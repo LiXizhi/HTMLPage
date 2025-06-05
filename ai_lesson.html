@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<!-- usage:
+this_url?datasource=official/school/course/ai0/1_intro
+-->
+<html lang="zh" class="h-full bg-white">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>K12 在线编程课程</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body {
+      min-height: 1000px;
+      margin: 0;
+      padding: 0;
+      overflow: auto !important;
+      background-color: white;
+    }
+    :fullscreen { background-color: white !important; }
+    :-webkit-full-screen { background-color: white !important; }
+    :-moz-full-screen { background-color: white !important; }
+    :-ms-fullscreen { background-color: white !important; }
+    .floating-window {
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      overflow: hidden;
+      min-width: 400px;
+      max-height: 80vh;
+      z-index: 100;
+    }
+    .guide-mode .floating-window {
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .guide-mode.minimized .floating-window {
+      width: 25% !important;
+      height: auto !important;
+      left: 0 !important;
+      top: 0 !important;
+    }
+    .control-btn {
+      z-index: 40;
+      cursor: pointer;
+      position: relative;
+      pointer-events: auto;
+    }
+    .aspect-4-3 {
+      aspect-ratio: 4/3;
+      width: 100%;
+      height: auto;
+    }
+    #action-area, #action-iframe {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border: none;
+      overflow: auto !important;
+    }
+    /* Add landscape orientation styles */
+    @media (orientation: landscape) {
+      #action-area {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #action-iframe {
+        height: 100%;
+        max-width: calc(4/3 * 100vh);
+        margin: 0 auto;
+      }
+    }
+    #content-container {
+      cursor: default;
+      user-select: none;
+      height: calc(100% - 60px);
+      background-color: white;
+    }
+    #directory-dropdown-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10000;
+    }
+    .directory-dropdown {
+      position: absolute;
+      width: 350px;
+      max-height: 400px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      pointer-events: auto;
+      display: none;
+    }
+    .directory-dropdown.active {
+      display: block;
+    }
+    .directory-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 15px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+    .directory-item:hover {
+      background-color: #f3f4f6;
+    }
+    .directory-item.active {
+      background-color: #e0e7ff;
+    }
+    .directory-item-content {
+      flex-grow: 1;
+      overflow: hidden;
+      margin-right: 8px;
+    }
+    .directory-item-type {
+      font-weight: 500;
+    }
+    .directory-item-title {
+      color: #4b5563;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 0.9rem;
+    }
+    #progress-bar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: space-between;
+      overflow: hidden;
+      position: relative;
+      z-index: 50;
+    }
+    .guide-btn-text {
+      display: none;
+    }
+    @media (min-width: 1020px) {
+      #progress-bar {
+        padding-right: 10vw; 
+      }
+      .guide-btn-text {
+        display: inline !important;
+        }
+      #guide-btn {
+        padding-right: 0.75rem;
+      }
+    }
+    .progress-area {
+      display: flex;
+      align-items: center;
+      flex-grow: 1;
+      min-width: 0;
+      margin-right: 10px;
+    }
+    .step-title {
+      margin-left: 10px;
+      font-weight: bold;
+      color: #4b5563;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 50vw;
+    }
+    .nav-buttons {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .progress-indicator {
+      background: #e0e7ff;
+      border-radius: 0.5rem;
+      padding: 0.25rem 1rem;
+      font-weight: bold;
+      color: #4338ca;
+      border: 1px solid #c7d2fe;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .progress-indicator:hover {
+      background: #c7d2fe;
+    }
+    @keyframes pulse-border {
+    0% { 
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.9);
+      transform: scale(1);
+      background-color: #3b82f6;
+    }
+    50% {
+      box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.7);
+      transform: scale(1.05);
+      background-color: #2563eb;
+    }
+    100% { 
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+      transform: scale(1);
+      background-color: #3b82f6;
+    }
+  }
+
+  .btn-highlight {
+    animation: pulse-border 1.2s infinite;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    transition: all 0.3s ease;
+  }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 2000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background-color: white;
+      margin: 15% auto;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 500px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    #welcome-area {
+      height: 90vh;
+      align-items: flex-start;
+      padding-top: 15vh;
+      background-color: white;
+    }
+    .ppt-content {
+      padding: 1.5rem;
+    }
+    .ppt-image-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      background-color: white;
+      overflow: hidden;
+    }
+    .ppt-image {
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      object-position: center;
+    }
+    #floating-header {
+      display: none;
+    }
+    .guide-mode #floating-header {
+      display: flex;
+    }
+    #floating-content {
+      height: 100%;
+    }
+    .guide-mode #floating-content {
+      height: calc(100% - 40px);
+    }
+    .hidden {
+      display: none !important;
+    }
+    /* Fix for ensuring images don't cause scrolling */
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    /* Page transition animations */
+    .page-transition-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .transition-forward .current-page {
+      animation: slideOutLeft 0.5s forwards;
+    }
+    .transition-backward .current-page {
+      animation: slideOutRight 0.5s forwards;
+    }
+    .transition-forward .next-page {
+      animation: slideInRight 0.5s forwards;
+    }
+    .transition-backward .next-page {
+      animation: slideInLeft 0.5s forwards;
+    }
+    @keyframes slideOutLeft {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(-100%); opacity: 0; }
+    }
+    @keyframes slideOutRight {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideInLeft {
+      from { transform: translateX(-100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body class="flex flex-col h-full bg-white">
+    <div id="progress-bar" class="py-2 px-4 gap-2 bg-gray-100 relative">
+    <div class="progress-area">
+        <div id="progress-indicator" class="progress-indicator hidden">
+        <span>1/5</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+        </div>
+        
+        <div id="step-title" class="step-title"></div>
+        
+        <button id="refresh-btn" class="h-8 p-1.5 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 hidden ml-2 flex items-center justify-center" type="button" title="刷新当前页面">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        </button>
+        
+        <button id="guide-btn" class="h-8 p-1.5 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 hidden ml-2 flex items-center justify-center" title="操作指南">
+        <span class="h-4 w-4 flex items-center justify-center">💡</span>
+        <span class="guide-btn-text ml-1 text-xs">操作说明</span>
+        </button>
+    </div>
+    
+    <div class="nav-buttons">
+        <button id="prev-btn" class="w-8 h-8 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" title="上一步">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        </button>
+        <button id="next-btn" class="h-8 px-4 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">开始上课</button>
+    </div>
+    </div>
+  
+  <div id="directory-dropdown-container">
+    <div id="directory-dropdown" class="directory-dropdown"></div>
+  </div>
+  
+  <div id="content-container" class="flex-1 relative bg-white">
+    <div id="floating-media" class="floating-window absolute bg-white rounded-lg hidden" style="width: 100%; left: 0; top: 0;">
+      <div id="floating-header" class="flex items-center justify-between p-2 bg-gray-800 text-white rounded-t-lg">
+        <div class="font-bold" id="floating-title">媒体内容</div>
+        <div class="flex space-x-2">
+          <button id="minimize-btn" class="control-btn px-2 py-1 bg-yellow-500 rounded hover:bg-yellow-600" type="button">
+            <span id="minimize-icon">_</span>
+          </button>
+          <button id="close-btn" class="control-btn px-2 py-1 bg-red-500 rounded hover:bg-red-600" type="button">✕</button>
+        </div>
+      </div>
+      <div id="floating-content" class="w-full"></div>
+    </div>
+    
+    <div id="action-area" class="absolute inset-0 z-10 hidden">
+      <iframe id="action-iframe" src="about:blank"></iframe>
+    </div>
+    
+    <div id="welcome-area" class="absolute inset-0 flex justify-center bg-white z-5">
+      <h1 class="text-3xl font-bold text-blue-600">欢迎来到AI未来学校</h1>
+    </div>
+  </div>
+  
+  <div id="completion-modal" class="modal">
+    <div class="modal-content">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">课程完成</h2>
+        <button id="close-modal" class="text-gray-500 hover:text-gray-700 text-xl font-bold">×</button>
+      </div>
+      <p class="mb-6">记得保存你的作品，点击我的作品可以继续创作。</p>
+      <div class="flex justify-end">
+        <button id="confirm-modal" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lesson_config = `
+### PPT
+- title: 欢迎来到AI未来学校
+- desc: 入学典礼
+- image: https://placehold.co/600x400
+`;
+
+    const isMobileDevice = () => {
+      return (('ontouchstart' in window) || 
+              (navigator.maxTouchPoints > 0) || 
+              (navigator.msMaxTouchPoints > 0) ||
+              /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    };
+    
+    const isMobile = isMobileDevice();
+    function getKeepworkDataSource(datasource) {
+        // Parse the datasource to construct the API URL
+        const parts = datasource.split('/');
+        const repoPath = parts.slice(0, 2).join('/');
+        const fullPath = datasource;
+        
+        // Construct the API URL with proper encoding
+        const apiUrl = `https://api.keepwork.com/core/v0/repos/${encodeURIComponent(repoPath)}/files/${encodeURIComponent(fullPath)}.md`;
+        
+        console.log("Fetching data from:", apiUrl);
+        
+        // Return the fetch promise
+        return fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.text();
+            });
+    }
+    function parseConfig(md) {
+      const lines = md.trim().split('\n');
+      const steps = [];
+      let currType = null;
+      let currStep = {};
+      
+      lines.forEach(line => {
+        if (line.startsWith('###')) {
+          if (currType && Object.keys(currStep).length > 0) {
+            if (isMobile && currStep.mobile_url) {
+              currStep.url = currStep.mobile_url;
+            }
+            steps.push({...currStep});
+          }
+          currType = line.replace('###','').trim();
+          currStep = { type: currType };
+        }
+        else if (line.startsWith('-') && currType) {
+          const colonPos = line.indexOf(':');
+          if (colonPos > 0) {
+            const key = line.substring(1, colonPos).trim();
+            const value = line.substring(colonPos + 1).trim();
+            currStep[key] = value;
+          } else {
+            currStep.url = line.replace('-','').trim();
+          }
+        }
+      });
+      
+      if (currType && Object.keys(currStep).length > 0) {
+        if (isMobile && currStep.mobile_url) {
+          currStep.url = currStep.mobile_url;
+        }
+        steps.push({...currStep});
+      }
+      
+      return steps;
+    }
+
+	let steps, progress, actionIndices;
+    
+    const iconMap = {
+      Video:  { emoji:'📽️', label:'动画',  color:'bg-red-400' },
+      PPT:    { emoji:'📄', label:'讲解',  color:'bg-green-400' },
+      Action: { emoji:'🎯', label:'动手', color:'bg-purple-400' }
+    };
+
+    
+    let current = -1;
+    let isMinimized = false;
+    let isDirectoryOpen = false;
+    let currentDisplayedActionIndex = -1;
+    let temporaryDisplayIndex = -1; 
+    let isFullscreen = false;
+    let isGuideMode = false; 
+    let isGuideMinimized = false; 
+
+    function saveProgress() {
+      // 内存中记录
+    }
+    
+    function showGuideButton() {
+      const guideBtn = document.getElementById('guide-btn');
+      if (current > 0 && current < steps.length && 
+          steps[current].type === 'Action' && 
+          steps[current-1].type !== 'Action') {
+        guideBtn.classList.remove('hidden');
+      } else {
+        guideBtn.classList.add('hidden');
+      }
+    }
+    
+    function showRefreshButton() {
+      const refreshBtn = document.getElementById('refresh-btn');
+      if (current >= 0 && current < steps.length && steps[current].type === 'Action') {
+        refreshBtn.classList.remove('hidden');
+      } else {
+        refreshBtn.classList.add('hidden');
+      }
+    }
+
+    function updateStepTitle() {
+      const titleElement = document.getElementById('step-title');
+      if (current >= 0 && current < steps.length) {
+        const step = steps[current];
+        if (step.title) {
+          titleElement.textContent = step.title;
+          titleElement.classList.remove('hidden');
+        } else {
+          titleElement.classList.add('hidden');
+        }
+      } else {
+        titleElement.classList.add('hidden');
+      }
+    }
+
+    function renderProgressBar() {
+      const progressIndicator = document.getElementById('progress-indicator');
+      
+      if (current >= 0 && current < steps.length) {
+        progressIndicator.querySelector('span').textContent = `${current+1}/${steps.length}`;
+        progressIndicator.classList.remove('hidden');
+        
+        updateStepTitle();
+        showGuideButton();
+        showRefreshButton();
+      } else {
+        progressIndicator.classList.add('hidden');
+        document.getElementById('step-title').classList.add('hidden');
+        document.getElementById('refresh-btn').classList.add('hidden');
+      }
+      
+      updateNavigationButtons();
+    }
+    
+    function renderDirectoryDropdown() {
+      const dropdown = document.getElementById('directory-dropdown');
+      dropdown.innerHTML = '';
+      
+      const title = document.createElement('div');
+      title.className = 'p-3 bg-gray-100 font-bold border-b';
+      title.textContent = '课程目录';
+      dropdown.appendChild(title);
+      
+      steps.forEach((s, i) => {
+        const { emoji, label, color } = iconMap[s.type];
+        
+        const item = document.createElement('div');
+        item.className = 'directory-item';
+        if (i === current) {
+          item.classList.add('active');
+        }
+        
+        const itemPrefix = document.createElement('div');
+        itemPrefix.className = 'mr-2 flex items-center';
+        itemPrefix.innerHTML = `
+          <span class="font-bold mr-2">${i+1}.</span>
+          <span class="text-xl mr-2">${emoji}</span>
+        `;
+        
+        const itemContent = document.createElement('div');
+        itemContent.className = 'directory-item-content';
+        
+        const itemType = document.createElement('div');
+        itemType.className = 'directory-item-type';
+        itemType.textContent = label;
+        
+        if (s.title) {
+          const itemTitle = document.createElement('div');
+          itemTitle.className = 'directory-item-title';
+          itemTitle.textContent = s.title;
+          itemContent.appendChild(itemTitle);
+        }
+        
+        itemContent.insertBefore(itemType, itemContent.firstChild);
+        
+        let completionMark = null;
+        if (progress[i]) {
+          completionMark = document.createElement('div');
+          completionMark.className = 'flex items-center justify-center w-5 h-5 bg-green-500 rounded-full flex-shrink-0';
+          completionMark.innerHTML = '<span class="text-white text-xs">✓</span>';
+        }
+        
+        item.appendChild(itemPrefix);
+        item.appendChild(itemContent);
+        if (completionMark) {
+          item.appendChild(completionMark);
+        }
+        
+        item.addEventListener('click', () => {
+          selectStep(i);
+          toggleDirectory(false);
+        });
+        
+        dropdown.appendChild(item);
+      });
+    }
+    
+    function toggleDirectory(show = null) {
+      const dropdown = document.getElementById('directory-dropdown');
+      if (show === null) {
+        isDirectoryOpen = !isDirectoryOpen;
+      } else {
+        isDirectoryOpen = show;
+      }
+      
+      if (isDirectoryOpen) {
+        const progressIndicator = document.getElementById('progress-indicator');
+        const rect = progressIndicator.getBoundingClientRect();
+        
+        dropdown.style.top = `${rect.bottom + window.scrollY}px`;
+        dropdown.style.left = `${rect.left + window.scrollX}px`;
+        
+        dropdown.classList.add('active');
+        renderDirectoryDropdown();
+      } else {
+        dropdown.classList.remove('active');
+      }
+    }
+    
+    function highlightNextButton() {
+      const nextBtn = document.getElementById('next-btn');
+      nextBtn.classList.add('btn-highlight');
+      
+      nextBtn.addEventListener('click', removeHighlight, { once: true });
+      //setTimeout(removeHighlight, 5000);
+    }
+    
+    function removeHighlight() {
+      const nextBtn = document.getElementById('next-btn');
+      nextBtn.classList.remove('btn-highlight');
+    }
+    
+    function updateNavigationButtons() {
+      const prevBtn = document.getElementById('prev-btn');
+      const nextBtn = document.getElementById('next-btn');
+      
+      removeHighlight();
+      
+      prevBtn.disabled = current <= 0;
+      
+      nextBtn.disabled = false;
+      
+      if (current < 0) {
+        nextBtn.textContent = "开始上课";
+        nextBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+      } else if (current >= steps.length - 1) {
+        nextBtn.textContent = "全部完成";
+        nextBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+      } else {
+        nextBtn.textContent = "下一步";
+        nextBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+      }
+    }
+
+    function adjustIframeHeight() {
+      const progressBarHeight = document.getElementById('progress-bar').offsetHeight;
+      const windowHeight = window.innerHeight;
+      const availableHeight = windowHeight - progressBarHeight;
+      
+      document.getElementById('content-container').style.height = availableHeight + 'px';
+    }
+
+    function centerWindow(window, width, height) {
+      if (width < document.documentElement.clientWidth) {
+        window.style.left = `${(document.documentElement.clientWidth - width) / 2}px`;
+      } else {
+        window.style.left = '0';
+      }
+      window.style.top = '0';
+      window.style.width = `${width}px`;
+      window.style.height = `${height}px`;
+    }
+
+    function pauseCurrentVideo() {
+      const videoElements = document.querySelectorAll('video');
+      videoElements.forEach(video => {
+        if (!video.paused) {
+          video.pause();
+        }
+      });
+    }
+
+    function hideAllContent() {
+      const welcomeArea = document.getElementById('welcome-area');
+      welcomeArea.classList.add('hidden');
+      
+      const actionArea = document.getElementById('action-area');
+      actionArea.classList.add('hidden');
+      
+      const floatingMedia = document.getElementById('floating-media');
+      floatingMedia.classList.add('hidden');
+      
+      document.body.classList.remove('guide-mode', 'minimized');
+      isGuideMode = false;
+      isGuideMinimized = false;
+      
+      pauseCurrentVideo();
+      removeHighlight();
+    }
+    
+    function refreshActionIframe() {
+      if (current >= 0 && current < steps.length && steps[current].type === 'Action') {
+        const actionIframe = document.getElementById('action-iframe');
+        actionIframe.src = steps[current].url || "";
+        if (actionIframe.contentWindow) {
+          actionIframe.contentWindow.location.reload();
+        }
+      }
+    }
+
+    function setupWindowControls() {
+      const floatingWindow = document.getElementById('floating-media');
+      
+      const minimizeBtn = document.getElementById('minimize-btn');
+      const closeBtn = document.getElementById('close-btn');
+      const refreshBtn = document.getElementById('refresh-btn');
+      
+      refreshBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        refreshActionIframe();
+      });
+      
+      minimizeBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+		if (isGuideMinimized) {
+			document.body.classList.remove('minimized');
+
+			const maxHeight = window.innerHeight * 0.8;
+			const aspectRatioWidth = maxHeight * (4/3);
+
+			if (aspectRatioWidth <= window.innerWidth) {
+			  centerWindow(floatingWindow, aspectRatioWidth, maxHeight);
+			} else {
+			  floatingWindow.style.width = '100%';
+			  floatingWindow.style.height = `${window.innerWidth * (3/4)}px`;
+			  floatingWindow.style.left = '0';
+			  floatingWindow.style.top = '0';
+			}
+
+			document.getElementById('minimize-icon').textContent = '_';
+			} else {
+			document.body.classList.add('minimized');
+
+			const minWidth = Math.max(400, window.innerWidth * 0.25);
+			floatingWindow.style.width = `${minWidth}px`;
+			floatingWindow.style.height = `${minWidth * 0.75}px`;
+			floatingWindow.style.left = '0';
+			floatingWindow.style.top = '0';
+
+			document.getElementById('minimize-icon').textContent = '□';
+		}
+		isGuideMinimized = !isGuideMinimized;
+      });
+
+      closeBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        pauseCurrentVideo();
+        
+        floatingWindow.classList.add('hidden');
+        document.body.classList.remove('guide-mode', 'minimized');
+        isGuideMode = false;
+        isGuideMinimized = false;
+        
+        if (temporaryDisplayIndex >= 0) {
+          temporaryDisplayIndex = -1;
+        }
+      });
+    }
+    
+    function enterFullscreen() {
+      try {
+        const docEl = document.documentElement;
+        
+        // Handle mobile orientation if supported
+        if (isMobile) {
+          try {
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape').catch(err => {
+                console.log('Orientation lock failed:', err);
+              });
+            }
+          } catch (e) {
+            console.log('Orientation API not supported');
+          }
+        }
+        
+        // Try different fullscreen methods
+        if (docEl.requestFullscreen) {
+          docEl.requestFullscreen().catch(e => console.log('Fullscreen error:', e));
+        } else if (docEl.mozRequestFullScreen) {
+          docEl.mozRequestFullScreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          docEl.webkitRequestFullscreen();
+        } else if (docEl.msRequestFullscreen) {
+          docEl.msRequestFullscreen();
+        }
+        
+        // Don't set isFullscreen flag here - let the event listener handle it
+      } catch (e) {
+        console.log('Error entering fullscreen mode:', e);
+      }
+    }
+    
+    function exitFullscreen() {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      
+      isFullscreen = false;
+    }
+    
+    document.addEventListener('fullscreenchange', onFullScreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullScreenChange);
+    document.addEventListener('mozfullscreenchange', onFullScreenChange);
+    document.addEventListener('MSFullscreenChange', onFullScreenChange);
+    
+    function onFullScreenChange() {
+      isFullscreen = !!document.fullscreenElement || 
+                    !!document.webkitFullscreenElement || 
+                    !!document.mozFullScreenElement ||
+                    !!document.msFullscreenElement;
+    }
+
+    setupWindowControls();
+
+    function displayContent() {
+      hideAllContent();
+      
+      if (current < 0 || current >= steps.length) {
+        document.getElementById('welcome-area').classList.remove('hidden');
+        return;
+      }
+      
+      const step = steps[current];
+      
+      if (step.type === 'Action') {
+        const actionArea = document.getElementById('action-area');
+        
+        document.getElementById('action-iframe').src = step.url;
+        
+        currentDisplayedActionIndex = current;
+        actionArea.classList.remove('hidden');
+        
+        if (temporaryDisplayIndex >= 0) {
+          const floatingMedia = document.getElementById('floating-media');
+          floatingMedia.classList.remove('hidden');
+        }
+      } 
+      else if (step.type === 'Video' || step.type === 'PPT') {
+        const floatingMedia = document.getElementById('floating-media');
+        floatingMedia.classList.remove('hidden');
+        
+        document.body.classList.remove('guide-mode', 'minimized');
+        isGuideMode = false;
+        isGuideMinimized = false;
+        
+        const maxHeight = window.innerHeight * 0.8;
+        const aspectRatioWidth = maxHeight * (4/3);
+          
+        if (aspectRatioWidth <= window.innerWidth) {
+          centerWindow(floatingMedia, aspectRatioWidth, maxHeight);
+        } else {
+          floatingMedia.style.width = '100%';
+          floatingMedia.style.height = `${window.innerWidth * (3/4)}px`;
+          floatingMedia.style.left = '0';
+          floatingMedia.style.top = '0';
+        }
+        
+        isMinimized = false;
+      }
+    }
+
+    function renderMedia() {
+      const displayIndex = temporaryDisplayIndex >= 0 ? temporaryDisplayIndex : current;
+      
+      if (displayIndex < 0 || displayIndex >= steps.length) return;
+      
+      const step = steps[displayIndex];
+      const targetContainer = document.getElementById('floating-content');
+      targetContainer.innerHTML = '';
+      
+      if (step.type === 'Video' || step.type === 'PPT') {
+        const titlePrefix = temporaryDisplayIndex >= 0 ? '操作指南：' : '';
+        const stepTitle = step.title ? step.title : (step.type === 'Video' ? '视频内容' : 'PPT 内容');
+        document.getElementById('floating-title').textContent = titlePrefix + stepTitle;
+        
+        const hasOnlyImage = step.type === 'PPT' && step.image && !step.desc;
+        const hasPPTDetails = step.type === 'PPT' && step.title && step.desc;
+          
+        if (step.type === 'Video') {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'absolute inset-0 flex items-center justify-center text-white bg-black/50';
+          placeholder.innerText = '视频加载中...';
+          targetContainer.appendChild(placeholder);
+          
+          const v = document.createElement('video');
+          v.preload = 'metadata';
+          v.controls = true;
+          v.autoplay = true;
+          v.playsInline = true; 
+          v.setAttribute('playsinline', ''); 
+          v.setAttribute('webkit-playsinline', '');
+          v.className = 'w-full h-full';
+          v.src = step.url;
+          
+          v.addEventListener('ended', () => {
+            highlightNextButton();
+          });
+          
+          v.addEventListener('loadedmetadata', () => placeholder.remove());
+          v.addEventListener('error', () => placeholder.innerText = '视频加载失败');
+          targetContainer.appendChild(v);
+        } else if (hasOnlyImage) {
+          const imageContainer = document.createElement('div');
+          imageContainer.className = 'ppt-image-container';
+          
+          const img = document.createElement('img');
+          img.src = step.image;
+          img.alt = step.title || 'PPT Image';
+          img.className = 'ppt-image';
+          
+          imageContainer.appendChild(img);
+          targetContainer.appendChild(imageContainer);
+          
+        } else if (hasPPTDetails) {
+          
+            const cardContainer = document.createElement('div');
+            cardContainer.className = 'flex flex-col h-full';
+            
+            // Description at the top (no title)
+            const descDiv = document.createElement('div');
+            descDiv.className = 'ppt-content p-4 bg-white';
+            descDiv.textContent = step.desc;
+            cardContainer.appendChild(descDiv);
+            
+            // Image or URL content taking up remaining space
+            if (step.image) {
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'flex-grow flex items-center justify-center p-4';
+                
+                const img = document.createElement('img');
+                img.src = step.image;
+                img.alt = step.title || 'Slide image';
+                img.className = 'max-w-full max-h-full object-contain rounded-lg';
+                
+                imageDiv.appendChild(img);
+                cardContainer.appendChild(imageDiv);
+            } else if (step.url) {
+                const iframeContainer = document.createElement('div');
+                iframeContainer.className = 'flex-grow';
+                
+                const iframe = document.createElement('iframe');
+                iframe.src = step.url;
+                iframe.className = 'w-full h-full border-none';
+                
+                iframeContainer.appendChild(iframe);
+                cardContainer.appendChild(iframeContainer);
+            }
+            
+            targetContainer.appendChild(cardContainer);
+
+        } else {
+          const iframe = document.createElement('iframe');
+          iframe.src = step.url;
+          iframe.className = 'w-full h-full';
+          targetContainer.appendChild(iframe);
+        }
+      }
+    }
+    
+    function selectStep(idx) {
+      if (idx < 0 || idx >= steps.length || isNavigating) return;
+      
+      // Determine direction of navigation
+      const isForward = idx > current;
+      
+      // Use the shared transition logic
+      navigateWithTransition(idx, isForward);
+    }
+        
+    function showGuide() {
+      if (current > 0 && steps[current-1].type !== 'Action') {
+        pauseCurrentVideo();
+        
+        temporaryDisplayIndex = current - 1;
+        
+        document.body.classList.add('guide-mode');
+        isGuideMode = true;
+        isGuideMinimized = true; 
+        document.body.classList.add('minimized');
+        
+        const floatingMedia = document.getElementById('floating-media');
+        floatingMedia.classList.remove('hidden');
+        
+        const minWidth = Math.max(400, window.innerWidth * 0.25);
+        floatingMedia.style.width = `${minWidth}px`;
+        floatingMedia.style.height = `${minWidth * 0.75}px`;
+        floatingMedia.style.left = '0';
+        floatingMedia.style.top = '0';
+        document.getElementById('minimize-icon').textContent = '□';
+        
+        renderMedia();
+        
+        if (steps[current].type === 'Action') {
+          document.getElementById('action-area').classList.remove('hidden');
+        }
+      }
+    }
+    
+    // Variable to track if navigation transition is in progress
+    let isNavigating = false;
+    
+    /**
+     * Performs a page transition animation and navigates to the target step
+     * @param {number} targetIndex - Index to navigate to
+     * @param {boolean} isForward - Direction of navigation
+     */
+    function navigateWithTransition(targetIndex, isForward) {
+      // Prevent navigation during transition
+      if (isNavigating || targetIndex < 0 || targetIndex >= steps.length) return;
+      
+      // Disable navigation buttons during transition
+      isNavigating = true;
+      document.getElementById('prev-btn').disabled = true;
+      document.getElementById('next-btn').disabled = true;
+      
+      // Stop any playing video content
+      pauseCurrentVideo();
+      removeHighlight();
+      
+      // Clean up guide mode if active
+      if (temporaryDisplayIndex >= 0) {
+        document.body.classList.remove('guide-mode', 'minimized');
+        isGuideMode = false;
+        isGuideMinimized = false;
+        temporaryDisplayIndex = -1;
+      }
+      
+      // Get current content elements
+      const welcomeArea = document.getElementById('welcome-area');
+      const actionArea = document.getElementById('action-area');
+      const floatingMedia = document.getElementById('floating-media');
+      
+      // Find current visible content
+      let currentElement = null;
+      if (!welcomeArea.classList.contains('hidden')) {
+        currentElement = welcomeArea;
+      } else if (!actionArea.classList.contains('hidden')) {
+        currentElement = actionArea;
+      } else if (!floatingMedia.classList.contains('hidden')) {
+        currentElement = floatingMedia;
+      }
+      
+      // Prepare for animation
+      const contentContainer = document.getElementById('content-container');
+      contentContainer.classList.add('page-transition-container');
+      contentContainer.classList.add(isForward ? 'transition-forward' : 'transition-backward');
+      
+      // Apply animation class to current element
+      if (currentElement) {
+        currentElement.classList.add('current-page');
+      }
+      
+      // Start animation
+      setTimeout(() => {
+        // Hide all content after starting animation
+        hideAllContent();
+        
+        // Try fullscreen but don't block
+        if (!isFullscreen && isForward) {
+          setTimeout(() => enterFullscreen(), 0);
+        }
+        
+        // Update current index and progress
+        current = targetIndex;
+        progress[current] = true;
+        saveProgress();
+        renderProgressBar();
+        
+        // Show new content
+        displayContent();
+        
+        // Get the new element that's now visible
+        let newElement = null;
+        if (!welcomeArea.classList.contains('hidden')) {
+          newElement = welcomeArea;
+        } else if (!actionArea.classList.contains('hidden')) {
+          newElement = actionArea;
+        } else if (!floatingMedia.classList.contains('hidden')) {
+          newElement = floatingMedia;
+        }
+        
+        // Apply animation class to new element
+        if (newElement) {
+          newElement.classList.add('next-page');
+        }
+        
+        // Render media content
+        renderMedia();
+        
+        // Finish animation and cleanup
+        setTimeout(() => {
+          // Clean up animation classes
+          contentContainer.classList.remove('page-transition-container', 'transition-forward', 'transition-backward');
+          
+          if (currentElement) {
+            currentElement.classList.remove('current-page');
+          }
+          
+          if (newElement) {
+            newElement.classList.remove('next-page');
+          }
+          
+          // Re-enable navigation after cooldown
+          setTimeout(() => {
+            isNavigating = false;
+            document.getElementById('prev-btn').disabled = current <= 0;
+            document.getElementById('next-btn').disabled = false;
+          }, 300);
+        }, 500);
+      }, 50);
+    }
+    function goToNextStep() {
+      if (current < 0) {
+        navigateWithTransition(0, true);
+      } else if (current < steps.length - 1) {
+        navigateWithTransition(current + 1, true);
+      } else {
+        showCompletionModal();
+      }
+    }
+    
+    function goToPrevStep() {
+      if (current > 0) {
+        navigateWithTransition(current - 1, false);
+      }
+    }
+    
+    function showCompletionModal() {
+      if (isFullscreen) {
+        exitFullscreen();
+      }
+      
+      setTimeout(function() {
+        document.getElementById('completion-modal').style.display = 'block';
+      }, 100);
+    }
+    
+    function closeCompletionModal() {
+      document.getElementById('completion-modal').style.display = 'none';
+    }
+
+    document.getElementById('prev-btn').addEventListener('click', goToPrevStep);
+    document.getElementById('next-btn').addEventListener('click', goToNextStep);
+    document.getElementById('progress-indicator').addEventListener('click', () => toggleDirectory());
+    document.getElementById('guide-btn').addEventListener('click', showGuide);
+    document.getElementById('refresh-btn').addEventListener('click', refreshActionIframe);
+    
+    document.getElementById('close-modal').addEventListener('click', closeCompletionModal);
+    document.getElementById('confirm-modal').addEventListener('click', closeCompletionModal);
+    
+    document.addEventListener('click', function(e) {
+      const progressIndicator = document.getElementById('progress-indicator');
+      const directoryDropdown = document.getElementById('directory-dropdown');
+      
+      if (isDirectoryOpen && 
+          !progressIndicator.contains(e.target) && 
+          !directoryDropdown.contains(e.target)) {
+        toggleDirectory(false);
+      }
+    });
+
+    window.onclick = function(event) {
+      const modal = document.getElementById('completion-modal');
+      if (event.target == modal) {
+        closeCompletionModal();
+      }
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && isFullscreen) {
+        exitFullscreen();
+      }
+    });
+
+    window.addEventListener('resize', function() {
+      adjustIframeHeight();
+      
+      if (!isGuideMode && !isMinimized && current >= 0) {
+        const floatingMedia = document.getElementById('floating-media');
+        if (!floatingMedia.classList.contains('hidden')) {
+          const maxHeight = window.innerHeight * 0.8;
+          const aspectRatioWidth = maxHeight * (4/3);
+          
+          if (aspectRatioWidth <= window.innerWidth) {
+            centerWindow(floatingMedia, aspectRatioWidth, maxHeight);
+          } else {
+            floatingMedia.style.width = '100%';
+            floatingMedia.style.height = `${window.innerWidth * (3/4)}px`;
+            floatingMedia.style.left = '0';
+          }
+        }
+      }
+    });
+    
+    function initializeFirstPPT() {
+      if (steps.length > 0 && steps[0].type === 'PPT') {
+        selectStep(0);
+      }
+    }
+
+    function LoadLessonDataSource(data){
+      if (data) {
+          lesson_config = data;
+          steps = parseConfig(lesson_config);
+          progress = Array(steps.length).fill(false);
+          actionIndices = steps
+            .map((step, index) => step.type === 'Action' ? index : -1)
+            .filter(index => index !== -1);
+          
+          adjustIframeHeight();
+          renderProgressBar();
+          updateNavigationButtons();
+          initializeFirstPPT();
+          return true;
+        }
+    }
+    // Add message event listener to listen for "next_step" messages
+    window.addEventListener("message", function(event) {
+      if (event?.data?.msgdata?.name === "next_step") {
+        // this tricky code will exit child webparacraft iframe's full screen
+        if (isFullscreen) {
+          exitFullscreen(); 
+        } else {
+          enterFullscreen();
+          setTimeout(function() {
+            exitFullscreen();
+          }, 100);
+        }
+        
+        setTimeout(function() {
+          goToNextStep();
+        }, 300);
+      }
+    });
+
+    const parentUrlParams = new URLSearchParams(window.parent.location.search);
+    datasource = parentUrlParams.get('datasource');
+    if (!datasource) {
+        datasource = "official/school/course/ai0/1_intro";
+    }
+
+    getKeepworkDataSource(datasource)
+      .then(data => {
+        LoadLessonDataSource(data);
+      })
+      .catch(error => {
+          console.error("Error:", error);
+      });
+    getKeepworkDataSource(datasource)
+  </script>
+</body>
+</html>

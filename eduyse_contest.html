@@ -1,0 +1,366 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EDUYSE 赛事中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f7fa;
+            min-height:1200px;
+        }
+        .contest-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .contest-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .status-upcoming {
+            background-color: #FEF3C7;
+            color: #D97706;
+        }
+        .status-ongoing {
+            background-color: #DCFCE7;
+            color: #16A34A;
+        }
+        .status-ended {
+            background-color: #E5E7EB;
+            color: #6B7280;
+        }
+        .action-button {
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-weight: bold;
+            display: inline-block;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .action-button:hover {
+            transform: scale(1.05);
+        }
+        .emoji-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1.2;
+            padding: 1rem;
+        }
+        .card-link {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+        }
+        .image-container {
+            aspect-ratio: 2/1;
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            font-size: 1.25rem;
+            color: #4B5563;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3B82F6;
+            animation: spin 1s linear infinite;
+            margin-right: 0.75rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error-message {
+            background-color: #FEE2E2;
+            color: #DC2626;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 2rem auto;
+            max-width: 600px;
+            text-align: center;
+        }
+        .certificate-link {
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: background-color 0.3s ease;
+        }
+        .certificate-link:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <header class="bg-blue-600 shadow-md">
+        <div class="container mx-auto px-4 py-6 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-white">赛事中心</h1>
+            <a href="https://keepwork.com/eduyse/web/certificate" class="certificate-link">证书查询</a>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="loading col-span-full">
+                <div class="loading-spinner"></div>
+                <span>正在加载赛事数据...</span>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 解析Markdown格式的配置
+        function parseMarkdownConfig(markdown) {
+            const contests = [];
+            const sections = markdown.split('###').filter(section => section.trim());
+            
+            sections.forEach(section => {
+                const lines = section.split('\n').map(line => line.trim()).filter(line => line);
+                const title = lines[0];
+                const details = {};
+                
+                lines.slice(1).forEach(line => {
+                    if (line.startsWith('- ')) {
+                        // 只分割第一个冒号来获取key
+                        const colonIndex = line.substring(2).indexOf(':');
+                        if (colonIndex > -1) {
+                            const key = line.substring(2, colonIndex + 2).trim();
+                            // 获取冒号后面的所有内容作为value
+                            const value = line.substring(colonIndex + 3).trim();
+                            details[key] = value;
+                        }
+                    }
+                });
+
+                // 设置默认URL
+                if (!details.url) {
+                    details.url = 'https://cp.palaka.cn/';
+                }
+                
+                contests.push({
+                    title,
+                    ...details
+                });
+            });
+            
+            return contests;
+        }
+
+        // 根据日期确定比赛状态
+        function determineContestStatus(startDate, endDate) {
+            const now = new Date();
+            startDate = new Date(startDate);
+            endDate = new Date(endDate);
+            
+            if (now < startDate) {
+                return {
+                    status: '未开赛',
+                    action: '敬请期待',
+                    statusClass: 'status-upcoming',
+                    buttonClass: 'bg-yellow-500 text-white',
+                    isEnded: false
+                };
+            } else if (now <= endDate) {
+                return {
+                    status: '进行中',
+                    action: '查看详情',
+                    statusClass: 'status-ongoing',
+                    buttonClass: 'bg-green-500 text-white',
+                    isEnded: false
+                };
+            } else {
+                return {
+                    status: '已结束',
+                    action: '查看回顾',
+                    statusClass: 'status-ended',
+                    buttonClass: 'bg-gray-500 text-white',
+                    isEnded: true
+                };
+            }
+        }
+
+        // 生成随机颜色作为卡片背景
+        function getRandomColor(contestName) {
+            const colors = [
+                'bg-blue-100', 'bg-green-100', 'bg-yellow-100', 
+                'bg-purple-100', 'bg-pink-100', 'bg-indigo-100'
+            ];
+            
+            // 计算字符串的简单哈希值
+            let hash = 0;
+            if (!contestName || contestName.length === 0) 
+                return colors[Math.floor(Math.random() * colors.length)];
+            
+            for (let i = 0; i < contestName.length; i++) {
+                const char = contestName.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            
+            // 使用哈希值的绝对值对颜色数组长度取模，得到索引
+            const colorIndex = Math.abs(hash) % colors.length;
+            
+            return colors[colorIndex];
+        }
+
+        // 检查是否为图片URL
+        function isImageUrl(str) {
+            return str && str.startsWith('https://');
+        }
+
+        // 在新窗口打开链接
+        function openContestInNewWindow(url) {
+            window.open(url, '_blank');
+        }
+
+        // 生成赛事卡片
+        function renderContests(markdownData) {
+            const contests = parseMarkdownConfig(markdownData);
+            const container = document.querySelector('main .grid');
+            
+            // Clear loading indicator
+            container.innerHTML = '';
+            
+            if (contests.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center py-8 text-gray-500">暂无赛事数据</div>';
+                return;
+            }
+            
+            contests.forEach(contest => {
+                const { status, action, statusClass, buttonClass, isEnded } = determineContestStatus(contest.start_date, contest.end_date);
+                
+                // Create a div instead of an anchor for the card
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'card-link cursor-pointer';
+                cardDiv.setAttribute('data-url', contest.url);
+                
+                const card = document.createElement('div');
+                card.className = 'contest-card bg-white rounded-lg overflow-hidden shadow-md relative';
+                
+                // Check if image is a URL
+                const isHttpsImage = isImageUrl(contest.image);
+                
+                let imageHTML = '';
+                if (isHttpsImage) {
+                    imageHTML = `
+                        <img src="${contest.image}" 
+                             alt="${contest.title}" 
+                             class="w-full h-full object-fill"
+                             onerror="this.onerror=null; this.src='/api/placeholder/400/200'; this.classList.add('p-4');">
+                    `;
+                } else {
+                    imageHTML = `
+                        <div class="emoji-container w-full h-full">
+                            ${contest.image || contest.title}
+                        </div>
+                    `;
+                }
+                
+                let dateHTML = '';
+                if (!isEnded) {
+                    dateHTML = `
+                        <div class="text-sm text-gray-500">
+                            ${contest.start_date} - ${contest.end_date}
+                        </div>
+                    `;
+                } else {
+                    dateHTML = `
+                        <div class="text-sm text-gray-400">
+                            已结束
+                        </div>
+                    `;
+                }
+                
+                card.innerHTML = `
+                    <div class="image-container ${getRandomColor(contest.title)}">
+                        ${imageHTML}
+                        <div class="status-badge ${statusClass}">${status}</div>
+                    </div>
+                    <div class="p-5">
+                        <h2 class="text-xl font-bold mb-3 text-gray-800">${contest.title}</h2>
+                        <p class="text-gray-600 text-sm mb-4 line-clamp-3">${contest.desc}</p>
+                        <div class="flex justify-between items-center">
+                            ${dateHTML}
+                            <span class="action-button ${buttonClass}">${action}</span>
+                        </div>
+                    </div>
+                `;
+                
+                cardDiv.appendChild(card);
+                container.appendChild(cardDiv);
+                
+                // Add click event to open in new window
+                cardDiv.addEventListener('click', function() {
+                    openContestInNewWindow(this.getAttribute('data-url'));
+                });
+            });
+        }
+
+        // Fetch data from the API
+        function fetchContestData() {
+            const apiUrl = 'https://api.keepwork.com/core/v0/repos/eduyse%2Fweb/files/eduyse%2Fweb%2Fcontest_data.md';
+            
+            fetch(apiUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应不正常');
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    renderContests(data);
+                })
+                .catch(error => {
+                    const container = document.querySelector('main .grid');
+                    container.innerHTML = `
+                        <div class="error-message col-span-full">
+                            <p><strong>加载失败:</strong> ${error.message}</p>
+                            <p class="mt-2">尝试使用备用数据</p>
+                        </div>
+                    `;
+                    
+                    // 使用备用数据
+                    const backupData = `
+### 全国大学生机器人大赛
+- start_date: 2025/5/15
+- end_date: 2025/10/1
+- image: 🚀 全国大学生机器人大赛 (China University Robot Competition)
+- desc: 一项中国大学生机器人技术创新、工程实践、公益性竞赛活动，每年举办一届。自2002年首届大赛举办以来，竞赛始终坚持"让思维沸腾起来，让智慧行动起来"的宗旨。
+- url: https://cp.palaka.cn/robo2025
+                    `;
+                    
+                    setTimeout(() => {
+                        renderContests(backupData);
+                    }, 1000);
+                });
+        }
+        
+        // Initialize immediately (no DOMContentLoaded)
+        fetchContestData();
+    </script>
+</body>
+</html>

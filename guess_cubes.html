@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>空间思维训练游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnproxy.keepwork.com/jsdelivr/npm/three@0.128.0/build/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif;min-height:700px;height:90vh}
+        #gameContainer { position: relative; width: 100%; height: 100%; }
+        #ui { position: absolute; top: 10px; left: 10px; z-index: 100; }
+        #successEffect { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            font-weight: bold;
+            color: #4ade80;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 200;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.5s ease;
+        }
+        .success-show {
+            opacity: 1 !important;
+            transform: translate(-50%, -50%) scale(1.2) !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui" class="text-white">
+            <div class="bg-black bg-opacity-50 p-4 rounded">
+                <h2 class="text-xl mb-2">空间思维训练</h2>
+                <div class="mb-2">
+                    <label>网格大小: </label>
+                    <select id="gridSize" class="bg-gray-700 text-white p-1 rounded">
+                        <option value="3" selected>3×3</option>
+                        <option value="4">4×4</option>
+                        <option value="5">5×5</option>
+                    </select>
+                </div>
+                <button id="newGame" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mr-2">新游戏</button>
+                <button id="undo" class="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded">撤销</button>
+                <div class="mt-2">
+                    <button id="rotateLeft" class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded mr-1">⟲ 左转</button>
+                    <button id="rotateRight" class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded">⟳ 右转</button>
+                </div>
+                <div id="cubeCount" class="mt-2 text-sm font-bold text-yellow-300"></div>
+                <div class="mt-2 text-xs text-gray-300">
+                    左键: 放置方块<br>
+                    右键/长按: 删除方块<br>
+                    黑色: 正确投影 | 灰色X: 错误投影
+                </div>
+            </div>
+        </div>
+        <div id="successEffect">🎉 完美！下一关...</div>
+    </div>
+
+    <script>
+        class SpatialGame {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.gridSize = 3; // 默认3x3
+                this.cubes = new Map(); // 存储用户放置的立方体
+                this.targetCubes = new Map(); // 存储目标立方体
+                this.projectionCubes = []; // 存储投影立方体
+                this.cubeHistory = []; // 存储方块放置历史，用于撤销
+                this.rotationSteps = 0; // 使用步数而不是角度，避免浮点数累积误差
+                this.isRotating = false; // 是否正在旋转
+                this.minCubesNeeded = 0; // 最少需要的方块数
+                
+                // 长按相关
+                this.longPressTimer = null;
+                this.longPressThreshold = 600; // 600ms 长按阈值
+                this.isLongPressing = false;
+                this.touchStartPos = null;
+                
+                this.init();
+                this.setupEventListeners();
+                this.newGame();
+            }
+            
+            init() {
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setClearColor(0x87CEEB);
+                document.getElementById('gameContainer').appendChild(this.renderer.domElement);
+                
+                // Set initial camera position (will be optimized by autoZoomCamera)
+                this.camera.position.set(-6, 6, 6);
+                this.camera.lookAt(-this.gridSize/4, 1, this.gridSize/4);
+                
+                // 添加环境光和方向光（不产生阴影）
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+                directionalLight.position.set(10, 10, 5);
+                this.scene.add(directionalLight);
+                
+                // 创建可旋转的平台组
+                this.platformGroup = new THREE.Group();
+                this.scene.add(this.platformGroup);
+                
+                // 创建固定的投影墙组
+                this.wallGroup = new THREE.Group();
+                this.scene.add(this.wallGroup);
+                
+                this.createPlatform();
+                this.createWalls();
+                
+                // Set optimal camera position after scene is created
+                setTimeout(() => this.autoZoomCamera(), 100);
+                
+                this.animate();
+            }
+            
+            // 获取精确的旋转变换参数，避免浮点数误差
+            getRotationParams() {
+                // 将旋转步数标准化到0-3范围内
+                const normalizedSteps = ((this.rotationSteps % 4) + 4) % 4;
+                
+                switch(normalizedSteps) {
+                    case 0: return { cos: 1, sin: 0 };    // 0度
+                    case 1: return { cos: 0, sin: -1 };    // 90度
+                    case 2: return { cos: -1, sin: 0 };   // 180度
+                    case 3: return { cos: 0, sin: 1 };   // 270度
+                    default: return { cos: 1, sin: 0 };
+                }
+            }
+            
+            createCheckerboardTexture() {
+                const size = 256;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const context = canvas.getContext('2d');
+                
+                const tileSize = size / this.gridSize;
+                
+                for (let i = 0; i < this.gridSize; i++) {
+                    for (let j = 0; j < this.gridSize; j++) {
+                        const isLight = (i + j) % 2 === 0;
+                        context.fillStyle = isLight ? '#8B6F47' : '#6B5937'; // 浅棕色和深棕色
+                        context.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
+                    }
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.wrapS = THREE.ClampToEdgeWrapping;
+                texture.wrapT = THREE.ClampToEdgeWrapping;
+                return texture;
+            }
+            
+            createPlatform() {
+                // 清除现有平台
+                while(this.platformGroup.children.length > 0) {
+                    this.platformGroup.remove(this.platformGroup.children[0]);
+                }
+                
+                // 创建棋盘格纹理
+                const checkerTexture = this.createCheckerboardTexture();
+                
+                // 创建底部平台
+                const platformGeometry = new THREE.BoxGeometry(this.gridSize, 0.2, this.gridSize);
+                const platformMaterial = new THREE.MeshLambertMaterial({ 
+                    map: checkerTexture
+                });
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.position.y = -0.1;
+                platform.userData = { type: 'platform' };
+                this.platformGroup.add(platform);
+                
+                // 创建网格线
+                this.createGridLines();
+            }
+            
+            createGridLines() {
+                const material = new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.4, transparent: true });
+                
+                // 水平线
+                for (let i = 0; i <= this.gridSize; i++) {
+                    const geometry = new THREE.BufferGeometry();
+                    const points = [
+                        new THREE.Vector3(-this.gridSize/2, 0.01, -this.gridSize/2 + i),
+                        new THREE.Vector3(this.gridSize/2, 0.01, -this.gridSize/2 + i)
+                    ];
+                    geometry.setFromPoints(points);
+                    this.platformGroup.add(new THREE.Line(geometry, material));
+                }
+                
+                // 垂直线
+                for (let i = 0; i <= this.gridSize; i++) {
+                    const geometry = new THREE.BufferGeometry();
+                    const points = [
+                        new THREE.Vector3(-this.gridSize/2 + i, 0.01, -this.gridSize/2),
+                        new THREE.Vector3(-this.gridSize/2 + i, 0.01, this.gridSize/2)
+                    ];
+                    geometry.setFromPoints(points);
+                    this.platformGroup.add(new THREE.Line(geometry, material));
+                }
+            }
+            
+            createWalls() {
+                // 清除现有墙
+                while(this.wallGroup.children.length > 0) {
+                    this.wallGroup.remove(this.wallGroup.children[0]);
+                }
+                
+                // 增加墙壁高度以适应更高层的投影显示
+                const wallHeight = this.gridSize * 1.2; // 比原来高20%
+                
+                // 正面墙
+                const frontWallGeometry = new THREE.PlaneGeometry(this.gridSize, wallHeight);
+                const frontWallMaterial = new THREE.MeshLambertMaterial({ 
+                    color: 0xcccccc, 
+                    transparent: true, 
+                    opacity: 0.3,
+                    side: THREE.DoubleSide
+                });
+                const frontWall = new THREE.Mesh(frontWallGeometry, frontWallMaterial);
+                frontWall.position.set(0, wallHeight/2, -this.gridSize/2 - 0.5);
+                frontWall.userData = { type: 'wall' };
+                this.wallGroup.add(frontWall);
+                
+                // 右侧墙
+                const rightWallGeometry = new THREE.PlaneGeometry(this.gridSize, wallHeight);
+                const rightWallMaterial = new THREE.MeshLambertMaterial({ 
+                    color: 0xcccccc, 
+                    transparent: true, 
+                    opacity: 0.3,
+                    side: THREE.DoubleSide
+                });
+                const rightWall = new THREE.Mesh(rightWallGeometry, rightWallMaterial);
+                rightWall.position.set(this.gridSize/2 + 0.5, wallHeight/2, 0);
+                rightWall.rotation.y = Math.PI / 2;
+                rightWall.userData = { type: 'wall' };
+                this.wallGroup.add(rightWall);
+            }
+            
+            generateTarget() {
+                this.targetCubes.clear();
+                const numCubes = Math.floor(Math.random() * (this.gridSize * 2)) + 2;
+                
+                // 确保第一个方块在地面上（作为连接起点）
+                let firstX = Math.floor(Math.random() * this.gridSize);
+                let firstZ = Math.floor(Math.random() * this.gridSize);
+                let key = `${firstX},0,${firstZ}`;
+                this.targetCubes.set(key, { x: firstX, y: 0, z: firstZ, color: this.getRandomColor() });
+                
+                // 生成其他联通的方块
+                for (let i = 1; i < numCubes; i++) {
+                    let placed = false;
+                    let attempts = 0;
+                    
+                    while (!placed && attempts < 50) {
+                        // 随机选择一个已存在的方块
+                        const existingCubes = Array.from(this.targetCubes.values());
+                        const baseCube = existingCubes[Math.floor(Math.random() * existingCubes.length)];
+                        
+                        // 在其相邻位置尝试放置新方块
+                        const directions = [
+                            {x: 1, y: 0, z: 0}, {x: -1, y: 0, z: 0},
+                            {x: 0, y: 1, z: 0}, {x: 0, y: -1, z: 0},
+                            {x: 0, y: 0, z: 1}, {x: 0, y: 0, z: -1}
+                        ];
+                        
+                        const direction = directions[Math.floor(Math.random() * directions.length)];
+                        const newX = baseCube.x + direction.x;
+                        const newY = baseCube.y + direction.y;
+                        const newZ = baseCube.z + direction.z;
+                        
+                        // 检查边界和是否已存在
+                        if (newX >= 0 && newX < this.gridSize && 
+                            newZ >= 0 && newZ < this.gridSize && 
+                            newY >= 0 && newY < this.gridSize) {
+                            
+                            const newKey = `${newX},${newY},${newZ}`;
+                            if (!this.targetCubes.has(newKey)) {
+                                this.targetCubes.set(newKey, { 
+                                    x: newX, y: newY, z: newZ, 
+                                    color: this.getRandomColor() 
+                                });
+                                placed = true;
+                            }
+                        }
+                        attempts++;
+                    }
+                }
+                
+                this.calculateMinCubes();
+                this.updateProjections();
+                this.updateCubeCount();
+                this.autoCheckAnswer();
+            }
+            
+            calculateMinCubes() {
+                // 计算实现目标投影所需的最少方块数
+                const frontProjection = new Set();
+                const rightProjection = new Set();
+                
+                // 收集目标投影位置
+                for (const [key, target] of this.targetCubes) {
+                    const originalX = target.x - this.gridSize/2 + 0.5;
+                    const originalZ = target.z - this.gridSize/2 + 0.5;
+                    const originalY = target.y;
+                    
+                    // 使用精确的旋转参数
+                    const { cos, sin } = this.getRotationParams();
+                    const rotatedX = originalX * cos - originalZ * sin;
+                    const rotatedZ = originalX * sin + originalZ * cos;
+                    
+                    // 投影位置
+                    const frontProjKey = `${Math.round(rotatedX * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    const rightProjKey = `${Math.round(rotatedZ * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    
+                    frontProjection.add(frontProjKey);
+                    rightProjection.add(rightProjKey);
+                }
+                
+                // 简化计算：最少方块数约等于两个投影的最大值
+                this.minCubesNeeded = Math.max(frontProjection.size, rightProjection.size);
+                this.minCubesNeeded = Math.max(this.minCubesNeeded, Math.ceil(this.targetCubes.size * 0.7));
+            }
+            
+            getRandomColor() {
+                const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+            
+            updateProjections() {
+                // 清除现有投影
+                this.projectionCubes.forEach(cube => {
+                    this.wallGroup.remove(cube);
+                });
+                this.projectionCubes = [];
+                
+                // 计算投影
+                this.createProjectionDisplay();
+            }
+            
+            createProjectionDisplay() {
+                // 获取目标投影
+                const targetFrontProjection = new Set();
+                const targetRightProjection = new Set();
+                
+                for (const [key, target] of this.targetCubes) {
+                    const originalX = target.x - this.gridSize/2 + 0.5;
+                    const originalZ = target.z - this.gridSize/2 + 0.5;
+                    const originalY = target.y;
+                    
+                    // 使用精确的旋转参数
+                    const { cos, sin } = this.getRotationParams();
+                    const rotatedX = originalX * cos - originalZ * sin;
+                    const rotatedZ = originalX * sin + originalZ * cos;
+                    
+                    const frontProjKey = `${Math.round(rotatedX * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    const rightProjKey = `${Math.round(rotatedZ * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    
+                    targetFrontProjection.add(frontProjKey);
+                    targetRightProjection.add(rightProjKey);
+                }
+                
+                // 获取当前用户方块的投影
+                const currentFrontProjection = new Set();
+                const currentRightProjection = new Set();
+                
+                for (const [key, cube] of this.cubes) {
+                    const originalX = cube.userData.gridX - this.gridSize/2 + 0.5;
+                    const originalZ = cube.userData.gridZ - this.gridSize/2 + 0.5;
+                    const originalY = cube.userData.gridY;
+                    
+                    // 使用精确的旋转参数
+                    const { cos, sin } = this.getRotationParams();
+                    const rotatedX = originalX * cos - originalZ * sin;
+                    const rotatedZ = originalX * sin + originalZ * cos;
+                    
+                    const frontProjKey = `${Math.round(rotatedX * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    const rightProjKey = `${Math.round(rotatedZ * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    
+                    currentFrontProjection.add(frontProjKey);
+                    currentRightProjection.add(rightProjKey);
+                }
+                
+                // 创建正面投影显示
+                this.createWallProjectionDisplay(
+                    targetFrontProjection, 
+                    currentFrontProjection, 
+                    'front'
+                );
+                
+                // 创建右侧投影显示
+                this.createWallProjectionDisplay(
+                    targetRightProjection, 
+                    currentRightProjection, 
+                    'right'
+                );
+            }
+            
+            createWallProjectionDisplay(targetProjection, currentProjection, wall) {
+                // 合并所有投影位置
+                const allPositions = new Set([...targetProjection, ...currentProjection]);
+                
+                for (const posKey of allPositions) {
+                    const [coordStr, yStr] = posKey.split(',');
+                    const coord = parseFloat(coordStr) / 2;
+                    const y = parseFloat(yStr) / 2;
+                    
+                    const isTarget = targetProjection.has(posKey);
+                    const isCurrent = currentProjection.has(posKey);
+                    
+                    let projCube;
+                    
+                    if (isTarget && isCurrent) {
+                        // 正确投影 - 深黑色
+                        const projGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.1);
+                        const projMaterial = new THREE.MeshLambertMaterial({ 
+                            color: 0x222222
+                        });
+                        projCube = new THREE.Mesh(projGeometry, projMaterial);
+                    } else if (isTarget && !isCurrent) {
+                        // 目标投影但用户未实现 - 灰色
+                        const projGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.1);
+                        const projMaterial = new THREE.MeshLambertMaterial({ 
+                            color: 0xeeeeee, 
+                            emissive: 0x888888,
+                            emissiveIntensity: 0.3
+                        });
+                        projCube = new THREE.Mesh(projGeometry, projMaterial);
+                    } else if (!isTarget && isCurrent) {
+                        // 错误投影 - 显示X
+                        projCube = this.createXMark(0.8);
+                    }
+                    
+                    if (projCube) {
+                        // 放宽显示范围限制，允许更高层的投影显示
+                        const maxWallHeight = this.gridSize * 1.2;
+                        
+                        if (wall === 'front') {
+                            // 正面墙投影显示条件
+                            if (Math.abs(coord) <= this.gridSize/2 && y <= maxWallHeight && y > 0) {
+                                projCube.position.set(coord, y, -this.gridSize/2 - 0.6);
+                                this.wallGroup.add(projCube);
+                                this.projectionCubes.push(projCube);
+                            }
+                        } else if (wall === 'right') {
+                            // 右侧墙投影显示条件
+                            if (Math.abs(coord) <= this.gridSize/2 && y <= maxWallHeight && y > 0) {
+                                projCube.position.set(this.gridSize/2 + 0.6, y, coord);
+                                if (projCube.rotation) {
+                                    projCube.rotation.y = Math.PI / 2;
+                                }
+                                this.wallGroup.add(projCube);
+                                this.projectionCubes.push(projCube);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            createXMark(size) {
+                const group = new THREE.Group();
+                const material = new THREE.MeshLambertMaterial({ 
+                    color: 0xcc3333,
+                    emissive: 0x888888,
+                    emissiveIntensity: 0.3
+                });
+                
+                // 创建X的两条线
+                const lineGeometry1 = new THREE.BoxGeometry(size * 0.8, size * 0.1, 0.05);
+                const lineGeometry2 = new THREE.BoxGeometry(size * 0.8, size * 0.1, 0.05);
+                
+                const line1 = new THREE.Mesh(lineGeometry1, material);
+                const line2 = new THREE.Mesh(lineGeometry2, material);
+                
+                line1.rotation.z = Math.PI / 4;
+                line2.rotation.z = -Math.PI / 4;
+                
+                group.add(line1);
+                group.add(line2);
+                
+                return group;
+            }
+            
+            isConnected(x, y, z) {
+                // 地面上(y=0)永远可以放置方块
+                if (y === 0) {
+                    return true;
+                }
+                
+                // 其他位置需要检查连通性
+                if (this.cubes.size === 0) {
+                    return true;
+                }
+                
+                const neighbors = [
+                    {x: x+1, y: y, z: z}, {x: x-1, y: y, z: z},
+                    {x: x, y: y+1, z: z}, {x: x, y: y-1, z: z},
+                    {x: x, y: y, z: z+1}, {x: x, y: y, z: z-1}
+                ];
+                
+                for (const neighbor of neighbors) {
+                    const neighborKey = `${neighbor.x},${neighbor.y},${neighbor.z}`;
+                    if (this.cubes.has(neighborKey)) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            
+            startLongPress(event) {
+                this.isLongPressing = false;
+                this.touchStartPos = {
+                    x: event.touches ? event.touches[0].clientX : event.clientX,
+                    y: event.touches ? event.touches[0].clientY : event.clientY
+                };
+                
+                this.longPressTimer = setTimeout(() => {
+                    this.isLongPressing = true;
+                    this.handleLongPress(event);
+                }, this.longPressThreshold);
+            }
+            
+            endLongPress(event) {
+                if (this.longPressTimer) {
+                    clearTimeout(this.longPressTimer);
+                    this.longPressTimer = null;
+                }
+                
+                if (!this.isLongPressing) {
+                    // 短按，正常点击
+                    this.handleClick(event);
+                }
+                
+                this.isLongPressing = false;
+            }
+            
+            handleLongPress(event) {
+                // 长按删除方块
+                const mouse = new THREE.Vector2();
+                const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+                const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+                
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, this.camera);
+                
+                const allObjects = [];
+                this.platformGroup.traverse((child) => {
+                    if (child.isMesh && child.userData.type === 'cube') {
+                        allObjects.push(child);
+                    }
+                });
+                
+                const intersects = raycaster.intersectObjects(allObjects);
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    if (object.userData.type === 'cube') {
+                        this.removeCube(object.userData.gridX, object.userData.gridY, object.userData.gridZ);
+                    }
+                }
+            }
+            
+            handleRightClick(event) {
+                // 右键删除方块
+                event.preventDefault();
+                
+                const mouse = new THREE.Vector2();
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, this.camera);
+                
+                const allObjects = [];
+                this.platformGroup.traverse((child) => {
+                    if (child.isMesh && child.userData.type === 'cube') {
+                        allObjects.push(child);
+                    }
+                });
+                
+                const intersects = raycaster.intersectObjects(allObjects);
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    if (object.userData.type === 'cube') {
+                        this.removeCube(object.userData.gridX, object.userData.gridY, object.userData.gridZ);
+                    }
+                }
+            }
+            
+            handleClick(event) {
+                if (this.isRotating) return;
+                
+                // 检查是否是右键点击
+                if (event.button === 2) {
+                    this.handleRightClick(event);
+                    return;
+                }
+                
+                const mouse = new THREE.Vector2();
+                const clientX = event.touches ? event.changedTouches[0].clientX : event.clientX;
+                const clientY = event.touches ? event.changedTouches[0].clientY : event.clientY;
+                
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, this.camera);
+                
+                const allObjects = [];
+                this.platformGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        allObjects.push(child);
+                    }
+                });
+                
+                const intersects = raycaster.intersectObjects(allObjects);
+                
+                if (intersects.length > 0) {
+                    const intersect = intersects[0];
+                    const object = intersect.object;
+                    
+                    if (object.userData.type === 'platform') {
+                        this.handlePlatformClick(intersect);
+                    } else if (object.userData.type === 'cube') {
+                        this.handleCubeClick(intersect, object);
+                    }
+                }
+            }
+            
+            handlePlatformClick(intersect) {
+                const point = intersect.point;
+                const localPoint = this.platformGroup.worldToLocal(point.clone());
+                const gridX = Math.floor(localPoint.x + this.gridSize/2);
+                const gridZ = Math.floor(localPoint.z + this.gridSize/2);
+                
+                if (gridX >= 0 && gridX < this.gridSize && gridZ >= 0 && gridZ < this.gridSize) {
+                    // 在地面上放置（y=0），永远允许
+                    this.placeCubeAt(gridX, 0, gridZ);
+                }
+            }
+            
+            handleCubeClick(intersect, cube) {
+                const normal = intersect.face.normal.clone();
+                normal.transformDirection(cube.matrixWorld);
+                const platformMatrix = new THREE.Matrix4().copy(this.platformGroup.matrixWorld).invert();
+                normal.transformDirection(platformMatrix);
+                
+                let targetX = cube.userData.gridX;
+                let targetY = cube.userData.gridY;
+                let targetZ = cube.userData.gridZ;
+                
+                if (Math.abs(normal.x) > 0.7) {
+                    targetX += Math.sign(normal.x);
+                } else if (Math.abs(normal.y) > 0.7) {
+                    targetY += Math.sign(normal.y);
+                } else if (Math.abs(normal.z) > 0.7) {
+                    targetZ += Math.sign(normal.z);
+                }
+                
+                if (targetX >= 0 && targetX < this.gridSize && 
+                    targetZ >= 0 && targetZ < this.gridSize && 
+                    targetY >= 0 && targetY < this.gridSize) {
+                    
+                    const key = `${targetX},${targetY},${targetZ}`;
+                    if (!this.cubes.has(key) && this.isConnected(targetX, targetY, targetZ)) {
+                        this.placeCubeAt(targetX, targetY, targetZ);
+                    }
+                }
+            }
+            
+            placeCubeAt(x, y, z) {
+                const key = `${x},${y},${z}`;
+                if (this.cubes.has(key)) return;
+                
+                const geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+                const material = new THREE.MeshLambertMaterial({ color: this.getRandomColor() });
+                const cube = new THREE.Mesh(geometry, material);
+                
+                cube.position.set(x - this.gridSize/2 + 0.5, y + 0.5, z - this.gridSize/2 + 0.5);
+                cube.userData = { gridX: x, gridY: y, gridZ: z, type: 'cube' };
+                
+                this.cubes.set(key, cube);
+                this.platformGroup.add(cube);
+                
+                // 添加到历史记录
+                this.cubeHistory.push({ x, y, z });
+                
+                this.updateCubeCount();
+                this.updateProjections(); // 实时更新投影显示
+                this.autoCheckAnswer();
+                this.updateUndoButton();
+            }
+            
+            removeCube(x, y, z) {
+                const key = `${x},${y},${z}`;
+                const cube = this.cubes.get(key);
+                if (cube) {
+                    this.platformGroup.remove(cube);
+                    this.cubes.delete(key);
+                    
+                    // 从历史记录中移除
+                    const index = this.cubeHistory.findIndex(item => item.x === x && item.y === y && item.z === z);
+                    if (index !== -1) {
+                        this.cubeHistory.splice(index, 1);
+                    }
+                    
+                    this.updateCubeCount();
+                    this.updateProjections(); // 实时更新投影显示
+                    this.autoCheckAnswer();
+                    this.updateUndoButton();
+                }
+            }
+            
+            undo() {
+                if (this.cubeHistory.length === 0) return;
+                
+                // 移除最后放置的方块
+                const lastCube = this.cubeHistory.pop();
+                this.removeCube(lastCube.x, lastCube.y, lastCube.z);
+                
+                // 重新添加到历史记录（因为removeCube会删除它）
+                // 但我们不需要重新添加，因为这就是撤销的目的
+            }
+            
+            updateUndoButton() {
+                const undoButton = document.getElementById('undo');
+                undoButton.disabled = this.cubeHistory.length === 0;
+                if (undoButton.disabled) {
+                    undoButton.classList.add('opacity-50', 'cursor-not-allowed');
+                    undoButton.classList.remove('hover:bg-orange-700');
+                } else {
+                    undoButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                    undoButton.classList.add('hover:bg-orange-700');
+                }
+            }
+            
+            updateCubeCount() {
+                const currentCount = this.cubes.size;
+                document.getElementById('cubeCount').textContent = 
+                    `用最少的方块: ${currentCount}/${this.minCubesNeeded}`;
+                
+                if (currentCount > this.minCubesNeeded) {
+                    document.getElementById('cubeCount').style.color = '#f87171';
+                } else if (currentCount === this.minCubesNeeded) {
+                    document.getElementById('cubeCount').style.color = '#4ade80';
+                } else {
+                    document.getElementById('cubeCount').style.color = '#fbbf24';
+                }
+            }
+            
+            checkProjectionMatch() {
+                // 检查当前方块是否产生正确的投影
+                const currentFrontProjection = new Set();
+                const currentRightProjection = new Set();
+                
+                // 计算当前方块的投影
+                for (const [key, cube] of this.cubes) {
+                    const originalX = cube.userData.gridX - this.gridSize/2 + 0.5;
+                    const originalZ = cube.userData.gridZ - this.gridSize/2 + 0.5;
+                    const originalY = cube.userData.gridY;
+                    
+                    // 使用精确的旋转参数
+                    const { cos, sin } = this.getRotationParams();
+                    const rotatedX = originalX * cos - originalZ * sin;
+                    const rotatedZ = originalX * sin + originalZ * cos;
+                    
+                    const frontProjKey = `${Math.round(rotatedX * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    const rightProjKey = `${Math.round(rotatedZ * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    
+                    currentFrontProjection.add(frontProjKey);
+                    currentRightProjection.add(rightProjKey);
+                }
+                
+                // 计算目标投影
+                const targetFrontProjection = new Set();
+                const targetRightProjection = new Set();
+                
+                for (const [key, target] of this.targetCubes) {
+                    const originalX = target.x - this.gridSize/2 + 0.5;
+                    const originalZ = target.z - this.gridSize/2 + 0.5;
+                    const originalY = target.y;
+                    
+                    // 使用精确的旋转参数
+                    const { cos, sin } = this.getRotationParams();
+                    const rotatedX = originalX * cos - originalZ * sin;
+                    const rotatedZ = originalX * sin + originalZ * cos;
+                    
+                    const frontProjKey = `${Math.round(rotatedX * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    const rightProjKey = `${Math.round(rotatedZ * 2)},${Math.round((originalY + 0.5) * 2)}`;
+                    
+                    targetFrontProjection.add(frontProjKey);
+                    targetRightProjection.add(rightProjKey);
+                }
+                
+                // 比较投影是否匹配
+                const frontMatch = this.setsEqual(currentFrontProjection, targetFrontProjection);
+                const rightMatch = this.setsEqual(currentRightProjection, targetRightProjection);
+                
+                return frontMatch && rightMatch;
+            }
+            
+            setsEqual(set1, set2) {
+                if (set1.size !== set2.size) return false;
+                for (const item of set1) {
+                    if (!set2.has(item)) return false;
+                }
+                return true;
+            }
+            
+            showSuccessEffect() {
+                const effect = document.getElementById('successEffect');
+                effect.classList.add('success-show');
+                
+                // 3秒后隐藏特效并自动开始下一关
+                setTimeout(() => {
+                    effect.classList.remove('success-show');
+                    // 再延迟1秒开始下一关
+                    setTimeout(() => {
+                        this.newGame();
+                    }, 1000);
+                }, 3000);
+            }
+            
+            rotatePlatform(direction) {
+                if (this.isRotating) return;
+                
+                this.isRotating = true;
+                const startRotationSteps = this.rotationSteps;
+                const targetRotationSteps = this.rotationSteps + direction;
+                
+                // 计算实际的角度用于动画
+                const startAngle = startRotationSteps * 90;
+                const targetAngle = targetRotationSteps * 90;
+                
+                const duration = 500;
+                const startTime = Date.now();
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    const easeProgress = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+                    
+                    const currentAngle = startAngle + (targetAngle - startAngle) * easeProgress;
+                    this.platformGroup.rotation.y = THREE.MathUtils.degToRad(currentAngle);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        // 更新旋转步数而不是角度
+                        this.rotationSteps = targetRotationSteps;
+                        this.isRotating = false;
+                        this.calculateMinCubes();
+                        this.updateProjections();
+                        this.updateCubeCount();
+                        this.autoCheckAnswer();
+                    }
+                };
+                
+                animate();
+            }
+            
+            autoCheckAnswer() {
+                const projectionMatch = this.checkProjectionMatch();
+                const cubeCount = this.cubes.size;
+                
+                // 只在成功时显示特效并自动下一关
+                if (projectionMatch && cubeCount <= this.minCubesNeeded) {
+                    this.showSuccessEffect();
+                }
+            }
+            
+            newGame() {
+                this.gridSize = parseInt(document.getElementById('gridSize').value);
+                
+                // 重置所有状态
+                this.rotationSteps = 0;
+                this.isRotating = false;
+                this.cubeHistory = []; // 清空历史记录
+                
+                // 完全清空所有方块
+                for (const [key, cube] of this.cubes) {
+                    this.platformGroup.remove(cube);
+                }
+                this.cubes.clear();
+                
+                // 重建游戏场景
+                this.createPlatform();
+                this.createWalls();
+                this.platformGroup.rotation.y = 0;
+                
+                // Auto-adjust camera for new grid size
+                this.autoZoomCamera();
+                
+                // 生成新的目标
+                this.generateTarget();
+                this.updateUndoButton();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('newGame').addEventListener('click', () => this.newGame());
+                document.getElementById('undo').addEventListener('click', () => this.undo());
+                document.getElementById('rotateLeft').addEventListener('click', () => this.rotatePlatform(-1));
+                document.getElementById('rotateRight').addEventListener('click', () => this.rotatePlatform(1));
+                
+                // 鼠标事件
+                this.renderer.domElement.addEventListener('mousedown', (event) => {
+                    event.preventDefault();
+                    if (event.button === 2) {
+                        // 右键点击，直接处理删除
+                        this.handleRightClick(event);
+                    } else {
+                        // 左键点击，开始长按检测
+                        this.startLongPress(event);
+                    }
+                });
+                
+                this.renderer.domElement.addEventListener('mouseup', (event) => {
+                    event.preventDefault();
+                    if (event.button !== 2) {
+                        // 只处理左键松开
+                        this.endLongPress(event);
+                    }
+                });
+                
+                // 触摸事件
+                this.renderer.domElement.addEventListener('touchstart', (event) => {
+                    event.preventDefault();
+                    this.startLongPress(event);
+                });
+                
+                this.renderer.domElement.addEventListener('touchend', (event) => {
+                    event.preventDefault();
+                    this.endLongPress(event);
+                });
+                
+                // 阻止右键菜单
+                this.renderer.domElement.addEventListener('contextmenu', (event) => {
+                    event.preventDefault();
+                });
+                
+                window.addEventListener('resize', () => {
+                    this.handleResize();
+                });
+            }
+            
+            handleResize() {
+                // Update camera aspect ratio
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                
+                // Update renderer size
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                
+                // Auto-adjust camera position for optimal viewing
+                this.autoZoomCamera();
+            }
+
+            autoZoomCamera() {
+                const aspect = window.innerWidth / window.innerHeight;
+                const sceneSize = this.gridSize + 2; // Add padding for walls and projections
+                
+                // Calculate optimal distance based on grid size and aspect ratio
+                const fov = this.camera.fov * (Math.PI / 180); // Convert to radians
+                const targetDistance = sceneSize / (2 * Math.tan(fov / 2));
+                
+                // Adjust distance based on aspect ratio
+                let optimalDistance;
+                if (aspect > 1) {
+                    // Landscape: use height as limiting factor
+                    optimalDistance = targetDistance * 1.2;
+                } else {
+                    // Portrait: use width as limiting factor and move camera further
+                    optimalDistance = targetDistance * 1.5 / aspect;
+                }
+                
+                // Ensure minimum and maximum distances
+                optimalDistance = Math.max(optimalDistance, this.gridSize * 2);
+                optimalDistance = Math.min(optimalDistance, this.gridSize * 8);
+                
+                // Smoothly animate camera to new position
+                this.animateCameraToPosition(
+                    -optimalDistance * 0.7, 
+                    optimalDistance * 0.7, 
+                    optimalDistance * 0.7
+                );
+            }
+
+            animateCameraToPosition(targetX, targetY, targetZ) {
+                const startPosition = this.camera.position.clone();
+                const targetPosition = new THREE.Vector3(targetX, targetY, targetZ);
+                
+                const duration = 800; // Animation duration in ms
+                const startTime = Date.now();
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    // Smooth easing function
+                    const easeProgress = progress < 0.5 
+                        ? 2 * progress * progress 
+                        : -1 + (4 - 2 * progress) * progress;
+                    
+                    // Interpolate camera position
+                    this.camera.position.lerpVectors(startPosition, targetPosition, easeProgress);
+                    
+                    // Update camera to look at the scene center
+                    this.camera.lookAt(-this.gridSize/4, 1, this.gridSize/4);
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                
+                animate();
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        new SpatialGame();
+    </script>
+</body>
+</html>

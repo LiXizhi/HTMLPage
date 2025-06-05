@@ -1,0 +1,288 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iframe Screen Capture Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- CRITICAL: Permissions Policy for the parent page -->
+    <meta http-equiv="Permissions-Policy" content="display-capture=*, camera=*, microphone=*">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">iframe Screen Capture Demo</h1>
+        
+        <!-- Environment Check -->
+        <div id="environmentCheck" class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6 rounded">
+            <h3 class="font-semibold">Environment Status:</h3>
+            <ul id="checkList" class="mt-2 space-y-1 text-sm"></ul>
+        </div>
+
+        <!-- Parent Frame Controls -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Parent Frame - Screen Capture Test</h2>
+            <div class="space-y-4">
+                <button id="parentScreenCapture" class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded">
+                    Test Screen Capture (Parent)
+                </button>
+                <div id="parentResult" class="mt-2 p-3 bg-gray-50 rounded"></div>
+            </div>
+        </div>
+
+        <!-- iframe with proper permissions -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">iframe - Screen Capture Test</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                This iframe has the following permissions: 
+                <code class="bg-gray-200 px-2 py-1 rounded">allow="camera; microphone; display-capture"</code>
+            </p>
+            
+            <!-- CRITICAL: iframe with display-capture permission -->
+            <iframe 
+                id="captureFrame"
+                allow="camera; microphone; display-capture"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                class="w-full h-96 border-2 border-gray-300 rounded"
+                srcdoc='
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <script src="https://cdn.tailwindcss.com"></script>
+                    <meta http-equiv="Permissions-Policy" content="display-capture=*, camera=*, microphone=*">
+                </head>
+                <body class="p-6 bg-blue-50">
+                    <h3 class="text-lg font-bold mb-4">iframe Content</h3>
+                    
+                    <div class="space-y-4">
+                        <button id="iframeScreenCapture" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                            Test Screen Capture (iframe)
+                        </button>
+                        
+                        <div class="space-y-2">
+                            <button id="checkPermissions" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded text-sm">
+                                Check Permissions
+                            </button>
+                            <button id="requestPermissions" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded text-sm">
+                                Request Permissions
+                            </button>
+                        </div>
+                        
+                        <div id="iframeResult" class="p-3 bg-white rounded border">
+                            <p class="text-sm text-gray-600">Click buttons to test...</p>
+                        </div>
+                        
+                        <div id="streamPreview" class="hidden">
+                            <video id="previewVideo" autoplay muted class="w-full max-w-md border rounded"></video>
+                            <button id="stopCapture" class="mt-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm">
+                                Stop Capture
+                            </button>
+                        </div>
+                    </div>
+
+                    <script>
+                        let currentStream = null;
+                        
+                        // Check if APIs are available
+                        function checkAPIs() {
+                            const results = [];
+                            results.push("✅ navigator.mediaDevices: " + !!navigator.mediaDevices);
+                            results.push("✅ getDisplayMedia: " + !!navigator.mediaDevices?.getDisplayMedia);
+                            results.push("✅ getUserMedia: " + !!navigator.mediaDevices?.getUserMedia);
+                            results.push("✅ HTTPS: " + (location.protocol === "https:" || location.hostname === "localhost"));
+                            
+                            document.getElementById("iframeResult").innerHTML = 
+                                "<h4 class=\"font-semibold mb-2\">API Availability:</h4>" + 
+                                results.map(r => "<div class=\"text-sm\">" + r + "</div>").join("");
+                        }
+                        
+                        // Check permissions status
+                        async function checkPermissions() {
+                            try {
+                                if (navigator.permissions) {
+                                    const cameraPermission = await navigator.permissions.query({name: "camera"});
+                                    const micPermission = await navigator.permissions.query({name: "microphone"});
+                                    
+                                    document.getElementById("iframeResult").innerHTML = 
+                                        "<h4 class=\"font-semibold mb-2\">Permission Status:</h4>" +
+                                        "<div class=\"text-sm\">📷 Camera: " + cameraPermission.state + "</div>" +
+                                        "<div class=\"text-sm\">🎤 Microphone: " + micPermission.state + "</div>" +
+                                        "<div class=\"text-sm\">🖥️ Display: API available but permission checked on use</div>";
+                                } else {
+                                    document.getElementById("iframeResult").innerHTML = 
+                                        "<div class=\"text-yellow-600\">⚠️ Permissions API not available</div>";
+                                }
+                            } catch (error) {
+                                document.getElementById("iframeResult").innerHTML = 
+                                    "<div class=\"text-red-600\">❌ Error checking permissions: " + error.message + "</div>";
+                            }
+                        }
+                        
+                        // Request camera/microphone permissions first
+                        async function requestPermissions() {
+                            try {
+                                const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+                                stream.getTracks().forEach(track => track.stop());
+                                document.getElementById("iframeResult").innerHTML = 
+                                    "<div class=\"text-green-600\">✅ Camera and microphone permissions granted</div>";
+                            } catch (error) {
+                                document.getElementById("iframeResult").innerHTML = 
+                                    "<div class=\"text-red-600\">❌ Failed to get camera/mic permissions: " + error.message + "</div>";
+                            }
+                        }
+                        
+                        // Test screen capture
+                        async function testScreenCapture() {
+                            try {
+                                document.getElementById("iframeResult").innerHTML = 
+                                    "<div class=\"text-blue-600\">🔄 Requesting screen capture...</div>";
+                                
+                                const stream = await navigator.mediaDevices.getDisplayMedia({
+                                    video: {
+                                        width: { ideal: 1920 },
+                                        height: { ideal: 1080 }
+                                    },
+                                    audio: true
+                                });
+                                
+                                currentStream = stream;
+                                
+                                // Show preview
+                                const video = document.getElementById("previewVideo");
+                                video.srcObject = stream;
+                                document.getElementById("streamPreview").classList.remove("hidden");
+                                
+                                document.getElementById("iframeResult").innerHTML = 
+                                    "<div class=\"text-green-600\">✅ Screen capture successful!</div>" +
+                                    "<div class=\"text-sm text-gray-600 mt-1\">Video tracks: " + stream.getVideoTracks().length + 
+                                    ", Audio tracks: " + stream.getAudioTracks().length + "</div>";
+                                
+                                // Handle stream end
+                                stream.getVideoTracks()[0].addEventListener("ended", () => {
+                                    stopCapture();
+                                });
+                                
+                            } catch (error) {
+                                let errorMsg = error.message;
+                                let suggestions = "";
+                                
+                                if (error.name === "NotAllowedError") {
+                                    suggestions = "<br><small>💡 Make sure to click Allow in the permission dialog</small>";
+                                } else if (error.message.includes("permission policy")) {
+                                    suggestions = "<br><small>💡 iframe needs allow=\"display-capture\" attribute</small>";
+                                } else if (error.message.includes("secure context")) {
+                                    suggestions = "<br><small>💡 Page must be served over HTTPS</small>";
+                                }
+                                
+                                document.getElementById("iframeResult").innerHTML = 
+                                    "<div class=\"text-red-600\">❌ Screen capture failed:</div>" +
+                                    "<div class=\"text-sm text-red-500\">" + errorMsg + suggestions + "</div>";
+                            }
+                        }
+                        
+                        function stopCapture() {
+                            if (currentStream) {
+                                currentStream.getTracks().forEach(track => track.stop());
+                                currentStream = null;
+                                document.getElementById("streamPreview").classList.add("hidden");
+                                document.getElementById("iframeResult").innerHTML = 
+                                    "<div class=\"text-gray-600\">⏹️ Screen capture stopped</div>";
+                            }
+                        }
+                        
+                        // Event listeners
+                        document.getElementById("iframeScreenCapture").addEventListener("click", testScreenCapture);
+                        document.getElementById("checkPermissions").addEventListener("click", checkPermissions);
+                        document.getElementById("requestPermissions").addEventListener("click", requestPermissions);
+                        document.getElementById("stopCapture").addEventListener("click", stopCapture);
+                        
+                        // Initial API check
+                        checkAPIs();
+                    </script>
+                </body>
+                </html>
+                '>
+            </iframe>
+        </div>
+
+        <!-- Instructions -->
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mt-6">
+            <h3 class="text-lg font-semibold text-yellow-800 mb-3">🔧 Setup Requirements:</h3>
+            <ol class="list-decimal list-inside space-y-2 text-yellow-700">
+                <li><strong>HTTPS Required:</strong> Page must be served over HTTPS (or localhost)</li>
+                <li><strong>iframe allow attribute:</strong> <code>allow="display-capture"</code></li>
+                <li><strong>Permissions Policy:</strong> Parent page must allow display-capture</li>
+                <li><strong>User Gesture:</strong> Must be triggered by user interaction</li>
+                <li><strong>Same-Origin or CORS:</strong> Proper cross-origin setup if needed</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Parent frame environment check
+        function checkEnvironment() {
+            const checks = [
+                {
+                    name: "HTTPS Protocol",
+                    status: location.protocol === 'https:' || location.hostname === 'localhost',
+                    value: location.protocol
+                },
+                {
+                    name: "MediaDevices API",
+                    status: !!navigator.mediaDevices,
+                    value: !!navigator.mediaDevices
+                },
+                {
+                    name: "getDisplayMedia API",
+                    status: !!navigator.mediaDevices?.getDisplayMedia,
+                    value: !!navigator.mediaDevices?.getDisplayMedia
+                },
+                {
+                    name: "Permissions Policy",
+                    status: document.querySelector('meta[http-equiv="Permissions-Policy"]') !== null,
+                    value: "Set in meta tag"
+                }
+            ];
+            
+            const checkList = document.getElementById('checkList');
+            checkList.innerHTML = checks.map(check => 
+                `<li class="${check.status ? 'text-green-600' : 'text-red-600'}">
+                    ${check.status ? '✅' : '❌'} ${check.name}: ${check.value}
+                </li>`
+            ).join('');
+        }
+        
+        // Parent frame screen capture test
+        async function testParentScreenCapture() {
+            const resultDiv = document.getElementById('parentResult');
+            try {
+                resultDiv.innerHTML = '<div class="text-blue-600">🔄 Testing parent frame screen capture...</div>';
+                
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                resultDiv.innerHTML = 
+                    '<div class="text-green-600">✅ Parent frame screen capture successful!</div>' +
+                    '<div class="text-sm text-gray-600">This proves the environment supports screen capture.</div>';
+                
+                // Stop the stream immediately for this test
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                resultDiv.innerHTML = 
+                    '<div class="text-red-600">❌ Parent frame screen capture failed:</div>' +
+                    '<div class="text-sm text-red-500">' + error.message + '</div>';
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkEnvironment();
+            document.getElementById('parentScreenCapture').addEventListener('click', testParentScreenCapture);
+        });
+    </script>
+</body>
+</html>

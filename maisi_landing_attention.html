@@ -1,0 +1,571 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注意力与学习能力测试</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .game-button {
+            transition: all 0.2s ease;
+        }
+        .game-button:hover {
+            transform: scale(1.05);
+        }
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        .iframe-container {
+            position: relative;
+            width: 100%;
+            max-width: 1280px;
+            margin: 0 auto;
+            aspect-ratio: 1280 / 720;
+            background: #f3f4f6;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: opacity 0.3s ease;
+        }
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .landscape-mode {
+            height: 90vh !important;
+            max-width: none !important;
+            width: 100% !important;
+            aspect-ratio: auto !important;
+        }
+        .control-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .control-btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #374151;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .control-btn:hover {
+            background: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .control-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        .placeholder-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border-radius: 8px;
+        }
+        
+        /* 媒体查询：检测设备方向 */
+        @media screen and (orientation: portrait) and (max-width: 768px) {
+            .landscape-btn-show {
+                display: block;
+            }
+        }
+        
+        @media screen and (orientation: landscape) or (min-width: 769px) {
+            .landscape-btn-show {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 测试游戏区域 - 压缩间距 -->
+    <section class="py-6 bg-white">
+        <div class="container mx-auto px-4">
+            <div class="max-w-2xl mx-auto text-center">
+                <h2 class="text-xl md:text-2xl font-bold mb-4 text-gray-800">
+                    🎮 注意力测试小游戏
+                </h2>
+                <p class="text-gray-600 mb-6 text-sm">
+                    让孩子体验一个有趣的注意力测试，了解当前的专注力水平
+                </p>
+                
+                <div id="gameArea" class="bg-gray-50 rounded-lg p-6 mb-4">
+                    <div id="gameInstructions" class="text-center">
+                        <h3 class="text-lg font-semibold mb-3">游戏规则</h3>
+                        <p class="text-gray-600 mb-4 text-sm">
+                            观察下方的数字序列，然后按照从小到大的顺序点击它们。<br>
+                            准备好了吗？点击开始按钮！
+                        </p>
+                        <button id="startGameBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold game-button">
+                            开始测试
+                        </button>
+                    </div>
+                    
+                    <div id="gameContent" class="hidden">
+                        <!-- 游戏进度显示 - 压缩间距 -->
+                        <div class="mb-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-semibold text-gray-600">第 <span id="currentLevel">1</span> 关</span>
+                                <span class="text-sm font-semibold text-gray-600">还需点击 <span id="remainingSteps">8</span> 步</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progressBar" class="bg-green-500 h-2 rounded-full progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center mb-4">
+                            <div class="text-base font-semibold">剩余时间: <span id="timeLeft">30</span>秒</div>
+                            <div class="text-base">得分: <span id="currentScore">0</span></div>
+                        </div>
+                        <div id="numbersGrid" class="grid grid-cols-4 gap-3 max-w-md mx-auto mb-3">
+                            <!-- 数字按钮将在这里动态生成 -->
+                        </div>
+                        <div id="gameStatus" class="text-center text-base font-semibold"></div>
+                    </div>
+                </div>
+                
+                <!-- 测试结果区域 - 压缩间距 -->
+                <div id="gameResult" class="hidden bg-gradient-to-r from-green-400 to-blue-500 text-white rounded-lg p-4">
+                    <h3 class="text-lg font-bold mb-3">测试完成！</h3>
+                    <div class="text-2xl font-bold mb-2" id="finalScore"></div>
+                    <div class="text-base mb-3" id="resultMessage"></div>
+                    <div class="text-sm opacity-90 mb-4" id="resultSuggestion"></div>
+                    
+                    <!-- 两个选择按钮 -->
+                    <div class="space-y-3">
+                        <button id="freeExperienceBtn" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-800 px-4 py-3 rounded-lg font-bold text-base game-button">
+                            🎯 免费体验麦思星球App<br>
+                            <span class="text-sm font-normal">提升13项基础认知能力</span>
+                        </button>
+                        
+                        <button id="fullAssessmentBtn" class="w-full bg-white bg-opacity-20 hover:bg-opacity-30 text-white border-2 border-white px-4 py-3 rounded-lg font-bold text-base game-button">
+                            📊 扫描二维码进入AI测评小程序<br>
+                            <span class="text-sm font-normal">获得5大维度全面学习力测评</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 麦思星球游戏区域 - 压缩间距 -->
+    <section id="maisiGameSection" class="py-6 gradient-bg text-white">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto text-center">
+                <h2 class="text-xl md:text-2xl font-bold mb-4">
+                    🌟 麦思星球 - 儿童认知能力训练专家
+                </h2>
+                
+                <!-- iframe容器 -->
+                <div class="iframe-container bg-white rounded-lg shadow-2xl" id="iframeContainer">
+                    <!-- 初始显示占位内容 -->
+                    <div id="placeholderContent" class="placeholder-content">
+                        <div class="text-center text-gray-500">
+                            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <span class="text-2xl">🎮</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-gray-700">请先完成注意力测试小游戏</h3>
+                            <p class="text-sm text-gray-500">完成测试后即可体验麦思星球训练内容</p>
+                        </div>
+                    </div>
+                    
+                    <iframe 
+                        id="maisiGameIframe"
+                        src=""
+                        title="麦思星球游戏"
+                        allow="fullscreen; autoplay; encrypted-media"
+                        loading="lazy"
+                        style="display: none;">
+                    </iframe>
+                    
+                    <!-- 加载遮罩 -->
+                    <div id="loadingOverlay" class="loading-overlay hidden">
+                        <div class="text-center text-gray-600">
+                            <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <p class="text-lg font-semibold">正在加载麦思星球...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 控制按钮 - 右对齐 -->
+                <div class="control-buttons">
+                    <button id="refreshBtn" class="control-btn">
+                        🔄 刷新页面
+                    </button>
+                    <button id="landscapeBtn" class="control-btn landscape-btn-show" style="display: none;">
+                        📱 横屏体验
+                    </button>
+                </div>
+                
+                <!-- 描述文字 - 压缩间距 -->
+                <p class="text-base opacity-90 mt-4">
+                    麦思星球专为8-16岁孩子打造的游戏化思维训练世界。
+                </p>
+            </div>
+        </div>
+    </section>
+    <script>
+        class AttentionGame {
+            constructor() {
+                this.score = 0;
+                this.timeLeft = 30;
+                this.currentLevel = 1;
+                this.numbers = [];
+                this.expectedNext = 1;
+                this.gameActive = false;
+                this.timer = null;
+                this.levelNumbers = 8;
+                this.iframePreloaded = false;
+                this.isLandscapeMode = false;
+                this.loadingStartTime = null;
+                this.levelColors = [
+                    'blue',    // 第1关
+                    'green',   // 第2关  
+                    'purple',  // 第3关
+                    'indigo',  // 第4关
+                    'pink',    // 第5关
+                    'teal',    // 第6关
+                    'orange',  // 第7关
+                    'red'      // 第8关
+                ];
+                
+                this.initEventListeners();
+                this.checkDeviceOrientation();
+            }
+            
+            initEventListeners() {
+                document.getElementById('startGameBtn').addEventListener('click', () => this.startGame());
+                document.getElementById('freeExperienceBtn').addEventListener('click', () => this.handleFreeExperience());
+                document.getElementById('fullAssessmentBtn').addEventListener('click', () => this.handleFullAssessment());
+                document.getElementById('refreshBtn').addEventListener('click', () => this.refreshPage());
+                document.getElementById('landscapeBtn').addEventListener('click', () => this.toggleLandscapeMode());
+                
+                // 监听iframe加载完成
+                document.getElementById('maisiGameIframe').addEventListener('load', () => this.handleIframeLoad());
+                
+                // 监听窗口尺寸变化，重新检查设备方向
+                window.addEventListener('resize', () => this.checkDeviceOrientation());
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(() => this.checkDeviceOrientation(), 100);
+                });
+            }
+            
+            checkDeviceOrientation() {
+                const landscapeBtn = document.getElementById('landscapeBtn');
+                const isPortrait = window.innerHeight > window.innerWidth;
+                const isMobile = window.innerWidth <= 768;
+                
+                if (isPortrait && isMobile) {
+                    landscapeBtn.style.display = 'block';
+                } else {
+                    landscapeBtn.style.display = 'none';
+                    // 如果不是竖屏手机，自动退出横屏模式
+                    if (this.isLandscapeMode) {
+                        this.exitLandscapeMode();
+                    }
+                }
+            }
+            
+            startGame() {
+                this.score = 0;
+                this.timeLeft = 30;
+                this.currentLevel = 1;
+                this.expectedNext = 1;
+                this.gameActive = true;
+                
+                document.getElementById('gameInstructions').classList.add('hidden');
+                document.getElementById('gameContent').classList.remove('hidden');
+                document.getElementById('gameResult').classList.add('hidden');
+                
+                // 游戏开始时立即加载麦思星球iframe
+                this.loadMaisiIframe();
+                
+                this.generateNumbers();
+                this.startTimer();
+                this.updateDisplay();
+            }
+            
+            loadMaisiIframe() {
+                if (!this.iframePreloaded) {
+                    console.log('游戏开始，开始加载麦思星球...');
+                    
+                    // 记录开始加载的时间
+                    this.loadingStartTime = Date.now();
+                    
+                    // 隐藏占位内容，显示加载遮罩
+                    document.getElementById('placeholderContent').style.display = 'none';
+                    document.getElementById('loadingOverlay').classList.remove('hidden');
+                    
+                    // 加载iframe
+                    const iframe = document.getElementById('maisiGameIframe');
+                    iframe.src = 'https://webparacraft.keepwork.com/?pid=530';
+                    this.iframePreloaded = true;
+                }
+            }
+            
+            handleIframeLoad() {
+                console.log('麦思星球游戏加载完成');
+                
+                // 计算已经加载的时间
+                const loadingTime = Date.now() - this.loadingStartTime;
+                const minLoadingTime = 5000; // 最少显示5秒
+                const remainingTime = Math.max(0, minLoadingTime - loadingTime);
+                
+                // 确保至少显示5秒的加载状态
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('maisiGameIframe').style.display = 'block';
+                }, remainingTime);
+            }
+            
+            refreshPage() {
+                console.log('刷新整个页面');
+                // 刷新整个页面
+                window.location.reload();
+            }
+            
+            toggleLandscapeMode() {
+                if (this.isLandscapeMode) {
+                    this.exitLandscapeMode();
+                } else {
+                    this.enterLandscapeMode();
+                }
+            }
+            
+            enterLandscapeMode() {
+                const container = document.getElementById('iframeContainer');
+                const landscapeBtn = document.getElementById('landscapeBtn');
+                
+                container.classList.add('landscape-mode');
+                landscapeBtn.textContent = '📱 退出横屏';
+                landscapeBtn.classList.add('active');
+                this.isLandscapeMode = true;
+                
+                // 自动滚动到iframe区域，确保显示完整的iframe
+                setTimeout(() => {
+                    const iframeSection = document.getElementById('maisiGameSection');
+                    const container = document.getElementById('iframeContainer');
+                    
+                    // 计算需要滚动的位置，让iframe完全可见
+                    const sectionTop = iframeSection.offsetTop;
+                    const containerHeight = container.offsetHeight;
+                    const viewportHeight = window.innerHeight;
+                    
+                    // 滚动到能够显示完整iframe的位置
+                    const scrollTop = Math.max(0, sectionTop - (viewportHeight - containerHeight) / 2);
+                    
+                    window.scrollTo({
+                        top: scrollTop,
+                        behavior: 'smooth'
+                    });
+                }, 100); // 稍微延迟以确保CSS过渡完成
+                
+                console.log('进入横屏模式并自动滚动到iframe');
+            }
+            
+            exitLandscapeMode() {
+                const container = document.getElementById('iframeContainer');
+                const landscapeBtn = document.getElementById('landscapeBtn');
+                
+                container.classList.remove('landscape-mode');
+                landscapeBtn.textContent = '📱 横屏体验';
+                landscapeBtn.classList.remove('active');
+                this.isLandscapeMode = false;
+                
+                console.log('退出横屏模式');
+            }
+            
+            generateNumbers() {
+                this.numbers = [];
+                this.expectedNext = 1;
+                
+                for (let i = 1; i <= this.levelNumbers; i++) {
+                    this.numbers.push(i);
+                }
+                
+                for (let i = this.numbers.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.numbers[i], this.numbers[j]] = [this.numbers[j], this.numbers[i]];
+                }
+                
+                this.renderNumbers();
+                this.updateProgress();
+            }
+            
+            renderNumbers() {
+                const grid = document.getElementById('numbersGrid');
+                grid.innerHTML = '';
+                
+                // 获取当前关卡的颜色
+                const colorIndex = (this.currentLevel - 1) % this.levelColors.length;
+                const currentColor = this.levelColors[colorIndex];
+                
+                this.numbers.forEach((num, index) => {
+                    const button = document.createElement('button');
+                    button.textContent = num;
+                    button.className = `bg-${currentColor}-500 hover:bg-${currentColor}-600 text-white w-14 h-14 rounded-lg font-bold text-lg game-button`;
+                    button.addEventListener('click', () => this.handleNumberClick(num, button));
+                    grid.appendChild(button);
+                });
+            }
+            
+            handleNumberClick(clickedNumber, button) {
+                if (!this.gameActive) return;
+                
+                if (clickedNumber === this.expectedNext) {
+                    button.className = 'bg-green-500 text-white w-14 h-14 rounded-lg font-bold text-lg';
+                    button.disabled = true;
+                    this.score += 10;
+                    this.expectedNext++;
+                    
+                    // 更新进度
+                    this.updateProgress();
+                    
+                    if (this.expectedNext > this.levelNumbers) {
+                        // 完成一轮
+                        this.score += 50;
+                        this.currentLevel++;
+                        setTimeout(() => {
+                            this.generateNumbers();
+                        }, 1500);
+                        document.getElementById('gameStatus').textContent = `🎉 第${this.currentLevel-1}关完成！准备挑战第${this.currentLevel}关...`;
+                    } else {
+                        const remaining = this.levelNumbers - this.expectedNext + 1;
+                        document.getElementById('gameStatus').textContent = `很棒！继续找 ${this.expectedNext}`;
+                    }
+                } else {
+                    const colorIndex = (this.currentLevel - 1) % this.levelColors.length;
+                    const currentColor = this.levelColors[colorIndex];
+                    
+                    button.className = 'bg-red-500 text-white w-14 h-14 rounded-lg font-bold text-lg';
+                    setTimeout(() => {
+                        button.className = `bg-${currentColor}-500 hover:bg-${currentColor}-600 text-white w-14 h-14 rounded-lg font-bold text-lg game-button`;
+                    }, 500);
+                    document.getElementById('gameStatus').textContent = '哎呀！再仔细看看';
+                }
+                
+                this.updateDisplay();
+            }
+            
+            updateProgress() {
+                // 更新关卡显示
+                document.getElementById('currentLevel').textContent = this.currentLevel;
+                
+                // 更新剩余步数
+                const remainingSteps = this.levelNumbers - this.expectedNext + 1;
+                document.getElementById('remainingSteps').textContent = remainingSteps;
+                
+                // 更新进度条
+                const progress = ((this.expectedNext - 1) / this.levelNumbers) * 100;
+                document.getElementById('progressBar').style.width = `${progress}%`;
+            }
+            
+            startTimer() {
+                this.timer = setInterval(() => {
+                    this.timeLeft--;
+                    this.updateDisplay();
+                    
+                    if (this.timeLeft <= 0) {
+                        this.endGame();
+                    }
+                }, 1000);
+            }
+            
+            updateDisplay() {
+                document.getElementById('timeLeft').textContent = this.timeLeft;
+                document.getElementById('currentScore').textContent = this.score;
+            }
+            
+            endGame() {
+                this.gameActive = false;
+                clearInterval(this.timer);
+                
+                document.getElementById('gameContent').classList.add('hidden');
+                document.getElementById('gameResult').classList.remove('hidden');
+                document.getElementById('finalScore').textContent = `${this.score} 分`;
+                
+                let message = '';
+                let suggestion = '';
+                
+                if (this.score >= 200) {
+                    message = `优秀！完成了${this.currentLevel-1}关，注意力表现非常棒！`;
+                    suggestion = '孩子的专注力已经很不错了，可以通过更高难度的训练继续提升';
+                } else if (this.score >= 100) {
+                    message = `良好！完成了${this.currentLevel-1}关，注意力水平不错`;
+                    suggestion = '通过系统性训练，孩子的注意力还有很大提升空间';
+                } else if (this.score >= 50) {
+                    message = `一般，完成了${this.currentLevel-1}关，注意力需要加强`;
+                    suggestion = '建议进行专业的认知能力训练，全面提升学习效率';
+                } else {
+                    message = `需要改进，完成了${this.currentLevel-1}关，注意力比较分散`;
+                    suggestion = '建议尽快开始系统性的注意力训练，帮助孩子改善专注力';
+                }
+                
+                document.getElementById('resultMessage').textContent = message;
+                document.getElementById('resultSuggestion').textContent = suggestion;
+            }
+            
+            handleFreeExperience() {
+                document.getElementById('maisiGameSection').scrollIntoView({ 
+                    behavior: 'smooth' 
+                });
+                console.log('用户选择免费体验麦思星球App');
+            }
+            
+            handleFullAssessment() {
+                document.querySelector('section:last-of-type').scrollIntoView({ 
+                    behavior: 'smooth' 
+                });
+                console.log('用户选择扫描二维码进入AI测评小程序');
+            }
+        }
+        
+        // 初始化游戏
+        const game = new AttentionGame();
+    </script>
+</body>
+</html>

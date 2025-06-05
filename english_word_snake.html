@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>英语单词贪吃蛇</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      overflow: hidden;
+    }
+    #game-board {
+      position: relative;
+      background-color: #f0f0f0;
+      border: 3px solid #333;
+    }
+    .snake-part {
+      position: absolute;
+      background-color: #4CAF50;
+      border-radius: 50%;
+      border: 1px solid #388E3C;
+    }
+    .snake-head {
+      background-color: #388E3C;
+    }
+    .word-block {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      background-color: #FF5722;
+      border-radius: 8px;
+      border: 1px solid #E64A19;
+      cursor: pointer;
+    }
+    @keyframes correctFeedback {
+      0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,255,0,0); }
+      50% { transform: scale(1.2); box-shadow: 0 0 20px rgba(0,255,0,0.7); }
+      100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,255,0,0); }
+    }
+    .correct-feedback {
+      animation: correctFeedback 0.5s ease-out;
+    }
+    #feedback-text {
+      position: absolute;
+      font-size: 24px;
+      font-weight: bold;
+      color: #388E3C;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+      pointer-events: none;
+      z-index: 100;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-center mb-4">英语单词贪吃蛇</h1>
+    
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div class="flex flex-col md:flex-row gap-6">
+        <div class="w-full md:w-3/4">
+          <div id="game-board" class="w-full h-96 relative rounded-lg">
+            <div id="feedback-text"></div>
+          </div>
+        </div>
+        
+        <div class="w-full md:w-1/4 flex flex-col">
+          <div class="space-y-4">
+            <button id="start-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+              开始游戏
+            </button>
+          </div>
+          <div class="bg-gray-100 p-4 rounded-lg mt-4">
+            <p class="font-semibold mb-2">分数: <span id="score">0</span></p>
+            <p class="font-semibold">等级: <span id="level">1</span></p>
+          </div>
+          <div class="mt-4 bg-gray-100 p-4 rounded-lg">
+            <p class="font-semibold mb-2">当前单词:</p>
+            <p id="current-word" class="text-xl text-center">-</p>
+            <p id="chinese-meaning" class="text-center text-gray-600 mt-1">-</p>
+          </div>
+          
+          <div class="mt-4">
+            <p class="text-sm text-gray-700">
+              操作说明:<br>
+              使用键盘方向键或 WASD 控制贪吃蛇<br>
+              听到单词后，引导蛇吃掉对应的单词块<br>
+              单词会每隔2秒自动播放一次
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // 全局变量定义
+    const gameBoard = document.getElementById('game-board');
+    const startBtn = document.getElementById('start-btn');
+    const scoreElement = document.getElementById('score');
+    const levelElement = document.getElementById('level');
+    const currentWordElement = document.getElementById('current-word');
+    const chineseMeaningElement = document.getElementById('chinese-meaning');
+    const feedbackText = document.getElementById('feedback-text');
+    
+    let boardWidth, boardHeight, cellSize;
+    let snake = [];
+    let direction = 'right';
+    let nextDirection = 'right';
+    let gameInterval = null;
+    let wordBlocks = [];
+    let score = 0;
+    let level = 1;
+    let speed = 150;
+    let currentTargetWord = '';
+    let currentChineseMeaning = '';
+    let audioContext = null;
+    let gameRunning = false;
+    let wordPlayInterval = null;
+    
+    const word_config = `
+apple,苹果
+banana,香蕉
+cat,猫
+dog,狗
+elephant,大象
+fish,鱼
+giraffe,长颈鹿
+house,房子
+ice cream,冰淇淋
+jungle,丛林
+kangaroo,袋鼠
+lion,狮子
+monkey,猴子
+notebook,笔记本
+orange,橙子
+`;
+    
+    // 解析CSV格式的单词配置
+    function parseWordConfig(configText) {
+      return configText.split('\n')
+        .filter(line => line.trim() !== '') // 跳过空行
+        .map(line => {
+          const [text, chinese] = line.split(',');
+          return {
+            text: text.trim(),
+            audio: text.trim(), // 使用英文单词作为音频标识
+            chinese: chinese.trim()
+          };
+        });
+    }
+    
+    // Words database with Chinese meanings
+    const wordsList = parseWordConfig(word_config);
+    
+    // 初始化音频上下文
+    function initAudioContext() {
+      if (audioContext) return; // 避免重复初始化
+      
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        console.log("Audio context initialized");
+      } catch (e) {
+        console.error('Web Audio API is not supported in this browser', e);
+      }
+    }
+    
+    // 创建正确答案音效
+    function playCorrectSound() {
+      if (!audioContext) {
+        initAudioContext();
+        if (!audioContext) return;
+      }
+      
+      try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Play a happy "correct" sound
+        const now = audioContext.currentTime;
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.5, now + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, now + 0.5);
+        
+        oscillator.frequency.setValueAtTime(523.25, now); // C5
+        oscillator.frequency.setValueAtTime(659.25, now + 0.1); // E5
+        oscillator.frequency.setValueAtTime(783.99, now + 0.2); // G5
+        
+        oscillator.start(now);
+        oscillator.stop(now + 0.5);
+      } catch (e) {
+        console.error("Error playing sound:", e);
+      }
+    }
+    
+    // 调整游戏面板大小
+    function resizeBoard() {
+      const containerWidth = gameBoard.parentElement.clientWidth;
+      const containerHeight = gameBoard.parentElement.clientHeight;
+      
+      boardWidth = Math.floor(containerWidth);
+      boardHeight = Math.floor(containerHeight);
+      
+      gameBoard.style.width = `${boardWidth}px`;
+      gameBoard.style.height = `${boardHeight}px`;
+      
+      cellSize = Math.floor(boardWidth / 20);
+    }
+    
+    // 初始化游戏
+    function initGame() {
+      console.log("Initializing game...");
+      resizeBoard();
+      resetGame();
+      createVirtualJoystick(); // 创建虚拟手柄
+    
+      // 添加事件监听器
+      startBtn.addEventListener('click', function() {
+        console.log("Start button clicked");
+        initAudioContext(); // 确保音频上下文已初始化
+        toggleGame();
+      });
+      
+      window.addEventListener('keydown', handleKeyPress);
+      window.addEventListener('resize', resizeBoard);
+      
+      // 在任何用户交互时初始化音频上下文
+      document.addEventListener('click', initAudioContext);
+    }
+    
+    // 重置游戏状态
+    function resetGame() {
+      console.log("Resetting game...");
+      if (gameInterval) clearInterval(gameInterval);
+      if (wordPlayInterval) clearInterval(wordPlayInterval);
+      gameInterval = null;
+      wordPlayInterval = null;
+      gameRunning = false;
+      
+      // 清除游戏面板但保留虚拟摇杆
+      const joystickContainer = document.getElementById('joystick-container');
+      const feedbackElement = document.getElementById('feedback-text');
+      
+      if (feedbackElement) {
+        feedbackElement.parentNode.removeChild(feedbackElement);
+      }
+
+      // 保存摇杆元素（如果存在）
+      let savedJoystick = null;
+      if (joystickContainer) {
+        savedJoystick = joystickContainer;
+        joystickContainer.parentNode.removeChild(joystickContainer);
+      }
+      
+      // 清除其余的子元素
+      while (gameBoard.firstChild) {
+        gameBoard.removeChild(gameBoard.firstChild);
+      }
+      
+      // 如果之前存在摇杆，把它添加回游戏面板
+      if (savedJoystick) {
+        gameBoard.appendChild(savedJoystick);
+      }
+      
+      // 重置变量
+      snake = [];
+      direction = 'right';
+      nextDirection = 'right';
+      wordBlocks = [];
+      score = 0;
+      level = 1;
+      speed = 150;
+      currentTargetWord = '';
+      currentChineseMeaning = '';
+      
+      // 初始蛇位置
+      const startX = Math.floor(boardWidth / (2 * cellSize)) * cellSize;
+      const startY = Math.floor(boardHeight / (2 * cellSize)) * cellSize;
+      
+      // 创建初始蛇(3节)
+      for (let i = 0; i < 3; i++) {
+        snake.push({ x: startX - (i * cellSize), y: startY });
+      }
+      
+      // 更新UI
+      scoreElement.textContent = score;
+      levelElement.textContent = level;
+      currentWordElement.textContent = '-';
+      chineseMeaningElement.textContent = '-';
+      startBtn.textContent = '开始游戏';
+      
+      // 绘制初始蛇
+      drawSnake();
+    }
+    
+    // 切换游戏状态(开始/暂停)
+    function toggleGame() {
+      console.log("Toggling game state, current state:", gameRunning);
+      if (gameRunning) {
+        if (gameInterval) clearInterval(gameInterval);
+        if (wordPlayInterval) clearInterval(wordPlayInterval);
+        gameInterval = null;
+        wordPlayInterval = null;
+        gameRunning = false;
+        startBtn.textContent = '继续游戏';
+      } else {
+        gameRunning = true;
+        startBtn.textContent = '暂停游戏';
+        
+        if (wordBlocks.length === 0) {
+          generateWordBlocks();
+          selectRandomTargetWord();
+        }
+        
+        gameInterval = setInterval(gameLoop, speed);
+        
+        // 每2秒自动播放单词
+        wordPlayInterval = setInterval(playCurrentWord, 2000);
+        
+        // 游戏开始时立即播放
+        playCurrentWord();
+      }
+    }
+    
+    // 主游戏循环
+    function gameLoop() {
+      moveSnake();
+      checkCollision();
+      drawSnake();
+    }
+    
+    // 移动蛇
+    function moveSnake() {
+      direction = nextDirection;
+      
+      // 计算新的头部位置
+      const head = { ...snake[0] };
+      
+      switch (direction) {
+        case 'up':
+          head.y -= cellSize;
+          // 如果蛇头超出上边界，从下边界出现
+          if (head.y < 0) {
+            head.y = boardHeight - cellSize;
+          }
+          break;
+        case 'down':
+          head.y += cellSize;
+          // 如果蛇头超出下边界，从上边界出现
+          if (head.y >= boardHeight) {
+            head.y = 0;
+          }
+          break;
+        case 'left':
+          head.x -= cellSize;
+          // 如果蛇头超出左边界，从右边界出现
+          if (head.x < 0) {
+            head.x = boardWidth - cellSize;
+          }
+          break;
+        case 'right':
+          head.x += cellSize;
+          // 如果蛇头超出右边界，从左边界出现
+          if (head.x >= boardWidth) {
+            head.x = 0;
+          }
+          break;
+      }
+      
+      // 添加新头部
+      snake.unshift(head);
+      
+      // 检查单词块碰撞
+      let ateWord = false;
+      for (let index = wordBlocks.length - 1; index >= 0; index--) {
+        const block = wordBlocks[index];
+        if (
+          head.x < block.x + block.width &&
+          head.x + cellSize > block.x &&
+          head.y < block.y + block.height &&
+          head.y + cellSize > block.y
+        ) {
+          // 检测到碰撞
+          if (block.text === currentTargetWord) {
+            // 吃到正确单词
+            score += 10;
+            scoreElement.textContent = score;
+            ateWord = true;
+            
+            const blockElement = document.getElementById(`word-${index}`);
+            
+            // 移除其他单词块，保留当前正确的单词
+            clearOtherWordBlocks(index);
+            
+            // 在被吃掉单词的位置显示反馈
+            showFeedback(block.x + block.width/2, block.y, '✓ ' + block.chinese);
+            
+            // 播放正确声音
+            playCorrectSound();
+            
+            // 朗读中文含义
+            speakChineseMeaning(block.chinese);
+            
+            // 为正确单词添加闪烁效果
+            applyCorrectWordBeeping(blockElement);
+            
+            // 保存此单词块，其他的都清除
+            const correctWordBlock = wordBlocks[index];
+            wordBlocks = [correctWordBlock];
+            
+            // 暂停游戏3秒钟，传入正确单词块
+            pauseGameTemporarily(3000, block.chinese, correctWordBlock, blockElement);
+            
+            // 当分数能被50整除时升级
+            if (score > 0 && score % 50 === 0) {
+              level++;
+              levelElement.textContent = level;
+              speed = Math.max(50, 150 - (level - 1) * 10);
+              clearInterval(gameInterval);
+              gameInterval = setInterval(gameLoop, speed);
+            }
+            
+            break;
+          } else {
+            // 吃到错误单词 - 游戏结束
+            gameOver();
+            return;
+          }
+        }
+      }
+      
+      // 如果没有吃到单词，移除尾部
+      if (!ateWord) {
+        snake.pop();
+      }
+    }
+
+    // 添加新函数：暂时暂停游戏
+    function pauseGameTemporarily(pauseTime, chinese, correctWordBlock, correctElement) {
+      // 保存当前游戏状态
+      const wasRunning = gameRunning;
+      
+      // 暂停游戏
+      if (gameInterval) clearInterval(gameInterval);
+      if (wordPlayInterval) clearInterval(wordPlayInterval);
+      gameInterval = null;
+      wordPlayInterval = null;
+      gameRunning = false;
+      
+      // 修改按钮文本
+      startBtn.textContent = '稍等...';
+      startBtn.disabled = true;
+      
+      // 设置定时器恢复游戏
+      setTimeout(() => {
+        // 移除正确单词闪烁效果
+        if (correctElement && correctElement.parentNode) {
+          correctElement.classList.remove('correct-word-beeping');
+          gameBoard.removeChild(correctElement);
+        }
+        
+        // 仅当游戏之前是运行状态时才恢复
+        if (wasRunning) {
+          // 清空单词块数组
+          wordBlocks = [];
+          
+          // 生成新的单词块
+          generateWordBlocks();
+          
+          // 选择新的目标单词
+          selectRandomTargetWord();
+          
+          // 重新启动游戏循环
+          gameRunning = true;
+          startBtn.textContent = '暂停游戏';
+          startBtn.disabled = false;
+          gameInterval = setInterval(gameLoop, speed);
+          wordPlayInterval = setInterval(playCurrentWord, 2000);
+          
+          // 立即播放新目标词
+          playCurrentWord();
+        }
+      }, pauseTime);
+    }
+    
+    // 添加新函数：清除其他单词块，保留指定索引的单词块
+    function clearOtherWordBlocks(keepIndex) {
+      const blockElements = document.querySelectorAll('.word-block');
+      blockElements.forEach((element, idx) => {
+        if (element.id !== `word-${keepIndex}` && element.parentNode) {
+          element.parentNode.removeChild(element);
+        }
+      });
+    }
+    
+    // 添加新函数：为正确单词应用闪烁效果
+    function applyCorrectWordBeeping(element) {
+      // 添加样式到 head 中
+      const styleElement = document.createElement('style');
+      styleElement.textContent = `
+        @keyframes correctWordBeeping {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 5px rgba(0,255,0,0.3); }
+          50% { transform: scale(1.1); box-shadow: 0 0 15px rgba(0,255,0,0.8); }
+        }
+        .correct-word-beeping {
+          animation: correctWordBeeping 0.5s infinite;
+          background-color: #4CAF50 !important;
+          border: 2px solid gold !important;
+        }
+      `;
+      document.head.appendChild(styleElement);
+      
+      // 应用动画类
+      element.classList.add('correct-word-beeping');
+    }
+    
+    // 修改暂时暂停游戏函数
+    function pauseGameTemporarily(pauseTime, chinese, correctWordBlock, correctElement) {
+      // 保存当前游戏状态
+      const wasRunning = gameRunning;
+      
+      // 暂停游戏
+      if (gameInterval) clearInterval(gameInterval);
+      if (wordPlayInterval) clearInterval(wordPlayInterval);
+      gameInterval = null;
+      wordPlayInterval = null;
+      gameRunning = false;
+      
+      // 修改按钮文本
+      startBtn.textContent = '稍等...';
+      startBtn.disabled = true;
+      
+      // 设置定时器恢复游戏
+      setTimeout(() => {
+        // 移除正确单词闪烁效果
+        if (correctElement && correctElement.parentNode) {
+          correctElement.classList.remove('correct-word-beeping');
+          gameBoard.removeChild(correctElement);
+        }
+        
+        // 仅当游戏之前是运行状态时才恢复
+        if (wasRunning) {
+          // 清空单词块数组
+          wordBlocks = [];
+          
+          // 生成新的单词块
+          generateWordBlocks();
+          
+          // 选择新的目标单词
+          selectRandomTargetWord();
+          
+          // 重新启动游戏循环
+          gameRunning = true;
+          startBtn.textContent = '暂停游戏';
+          startBtn.disabled = false;
+          gameInterval = setInterval(gameLoop, speed);
+          wordPlayInterval = setInterval(playCurrentWord, 2000);
+          
+          // 立即播放新目标词
+          playCurrentWord();
+        }
+      }, pauseTime);
+    }
+    
+    // 检查与墙壁或自身的碰撞
+    function checkCollision() {
+      const head = snake[0];
+      
+      // 移除墙壁碰撞检测，因为我们已经在moveSnake中处理了边界情况
+      
+      // 只保留自身碰撞检测
+      for (let i = 1; i < snake.length; i++) {
+        if (head.x === snake[i].x && head.y === snake[i].y) {
+          gameOver();
+          return;
+        }
+      }
+    }
+    
+    // 在游戏面板上绘制蛇
+    function drawSnake() {
+      // 移除之前的蛇身部分
+      const oldParts = document.querySelectorAll('.snake-part');
+      oldParts.forEach(part => part.remove());
+      
+      // 绘制新的蛇身部分
+      snake.forEach((part, index) => {
+        const snakePart = document.createElement('div');
+        snakePart.className = 'snake-part';
+        if (index === 0) snakePart.classList.add('snake-head');
+        
+        snakePart.style.width = `${cellSize}px`;
+        snakePart.style.height = `${cellSize}px`;
+        snakePart.style.left = `${part.x}px`;
+        snakePart.style.top = `${part.y}px`;
+        
+        gameBoard.appendChild(snakePart);
+      });
+    }
+    
+    // 生成随机单词块
+    function generateWordBlocks() {
+      // 生成随机数量的块(2-4)
+      const numBlocks = Math.floor(Math.random() * 3) + 2;
+      console.log(`Generating ${numBlocks} word blocks`);
+      
+      for (let i = 0; i < numBlocks; i++) {
+        // 从单词列表中获取随机单词
+        const wordIndex = Math.floor(Math.random() * wordsList.length);
+        const word = wordsList[wordIndex];
+        
+        // 计算单词块的随机位置
+        const blockWidth = Math.max(80, word.text.length * 12);
+        const blockHeight = 40;
+        
+        const maxX = boardWidth - blockWidth;
+        const maxY = boardHeight - blockHeight;
+        
+        // Safety check to prevent infinite loops
+        if (maxX <= 0 || maxY <= 0) {
+          console.error("Invalid board dimensions for word blocks");
+          continue; // Skip this iteration
+        }
+        
+        let placementSuccess = false;
+        let attempts = 0;
+        const MAX_ATTEMPTS = 50; // Prevent infinite loop
+        
+        while (!placementSuccess && attempts < MAX_ATTEMPTS) {
+          attempts++;
+          
+          const blockX = Math.floor(Math.random() * maxX);
+          const blockY = Math.floor(Math.random() * maxY);
+          
+          // 确保块不与蛇重叠
+          let overlapping = false;
+          snake.forEach(part => {
+            if (
+              blockX < part.x + cellSize &&
+              blockX + blockWidth > part.x &&
+              blockY < part.y + cellSize &&
+              blockY + blockHeight > part.y
+            ) {
+              overlapping = true;
+            }
+          });
+          
+          // 检查是否在蛇的视线路径上
+          const head = snake[0];
+          let inLineOfSight = false;
+          
+          // 根据蛇的当前方向判断视线路径
+          switch(direction) {
+            case 'up':
+              if (blockX < head.x + cellSize && blockX + blockWidth > head.x && 
+                  blockY < head.y && blockY + blockHeight > 0) {
+                inLineOfSight = true;
+              }
+              break;
+            case 'down':
+              if (blockX < head.x + cellSize && blockX + blockWidth > head.x && 
+                  blockY > head.y && blockY < boardHeight) {
+                inLineOfSight = true;
+              }
+              break;
+            case 'left':
+              if (blockY < head.y + cellSize && blockY + blockHeight > head.y && 
+                  blockX < head.x && blockX + blockWidth > 0) {
+                inLineOfSight = true;
+              }
+              break;
+            case 'right':
+              if (blockY < head.y + cellSize && blockY + blockHeight > head.y && 
+                  blockX > head.x && blockX < boardWidth) {
+                inLineOfSight = true;
+              }
+              break;
+          }
+          
+          if (!overlapping && !inLineOfSight) {
+            // 创建单词块
+            const wordBlock = {
+              x: blockX,
+              y: blockY,
+              width: blockWidth,
+              height: blockHeight,
+              text: word.text,
+              audio: word.audio,
+              chinese: word.chinese
+            };
+            
+            wordBlocks.push(wordBlock);
+            
+            // 创建视觉元素
+            const blockElement = document.createElement('div');
+            blockElement.className = 'word-block';
+            blockElement.id = `word-${wordBlocks.length - 1}`;
+            blockElement.textContent = word.text;
+            blockElement.style.left = `${blockX}px`;
+            blockElement.style.top = `${blockY}px`;
+            blockElement.style.width = `${blockWidth}px`;
+            blockElement.style.height = `${blockHeight}px`;
+            blockElement.style.zIndex = "1"; // 默认z-index为1
+            
+            gameBoard.appendChild(blockElement);
+            placementSuccess = true;
+          }
+        }
+        
+        // If couldn't place this block after max attempts, just skip it
+        if (!placementSuccess) {
+          console.warn(`Failed to place word block "${word.text}" after ${MAX_ATTEMPTS} attempts`);
+        }
+      }
+    }
+    
+    // 从单词块中选择随机目标单词
+    function selectRandomTargetWord() {
+      if (wordBlocks.length > 0) {
+        const randomIndex = Math.floor(Math.random() * wordBlocks.length);
+        currentTargetWord = wordBlocks[randomIndex].text;
+        currentChineseMeaning = wordBlocks[randomIndex].chinese;
+        
+        currentWordElement.textContent = currentTargetWord;
+        chineseMeaningElement.textContent = currentChineseMeaning;
+        
+        // 设置z-index确保正确目标词显示在最上层
+        const wordBlockElements = document.querySelectorAll('.word-block');
+        wordBlockElements.forEach((element, index) => {
+          // 将所有单词块z-index设为1
+          element.style.zIndex = "1";
+          
+          // 目标单词块z-index设为10，确保始终在最上层
+          if (element.textContent === currentTargetWord) {
+            element.style.zIndex = "10";
+          }
+        });
+        
+        // 立即为目标单词播放音频
+        setTimeout(playCurrentWord, 100);
+      }
+    }
+    
+    // 播放当前目标单词的音频
+    function playCurrentWord() {
+    if (!currentTargetWord || !gameRunning) return;
+    
+    // Check if Speech Synthesis API is available
+    if ('speechSynthesis' in window) {
+        try {
+        // Try using Speech Synthesis API first
+        speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(" " + currentTargetWord);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.9;
+        
+        setTimeout(() => {
+            speechSynthesis.speak(utterance);
+        }, 50);
+        
+        return; // Exit if successful
+        } catch (e) {
+        console.error("Error with Speech Synthesis API:", e);
+        // Fall through to the YouDao API fallback
+        }
+    }
+    
+    // Fallback to YouDao Dictionary API
+    try {
+        // Encode the word for URL (handle spaces and special characters)
+        const encodedWord = encodeURIComponent(currentTargetWord.trim());
+        const audioUrl = `https://dict.youdao.com/dictvoice?audio=${encodedWord}`;
+        
+        // Create audio element
+        let audio = document.getElementById('word-audio');
+        if (!audio) {
+        audio = document.createElement('audio');
+        audio.id = 'word-audio';
+        document.body.appendChild(audio);
+        }
+        
+        // Set source and play
+        audio.src = audioUrl;
+        audio.play().catch(err => {
+        console.error("Error playing YouDao audio:", err);
+        });
+    } catch (e) {
+        console.error("Error with YouDao API fallback:", e);
+    }
+    }
+    // 处理键盘输入
+    function handleKeyPress(e) {
+      if (!gameRunning) return;
+      
+      switch (e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          if (direction !== 'down') nextDirection = 'up';
+          break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          if (direction !== 'up') nextDirection = 'down';
+          break;
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+          if (direction !== 'right') nextDirection = 'left';
+          break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+          if (direction !== 'left') nextDirection = 'right';
+          break;
+      }
+    }
+    
+    // 游戏结束
+    function gameOver() {
+      if (gameInterval) clearInterval(gameInterval);
+      if (wordPlayInterval) clearInterval(wordPlayInterval);
+      gameInterval = null;
+      wordPlayInterval = null;
+      gameRunning = false;
+      
+      alert(`游戏结束！你的分数是：${score}`);
+      resetGame();
+    }
+    
+    // 显示视觉反馈
+function showFeedback(x, y, text) {
+  // 获取或创建反馈文本元素
+  let feedbackElement = document.getElementById('feedback-text');
+  if (!feedbackElement) {
+    feedbackElement = document.createElement('div');
+    feedbackElement.id = 'feedback-text';
+    gameBoard.appendChild(feedbackElement);
+  }
+  
+  // 设置文本和位置
+  feedbackElement.textContent = text;
+  feedbackElement.style.left = `${x}px`;
+  feedbackElement.style.top = `${y}px`;
+  
+  // 重置任何正在进行的动画
+  feedbackElement.style.animation = 'none';
+  feedbackElement.style.opacity = '0';
+  
+  // 触发重排以确保重置生效
+  void feedbackElement.offsetWidth;
+  
+  // 应用动画和淡入效果
+  feedbackElement.style.animation = 'correctFeedback 0.5s ease-out';
+  feedbackElement.style.opacity = '1';
+  
+  // 淡出效果
+  setTimeout(() => {
+    feedbackElement.style.opacity = '0';
+  }, 1500);
+}
+
+// 使用语音合成朗读中文含义
+function speakChineseMeaning(text) {
+  if (!('speechSynthesis' in window)) return;
+  
+  try {
+    // 取消任何正在进行的语音
+    speechSynthesis.cancel();
+    
+    // 创建语音合成对象
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-CN';  // 设置中文语音
+    utterance.rate = 0.9;      // 稍微放慢语速
+    
+    // 延迟一点以避免与英文单词发音冲突
+    setTimeout(() => {
+      speechSynthesis.speak(utterance);
+    }, 800);
+  } catch (e) {
+    console.error("Error speaking Chinese meaning:", e);
+  }
+}
+
+// 检测是否为移动设备
+function isMobileDevice() {
+  return (navigator.maxTouchPoints > 0) || 
+         (navigator.msMaxTouchPoints > 0) ||
+         /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// 创建虚拟手柄控制器
+function createVirtualJoystick() {
+  if (!isMobileDevice()) return;
+  
+  const joystickContainer = document.createElement('div');
+  joystickContainer.id = 'joystick-container';
+  
+  const joystickBase = document.createElement('div');
+  joystickBase.id = 'joystick-base';
+  
+  const joystickKnob = document.createElement('div');
+  joystickKnob.id = 'joystick-knob';
+  
+  const style = document.createElement('style');
+style.textContent = `
+  #joystick-container {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: 80px;
+    height: 80px;
+    z-index: 1000;
+    touch-action: none;
+  }
+  #joystick-base {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #joystick-knob {
+    position: absolute;
+    width: 50%;
+    height: 50%;
+    background-color: rgba(76, 175, 80, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    top: 25%;
+    left: 25%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  @media (min-width: 768px) {
+    body:not(.touch-only) #joystick-container {
+      display: none;
+    }
+  }
+`;
+
+  document.head.appendChild(style);
+  joystickBase.appendChild(joystickKnob);
+  joystickContainer.appendChild(joystickBase);
+  gameBoard.appendChild(joystickContainer);
+  
+  let isDragging = false;
+  let startX, startY;
+  let currentDirection = null;
+  const maxDistance = joystickBase.clientWidth / 2; // Maximum drag distance from center
+  
+  // Get center position of joystick base
+  const getBaseCenter = () => {
+    const rect = joystickBase.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+  };
+  
+  // Reset knob position to center
+  const resetKnobPosition = () => {
+    joystickKnob.style.top = '25%';
+    joystickKnob.style.left = '25%';
+  };
+  
+  // Touch start event handler
+  joystickContainer.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const baseCenter = getBaseCenter();
+    
+    startX = touch.clientX;
+    startY = touch.clientY;
+    isDragging = true;
+  });
+  
+  // Touch move event handler
+  document.addEventListener('touchmove', function(e) {
+    if (!isDragging || !gameRunning) return;
+    
+    const touch = e.touches[0];
+    const baseCenter = getBaseCenter();
+    
+    // Calculate the delta from center
+    const deltaX = touch.clientX - baseCenter.x;
+    const deltaY = touch.clientY - baseCenter.y;
+    
+    // Calculate distance from center
+    const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
+    
+    // Calculate the angle
+    const angle = Math.atan2(deltaY, deltaX);
+    
+    // Move the joystick knob
+    // Calculate the new position with the constraint of staying within the base
+    const knobX = 25 + (75 * deltaX / maxDistance) * Math.min(distance / maxDistance, 1);
+    const knobY = 25 + (75 * deltaY / maxDistance) * Math.min(distance / maxDistance, 1);
+    
+    joystickKnob.style.left = `${knobX}%`;
+    joystickKnob.style.top = `${knobY}%`;
+    
+    // Determine direction based on angle
+    // Convert angle to degrees for easier understanding
+    const angleDeg = angle * 180 / Math.PI;
+    
+    // Only change direction if the drag distance is significant
+    if (distance > maxDistance * 0.3) {
+      let newDirection;
+      
+      // Determine direction based on the angle
+      if (angleDeg > -45 && angleDeg <= 45) {
+        newDirection = 'right';
+      } else if (angleDeg > 45 && angleDeg <= 135) {
+        newDirection = 'down';
+      } else if (angleDeg > 135 || angleDeg <= -135) {
+        newDirection = 'left';
+      } else {
+        newDirection = 'up';
+      }
+      
+      // Only update if direction changed and not opposite to current direction
+      if (newDirection !== currentDirection) {
+        currentDirection = newDirection;
+        
+        // Check if valid move (not opposite of current direction)
+        const opposites = {
+          'up': 'down',
+          'down': 'up',
+          'left': 'right',
+          'right': 'left'
+        };
+        
+        if (direction !== opposites[newDirection]) {
+          nextDirection = newDirection;
+        }
+      }
+    }
+  }, { passive: false });
+  
+  // Touch end event handler
+  document.addEventListener('touchend', function(e) {
+    if (!isDragging) return;
+    
+    isDragging = false;
+    currentDirection = null;
+    resetKnobPosition();
+  });
+  
+  // Touch cancel event handler
+  document.addEventListener('touchcancel', function(e) {
+    if (!isDragging) return;
+    
+    isDragging = false;
+    currentDirection = null;
+    resetKnobPosition();
+  });
+  
+  // Prevent context menu
+  joystickContainer.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+  });
+}
+
+// 页面加载时初始化游戏
+initGame();
+  </script>
+</body>
+</html>
