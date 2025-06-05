@@ -1,3 +1,3 @@
-## All AI Generated HTML Pages
+## All AI-generated HTML Pages
 
-Run server.py and happy vibe coding!
+Run `serve.py` and happy vibe coding!
