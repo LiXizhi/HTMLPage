@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>对应思维</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .game-item {
+            transition: all 0.3s ease;
+        }
+        .game-item:hover {
+            transform: scale(1.05);
+        }
+        .selected {
+            border: 3px solid #10b981;
+            background-color: #dcfce7;
+        }
+        .correct {
+            border: 3px solid #22c55e;
+            background-color: #bbf7d0;
+            animation: correct-flash 0.6s ease-in-out;
+        }
+        .incorrect {
+            border: 3px solid #ef4444;
+            background-color: #fecaca;
+            animation: shake 0.5s ease-in-out;
+        }
+        @keyframes correct-flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        /* 正确答案提示 */
+        .success-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(34, 197, 94, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .success-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            animation: bounceIn 0.5s ease-out;
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 顶部区域 -->
+        <div class="flex justify-between items-start mb-8">
+            <!-- 游戏标题 -->
+            <div>
+                <div class="text-3xl font-bold text-gray-800 mb-2">
+                    对应思维
+                </div>
+                <p class="text-gray-600">观察给出的图例，挑选一个合适的图案放进问号中。</p>
+            </div>
+            
+            <!-- 右上角控制区 -->
+            <div class="flex items-center space-x-2 flex-nowrap">
+                <!-- 得分显示 -->
+                <div class="bg-blue-500 text-white px-3 py-2 rounded-lg whitespace-nowrap text-sm">
+                    得分: <span id="score">0</span>
+                </div>
+                
+                <!-- 进度显示 -->
+                <div class="bg-green-500 text-white px-3 py-2 rounded-lg whitespace-nowrap text-sm">
+                    第 <span id="level">1</span> / 10 题
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏区域 -->
+        <div class="max-w-4xl mx-auto">
+            <!-- 示例区域 -->
+            <div id="examples" class="mb-8">
+                <!-- 示例会动态生成 -->
+            </div>
+
+            <!-- 问题区域 -->
+            <div class="bg-white rounded-lg p-6 shadow-lg mb-6">
+                <div class="flex items-center justify-center space-x-8">
+                    <div id="question-left" class="text-center bg-gray-100 rounded-lg p-4 w-32 h-32 flex flex-col items-center justify-center">
+                        <!-- 问题左边 -->
+                    </div>
+                    <div class="text-4xl text-yellow-500">→</div>
+                    <div id="question-right" class="text-center bg-yellow-100 rounded-lg p-4 w-32 h-32 flex flex-col items-center justify-center border-2 border-dashed border-yellow-400">
+                        <span class="text-6xl text-yellow-500">?</span>
+                        <span class="text-xs text-yellow-600 mt-1">待选择</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 选项区域 -->
+            <div class="bg-purple-50 rounded-lg p-6 shadow-lg border-2 border-purple-200">
+                <h3 class="text-center text-lg font-bold text-purple-800 mb-4">请选择正确答案</h3>
+                <div id="options" class="grid grid-cols-3 gap-4">
+                    <!-- 选项会动态生成 -->
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="text-center mt-6">
+                <button id="restart-btn" class="bg-blue-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-600 transition-colors">
+                    重新开始
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 正确答案提示 -->
+    <div id="success-overlay" class="success-overlay" style="display: none;">
+        <div class="success-content">
+            <div class="text-6xl mb-4">🎉</div>
+            <h2 class="text-2xl font-bold text-green-600 mb-2">回答正确！</h2>
+            <p class="text-lg text-gray-600">+10分</p>
+        </div>
+    </div>
+
+    <script>
+        // 使用当前时间作为随机种子的简单随机数生成器
+        class SeededRandom {
+            constructor(seed) {
+                this.seed = seed || Date.now();
+            }
+            
+            next() {
+                this.seed = (this.seed * 9301 + 49297) % 233280;
+                return this.seed / 233280;
+            }
+            
+            shuffle(array) {
+                const arr = [...array];
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(this.next() * (i + 1));
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+                return arr;
+            }
+            
+            randomSelect(array, count) {
+                const shuffled = this.shuffle(array);
+                return shuffled.slice(0, count);
+            }
+        }
+
+        // 游戏配置
+        const game_config = {
+            levels: [
+                // 关卡1：整体与部分关系
+                {
+                    examples: [
+                        { left: "🏔️", leftText: "山", right: "🪨", rightText: "石头", description: "山→石头" },
+                        { left: "🌳", leftText: "树", right: "🍃", rightText: "叶子", description: "树→叶子" }
+                    ],
+                    question: { left: "🧥", leftText: "外套", description: "外套→?" },
+                    options: [
+                        { emoji: "👢", text: "靴子", correct: false },
+                        { emoji: "🔘", text: "纽扣", correct: true },
+                        { emoji: "👖", text: "牛仔裤", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🏠", leftText: "房子", right: "🪟", rightText: "窗户", description: "房子→窗户" },
+                        { left: "🚗", leftText: "汽车", right: "🛞", rightText: "轮胎", description: "汽车→轮胎" }
+                    ],
+                    question: { left: "📱", leftText: "手机", description: "手机→?" },
+                    options: [
+                        { emoji: "🔋", text: "电池", correct: true },
+                        { emoji: "💻", text: "电脑", correct: false },
+                        { emoji: "📺", text: "电视", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌸", leftText: "花", right: "🌺", rightText: "花瓣", description: "花→花瓣" },
+                        { left: "⭐", leftText: "星星", right: "✨", rightText: "光芒", description: "星星→光芒" }
+                    ],
+                    question: { left: "🐟", leftText: "鱼", description: "鱼→?" },
+                    options: [
+                        { emoji: "🌊", text: "海洋", correct: false },
+                        { emoji: "🐠", text: "鱼鳞", correct: true },
+                        { emoji: "🎣", text: "鱼竿", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "📚", leftText: "书", right: "📄", rightText: "页面", description: "书→页面" },
+                        { left: "🎂", leftText: "蛋糕", right: "🕯️", rightText: "蜡烛", description: "蛋糕→蜡烛" }
+                    ],
+                    question: { left: "⌚", leftText: "手表", description: "手表→?" },
+                    options: [
+                        { emoji: "🕐", text: "指针", correct: true },
+                        { emoji: "⏰", text: "闹钟", correct: false },
+                        { emoji: "📅", text: "日历", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🏫", leftText: "学校", right: "🚪", rightText: "门", description: "学校→门" },
+                        { left: "✈️", leftText: "飞机", right: "🪟", rightText: "舷窗", description: "飞机→舷窗" }
+                    ],
+                    question: { left: "🚲", leftText: "自行车", description: "自行车→?" },
+                    options: [
+                        { emoji: "🛞", text: "车轮", correct: true },
+                        { emoji: "🛣️", text: "道路", correct: false },
+                        { emoji: "🚗", text: "汽车", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎻", leftText: "小提琴", right: "🎼", rightText: "琴弦", description: "小提琴→琴弦" },
+                        { left: "🖥️", leftText: "电脑", right: "⌨️", rightText: "键盘", description: "电脑→键盘" }
+                    ],
+                    question: { left: "👁️", leftText: "眼睛", description: "眼睛→?" },
+                    options: [
+                        { emoji: "👃", text: "鼻子", correct: false },
+                        { emoji: "👀", text: "眼珠", correct: true },
+                        { emoji: "👂", text: "耳朵", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌍", leftText: "地球", right: "🌙", rightText: "月亮", description: "地球→月亮" },
+                        { left: "🌻", leftText: "向日葵", right: "🌰", rightText: "种子", description: "向日葵→种子" }
+                    ],
+                    question: { left: "🍎", leftText: "苹果", description: "苹果→?" },
+                    options: [
+                        { emoji: "🌱", text: "苹果核", correct: true },
+                        { emoji: "🍊", text: "橙子", correct: false },
+                        { emoji: "🥤", text: "果汁", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎪", leftText: "马戏团", right: "🎭", rightText: "帐篷", description: "马戏团→帐篷" },
+                        { left: "🏰", leftText: "城堡", right: "🗼", rightText: "塔楼", description: "城堡→塔楼" }
+                    ],
+                    question: { left: "🚢", leftText: "船", description: "船→?" },
+                    options: [
+                        { emoji: "🌊", text: "海浪", correct: false },
+                        { emoji: "⛵", text: "船帆", correct: true },
+                        { emoji: "⚓", text: "锚", correct: false }
+                    ]
+                },
+
+                // 关卡2：生产与产品关系
+                {
+                    examples: [
+                        { left: "🐝", leftText: "蜜蜂", right: "🍯", rightText: "蜂蜜", description: "蜜蜂→蜂蜜" },
+                        { left: "🐄", leftText: "奶牛", right: "🥛", rightText: "牛奶", description: "奶牛→牛奶" }
+                    ],
+                    question: { left: "🐔", leftText: "鸡", description: "鸡→?" },
+                    options: [
+                        { emoji: "🥚", text: "鸡蛋", correct: true },
+                        { emoji: "🪶", text: "羽毛", correct: false },
+                        { emoji: "🌽", text: "玉米", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🕷️", leftText: "蜘蛛", right: "🕸️", rightText: "蜘蛛网", description: "蜘蛛→蜘蛛网" },
+                        { left: "🐛", leftText: "蚕", right: "🧵", rightText: "丝线", description: "蚕→丝线" }
+                    ],
+                    question: { left: "🐑", leftText: "羊", description: "羊→?" },
+                    options: [
+                        { emoji: "🥩", text: "羊肉", correct: false },
+                        { emoji: "🧶", text: "羊毛", correct: true },
+                        { emoji: "🌾", text: "草", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌾", leftText: "小麦", right: "🍞", rightText: "面包", description: "小麦→面包" },
+                        { left: "🍇", leftText: "葡萄", right: "🍷", rightText: "葡萄酒", description: "葡萄→葡萄酒" }
+                    ],
+                    question: { left: "🫘", leftText: "豆子", description: "豆子→?" },
+                    options: [
+                        { emoji: "🥛", text: "豆浆", correct: true },
+                        { emoji: "🌱", text: "豆芽", correct: false },
+                        { emoji: "🥗", text: "沙拉", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌴", leftText: "椰子树", right: "🥥", rightText: "椰子", description: "椰子树→椰子" },
+                        { left: "🌿", leftText: "茶树", right: "🍵", rightText: "茶叶", description: "茶树→茶叶" }
+                    ],
+                    question: { left: "🐝", leftText: "蜜蜂", description: "蜜蜂→?" },
+                    options: [
+                        { emoji: "🌸", text: "花朵", correct: false },
+                        { emoji: "🕯️", text: "蜂蜡", correct: true },
+                        { emoji: "🏠", text: "蜂巢", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌳", leftText: "橡胶树", right: "⚪", rightText: "橡胶", description: "橡胶树→橡胶" },
+                        { left: "🐟", leftText: "鱼", right: "🍣", rightText: "鱼肉", description: "鱼→鱼肉" }
+                    ],
+                    question: { left: "🐧", leftText: "企鹅", description: "企鹅→?" },
+                    options: [
+                        { emoji: "🥚", text: "企鹅蛋", correct: true },
+                        { emoji: "❄️", text: "冰雪", correct: false },
+                        { emoji: "🐟", text: "鱼", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌰", leftText: "坚果", right: "🫒", rightText: "坚果油", description: "坚果→坚果油" },
+                        { left: "🌻", leftText: "向日葵", right: "🌻", rightText: "葵花籽", description: "向日葵→葵花籽" }
+                    ],
+                    question: { left: "🦆", leftText: "鸭", description: "鸭→?" },
+                    options: [
+                        { emoji: "🪶", text: "鸭毛", correct: false },
+                        { emoji: "🥚", text: "鸭蛋", correct: true },
+                        { emoji: "🌊", text: "池塘", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌾", leftText: "稻谷", right: "🍚", rightText: "大米", description: "稻谷→大米" },
+                        { left: "🥔", leftText: "土豆", right: "🍟", rightText: "薯条", description: "土豆→薯条" }
+                    ],
+                    question: { left: "🍅", leftText: "番茄", description: "番茄→?" },
+                    options: [
+                        { emoji: "🥗", text: "沙拉", correct: false },
+                        { emoji: "🍝", text: "番茄酱", correct: true },
+                        { emoji: "🌱", text: "种子", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🕊️", leftText: "鸽子", right: "🪶", rightText: "羽毛", description: "鸽子→羽毛" },
+                        { left: "🦢", leftText: "天鹅", right: "🪶", rightText: "天鹅绒", description: "天鹅→天鹅绒" }
+                    ],
+                    question: { left: "🦙", leftText: "羊驼", description: "羊驼→?" },
+                    options: [
+                        { emoji: "🧶", text: "羊驼毛", correct: true },
+                        { emoji: "🥛", text: "羊奶", correct: false },
+                        { emoji: "🌾", text: "草料", correct: false }
+                    ]
+                },
+
+                // 关卡3：需求与解决方案关系
+                {
+                    examples: [
+                        { left: "🌧️", leftText: "雨", right: "☂️", rightText: "雨伞", description: "雨→雨伞" },
+                        { left: "☀️", leftText: "太阳", right: "🕶️", rightText: "墨镜", description: "太阳→墨镜" }
+                    ],
+                    question: { left: "❄️", leftText: "雪", description: "雪→?" },
+                    options: [
+                        { emoji: "🧤", text: "手套", correct: true },
+                        { emoji: "🌡️", text: "温度计", correct: false },
+                        { emoji: "🏔️", text: "雪山", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🔥", leftText: "火", right: "🧯", rightText: "灭火器", description: "火→灭火器" },
+                        { left: "💧", leftText: "水", right: "🪣", rightText: "水桶", description: "水→水桶" }
+                    ],
+                    question: { left: "🌊", leftText: "洪水", description: "洪水→?" },
+                    options: [
+                        { emoji: "🚁", text: "直升机", correct: false },
+                        { emoji: "🛶", text: "救生艇", correct: true },
+                        { emoji: "🌉", text: "桥梁", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🌑", leftText: "黑暗", right: "🔦", rightText: "手电筒", description: "黑暗→手电筒" },
+                        { left: "🥵", leftText: "炎热", right: "❄️", rightText: "冰块", description: "炎热→冰块" }
+                    ],
+                    question: { left: "🥶", leftText: "寒冷", description: "寒冷→?" },
+                    options: [
+                        { emoji: "🔥", text: "火炉", correct: true },
+                        { emoji: "🧊", text: "冰块", correct: false },
+                        { emoji: "💨", text: "风", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "😴", leftText: "困倦", right: "☕", rightText: "咖啡", description: "困倦→咖啡" },
+                        { left: "🤒", leftText: "发烧", right: "💊", rightText: "药", description: "发烧→药" }
+                    ],
+                    question: { left: "😵‍💫", leftText: "头晕", description: "头晕→?" },
+                    options: [
+                        { emoji: "💺", text: "椅子", correct: true },
+                        { emoji: "🏃", text: "跑步", correct: false },
+                        { emoji: "📱", text: "手机", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎯", leftText: "目标", right: "🏹", rightText: "弓箭", description: "目标→弓箭" },
+                        { left: "🕳️", leftText: "洞", right: "🔧", rightText: "工具", description: "洞→工具" }
+                    ],
+                    question: { left: "🔒", leftText: "锁", description: "锁→?" },
+                    options: [
+                        { emoji: "🚪", text: "门", correct: false },
+                        { emoji: "🔑", text: "钥匙", correct: true },
+                        { emoji: "🏠", text: "房子", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "📝", leftText: "写字", right: "✏️", rightText: "铅笔", description: "写字→铅笔" },
+                        { left: "🔍", leftText: "寻找", right: "🔦", rightText: "手电筒", description: "寻找→手电筒" }
+                    ],
+                    question: { left: "🧹", leftText: "打扫", description: "打扫→?" },
+                    options: [
+                        { emoji: "🗑️", text: "垃圾桶", correct: true },
+                        { emoji: "🧽", text: "海绵", correct: false },
+                        { emoji: "🏠", text: "房子", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🚗", leftText: "开车", right: "⛽", rightText: "汽油", description: "开车→汽油" },
+                        { left: "📱", leftText: "通话", right: "🔋", rightText: "电池", description: "通话→电池" }
+                    ],
+                    question: { left: "🕯️", leftText: "点蜡烛", description: "点蜡烛→?" },
+                    options: [
+                        { emoji: "🔥", text: "打火机", correct: true },
+                        { emoji: "💨", text: "风", correct: false },
+                        { emoji: "🌑", text: "黑暗", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🏊", leftText: "游泳", right: "🏊‍♀️", rightText: "游泳衣", description: "游泳→游泳衣" },
+                        { left: "🎭", leftText: "表演", right: "🎪", rightText: "舞台", description: "表演→舞台" }
+                    ],
+                    question: { left: "🎨", leftText: "画画", description: "画画→?" },
+                    options: [
+                        { emoji: "🖼️", text: "画框", correct: false },
+                        { emoji: "🖌️", text: "画笔", correct: true },
+                        { emoji: "🎭", text: "面具", correct: false }
+                    ]
+                },
+
+                // 关卡4：功能与工具关系
+                {
+                    examples: [
+                        { left: "📚", leftText: "书", right: "✏️", rightText: "铅笔", description: "书→铅笔" },
+                        { left: "🎨", leftText: "画", right: "🖌️", rightText: "画笔", description: "画→画笔" }
+                    ],
+                    question: { left: "🎵", leftText: "音乐", description: "音乐→?" },
+                    options: [
+                        { emoji: "🎧", text: "耳机", correct: false },
+                        { emoji: "🎹", text: "钢琴", correct: true },
+                        { emoji: "📻", text: "收音机", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🍳", leftText: "做饭", right: "🔥", rightText: "炉子", description: "做饭→炉子" },
+                        { left: "🧵", leftText: "缝纫", right: "🪡", rightText: "针", description: "缝纫→针" }
+                    ],
+                    question: { left: "🔨", leftText: "敲打", description: "敲打→?" },
+                    options: [
+                        { emoji: "🔩", text: "螺丝", correct: false },
+                        { emoji: "🪚", text: "锯子", correct: false },
+                        { emoji: "🔨", text: "锤子", correct: true }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🚿", leftText: "洗澡", right: "🧴", rightText: "洗发水", description: "洗澡→洗发水" },
+                        { left: "🦷", leftText: "刷牙", right: "🪥", rightText: "牙刷", description: "刷牙→牙刷" }
+                    ],
+                    question: { left: "🧽", leftText: "清洁", description: "清洁→?" },
+                    options: [
+                        { emoji: "🧼", text: "肥皂", correct: true },
+                        { emoji: "💧", text: "水", correct: false },
+                        { emoji: "🪣", text: "水桶", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "📏", leftText: "测量", right: "📐", rightText: "尺子", description: "测量→尺子" },
+                        { left: "✂️", leftText: "剪切", right: "📄", rightText: "剪刀", description: "剪切→剪刀" }
+                    ],
+                    question: { left: "🔧", leftText: "修理", description: "修理→?" },
+                    options: [
+                        { emoji: "🔨", text: "锤子", correct: false },
+                        { emoji: "🔧", text: "扳手", correct: true },
+                        { emoji: "⚙️", text: "齿轮", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎣", leftText: "钓鱼", right: "🪝", rightText: "鱼钩", description: "钓鱼→鱼钩" },
+                        { left: "🏹", leftText: "射箭", right: "🎯", rightText: "弓", description: "射箭→弓" }
+                    ],
+                    question: { left: "⚽", leftText: "踢球", description: "踢球→?" },
+                    options: [
+                        { emoji: "🥅", text: "球门", correct: true },
+                        { emoji: "👟", text: "鞋子", correct: false },
+                        { emoji: "🏟️", text: "体育场", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🍴", leftText: "吃饭", right: "🍽️", rightText: "餐具", description: "吃饭→餐具" },
+                        { left: "☕", leftText: "喝茶", right: "🫖", rightText: "茶壶", description: "喝茶→茶壶" }
+                    ],
+                    question: { left: "🥤", leftText: "喝饮料", description: "喝饮料→?" },
+                    options: [
+                        { emoji: "🥤", text: "吸管", correct: true },
+                        { emoji: "🧊", text: "冰块", correct: false },
+                        { emoji: "🍋", text: "柠檬", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎮", leftText: "游戏", right: "🕹️", rightText: "手柄", description: "游戏→手柄" },
+                        { left: "📺", leftText: "看电视", right: "📱", rightText: "遥控器", description: "看电视→遥控器" }
+                    ],
+                    question: { left: "💻", leftText: "电脑", description: "电脑→?" },
+                    options: [
+                        { emoji: "🖱️", text: "鼠标", correct: true },
+                        { emoji: "📱", text: "手机", correct: false },
+                        { emoji: "📺", text: "显示器", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎪", leftText: "表演", right: "🎭", rightText: "面具", description: "表演→面具" },
+                        { left: "🏊", leftText: "游泳", right: "🩱", rightText: "泳衣", description: "游泳→泳衣" }
+                    ],
+                    question: { left: "🚴", leftText: "骑车", description: "骑车→?" },
+                    options: [
+                        { emoji: "🪖", text: "头盔", correct: true },
+                        { emoji: "🛞", text: "轮胎", correct: false },
+                        { emoji: "🛣️", text: "道路", correct: false }
+                    ]
+                },
+
+                // 关卡5：使用与场所关系
+                {
+                    examples: [
+                        { left: "🔑", leftText: "钥匙", right: "🚪", rightText: "门", description: "钥匙→门" },
+                        { left: "🪙", leftText: "硬币", right: "🏪", rightText: "商店", description: "硬币→商店" }
+                    ],
+                    question: { left: "🎫", leftText: "票", description: "票→?" },
+                    options: [
+                        { emoji: "🚌", text: "公交", correct: false },
+                        { emoji: "🎭", text: "剧院", correct: true },
+                        { emoji: "🎪", text: "马戏团", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🍽️", leftText: "餐具", right: "🍴", rightText: "餐厅", description: "餐具→餐厅" },
+                        { left: "📚", leftText: "书", right: "📖", rightText: "图书馆", description: "书→图书馆" }
+                    ],
+                    question: { left: "🛏️", leftText: "床", description: "床→?" },
+                    options: [
+                        { emoji: "🏨", text: "酒店", correct: true },
+                        { emoji: "🛋️", text: "沙发", correct: false },
+                        { emoji: "🏠", text: "客厅", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "⚽", leftText: "足球", right: "🏟️", rightText: "体育场", description: "足球→体育场" },
+                        { left: "🎬", leftText: "电影", right: "🎭", rightText: "电影院", description: "电影→电影院" }
+                    ],
+                    question: { left: "🩺", leftText: "听诊器", description: "听诊器→?" },
+                    options: [
+                        { emoji: "🏥", text: "医院", correct: true },
+                        { emoji: "💊", text: "药店", correct: false },
+                        { emoji: "🚑", text: "救护车", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎨", leftText: "画笔", right: "🖼️", rightText: "美术馆", description: "画笔→美术馆" },
+                        { left: "🔬", leftText: "显微镜", right: "🧪", rightText: "实验室", description: "显微镜→实验室" }
+                    ],
+                    question: { left: "🍞", leftText: "面包", description: "面包→?" },
+                    options: [
+                        { emoji: "🥖", text: "面包店", correct: true },
+                        { emoji: "🍰", text: "蛋糕店", correct: false },
+                        { emoji: "☕", text: "咖啡店", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "💰", leftText: "钱", right: "🏦", rightText: "银行", description: "钱→银行" },
+                        { left: "💌", leftText: "信件", right: "📮", rightText: "邮局", description: "信件→邮局" }
+                    ],
+                    question: { left: "⛽", leftText: "汽油", description: "汽油→?" },
+                    options: [
+                        { emoji: "🚗", text: "汽车", correct: false },
+                        { emoji: "⛽", text: "加油站", correct: true },
+                        { emoji: "🛣️", text: "公路", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🧳", leftText: "行李", right: "✈️", rightText: "机场", description: "行李→机场" },
+                        { left: "🚂", leftText: "火车", right: "🚉", rightText: "火车站", description: "火车→火车站" }
+                    ],
+                    question: { left: "🚢", leftText: "船", description: "船→?" },
+                    options: [
+                        { emoji: "🏖️", text: "海滩", correct: false },
+                        { emoji: "🌊", text: "海洋", correct: false },
+                        { emoji: "⚓", text: "港口", correct: true }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "👮", leftText: "警察", right: "🚔", rightText: "警察局", description: "警察→警察局" },
+                        { left: "🔥", leftText: "火", right: "🚒", rightText: "消防站", description: "火→消防站" }
+                    ],
+                    question: { left: "📖", leftText: "学习", description: "学习→?" },
+                    options: [
+                        { emoji: "🏫", text: "学校", correct: true },
+                        { emoji: "📚", text: "图书馆", correct: false },
+                        { emoji: "🏠", text: "家", correct: false }
+                    ]
+                },
+                {
+                    examples: [
+                        { left: "🎪", leftText: "马戏", right: "🎭", rightText: "马戏团", description: "马戏→马戏团" },
+                        { left: "🏊", leftText: "游泳", right: "🏊‍♀️", rightText: "游泳池", description: "游泳→游泳池" }
+                    ],
+                    question: { left: "🛍️", leftText: "购物", description: "购物→?" },
+                    options: [
+                        { emoji: "🏪", text: "商场", correct: true },
+                        { emoji: "💳", text: "信用卡", correct: false },
+                        { emoji: "🛒", text: "购物车", correct: false }
+                    ]
+                }
+            ],
+            scoring: {
+                correct: 10,
+                incorrect: -5
+            }
+        };
+
+        // 初始化随机数生成器，使用当前时间作为种子
+        const seededRandom = new SeededRandom(Date.now());
+        
+        // 从配置中随机选择10个不重复的题目，如果题目不足则重复使用
+        const maxQuestions = 10;
+        let selectedLevels = [];
+        if (game_config.levels.length >= maxQuestions) {
+            selectedLevels = seededRandom.randomSelect(game_config.levels, maxQuestions);
+        } else {
+            // 如果题目不足10个，重复使用直到达到10题
+            while (selectedLevels.length < maxQuestions) {
+                const shuffledLevels = seededRandom.shuffle(game_config.levels);
+                selectedLevels = selectedLevels.concat(shuffledLevels);
+            }
+            selectedLevels = selectedLevels.slice(0, maxQuestions);
+        }
+
+        // 游戏状态
+        let gameState = {
+            currentLevel: 0,
+            score: 0,
+            selectedOption: null,
+            answered: false,
+            totalQuestions: selectedLevels.length
+        };
+
+        // DOM元素
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const examplesElement = document.getElementById('examples');
+        const questionLeftElement = document.getElementById('question-left');
+        const questionRightElement = document.getElementById('question-right');
+        const optionsElement = document.getElementById('options');
+        const restartBtn = document.getElementById('restart-btn');
+        const successOverlay = document.getElementById('success-overlay');
+
+        // 初始化游戏
+        function initGame() {
+            // 重新生成随机题目
+            const newSeededRandom = new SeededRandom(Date.now());
+            if (game_config.levels.length >= maxQuestions) {
+                selectedLevels = newSeededRandom.randomSelect(game_config.levels, maxQuestions);
+            } else {
+                selectedLevels = [];
+                while (selectedLevels.length < maxQuestions) {
+                    const shuffledLevels = newSeededRandom.shuffle(game_config.levels);
+                    selectedLevels = selectedLevels.concat(shuffledLevels);
+                }
+                selectedLevels = selectedLevels.slice(0, maxQuestions);
+            }
+            
+            gameState = {
+                currentLevel: 0,
+                score: 0,
+                selectedOption: null,
+                answered: false,
+                totalQuestions: selectedLevels.length
+            };
+            updateScore();
+            loadLevel();
+        }
+
+        // 加载关卡
+        function loadLevel() {
+            if (gameState.currentLevel >= gameState.totalQuestions) {
+                showGameComplete();
+                return;
+            }
+
+            const level = selectedLevels[gameState.currentLevel];
+            gameState.answered = false;
+            gameState.selectedOption = null;
+
+            // 更新关卡显示
+            levelElement.textContent = gameState.currentLevel + 1;
+
+            // 渲染示例
+            renderExamples(level.examples);
+
+            // 渲染问题
+            renderQuestion(level.question);
+
+            // 渲染选项
+            renderOptions(level.options);
+        }
+
+        // 渲染示例
+        function renderExamples(examples) {
+            examplesElement.innerHTML = '';
+            examples.forEach(example => {
+                const exampleDiv = document.createElement('div');
+                exampleDiv.className = 'bg-white rounded-lg p-4 shadow-md mb-4';
+                exampleDiv.innerHTML = `
+                    <div class="flex items-center justify-center space-x-6">
+                        <div class="text-center bg-gray-100 rounded-lg p-3 w-20 h-20 flex flex-col items-center justify-center">
+                            <div class="text-3xl">${example.left}</div>
+                            <div class="text-xs text-gray-600 mt-1">${example.leftText}</div>
+                        </div>
+                        <div class="text-2xl text-yellow-500">→</div>
+                        <div class="text-center bg-green-100 rounded-lg p-3 w-20 h-20 flex flex-col items-center justify-center">
+                            <div class="text-3xl">${example.right}</div>
+                            <div class="text-xs text-gray-600 mt-1">${example.rightText}</div>
+                        </div>
+                    </div>
+                `;
+                examplesElement.appendChild(exampleDiv);
+            });
+        }
+
+        // 渲染问题
+        function renderQuestion(question) {
+            questionLeftElement.innerHTML = `
+                <div class="text-6xl">${question.left}</div>
+                <div class="text-sm text-gray-600 mt-2">${question.leftText}</div>
+            `;
+            questionRightElement.innerHTML = `
+                <span class="text-6xl text-yellow-500">?</span>
+                <span class="text-xs text-yellow-600 mt-1">待选择</span>
+            `;
+        }
+
+        // 渲染选项
+        function renderOptions(options) {
+            optionsElement.innerHTML = '';
+            options.forEach((option, index) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'game-item bg-white rounded-lg p-4 cursor-pointer text-center hover:bg-blue-50 border-2 border-transparent shadow-md';
+                optionDiv.innerHTML = `
+                    <div class="text-4xl mb-2">${option.emoji}</div>
+                    <div class="text-sm text-gray-600">${option.text}</div>
+                `;
+                optionDiv.addEventListener('click', () => selectOption(index, option));
+                optionsElement.appendChild(optionDiv);
+            });
+        }
+
+        // 显示正确答案提示
+        function showSuccessMessage() {
+            successOverlay.style.display = 'flex';
+            setTimeout(() => {
+                successOverlay.style.display = 'none';
+            }, 1500);
+        }
+
+        // 选择选项
+        function selectOption(index, option) {
+            if (gameState.answered) return;
+
+            // 移除之前的选择状态
+            document.querySelectorAll('.game-item').forEach(item => {
+                item.classList.remove('selected', 'correct', 'incorrect');
+            });
+
+            // 标记当前选择
+            const selectedElement = optionsElement.children[index];
+            selectedElement.classList.add('selected');
+            gameState.selectedOption = index;
+
+            // 延迟显示结果
+            setTimeout(() => {
+                checkAnswer(option, selectedElement);
+            }, 500);
+        }
+
+        // 检查答案
+        function checkAnswer(option, selectedElement) {
+            gameState.answered = true;
+            const level = selectedLevels[gameState.currentLevel];
+
+            if (option.correct) {
+                // 正确答案
+                selectedElement.classList.remove('selected');
+                selectedElement.classList.add('correct');
+                gameState.score += game_config.scoring.correct;
+                
+                // 显示正确答案在问题区域
+                questionRightElement.innerHTML = `
+                    <div class="text-6xl">${option.emoji}</div>
+                    <div class="text-xs text-green-600 mt-1">${option.text}</div>
+                `;
+                questionRightElement.classList.add('correct');
+
+                // 显示正确答案提示
+                showSuccessMessage();
+            } else {
+                // 错误答案 - 不显示提示，直接处理
+                selectedElement.classList.remove('selected');
+                gameState.score += game_config.scoring.incorrect;
+
+                // 显示正确答案
+                const correctOption = level.options.find(opt => opt.correct);
+                questionRightElement.innerHTML = `
+                    <div class="text-6xl">${correctOption.emoji}</div>
+                    <div class="text-xs text-green-600 mt-1">${correctOption.text}</div>
+                `;
+            }
+
+            updateScore();
+
+            // 1秒后自动下一题
+            setTimeout(() => {
+                nextLevel();
+            }, 1000);
+        }
+
+        // 更新得分
+        function updateScore() {
+            scoreElement.textContent = gameState.score;
+        }
+
+        // 下一题
+        function nextLevel() {
+            // 重置问题区域样式
+            questionRightElement.classList.remove('correct');
+            
+            gameState.currentLevel++;
+            loadLevel();
+        }
+
+        // 游戏完成
+        function showGameComplete() {
+            examplesElement.innerHTML = `
+                <div class="text-center bg-green-100 rounded-lg p-8">
+                    <div class="text-6xl mb-4">🎉</div>
+                    <h2 class="text-2xl font-bold text-green-800 mb-2">恭喜完成！</h2>
+                    <p class="text-lg text-green-600">最终得分: ${gameState.score}</p>
+                    <p class="text-sm text-gray-600 mt-2">您已完成所有${gameState.totalQuestions}题！</p>
+                </div>
+            `;
+            questionLeftElement.parentElement.style.display = 'none';
+            optionsElement.parentElement.style.display = 'none';
+        }
+
+        // 重新开始
+        function restartGame() {
+            document.querySelectorAll('.game-item').forEach(item => {
+                item.classList.remove('selected', 'correct', 'incorrect');
+            });
+            questionLeftElement.parentElement.style.display = 'block';
+            optionsElement.parentElement.style.display = 'block';
+            initGame();
+        }
+
+        // 事件监听
+        restartBtn.addEventListener('click', restartGame);
+
+        // 初始化游戏
+        initGame();
+    </script>
+</body>
+</html>

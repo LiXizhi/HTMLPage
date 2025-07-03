@@ -1,0 +1,628 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>电子证书生成器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnproxy.keepwork.com/jsdelivr/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SimSun';
+        }
+        .certificate-font {
+            font-family: 'SimSun', serif;
+        }
+        .certificate-container {
+            width: 100%;
+            padding: 0 10px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+        }
+        .certificate {
+            width: 210mm; /* A4纸宽度 */
+            height: 297mm; /* A4纸高度 */
+            position: relative;
+            background-color: #f9f7f1;
+            background-image: 
+                radial-gradient(#f5e7c1 20%, transparent 0), 
+                radial-gradient(#f5e7c1 20%, transparent 0);
+            background-size: 10px 10px;
+            background-position: 0 0, 5px 5px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.25);
+            overflow: hidden;
+            transform-origin: top center;
+        }
+        .certificate::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255,215,0,0.15) 0%, rgba(255,255,255,0) 50%, rgba(255,215,0,0.15) 100%);
+            pointer-events: none;
+            z-index: 1;
+        }
+        .certificate::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            bottom: 15px;
+            border: 2px solid #d4af37;
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .inner-border {
+            border: 8px solid transparent;
+            border-image: linear-gradient(45deg, #d4af37, #f9f7f1 25%, #d4af37 50%, #f9f7f1 75%, #d4af37) 1;
+            position: relative;
+        }
+        .inner-border::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            right: -8px;
+            bottom: -8px;
+            border: 1px solid #d4af37;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+        .corner {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 2px solid #d4af37;
+            z-index: 2;
+        }
+        .corner-top-left {
+            top: 30px;
+            left: 30px;
+            border-right: none;
+            border-bottom: none;
+        }
+        .corner-top-right {
+            top: 30px;
+            right: 30px;
+            border-left: none;
+            border-bottom: none;
+        }
+        .corner-bottom-left {
+            bottom: 30px;
+            left: 30px;
+            border-right: none;
+            border-top: none;
+        }
+        .corner-bottom-right {
+            bottom: 30px;
+            right: 30px;
+            border-left: none;
+            border-top: none;
+        }
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 120px;
+            color: rgba(0,0,0,0.03);
+            font-weight: bold;
+            white-space: nowrap;
+            z-index: -1;
+        }
+        .ribbon {
+            width: 80px;
+            height: 80px;
+            position: absolute;
+            overflow: hidden;
+        }
+        .ribbon-top-right {
+            top: 0;
+            right: 0;
+        }
+        .ribbon-top-right::before,
+        .ribbon-top-right::after {
+            content: "";
+            position: absolute;
+            z-index: 5;
+            display: block;
+            border: 5px solid #a17d0c;
+        }
+        .ribbon-top-right::before {
+            top: 0;
+            left: 0;
+        }
+        .ribbon-top-right::after {
+            bottom: 0;
+            right: 0;
+        }
+        .ribbon-top-right span {
+            position: absolute;
+            top: 13px;
+            right: -25px;
+            transform: rotate(45deg);
+            width: 100px;
+            background-color: #d4af37;
+            text-align: center;
+            padding: 5px 0;
+            font-size: 12px;
+            color: #fff;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .seal-wrapper {
+            position: relative;
+            width: 110px;
+            height: 110px;
+        }
+        .seal-outer-circle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 5px solid red;
+            border-radius: 50%;
+            z-index: 1;
+        }
+        .seal-star {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-size: 40px;
+            line-height: 0;
+            z-index: 2;
+        }
+        .seal-text {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+        }
+        .certificate-number {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* 显示隐藏类，避免使用hidden类，兼容性更好 */
+        .display-none {
+            display: none !important;
+        }
+        .display-flex {
+            display: flex !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center py-8">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4 mb-8">
+        <h1 class="text-2xl font-bold text-center mb-6">电子证书查询</h1>
+        
+        <div class="mb-6">
+            <label for="contestSelector" class="block mb-2 text-sm font-medium">选择比赛</label>
+            <select id="contestSelector" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">加载中...</option>
+            </select>
+        </div>
+        
+        <div class="mb-6">
+            <label for="userInput" class="block mb-2 text-sm font-medium">请输入您的用户名或用户ID</label>
+            <input type="text" id="userInput" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如：张三 或 U12345">
+        </div>
+        
+        <div class="mb-6">
+            <label class="block mb-2 text-sm font-medium">查询方式</label>
+            <div class="flex space-x-4">
+                <div class="flex items-center">
+                    <input type="radio" id="searchByName" name="searchType" value="name" class="mr-2" checked>
+                    <label for="searchByName">按用户名查询</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="radio" id="searchById" name="searchType" value="id" class="mr-2">
+                    <label for="searchById">按用户ID查询</label>
+                </div>
+            </div>
+        </div>
+        
+        <button id="searchCertificate" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">查询证书</button>
+    </div>
+    
+    <div id="noResultMessage" class="display-none bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-8 max-w-md mx-4">
+        <p>未找到匹配的获奖记录，请检查您输入的用户名或ID是否正确。</p>
+    </div>
+    
+    <div id="certificatePreview" class="display-none w-full flex-col items-center mb-8">
+        <div class="certificate-container mb-6">
+            <div id="certificate" class="certificate p-10 flex flex-col items-center">
+                <div class="corner corner-top-left"></div>
+                <div class="corner corner-top-right"></div>
+                <div class="corner corner-bottom-left"></div>
+                <div class="corner corner-bottom-right"></div>
+                <div class="ribbon ribbon-top-right"><span>官方认证</span></div>
+                <div class="watermark">CERTIFICATE</div>
+                
+                <div class="inner-border w-full h-full flex flex-col items-center justify-center p-10">
+                    <div class="mb-4 flex justify-center">
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAYAAACqNX6+AAAACXBIWXMAAAsTAAALEwEAmpwYAAAEYklEQVR4nO2c/4vVVBTH9/4BQgSSUBAEQRAE/RAEQdAPQRD0QxAEQT8EQRAE/VREu9XWrgupUCzrumLpuqLrrpW6rui6Vr9dMX3V7sz88Dk4I7Mz597JZGbmzp2ZDw9mJ51z7z333HM+995zbpVKkSJFihRJrQq7Z6raSlV0yrZKEqOK9lMVXYfmqLSiF4aRT9hfK4NMghQdoVM4Ga3RJI1uYX9RCT/BDNpKVfSCmYnL6YRtLu+Y2F8UhU3RXnrKQEQboRV1rLBt0sIKyJPoRcmAODaE/UVROoQV3bMKxJGCiSPGYttEVfSDmYV5GqVJGnEV4cNoUfS9SUBctHRHSVFEpzMzMBUtnZ5XERSt0BRerJ3xQ0IIcazSJPZHy+yrDZh9YRlk9teW0mJlKfXhGDrGY7xgW6eOWIw+jhZBu+kZnTGzL08nJqyMrlpoUUm6ORuxOHuO3qULtEz3o6Wj0VJX0cC6iPqYn4eAK3UHxMnRKUu8YGccw0uI2UzFx5csPRQFPSNHzQKCWD8JJMfRKptKi5WlF7BnV9pFtg97dIH2T4CY/3p4gd6Bi76/y2v01jHo3dI0yI8s8YILnVhxGaGJ0YiVFE18yzZrJ0qbIHdpkp7Fz57PwPlY0qF1GqeyQU7+DOHBPnEvbfPEF1iEXJADLwcPHlbSNQvZRexr/eR56IOwFdTmTOLMtj7vbPezEMgRmyOu6tDrJiKs0G/xzFjA9+g9fIv2Pxo0yjR8Gs+YtXFw+jl42fHzyfAu+l5PqWRFdwKxFhYdKYcz5nBLuP808/mDx9aLzxRwDzzm3aMKGCnxPHoHVZtH8Bxs2T8cMG9EQ9EKg7CvSEW14p2X8/cSE5azNofw4mHwc+bNGLyA57yZBp2D+F/vXS2ckifxTKIlS3TXEvBlmwxnXLaSUaUn1sHvvGuumvhYQJ9HTXQ7Pm8h1Ny8ZAVbMpNEb/4Yxgy3YKLFOuWsiQeM++BdPe8LZ1vQA9h4tOL9G/wJnk2GUCTgVU8g5nHLBg8LDIh75VCGQTfwLBOhj4TYN+93EcvQZk5tCaP+5D2UYVzD2nk3cX8WxNvtqziA0CjNJ/pgDLPegAe9FzdBKN7JVmIwBg7wvk9XZUwf1/BuMB/T7mF6IdhUYw5tSvgxcxuBeBs8H50YnCWMl/2fvTPhDXaLjDDUe8z3wgbH99atrfL3PPHbxPrpmcQE4/lsv8vYq/iMRzYIZ4fxJXw/1/BOQfA2ynrPX3fYK8bXB5oDscP7E3wXn8EzcxG2Dn3W4/iVQMBnsMvz+Rn8gX/gNfRhTtKWTG0N83vQE7BGCL04iRRDLhkOq9n2m3FIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyXFIyQmF8B9fUHIlTgVc5gAAAABJRU5ErkJggg==" alt="Logo" class="h-20 mb-2">
+                    </div>
+                    
+                    <h1 id="certificateTitle" class="text-4xl font-bold text-center mb-5 certificate-font tracking-wider">2025帕拉卡AI智能体大赛</h1>
+                    
+                    <div class="text-center mb-8 relative">
+                        <h2 class="text-3xl certificate-font mb-2 font-semibold relative inline-block">
+                            荣誉证书
+                            <span class="absolute -bottom-1 left-0 w-full h-0.5 bg-yellow-600"></span>
+                        </h2>
+                        <p class="text-lg certificate-font text-gray-600">CERTIFICATE OF HONOR</p>
+                    </div>
+                    
+                    <div class="text-center mb-10">
+                        <p class="text-xl certificate-font mb-4">兹证明</p>
+                        <p id="certificateUserName" class="text-3xl certificate-font font-bold underline decoration-dotted underline-offset-8 mb-6 px-8">张三</p>
+                        <p class="text-xl certificate-font leading-relaxed">
+                            在本次大赛中表现优异<br>
+                            成绩突出，贡献卓越<br>
+                            特授予<span id="certificateAwardType" class="font-bold mx-2">一等奖</span>荣誉
+                        </p>
+                    </div>
+                    
+                    <div class="flex justify-between w-full mt-16">
+                        <div class="text-center">
+                            <p class="text-lg certificate-font">颁发日期</p>
+                            <p id="certificateDate" class="text-lg certificate-font">2025年04月24日</p>
+                        </div>
+                        <div class="text-center seal-wrapper">  
+                            <div class="seal-outer-circle"></div>  
+                            <div class="seal-star">★</div>  
+                            <svg class="seal-text" viewBox="0 0 110 110">  
+                                <defs>  
+                                    <path id="circlePath" d="M 55, 55 m -33, 0 a 33,33 0 1,1 66,0 a 33,33 0 1,1 -66,0" />  
+                                </defs>  
+                                <text id="sealOrganization" fill="red" font-size="16">  
+                                    <textPath xlink:href="#circlePath" startOffset="0%">  
+                                        XXX市教科院  
+                                    </textPath>  
+                                </text>  
+                            </svg>  
+                        </div>  
+                    </div>
+                    
+                    <div class="certificate-number">
+                        <span>证书编号：</span>
+                        <span id="certificateNumber">1234567</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex gap-4 justify-center mt-4 mb-8">
+            <button id="downloadPdf" class="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">下载 PDF</button>
+        </div>
+    </div>
+    
+    <script>
+        // 检测是否在微信浏览器中运行
+        function isWechat() {
+            return /MicroMessenger/i.test(navigator.userAgent);
+        }
+        
+        // 解析Markdown配置
+        function parseMarkdownConfig(markdownText) {
+            const contests = [];
+            let currentContest = null;
+            
+            // 按行分割
+            const lines = markdownText.split('\n');
+            
+            for (let line of lines) {
+                line = line.trim();
+                
+                // 跳过空行
+                if (!line) continue;
+                
+                // 处理标题（比赛名称）
+                if (line.startsWith('## ')) {
+                    if (currentContest) {
+                        contests.push(currentContest);
+                    }
+                    
+                    currentContest = {
+                        name: line.substring(3).trim(),
+                        sign: '',
+                        winners: []
+                    };
+                    continue;
+                }
+                
+                // 如果还没有开始一个比赛部分，跳过
+                if (!currentContest) continue;
+                
+                // 处理设置项
+                if (line.startsWith('- sign:')) {
+                    currentContest.sign = line.substring('- sign:'.length).trim();
+                    continue;
+                }
+                
+                // 处理获奖者条目
+                if (line.includes(',')) {
+                    const parts = line.split(',');
+                    if (parts.length >= 3) {
+                        currentContest.winners.push({
+                            name: parts[0].trim(),
+                            userId: parts[1].trim(),
+                            award: parts[2].trim()
+                        });
+                    }
+                }
+            }
+            
+            // 添加最后一个比赛
+            if (currentContest) {
+                contests.push(currentContest);
+            }
+            
+            return contests;
+        }
+        
+        const userInputEl = document.getElementById('userInput');
+        const searchCertificateBtn = document.getElementById('searchCertificate');
+        const certificatePreviewEl = document.getElementById('certificatePreview');
+        const downloadPdfBtn = document.getElementById('downloadPdf');
+        const noResultMessageEl = document.getElementById('noResultMessage');
+        const certificateEl = document.getElementById('certificate');
+        const contestSelector = document.getElementById('contestSelector');
+        
+        // 根据窗口大小计算并设置证书的缩放比例
+        function adjustCertificateScale() {
+            // 获取窗口可用宽度（减去两侧的内边距）
+            const windowWidth = window.innerWidth - 20; // 减去certificate-container的左右padding总和
+            
+            // A4纸张在不同环境下的像素尺寸可能不同，这里参考一般显示尺寸
+            const a4WidthInPixels = 794; // 大约210mm的像素值
+            
+            // 计算缩放比例，以窗口宽度为基准
+            let scale = windowWidth / a4WidthInPixels;
+            
+            // 在微信浏览器中可能需要额外调整
+            if (isWechat()) {
+                scale = scale * 0.95; // 稍微减小一点，避免可能的溢出
+            }
+            
+            // 应用缩放
+            certificateEl.style.transform = `scale(${scale})`;
+            
+            // 根据缩放比例调整容器高度，以适应缩放后的证书
+            const containerHeight = 297 * scale; // A4高度为297mm
+            document.querySelector('.certificate-container').style.height = `${containerHeight}mm`;
+            
+            // 调整证书的CSS变换原点，确保缩放中心位于上方中央
+            certificateEl.style.transformOrigin = 'top center';
+        }
+        
+        // 显示/隐藏元素的辅助函数，避免使用classList.add/remove
+        function showElement(element) {
+            element.style.display = element === certificatePreviewEl ? 'flex' : 'block';
+            element.classList.remove('display-none');
+            if (element === certificatePreviewEl) {
+                element.classList.add('display-flex');
+            }
+        }
+        
+        function hideElement(element) {
+            element.style.display = 'none';
+            element.classList.add('display-none');
+            if (element === certificatePreviewEl) {
+                element.classList.remove('display-flex');
+            }
+        }
+        
+        // 生成简单的哈希值
+        function simpleHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            // 确保结果为正数，并取后7位
+            const positiveHash = Math.abs(hash);
+            const hashString = positiveHash.toString();
+            return hashString.slice(-7).padStart(7, '0');
+        }
+        
+        const getTokenFromCookie = () => {
+            const cookies = window.parent.document.cookie;
+            if (!cookies) return null;
+            
+            const cookieArray = cookies.split('; ');
+            for (let cookie of cookieArray) {
+                if (cookie.startsWith('token=')) {
+                    return cookie.substring(6); // 'token='.length
+                }
+            }
+            return null;
+        };
+        
+        // Generic function to fetch data from any URL with optional authentication
+        function fetchPageDataFromUrl(url) {
+            const token = getTokenFromCookie();
+
+            // Create headers object
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            // Add Authorization header if token exists
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            return fetch(url, {
+                method: 'GET',
+                headers: headers
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络请求失败');
+                }
+                return response.text();
+            });
+        }
+
+        // 初始化应用程序
+        let contests = [];
+        
+        // 获取证书配置数据
+        function fetchContests() {
+            const certDataUrl = 'https://api.keepwork.com/core/v0/repos/eduyse%2Fweb/files/eduyse%2Fweb%2Fcertificates%2Fcert_data.md';
+            
+            fetchPageDataFromUrl(certDataUrl)
+                .then(data => {
+                    // 解析Markdown配置
+                    contests = parseMarkdownConfig(data);
+                    
+                    // 清空选择器并填充比赛选择器
+                    contestSelector.innerHTML = '';
+                    contests.forEach((contest, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = contest.name;
+                        contestSelector.appendChild(option);
+                    });
+                    
+                    // 启用搜索按钮
+                    searchCertificateBtn.disabled = false;
+                })
+                .catch(error => {
+                    console.error('获取证书数据失败:', error);
+                    contestSelector.innerHTML = '<option value="">加载失败，请刷新页面重试</option>';
+                    searchCertificateBtn.disabled = true;
+                    
+                    // 显示错误消息
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 max-w-md mx-4';
+                    errorDiv.innerHTML = '<p>无法加载证书数据，请检查网络连接后刷新页面。</p>';
+                    document.querySelector('.bg-white').after(errorDiv);
+                });
+        }
+
+        // 调用函数获取证书数据
+        fetchContests();
+            
+        // 初始调整和窗口调整时重新计算
+        window.addEventListener('resize', adjustCertificateScale);
+        
+        // 初始加载时也调整
+        setTimeout(adjustCertificateScale, 100);
+        
+        // 查询证书
+        searchCertificateBtn.addEventListener('click', function() {
+            const userInput = userInputEl.value.trim();
+            const searchType = document.querySelector('input[name="searchType"]:checked').value;
+            const selectedContestIndex = parseInt(contestSelector.value);
+            
+            if (!userInput) {
+                alert('请输入您的用户名或用户ID');
+                return;
+            }
+            
+            // 获取选中的比赛
+            const selectedContest = contests[selectedContestIndex];
+            
+            // 查找获奖记录
+            let winner = null;
+            if (searchType === 'name') {
+                winner = selectedContest.winners.find(w => w.name === userInput);
+            } else {
+                winner = selectedContest.winners.find(w => w.userId === userInput);
+            }
+            
+            if (winner) {
+                // 更新证书内容
+                document.getElementById('certificateTitle').textContent = selectedContest.name;
+                document.getElementById('certificateUserName').textContent = winner.name;
+                document.getElementById('certificateAwardType').textContent = winner.award;
+                
+                // 更新印章文字
+                document.querySelector('#sealOrganization textPath').textContent = selectedContest.sign;
+                
+                // 设置当前日期
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                document.getElementById('certificateDate').textContent = `${year}年${month}月${day}日`;
+                
+                // 生成证书编号
+                const certificateNumberInput = winner.name + winner.userId + selectedContest.name;
+                const certificateNumber = simpleHash(certificateNumberInput);
+                document.getElementById('certificateNumber').textContent = certificateNumber;
+                
+                // 显示证书预览，隐藏无结果消息
+                hideElement(noResultMessageEl);
+                showElement(certificatePreviewEl);
+                
+                // 调整证书缩放比例
+                setTimeout(adjustCertificateScale, 100);
+                
+                // 滚动到证书预览位置
+                setTimeout(function() {
+                    certificatePreviewEl.scrollIntoView({ behavior: 'smooth' });
+                }, 200);
+            } else {
+                // 显示无结果消息
+                hideElement(certificatePreviewEl);
+                showElement(noResultMessageEl);
+                
+                // 滚动到无结果消息位置
+                setTimeout(function() {
+                    noResultMessageEl.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            }
+        });
+        
+        // 下载 PDF
+        downloadPdfBtn.addEventListener('click', function() {
+            const certificate = document.getElementById('certificate');
+            const userName = document.getElementById('certificateUserName').textContent;
+            const contestName = document.getElementById('certificateTitle').textContent;
+            
+            // 临时移除缩放样式以便于导出原始尺寸的PDF
+            const originalTransform = certificate.style.transform;
+            certificate.style.transform = 'scale(1)';
+            
+            const options = {
+                margin: 0,
+                filename: `${contestName}-${userName}证书.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            
+            // 显示加载提示
+            const downloadBtn = document.getElementById('downloadPdf');
+            const originalText = downloadBtn.textContent;
+            downloadBtn.textContent = '正在生成PDF...';
+            downloadBtn.disabled = true;
+            
+            html2pdf().set(options).from(certificate).save().then(() => {
+                // 恢复按钮状态和缩放样式
+                downloadBtn.textContent = originalText;
+                downloadBtn.disabled = false;
+                certificate.style.transform = originalTransform;
+            });
+        });
+    </script>
+</body>
+</html>

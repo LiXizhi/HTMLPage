@@ -598,17 +598,50 @@
             });
         }
 
-        // 从远程URL获取产品数据并初始化页面
+        const getTokenFromCookie = () => {
+            const cookies = window.parent.document.cookie;
+            if (!cookies) return null;
+            
+            const cookieArray = cookies.split('; ');
+            for (let cookie of cookieArray) {
+                if (cookie.startsWith('token=')) {
+                    return cookie.substring(6); // 'token='.length
+                }
+            }
+            return null;
+        };
+        
+        // Generic function to fetch data from any URL with optional authentication
+        function fetchPageDataFromUrl(url) {
+            const token = getTokenFromCookie();
+
+            // Create headers object
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            // Add Authorization header if token exists
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            return fetch(url, {
+                method: 'GET',
+                headers: headers
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络请求失败');
+                }
+                return response.text();
+            });
+        }
+
+        // Function to fetch product data and update the page
         function fetchProductData() {
             const dataUrl = 'https://api.keepwork.com/core/v0/repos/eduyse%2Fweb/files/eduyse%2Fweb%2Fproduct_data.md';
             
-            fetch(dataUrl)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('网络请求失败');
-                    }
-                    return response.text();
-                })
+            fetchPageDataFromUrl(dataUrl)
                 .then(data => {
                     // 解析产品配置
                     const categories = parseProductConfig(data);

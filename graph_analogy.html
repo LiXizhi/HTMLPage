@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抽象推理大师</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .game-cell {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: white;
+            margin: 2px;
+        }
+        @media (min-width: 768px) {
+            .game-cell {
+                width: 70px;
+                height: 70px;
+                margin: 3px;
+            }
+        }
+        @media (min-width: 1024px) {
+            .game-cell {
+                width: 80px;
+                height: 80px;
+                margin: 4px;
+            }
+        }
+        .shapes-container {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            width: 100%;
+            height: 100%;
+        }
+        .shape {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0; /* 防止形状被压缩 */
+        }
+        @media (min-width: 768px) {
+            .shape {
+                width: 18px;
+                height: 18px;
+            }
+        }
+        @media (min-width: 1024px) {
+            .shape {
+                width: 20px;
+                height: 20px;
+            }
+        }
+        .shape.single {
+            width: 24px;
+            height: 24px;
+        }
+        @media (min-width: 768px) {
+            .shape.single {
+                width: 28px;
+                height: 28px;
+            }
+        }
+        @media (min-width: 1024px) {
+            .shape.single {
+                width: 32px;
+                height: 32px;
+            }
+        }
+        
+        .triangle {
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 14px solid #333; /* 默认颜色，会被JavaScript动态设置 */
+            border-radius: 0;
+            background: transparent !important; /* 确保背景透明 */
+        }
+        @media (min-width: 768px) {
+            .triangle {
+                border-left: 9px solid transparent;
+                border-right: 9px solid transparent;
+                border-bottom: 16px solid #333;
+            }
+        }
+        @media (min-width: 1024px) {
+            .triangle {
+                border-left: 10px solid transparent;
+                border-right: 10px solid transparent;
+                border-bottom: 18px solid #333;
+            }
+        }
+        .triangle.single {
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-bottom: 21px solid #333;
+        }
+        @media (min-width: 768px) {
+            .triangle.single {
+                border-left: 14px solid transparent;
+                border-right: 14px solid transparent;
+                border-bottom: 24px solid #333;
+            }
+        }
+        @media (min-width: 1024px) {
+            .triangle.single {
+                border-left: 16px solid transparent;
+                border-right: 16px solid transparent;
+                border-bottom: 28px solid #333;
+            }
+        }
+        .square {
+            border: none;
+            border-radius: 0;
+        }
+        .circle {
+            border: 2px solid #333;
+            border-radius: 50%;
+        }
+        .diamond {
+            transform: rotate(45deg);
+            border: 2px solid #333;
+        }
+        .pentagon {
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+            border: none;
+        }
+        .hexagon {
+            clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%);
+            border: none;
+        }
+        
+        .number {
+            position: absolute;
+            font-size: 10px;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255,255,255,0.9);
+            padding: 1px 3px;
+            border-radius: 2px;
+        }
+        @media (min-width: 768px) {
+            .number {
+                font-size: 12px;
+            }
+        }
+        .top-left { top: 2px; left: 2px; }
+        .top-right { top: 2px; right: 2px; }
+        .bottom-left { bottom: 2px; left: 2px; }
+        .bottom-right { bottom: 2px; right: 2px; }
+        
+        .option-group {
+            border: 3px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 4px;
+            min-width: 140px; /* 确保最小宽度 */
+        }
+        @media (min-width: 768px) {
+            .option-group {
+                padding: 10px;
+                margin: 6px;
+                min-width: 160px;
+            }
+        }
+        @media (min-width: 1024px) {
+            .option-group {
+                min-width: 180px;
+            }
+        }
+        .option-group:hover {
+            border-color: #3b82f6;
+            transform: scale(1.02);
+        }
+        .option-group.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .option-group.correct {
+            border-color: #10b981;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        }
+        .option-group.incorrect {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+        }
+        .option-group.disabled {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        
+        .level-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 3rem;
+            min-width: 80px;
+        }
+
+        /* 修复小屏幕下的布局 */
+        @media (max-width: 1023px) {
+            #optionsContainer.grid-cols-5 {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-2 py-4 md:px-4 md:py-6">
+        <!-- 游戏状态 -->
+        <div class="bg-white rounded-lg shadow-md p-3 md:p-4 mb-4 md:mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="text-sm md:text-base font-semibold">
+                    关卡: 
+                    <select id="levelSelect" class="level-select bg-white border border-gray-300 rounded px-2 py-1 text-blue-600 cursor-pointer text-sm">
+                        <!-- 选项将由JavaScript生成 -->
+                    </select>
+                </div>
+                <div class="flex items-center gap-4 text-sm md:text-base font-semibold">
+                    <span>得分: <span id="score" class="text-green-600">0</span></span>
+                    <span>正确率: <span id="accuracy" class="text-purple-600">0%</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏区域 -->
+        <div id="gameArea" class="bg-white rounded-lg shadow-md p-3 md:p-6">
+            <!-- 题目描述 -->
+            <div class="text-center mb-4 md:mb-6">
+                <h2 class="text-lg md:text-2xl font-bold" id="questionTitle">找出错误的一组</h2>
+            </div>
+
+            <!-- 选项区域 -->
+            <div id="optionsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 md:gap-3 justify-items-center">
+                <!-- 选项将由JavaScript动态生成 -->
+            </div>
+
+            <!-- 控制按钮 -->
+            <div class="text-center mt-4 md:mt-6 space-y-2 md:space-y-0 md:space-x-3">
+                <button id="submitBtn" class="w-full md:w-auto bg-blue-500 hover:bg-blue-600 text-white px-4 md:px-6 py-2 rounded-lg font-semibold disabled:opacity-50 text-sm md:text-base" disabled>
+                    提交答案
+                </button>
+                <button id="nextBtn" class="w-full md:w-auto bg-green-500 hover:bg-green-600 text-white px-4 md:px-6 py-2 rounded-lg font-semibold hidden text-sm md:text-base">
+                    下一关
+                </button>
+                <button id="hintBtn" class="w-full md:w-auto bg-yellow-500 hover:bg-yellow-600 text-white px-3 md:px-4 py-2 rounded-lg font-semibold text-sm md:text-base">
+                    💡 提示
+                </button>
+            </div>
+
+            <!-- 反馈区域 -->
+            <div id="feedback" class="mt-3 md:mt-4 text-center hidden">
+                <div id="feedbackText" class="text-sm md:text-base font-semibold mb-1"></div>
+                <div id="explanation" class="text-xs md:text-sm text-gray-600"></div>
+            </div>
+        </div>
+
+        <!-- 进度条 -->
+        <div class="mt-3 md:mt-6 bg-white rounded-lg shadow-md p-3">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs md:text-sm font-medium text-gray-700">关卡进度</span>
+                <span class="text-xs md:text-sm font-medium text-gray-700" id="progressText">1/15</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 6.67%"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AbstractReasoningGame {
+            constructor() {
+                this.currentLevel = 1;
+                this.score = 0;
+                this.totalQuestions = 0;
+                this.correctAnswers = 0;
+                this.selectedOption = null;
+                this.maxLevels = 15;
+                this.currentShuffledOptions = [];
+                this.wrongAnswerIndex = 0;
+                this.autoNextTimeout = null;
+                this.gameCompleted = false;
+                
+                this.shapeEdges = {
+                    triangle: 3,
+                    square: 4,
+                    pentagon: 5,
+                    hexagon: 6,
+                    circle: 0,
+                    diamond: 4
+                };
+                
+                this.colors = {
+                    green: '#10b981',
+                    yellow: '#f59e0b',
+                    blue: '#3b82f6',
+                    red: '#ef4444',
+                    purple: '#8b5cf6'
+                };
+                
+                this.rules = this.generateRules();
+                this.initializeGame();
+            }
+
+            generateRules() {
+                return [
+                    {
+                        type: "number_equals_edges",
+                        name: "数字等于图形边数",
+                        generateCorrect: () => {
+                            const shapes = ['triangle', 'square', 'pentagon', 'hexagon'];
+                            const colors = ['green', 'blue', 'red', 'yellow'];
+                            const positions = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+                            
+                            return {
+                                shapes: positions.map((pos, i) => {
+                                    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+                                    return {
+                                        shapes: [{ type: shape, color: colors[i] }],
+                                        pos: pos,
+                                        num: this.shapeEdges[shape]
+                                    };
+                                })
+                            };
+                        },
+                        generateWrong: (correctOption) => {
+                            const wrong = JSON.parse(JSON.stringify(correctOption));
+                            // 随机选择一个位置，让数字不等于边数
+                            const randomIndex = Math.floor(Math.random() * 4);
+                            const currentNum = wrong.shapes[randomIndex].num;
+                            const possibleWrongNums = [1, 2, 3, 4, 5, 6, 7, 8].filter(n => n !== currentNum);
+                            wrong.shapes[randomIndex].num = possibleWrongNums[Math.floor(Math.random() * possibleWrongNums.length)];
+                            return wrong;
+                        },
+                        explanation: "正确规律：数字应该等于图形的边数（三角形3边，正方形4边，五边形5边，六边形6边）"
+                    },
+                    {
+                        type: "multiple_shapes_sum",
+                        name: "数字等于所有图形边数之和",
+                        generateCorrect: () => {
+                            const shapes = ['triangle', 'square', 'pentagon'];
+                            const colors = ['green', 'blue', 'red', 'yellow', 'purple'];
+                            const positions = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+                            
+                            return {
+                                shapes: positions.map(pos => {
+                                    const numShapes = Math.random() < 0.5 ? 1 : 2;
+                                    const cellShapes = [];
+                                    let totalEdges = 0;
+                                    
+                                    for (let i = 0; i < numShapes; i++) {
+                                        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+                                        const color = colors[Math.floor(Math.random() * colors.length)];
+                                        cellShapes.push({ type: shape, color: color });
+                                        totalEdges += this.shapeEdges[shape];
+                                    }
+                                    
+                                    return {
+                                        shapes: cellShapes,
+                                        pos: pos,
+                                        num: totalEdges
+                                    };
+                                })
+                            };
+                        },
+                        generateWrong: (correctOption) => {
+                            const wrong = JSON.parse(JSON.stringify(correctOption));
+                            const randomIndex = Math.floor(Math.random() * 4);
+                            const currentNum = wrong.shapes[randomIndex].num;
+                            wrong.shapes[randomIndex].num = currentNum + (Math.random() < 0.5 ? 1 : -1);
+                            if (wrong.shapes[randomIndex].num < 1) wrong.shapes[randomIndex].num = 1;
+                            return wrong;
+                        },
+                        explanation: "正确规律：数字应该等于格子内所有图形边数之和"
+                    },
+                    {
+                        type: "color_filter_green",
+                        name: "数字等于绿色图形边数之和",
+                        generateCorrect: () => {
+                            const shapes = ['triangle', 'square', 'pentagon', 'hexagon'];
+                            const colors = ['green', 'blue', 'red', 'yellow'];
+                            const positions = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+                            
+                            return {
+                                shapes: positions.map(pos => {
+                                    const hasGreen = Math.random() < 0.7;
+                                    const cellShapes = [];
+                                    let greenEdges = 0;
+                                    
+                                    if (hasGreen) {
+                                        const greenShape = shapes[Math.floor(Math.random() * shapes.length)];
+                                        cellShapes.push({ type: greenShape, color: 'green' });
+                                        greenEdges += this.shapeEdges[greenShape];
+                                    }
+                                    
+                                    // 添加一个非绿色图形
+                                    if (Math.random() < 0.6) {
+                                        const otherShape = shapes[Math.floor(Math.random() * shapes.length)];
+                                        const otherColors = colors.filter(c => c !== 'green');
+                                        const otherColor = otherColors[Math.floor(Math.random() * otherColors.length)];
+                                        cellShapes.push({ type: otherShape, color: otherColor });
+                                    }
+                                    
+                                    if (cellShapes.length === 0) {
+                                        // 确保至少有一个图形
+                                        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+                                        cellShapes.push({ type: shape, color: 'green' });
+                                        greenEdges = this.shapeEdges[shape];
+                                    }
+                                    
+                                    return {
+                                        shapes: cellShapes,
+                                        pos: pos,
+                                        num: greenEdges
+                                    };
+                                })
+                            };
+                        },
+                        generateWrong: (correctOption) => {
+                            const wrong = JSON.parse(JSON.stringify(correctOption));
+                            const randomIndex = Math.floor(Math.random() * 4);
+                            const currentNum = wrong.shapes[randomIndex].num;
+                            wrong.shapes[randomIndex].num = currentNum + (Math.random() < 0.5 ? 2 : -2);
+                            if (wrong.shapes[randomIndex].num < 0) wrong.shapes[randomIndex].num = 0;
+                            return wrong;
+                        },
+                        explanation: "正确规律：数字应该只计算绿色图形的边数之和，忽略其他颜色的图形"
+                    },
+                    {
+                        type: "diagonal_sum",
+                        name: "对角线图形边数对应",
+                        generateCorrect: () => {
+                            const shapes = ['triangle', 'square', 'pentagon', 'hexagon'];
+                            const colors = ['green', 'blue', 'red', 'yellow'];
+                            
+                            // 先生成左下和右下的图形
+                            const bottomLeftShapes = [{ type: shapes[Math.floor(Math.random() * shapes.length)], color: colors[0] }];
+                            const bottomRightShapes = [{ type: shapes[Math.floor(Math.random() * shapes.length)], color: colors[1] }];
+                            
+                            if (Math.random() < 0.4) {
+                                bottomLeftShapes.push({ type: shapes[Math.floor(Math.random() * shapes.length)], color: colors[2] });
+                            }
+                            if (Math.random() < 0.4) {
+                                bottomRightShapes.push({ type: shapes[Math.floor(Math.random() * shapes.length)], color: colors[3] });
+                            }
+                            
+                            const bottomLeftSum = bottomLeftShapes.reduce((sum, shape) => sum + this.shapeEdges[shape.type], 0);
+                            const bottomRightSum = bottomRightShapes.reduce((sum, shape) => sum + this.shapeEdges[shape.type], 0);
+                            
+                            return {
+                                shapes: [
+                                    { shapes: [{ type: shapes[Math.floor(Math.random() * shapes.length)], color: colors[0] }], pos: "top-left", num: bottomRightSum },
+                                    { shapes: [{ type: shapes[Math.floor(Math.random() * shapes.length)], color: colors[1] }], pos: "top-right", num: bottomLeftSum },
+                                    { shapes: bottomLeftShapes, pos: "bottom-left", num: 0 },
+                                    { shapes: bottomRightShapes, pos: "bottom-right", num: 0 }
+                                ]
+                            };
+                        },
+                        generateWrong: (correctOption) => {
+                            const wrong = JSON.parse(JSON.stringify(correctOption));
+                            const randomIndex = Math.random() < 0.5 ? 0 : 1; // 只改变左上角或右上角
+                            wrong.shapes[randomIndex].num += (Math.random() < 0.5 ? 1 : -1);
+                            if (wrong.shapes[randomIndex].num < 0) wrong.shapes[randomIndex].num = 0;
+                            return wrong;
+                        },
+                        explanation: "正确规律：左上数字 = 右下图形边数之和，右上数字 = 左下图形边数之和"
+                    }
+                ];
+            }
+
+            initializeGame() {
+                this.setupLevelSelect();
+                this.bindEvents();
+                this.loadLevel();
+            }
+
+            setupLevelSelect() {
+                const levelSelect = document.getElementById('levelSelect');
+                levelSelect.innerHTML = '';
+                
+                for (let i = 1; i <= this.maxLevels; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = `第${i}关`;
+                    levelSelect.appendChild(option);
+                }
+                
+                levelSelect.addEventListener('change', (e) => {
+                    this.currentLevel = parseInt(e.target.value);
+                    this.clearAutoNext();
+                    this.loadLevel();
+                });
+            }
+
+            bindEvents() {
+                document.getElementById('submitBtn').addEventListener('click', () => this.submitAnswer());
+                document.getElementById('nextBtn').addEventListener('click', () => {
+                    this.clearAutoNext();
+                    this.nextLevel();
+                });
+                document.getElementById('hintBtn').addEventListener('click', () => this.showHint());
+            }
+
+            clearAutoNext() {
+                if (this.autoNextTimeout) {
+                    clearTimeout(this.autoNextTimeout);
+                    this.autoNextTimeout = null;
+                }
+            }
+
+            generateLevel(rule) {
+                // 生成4个正确答案和1个错误答案
+                const correctOptions = [];
+                for (let i = 0; i < 4; i++) {
+                    correctOptions.push(rule.generateCorrect());
+                }
+                
+                const wrongOption = rule.generateWrong(correctOptions[0]);
+                
+                // 混合所有选项
+                const allOptions = [...correctOptions, wrongOption];
+                
+                // 随机打乱顺序
+                for (let i = allOptions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [allOptions[i], allOptions[j]] = [allOptions[j], allOptions[i]];
+                }
+                
+                // 找到错误答案的位置
+                this.wrongAnswerIndex = allOptions.findIndex(option => 
+                    JSON.stringify(option) === JSON.stringify(wrongOption)
+                );
+                
+                return {
+                    options: allOptions,
+                    rule: rule
+                };
+            }
+
+            loadLevel() {
+                const ruleIndex = (this.currentLevel - 1) % this.rules.length;
+                const rule = this.rules[ruleIndex];
+                const level = this.generateLevel(rule);
+                
+                document.getElementById('questionTitle').textContent = "找出错误的一组";
+                document.getElementById('levelSelect').value = this.currentLevel;
+                document.getElementById('progressText').textContent = `${this.currentLevel}/${this.maxLevels}`;
+                document.getElementById('progressBar').style.width = `${(this.currentLevel / this.maxLevels) * 100}%`;
+                
+                this.currentLevel_rule = rule;
+                this.renderOptions(level.options);
+                this.selectedOption = null;
+                this.gameCompleted = false;
+                
+                // 重置按钮状态
+                document.getElementById('submitBtn').disabled = true;
+                document.getElementById('nextBtn').classList.add('hidden');
+                document.getElementById('feedback').classList.add('hidden');
+                document.getElementById('submitBtn').style.display = 'inline-block';
+                
+                // 清除之前的选择状态
+                document.querySelectorAll('.option-group').forEach(group => {
+                    group.classList.remove('selected', 'correct', 'incorrect', 'disabled');
+                });
+            }
+
+            renderOptions(options) {
+                const container = document.getElementById('optionsContainer');
+                container.innerHTML = '';
+                
+                options.forEach((option, index) => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'option-group';
+                    optionDiv.dataset.index = index;
+                    
+                    const label = document.createElement('div');
+                    label.className = 'text-center font-bold text-sm md:text-base mb-2';
+                    label.textContent = String.fromCharCode(65 + index); // A, B, C, D, E
+                    
+                    const grid = document.createElement('div');
+                    grid.className = 'grid grid-cols-2 gap-1 justify-items-center';
+                    
+                    option.shapes.forEach(cellData => {
+                        const cell = document.createElement('div');
+                        cell.className = 'game-cell';
+                        
+                        const shapesContainer = document.createElement('div');
+                        shapesContainer.className = 'shapes-container';
+                        
+                        cellData.shapes.forEach(shapeData => {
+                            const shapeDiv = document.createElement('div');
+                            const shapeClass = cellData.shapes.length === 1 ? 'shape single' : 'shape';
+                            shapeDiv.className = `${shapeClass} ${shapeData.type}`;
+                            
+                            if (shapeData.type === 'triangle') {
+                                shapeDiv.style.borderBottomColor = this.colors[shapeData.color];
+                            } else {
+                                shapeDiv.style.backgroundColor = this.colors[shapeData.color];
+                            }
+                            
+                            shapesContainer.appendChild(shapeDiv);
+                        });
+                        
+                        const numberDiv = document.createElement('div');
+                        numberDiv.className = `number ${cellData.pos}`;
+                        numberDiv.textContent = cellData.num;
+                        
+                        cell.appendChild(shapesContainer);
+                        cell.appendChild(numberDiv);
+                        grid.appendChild(cell);
+                    });
+                    
+                    optionDiv.appendChild(label);
+                    optionDiv.appendChild(grid);
+                    container.appendChild(optionDiv);
+                    
+                    // 添加点击事件
+                    optionDiv.addEventListener('click', () => this.selectOption(index));
+                });
+            }
+
+            selectOption(index) {
+                if (this.gameCompleted) return;
+                
+                // 清除之前的选择
+                document.querySelectorAll('.option-group').forEach(group => {
+                    group.classList.remove('selected');
+                });
+                
+                // 选择新的选项
+                document.querySelector(`[data-index="${index}"]`).classList.add('selected');
+                this.selectedOption = index;
+                
+                // 启用提交按钮
+                document.getElementById('submitBtn').disabled = false;
+            }
+
+            submitAnswer() {
+                if (this.selectedOption === null || this.gameCompleted) return;
+                
+                const isCorrect = this.selectedOption === this.wrongAnswerIndex;
+                
+                this.totalQuestions++;
+                if (isCorrect) {
+                    this.correctAnswers++;
+                    this.score += 10;
+                    this.gameCompleted = true;
+                    
+                    // 答对了，显示正确答案并禁用选择
+                    document.querySelectorAll('.option-group').forEach((group, index) => {
+                        if (index === this.wrongAnswerIndex) {
+                            group.classList.add('correct');
+                        }
+                        group.classList.add('disabled');
+                    });
+                    
+                    // 显示下一关按钮
+                    document.getElementById('submitBtn').style.display = 'none';
+                    document.getElementById('nextBtn').classList.remove('hidden');
+                    
+                    // 1.5秒后自动进入下一关
+                    this.autoNextTimeout = setTimeout(() => {
+                        this.nextLevel();
+                    }, 1500);
+                } else {
+                    // 答错了，显示提示但允许重新选择
+                    document.querySelector(`[data-index="${this.selectedOption}"]`).classList.add('incorrect');
+                    
+                    // 清除选择状态，允许重新选择
+                    setTimeout(() => {
+                        document.querySelectorAll('.option-group').forEach(group => {
+                            group.classList.remove('selected', 'incorrect');
+                        });
+                        this.selectedOption = null;
+                        document.getElementById('submitBtn').disabled = true;
+                    }, 1000);
+                }
+                
+                this.updateStats();
+                this.showFeedback(isCorrect, this.currentLevel_rule.explanation);
+            }
+
+            showFeedback(isCorrect, explanation) {
+                const feedback = document.getElementById('feedback');
+                const feedbackText = document.getElementById('feedbackText');
+                const explanationDiv = document.getElementById('explanation');
+                
+                feedback.classList.remove('hidden');
+                
+                if (isCorrect) {
+                    feedbackText.textContent = '🎉 正确！你找到了错误的选项！';
+                    feedbackText.className = 'text-sm md:text-base font-semibold mb-1 text-green-600';
+                    explanationDiv.textContent = explanation;
+                } else {
+                    feedbackText.textContent = '❌ 不对，再想想哪个选项不符合规律';
+                    feedbackText.className = 'text-sm md:text-base font-semibold mb-1 text-red-600';
+                    explanationDiv.textContent = explanation;
+                    
+                    // 答错时，3秒后隐藏反馈
+                    setTimeout(() => {
+                        feedback.classList.add('hidden');
+                    }, 3000);
+                }
+            }
+
+            nextLevel() {
+                this.clearAutoNext();
+                
+                if (this.currentLevel >= this.maxLevels) {
+                    this.endGame();
+                    return;
+                }
+                
+                this.currentLevel++;
+                document.getElementById('submitBtn').style.display = 'inline-block';
+                this.loadLevel();
+            }
+
+            showHint() {
+                if (this.currentLevel_rule) {
+                    alert(`💡 ${this.currentLevel_rule.explanation}`);
+                } else {
+                    alert('💡 观察4个正确选项找出规律，然后找出那个不符合规律的选项。');
+                }
+            }
+
+            updateStats() {
+                document.getElementById('score').textContent = this.score;
+                const accuracy = this.totalQuestions > 0 ? Math.round((this.correctAnswers / this.totalQuestions) * 100) : 0;
+                document.getElementById('accuracy').textContent = accuracy + '%';
+            }
+
+            endGame() {
+                this.clearAutoNext();
+                const accuracy = Math.round((this.correctAnswers / this.totalQuestions) * 100);
+                alert(`🎊 游戏完成！\n总得分: ${this.score}\n正确率: ${accuracy}%\n\n${accuracy >= 80 ? '优秀！你的逆向推理能力很强！' : accuracy >= 60 ? '不错！继续练习会更好！' : '需要多加练习哦！'}`);
+                
+                // 重新开始游戏
+                if (confirm('是否重新开始游戏？')) {
+                    this.currentLevel = 1;
+                    this.score = 0;
+                    this.totalQuestions = 0;
+                    this.correctAnswers = 0;
+                    this.updateStats();
+                    this.loadLevel();
+                }
+            }
+        }
+
+        // 启动游戏
+        new AbstractReasoningGame();
+    </script>
+</body>
+</html>

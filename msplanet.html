@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麦思星球 - 让每个孩子在自己的世界里自由发光</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .iframe-container {
+            position: relative;
+            width: 100%;
+            max-width: 1280px;
+            margin: 0 auto;
+            aspect-ratio: 1280 / 720;
+            background: #f3f4f6;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: opacity 0.3s ease;
+        }
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .landscape-mode {
+            width: 100% !important;
+            height: calc(100vh - 110px);
+            max-width: none !important;
+        }
+        
+        /* 横屏模式下隐藏标题 */
+        .landscape-mode-active h1 {
+            display: none !important;
+        }
+        
+        /* 横屏模式下隐藏刷新按钮 */
+        .landscape-mode-active #refreshBtn {
+            display: none !important;
+        }
+        
+        /* 横屏模式下移除容器的padding和margin */
+        .landscape-mode-active .container {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            max-width: none !important;
+        }
+        
+        /* 横屏模式下section占满全屏 */
+        .landscape-mode-active {
+            padding: 0 !important;
+        }
+        
+        .control-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .control-btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #374151;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .control-btn:hover {
+            background: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .control-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        /* 媒体查询：检测设备方向 */
+        @media screen and (orientation: portrait) and (max-width: 768px) {
+            .landscape-btn-show {
+                display: block;
+            }
+        }
+        
+        @media screen and (orientation: landscape) or (min-width: 769px) {
+            .landscape-btn-show {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 麦思星球游戏区域 -->
+    <section class="py-8 gradient-bg text-white min-h-screen">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto text-center">
+                <h1 class="text-lg md:text-xl font-bold mb-6">
+                    🌟 让每个孩子在自己的世界里自由发光
+                </h1>
+                
+                <!-- iframe容器 -->
+                <div class="iframe-container bg-white rounded-lg shadow-2xl" id="iframeContainer">
+                    <iframe 
+                        id="maisiGameIframe"
+                        title="麦思星球游戏"
+                        allow="fullscreen; autoplay; encrypted-media"
+                        loading="lazy">
+                    </iframe>
+                    
+                    <!-- 加载遮罩 -->
+                    <div id="loadingOverlay" class="loading-overlay">
+                        <div class="text-center text-gray-600">
+                            <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <p class="text-lg font-semibold">正在加载麦思星球...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 控制按钮 - 右对齐 -->
+                <div class="control-buttons">
+                    <button id="refreshBtn" class="control-btn">
+                        🔄 刷新页面
+                    </button>
+                    <button id="landscapeBtn" class="control-btn landscape-btn-show" style="display: none;">
+                        📱 横屏体验
+                    </button>
+                </div>
+                
+                <!-- 描述内容 -->
+                <div class="mt-8 text-left max-w-4xl mx-auto">
+                    <div class="bg-white bg-opacity-10 rounded-lg p-6 backdrop-blur-sm">
+                        <h2 class="text-xl font-bold mb-4 text-center">🎯 为什么选择麦思星球？</h2>
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-3">🧠 科学训练体系</h3>
+                                <ul class="space-y-2 text-sm opacity-90">
+                                    <li>• 基于认知科学研究，针对5-16岁孩子设计</li>
+                                    <li>• 56项基础认知能力全面提升</li>
+                                    <li>• 个性化训练方案，因材施教</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-3">🎮 游戏化学习</h3>
+                                <ul class="space-y-2 text-sm opacity-90">
+                                    <li>• 趣味游戏形式，孩子主动参与</li>
+                                    <li>• 即时反馈机制，持续激励进步</li>
+                                    <li>• 循序渐进难度，确保学习效果</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-3">📊 数据驱动</h3>
+                                <ul class="space-y-2 text-sm opacity-90">
+                                    <li>• 实时学习数据分析</li>
+                                    <li>• 详细能力评估报告</li>
+                                    <li>• 家长随时了解孩子进步</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold mb-3">🏆 显著效果</h3>
+                                <ul class="space-y-2 text-sm opacity-90">
+                                    <li>• 注意力集中度提升30%+</li>
+                                    <li>• 记忆力和思维能力显著改善</li>
+                                    <li>• 学习效率和成绩同步提升</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        const getTokenFromCookie = () => {
+            const cookies = window.parent.document.cookie;
+            if (!cookies) return null;
+            
+            const cookieArray = cookies.split('; ');
+            for (let cookie of cookieArray) {
+                if (cookie.startsWith('token=')) {
+                    return cookie.substring(6); // 'token='.length
+                }
+            }
+            return null;
+        };
+        const getUserNameFromCookie = () => {
+            const cookies = window.parent.document.cookie;
+            if (!cookies) return null;
+            
+            const cookieArray = cookies.split('; ');
+            for (let cookie of cookieArray) {
+                if (cookie.startsWith('userName=')) {
+                    return cookie.substring(9); // 'userName='.length
+                }
+            }
+            return null;
+        };
+
+        function fetchPageDataFromUrl(url) {
+            const token = getTokenFromCookie();
+
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            return fetch(url, {
+                method: 'GET',
+                headers: headers
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络请求失败');
+                }
+                return response.text();
+            });
+        }
+
+        function CalculateKeepworkRawPageUrl(url) {
+            const urlObj = new URL(url);
+            
+            if (!urlObj.hostname.includes('keepwork.com')) {
+                throw new Error('URL must be from keepwork.com domain');
+            }
+            const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
+            
+            if (pathParts.length < 2) {
+                throw new Error('URL must contain at least userName and websiteName');
+            }
+            
+            const userName = pathParts[0];
+            const websiteName = pathParts[1];
+            const relativePath = pathParts.slice(2).join('/');
+            const repoPath = `${userName}/${websiteName}`;
+            
+            let fullPath;
+            if (relativePath) {
+                fullPath = `${userName}/${websiteName}/${relativePath}`;
+            } else {
+                fullPath = `${userName}/${websiteName}`;
+            }
+            
+            const apiUrl = `https://api.keepwork.com/core/v0/repos/${encodeURIComponent(repoPath)}/files/${encodeURIComponent(fullPath)}.md`;
+            return apiUrl;
+        }
+
+        function hasSeenTutorial() {
+            const userName = getUserNameFromCookie();
+            
+            if (!userName) {
+                console.log('未找到用户名，默认未看过教程');
+                return Promise.resolve(false);
+            }
+            
+            const pageUrl = `https://keepwork.com/${userName}/edunotes/store/maisiAI`;
+            
+            try {
+                const apiUrl = CalculateKeepworkRawPageUrl(pageUrl);
+                console.log(`检查用户 ${userName} 的页面: ${pageUrl}`);
+                return fetchPageDataFromUrl(apiUrl)
+                    .then(data => {
+                        console.log(`用户 ${userName} 的页面存在，已看过教程`);
+                        return true;
+                    })
+                    .catch(error => {
+                        console.log(`用户 ${userName} 的页面不存在，未看过教程:`, error.message);
+                        return false;
+                    });
+            } catch (error) {
+                console.error(`URL格式错误:`, error.message);
+                return Promise.resolve(false);
+            }
+        }
+
+        function createTutorialIframe() {
+            const tutorialIframe = document.createElement('iframe');
+            tutorialIframe.id = 'newuserTutorial_iframe';
+            tutorialIframe.src = CalculateKeepworkRawPageUrl('https://keepwork.com/maisi/maisi/webgames/data/newuser');
+            tutorialIframe.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+                z-index: 1000;
+                background: white;
+                border-radius: 8px;
+            `;
+            tutorialIframe.title = '新手指引';
+            tutorialIframe.allow = 'fullscreen; autoplay; encrypted-media';
+            
+            return tutorialIframe;
+        }
+
+        function showNewUserTutorial() {
+            hasSeenTutorial().then(hasSeen => {
+                if (!hasSeen) {
+                    const iframeContainer = document.getElementById('iframeContainer');
+                    
+                    if (iframeContainer) {
+                        iframeContainer.style.position = 'relative';
+                        const tutorialIframe = createTutorialIframe();
+                        iframeContainer.appendChild(tutorialIframe);
+                        console.log('新手指引已显示');
+                    }
+                } else {
+                    console.log('用户已看过教程，跳过新手指引');
+                }
+            });
+        }
+
+        function closeTutorialIframe() {
+            const tutorialIframe = document.getElementById('newuserTutorial_iframe');
+            if (tutorialIframe) {
+                tutorialIframe.remove();
+                console.log('新手指引已关闭');
+            }
+        }
+
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'closeGameCommon') {
+                closeTutorialIframe();
+            }
+        });
+
+
+        class MaisiGame {
+            constructor() {
+                this.isLandscapeMode = false;
+                this.loadingStartTime = Date.now();
+                
+                this.initIframeSrc();
+                this.initEventListeners();
+                this.checkDeviceOrientation();
+            }
+            
+            initIframeSrc() {
+                const paracraftFrame = document.getElementById('maisiGameIframe');
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                
+                setTimeout(() => {
+                    const token = getTokenFromCookie();
+                    
+                    if (token) {
+                        let url = "https://webparacraft.keepwork.com/?pid=4108584";
+                        url += `&token=${token}`;
+                        
+                        paracraftFrame.src = url;
+                        
+                        console.log('设置iframe URL:', url);
+                        console.log('Token存在:', !!token);
+                        
+                        showNewUserTutorial();
+                    } else {
+                        // 没有token，显示登录提示
+                        loadingOverlay.innerHTML = `
+                            <div class="text-center text-gray-600">
+                                <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span class="text-2xl">🔐</span>
+                                </div>
+                                <h3 class="text-lg font-semibold mb-2 text-gray-700">需要登录</h3>
+                                <p class="text-sm text-gray-500 mb-4">请先登录或注册后再体验麦思星球</p>
+                                <button onclick="window.parent.location.href='/login'" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition duration-200">
+                                    前往登录
+                                </button>
+                            </div>
+                        `;
+                        loadingOverlay.classList.remove('hidden');
+                        console.log('未找到token，显示登录提示');
+                    }
+                }, 100);
+            }
+            
+            initEventListeners() {
+                document.getElementById('refreshBtn').addEventListener('click', () => this.refreshPage());
+                document.getElementById('landscapeBtn').addEventListener('click', () => this.toggleLandscapeMode());
+                
+                // 监听iframe加载完成
+                document.getElementById('maisiGameIframe').addEventListener('load', () => this.handleIframeLoad());
+                
+                // 监听窗口尺寸变化，重新检查设备方向
+                window.addEventListener('resize', () => this.checkDeviceOrientation());
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(() => this.checkDeviceOrientation(), 100);
+                });
+            }
+            
+            checkDeviceOrientation() {
+                const landscapeBtn = document.getElementById('landscapeBtn');
+                const isPortrait = window.innerHeight > window.innerWidth;
+                const isMobile = window.innerWidth <= 768;
+                
+                if (isPortrait && isMobile) {
+                    landscapeBtn.style.display = 'block';
+                } else {
+                    landscapeBtn.style.display = 'none';
+                    // 如果不是竖屏手机，自动退出横屏模式
+                    if (this.isLandscapeMode) {
+                        this.exitLandscapeMode();
+                    }
+                }
+            }
+            
+            handleIframeLoad() {
+                console.log('麦思星球游戏加载完成');
+                
+                // 计算已经加载的时间
+                const loadingTime = Date.now() - this.loadingStartTime;
+                const minLoadingTime = 5000; // 最少显示5秒
+                const remainingTime = Math.max(0, minLoadingTime - loadingTime);
+                
+                // 确保至少显示5秒的加载状态
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                }, remainingTime);
+            }
+            
+            refreshPage() {
+                console.log('刷新整个页面');
+                // 刷新整个页面
+                window.location.reload();
+            }
+            
+            toggleLandscapeMode() {
+                if (this.isLandscapeMode) {
+                    this.exitLandscapeMode();
+                } else {
+                    this.enterLandscapeMode();
+                }
+            }
+            
+            enterLandscapeMode() {
+                const container = document.getElementById('iframeContainer');
+                const landscapeBtn = document.getElementById('landscapeBtn');
+                const section = document.querySelector('section'); // 获取section元素
+                
+                container.classList.add('landscape-mode');
+                section.classList.add('landscape-mode-active'); // 添加到section
+                landscapeBtn.textContent = '📱 退出横屏';
+                landscapeBtn.classList.add('active');
+                this.isLandscapeMode = true;
+                
+                // 自动滚动到iframe区域，确保显示完整的iframe
+                setTimeout(() => {
+                    const container = document.getElementById('iframeContainer');
+                    
+                    // 计算需要滚动的位置，让iframe完全可见
+                    const containerTop = container.offsetTop;
+                    const containerHeight = container.offsetHeight;
+                    const viewportHeight = window.innerHeight;
+                    
+                    // 滚动到能够显示完整iframe的位置
+                    const scrollTop = Math.max(0, containerTop - (viewportHeight - containerHeight) / 2);
+                    
+                    window.scrollTo({
+                        top: scrollTop,
+                        behavior: 'smooth'
+                    });
+                }, 100); // 稍微延迟以确保CSS过渡完成
+                
+                console.log('进入横屏模式并自动滚动到iframe');
+            }
+            
+            exitLandscapeMode() {
+                const container = document.getElementById('iframeContainer');
+                const landscapeBtn = document.getElementById('landscapeBtn');
+                const section = document.querySelector('section'); // 获取section元素
+                
+                container.classList.remove('landscape-mode');
+                section.classList.remove('landscape-mode-active'); // 从section移除
+                landscapeBtn.textContent = '📱 横屏体验';
+                landscapeBtn.classList.remove('active');
+                this.isLandscapeMode = false;
+                
+                console.log('退出横屏模式');
+            }
+        }
+        
+        // 初始化游戏
+        const game = new MaisiGame();
+    </script>
+</body>
+</html>

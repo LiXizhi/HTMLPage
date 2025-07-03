@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学科五子棋</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .game-board {
+            position: relative;
+            width: 480px;
+            height: 480px;
+            background-color: #deb887;
+            border: 3px solid #8b4513;
+            margin: 0 auto;
+        }
+        
+        /* 手机端棋盘适配 */
+        @media (max-width: 640px) {
+            .game-board {
+                width: min(90vw, 360px);
+                height: min(90vw, 360px);
+                max-width: 360px;
+                max-height: 360px;
+            }
+            
+            .board-cell {
+                width: calc(min(90vw, 360px) / 15);
+                height: calc(min(90vw, 360px) / 15);
+            }
+            
+            .piece {
+                width: calc(min(90vw, 360px) / 15 - 4px);
+                height: calc(min(90vw, 360px) / 15 - 4px);
+                font-size: calc(min(90vw, 360px) / 30);
+            }
+            
+            .science-grid {
+                width: calc(min(90vw, 360px) / 18);
+                height: calc(min(90vw, 360px) / 18);
+                font-size: calc(min(90vw, 360px) / 40);
+            }
+        }
+        
+        .board-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .board-cell {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        
+        .board-cell:hover:not(.has-piece) {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        .piece {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            position: relative;
+            z-index: 15;
+        }
+        
+        .piece.black { 
+            background-color: #000; 
+            color: #fff;
+        }
+        
+        .piece.white { 
+            background-color: #fff; 
+            color: #000;
+        }
+        
+        .piece.black.science { 
+            background-color: #000;
+            color: #ffd700;
+            font-size: 14px;
+            border: 2px solid #333;
+        }
+        
+        .piece.white.science { 
+            background-color: #fff;
+            color: #ffd700;
+            font-size: 14px;
+            border: 2px solid #333;
+        }
+        
+        .science-grid {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            pointer-events: none; /* 允许点击穿透 */
+        }
+        
+        .science-grid.chinese { 
+            background-color: #ef4444; 
+            color: white;
+        }
+        
+        .science-grid.math { 
+            background-color: #3b82f6; 
+            color: white;
+        }
+        
+        .science-grid.english { 
+            background-color: #10b981; 
+            color: white;
+        }
+
+        .piece-selector-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+        }
+
+        .piece-selector-container.selected {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+
+        .piece-selector {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 2px solid #333;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .piece-selector:hover {
+            transform: scale(1.1);
+        }
+
+        .piece-selector.black {
+            background-color: #000;
+            color: #fff;
+        }
+
+        .piece-selector.white {
+            background-color: #fff;
+            color: #000;
+        }
+
+        .piece-selector.black.science {
+            background-color: #000;
+            color: #ffd700;
+            font-size: 16px;
+        }
+
+        .piece-selector.white.science {
+            background-color: #fff;
+            color: #ffd700;
+            font-size: 16px;
+        }
+
+        .piece-selector.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        /* 手机端布局优化 */
+        @media (max-width: 640px) {
+            .max-w-6xl {
+                max-width: 100% !important;
+            }
+            
+            body {
+                padding: 8px !important;
+            }
+            
+            .game-container {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            
+            .piece-selector-container {
+                flex-direction: column;
+                gap: 4px;
+                padding: 6px;
+            }
+            
+            .piece-selector-container span {
+                font-size: 12px;
+            }
+            
+            .control-bar {
+                flex-direction: column;
+                gap: 12px;
+                align-items: stretch;
+            }
+            
+            .control-bar > div {
+                text-align: center;
+            }
+            
+            .piece-selectors {
+                display: flex;
+                justify-content: center;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+    <div class="max-w-6xl mx-auto game-container">
+        <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">学科五子棋</h1>
+        
+        <!-- 游戏控制栏 -->
+        <div class="bg-white rounded-lg p-4 mb-6 shadow">
+            <div class="flex justify-between items-center control-bar">
+                <div class="text-lg font-semibold">
+                    当前玩家: <span id="currentPlayer" class="text-blue-600">黑方</span>
+                </div>
+                
+                <!-- 棋子选择器 -->
+                <div class="flex items-center space-x-4 piece-selectors">
+                    <!-- 普通棋子选择 -->
+                    <div id="normalPieceContainer" class="piece-selector-container selected">
+                        <div id="normalPieceSelector" class="piece-selector black">
+                            ●
+                        </div>
+                        <span class="text-sm font-medium">普通子</span>
+                    </div>
+                    
+                    <!-- 科学棋子选择 -->
+                    <div id="sciencePieceContainer" class="piece-selector-container">
+                        <div id="sciencePieceSelector" class="piece-selector black science">
+                            ★
+                        </div>
+                        <span class="text-sm font-medium">科学子</span>
+                        <span id="scienceCount" class="text-xs text-gray-500">(剩余: 2)</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <button id="resetBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">重新开始</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 棋盘 -->
+        <div class="flex justify-center mb-6">
+            <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
+                <div id="gameBoard" class="game-board">
+                    <!-- 棋盘线条 -->
+                    <svg class="board-lines" width="100%" height="100%">
+                        <!-- 垂直线 -->
+                        <defs>
+                            <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+                                <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#8b4513" stroke-width="1"/>
+                            </pattern>
+                        </defs>
+                        <!-- 横线 -->
+                        <g id="horizontal-lines"></g>
+                        <!-- 竖线 -->
+                        <g id="vertical-lines"></g>
+                        <!-- 星位 -->
+                        <g id="star-points"></g>
+                    </svg>
+                    <!-- 棋盘格子 -->
+                    <div id="board-cells"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏统计 -->
+        <div class="bg-white rounded-lg p-4 mb-6 shadow">
+            <h3 class="font-semibold mb-3 text-center">游戏统计</h3>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gray-50 p-3 rounded">
+                    <h4 class="font-semibold mb-2 flex items-center">
+                        <div class="w-4 h-4 bg-black rounded-full mr-2"></div>
+                        黑方
+                    </h4>
+                    <div class="space-y-1 text-sm">
+                        <div>得分: <span id="blackScore" class="font-bold text-lg">0</span></div>
+                        <div>科学子剩余: <span id="blackScience" class="font-bold">2</span></div>
+                        <div>答题正确率: <span id="blackAccuracy">0%</span></div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-3 rounded">
+                    <h4 class="font-semibold mb-2 flex items-center">
+                        <div class="w-4 h-4 bg-white border-2 border-gray-800 rounded-full mr-2"></div>
+                        白方
+                    </h4>
+                    <div class="space-y-1 text-sm">
+                        <div>得分: <span id="whiteScore" class="font-bold text-lg">0</span></div>
+                        <div>科学子剩余: <span id="whiteScience" class="font-bold">2</span></div>
+                        <div>答题正确率: <span id="whiteAccuracy">0%</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏设置 -->
+        <div class="bg-white rounded-lg p-4 mb-6 shadow">
+            <h3 class="font-semibold mb-3">游戏设置</h3>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="flex items-center space-x-3">
+                    <label class="text-sm font-medium">科学格数量:</label>
+                    <input type="range" id="scienceGridCount" min="0" max="30" value="12" class="flex-1">
+                    <span id="scienceGridValue" class="text-sm font-bold w-8">12</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <label class="text-sm font-medium">科学子数量:</label>
+                    <input type="range" id="sciencePieceCount" min="0" max="5" value="2" class="flex-1">
+                    <span id="sciencePieceValue" class="text-sm font-bold w-8">2</span>
+                </div>
+            </div>
+            <div class="mt-3 text-center">
+                <button id="applySettings" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">应用设置</button>
+            </div>
+        </div>
+
+        <!-- 游戏规则 -->
+        <div class="bg-white rounded-lg p-6 shadow">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">游戏规则</h2>
+            <div class="grid md:grid-cols-2 gap-4 text-sm text-gray-700">
+                <div>
+                    <h3 class="font-semibold mb-2">基本规则：</h3>
+                    <ul class="space-y-1">
+                        <li>• 轮流下棋，连成五子线获得分数</li>
+                        <li>• 在科学格下棋需要答对相应题目</li>
+                        <li>• 使用科学子需要答题（任意学科）</li>
+                        <li>• 答错需要换位置下普通棋子</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">计分规则：</h3>
+                    <ul class="space-y-1">
+                        <li>• 普通五子连线：<span class="font-bold text-blue-600">1分</span></li>
+                        <li>• 含2个同类科学格/科学子：<span class="font-bold text-red-600">2分</span></li>
+                        <li>• 科学格：<span class="bg-red-500 text-white px-1 rounded">语</span> <span class="bg-blue-500 text-white px-1 rounded">数</span> <span class="bg-green-500 text-white px-1 rounded">外</span></li>
+                        <li>• 总分高者获胜</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 答题弹窗 -->
+    <div id="questionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-semibold mb-4">答题挑战</h3>
+            <div class="mb-4">
+                <div class="text-sm text-gray-600 mb-2">学科：<span id="questionSubject" class="font-semibold"></span></div>
+                <div id="questionText" class="text-base mb-4"></div>
+                <div id="questionOptions" class="space-y-2">
+                    <!-- 选项将通过JavaScript生成 -->
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="cancelAnswer" class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                <button id="submitAnswer" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">提交</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏结束弹窗 -->
+    <div id="gameOverModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-xl font-semibold mb-4 text-center">游戏结束</h3>
+            <div id="gameResult" class="text-center mb-4"></div>
+            <div class="flex justify-center">
+                <button id="newGameBtn" class="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600">再来一局</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 游戏配置
+        const gameConfig = {
+            scienceGridCount: 12,
+            sciencePieceCount: 2
+        };
+
+        // 游戏状态
+        const gameState = {
+            board: Array(15).fill().map(() => Array(15).fill(null)),
+            currentPlayer: 'black',
+            selectedPieceType: 'normal', // 'normal' 或 'science'
+            blackScore: 0,
+            whiteScore: 0,
+            blackScience: 2,
+            whiteScience: 2,
+            blackCorrect: 0,
+            blackTotal: 0,
+            whiteCorrect: 0,
+            whiteTotal: 0,
+            scienceGrids: [],
+            selectedAnswer: null,
+            pendingMove: null,
+            scoredLines: new Set()
+        };
+
+        // 题库
+        const questionBank = {
+            chinese: [
+                { question: "下列哪个字的读音正确？", options: ["qiáng壮", "jiàng壮", "zhuàng壮", "chuáng壮"], answer: 2 },
+                { question: "\"春蚕到死丝方尽\"的下一句是？", options: ["蜡炬成灰泪始干", "蜡烛成灰泪始干", "春蚕到死丝方尽", "红颜弃轩冕"], answer: 0 },
+                { question: "\"三顾茅庐\"说的是哪位历史人物？", options: ["刘备", "关羽", "张飞", "诸葛亮"], answer: 0 },
+                { question: "下列词语中，错别字是？", options: ["再接再厉", "再接再励", "坚持不懈", "持之以恒"], answer: 1 },
+                { question: "\"床前明月光\"的作者是？", options: ["杜甫", "李白", "王维", "孟浩然"], answer: 1 }
+            ],
+            math: [
+                { question: "25 + 17 = ?", options: ["42", "41", "43", "40"], answer: 0 },
+                { question: "一个三角形的内角和是多少度？", options: ["90°", "180°", "270°", "360°"], answer: 1 },
+                { question: "12 × 8 = ?", options: ["84", "96", "88", "92"], answer: 1 },
+                { question: "圆的面积公式是？", options: ["πr", "2πr", "πr²", "2πr²"], answer: 2 },
+                { question: "64 ÷ 8 = ?", options: ["6", "7", "8", "9"], answer: 2 }
+            ],
+            english: [
+                { question: "\"Hello\"的中文意思是？", options: ["再见", "你好", "谢谢", "对不起"], answer: 1 },
+                { question: "英语中\"苹果\"怎么说？", options: ["Orange", "Banana", "Apple", "Grape"], answer: 2 },
+                { question: "\"Thank you\"的回答通常是？", options: ["Hello", "Goodbye", "You're welcome", "Sorry"], answer: 2 },
+                { question: "一周有几天？英语怎么说？", options: ["Six days", "Seven days", "Five days", "Eight days"], answer: 1 },
+                { question: "\"Good morning\"是什么意思？", options: ["晚上好", "下午好", "早上好", "晚安"], answer: 2 }
+            ]
+        };
+
+        // 初始化游戏
+        function initGame() {
+            createBoard();
+            generateScienceGrids();
+            updateDisplay();
+            updatePieceSelectors();
+            initSettings();
+        }
+
+        // 初始化设置
+        function initSettings() {
+            const gridSlider = document.getElementById('scienceGridCount');
+            const pieceSlider = document.getElementById('sciencePieceCount');
+            const gridValue = document.getElementById('scienceGridValue');
+            const pieceValue = document.getElementById('sciencePieceValue');
+
+            gridSlider.addEventListener('input', () => {
+                gridValue.textContent = gridSlider.value;
+            });
+
+            pieceSlider.addEventListener('input', () => {
+                pieceValue.textContent = pieceSlider.value;
+            });
+
+            document.getElementById('applySettings').addEventListener('click', applySettings);
+        }
+
+        // 应用设置
+        function applySettings() {
+            gameConfig.scienceGridCount = parseInt(document.getElementById('scienceGridCount').value);
+            gameConfig.sciencePieceCount = parseInt(document.getElementById('sciencePieceCount').value);
+            
+            // 重置游戏（这会重新生成科学格）
+            resetGame();
+        }
+
+        // 创建棋盘
+        function createBoard() {
+            const board = document.getElementById('gameBoard');
+            const cellsContainer = document.getElementById('board-cells');
+            cellsContainer.innerHTML = '';
+            
+            // 绘制棋盘线条
+            drawBoardLines();
+            
+            // 获取当前棋盘尺寸
+            const boardRect = board.getBoundingClientRect();
+            const boardSize = Math.min(boardRect.width, boardRect.height);
+            const cellSize = boardSize / 15;
+            
+            // 创建棋盘交点
+            for (let i = 0; i < 15; i++) {
+                for (let j = 0; j < 15; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'board-cell';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    
+                    // 计算位置（交点位置）
+                    const x = cellSize / 2 + j * cellSize;
+                    const y = cellSize / 2 + i * cellSize;
+                    cell.style.left = x + 'px';
+                    cell.style.top = y + 'px';
+                    
+                    cell.addEventListener('click', () => handleCellClick(i, j));
+                    cellsContainer.appendChild(cell);
+                }
+            }
+        }
+
+        // 绘制棋盘线条
+        function drawBoardLines() {
+            const hLines = document.getElementById('horizontal-lines');
+            const vLines = document.getElementById('vertical-lines');
+            const starPoints = document.getElementById('star-points');
+            
+            hLines.innerHTML = '';
+            vLines.innerHTML = '';
+            starPoints.innerHTML = '';
+            
+            const board = document.getElementById('gameBoard');
+            const boardRect = board.getBoundingClientRect();
+            const boardSize = Math.min(boardRect.width, boardRect.height);
+            const cellSize = boardSize / 15;
+            const offset = cellSize / 2;
+            
+            // 横线
+            for (let i = 0; i < 15; i++) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', offset);
+                line.setAttribute('y1', offset + i * cellSize);
+                line.setAttribute('x2', boardSize - offset);
+                line.setAttribute('y2', offset + i * cellSize);
+                line.setAttribute('stroke', '#8b4513');
+                line.setAttribute('stroke-width', '1');
+                hLines.appendChild(line);
+            }
+            
+            // 竖线
+            for (let j = 0; j < 15; j++) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', offset + j * cellSize);
+                line.setAttribute('y1', offset);
+                line.setAttribute('x2', offset + j * cellSize);
+                line.setAttribute('y2', boardSize - offset);
+                line.setAttribute('stroke', '#8b4513');
+                line.setAttribute('stroke-width', '1');
+                vLines.appendChild(line);
+            }
+            
+            // 星位点
+            const starPositions = [[3,3], [3,11], [7,7], [11,3], [11,11]];
+            starPositions.forEach(([row, col]) => {
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', offset + col * cellSize);
+                circle.setAttribute('cy', offset + row * cellSize);
+                circle.setAttribute('r', '3');
+                circle.setAttribute('fill', '#8b4513');
+                starPoints.appendChild(circle);
+            });
+        }
+
+        // 生成科学格
+        function generateScienceGrids() {
+            // 清除现有的科学格显示，但保留数据
+            const existingGrids = document.querySelectorAll('.science-grid');
+            existingGrids.forEach(grid => grid.remove());
+            
+            // 如果已有科学格数据，只重新渲染位置
+            if (gameState.scienceGrids.length > 0) {
+                renderScienceGrids();
+                return;
+            }
+            
+            // 首次生成科学格数据
+            gameState.scienceGrids = [];
+            const subjects = ['chinese', 'math', 'english'];
+            const positions = [];
+            
+            // 生成所有可能位置（避开边缘和中心星位）
+            for (let i = 2; i < 13; i++) {
+                for (let j = 2; j < 13; j++) {
+                    if (i === 7 && j === 7) continue;
+                    positions.push([i, j]);
+                }
+            }
+            
+            // 随机选择指定数量的位置
+            const gridsPerSubject = Math.floor(gameConfig.scienceGridCount / 3);
+            const extraGrids = gameConfig.scienceGridCount % 3;
+            
+            for (let s = 0; s < 3; s++) {
+                const count = gridsPerSubject + (s < extraGrids ? 1 : 0);
+                for (let i = 0; i < count; i++) {
+                    if (positions.length === 0) break;
+                    const randomIndex = Math.floor(Math.random() * positions.length);
+                    const [row, col] = positions.splice(randomIndex, 1)[0];
+                    gameState.scienceGrids.push({ row, col, subject: subjects[s] });
+                }
+            }
+            
+            renderScienceGrids();
+        }
+
+        // 渲染科学格（独立函数，用于resize时重新定位）
+        function renderScienceGrids() {
+            gameState.scienceGrids.forEach(grid => {
+                const scienceDiv = document.createElement('div');
+                scienceDiv.className = `science-grid ${grid.subject}`;
+                const text = grid.subject === 'chinese' ? '语' : grid.subject === 'math' ? '数' : '外';
+                scienceDiv.textContent = text;
+                
+                // 计算位置 - 响应式
+                const board = document.getElementById('gameBoard');
+                const boardRect = board.getBoundingClientRect();
+                const boardSize = Math.min(boardRect.width, boardRect.height);
+                const cellSize = boardSize / 15;
+                const x = cellSize / 2 + grid.col * cellSize;
+                const y = cellSize / 2 + grid.row * cellSize;
+                scienceDiv.style.left = x + 'px';
+                scienceDiv.style.top = y + 'px';
+                
+                document.getElementById('board-cells').appendChild(scienceDiv);
+            });
+        }
+
+        // 更新棋子选择器
+        function updatePieceSelectors() {
+            const normalContainer = document.getElementById('normalPieceContainer');
+            const scienceContainer = document.getElementById('sciencePieceContainer');
+            const normalSelector = document.getElementById('normalPieceSelector');
+            const scienceSelector = document.getElementById('sciencePieceSelector');
+            const scienceCount = document.getElementById('scienceCount');
+
+            // 更新选择器颜色
+            if (gameState.currentPlayer === 'black') {
+                normalSelector.className = 'piece-selector black';
+                normalSelector.textContent = '●';
+                scienceSelector.className = 'piece-selector black science';
+                scienceSelector.textContent = '★';
+            } else {
+                normalSelector.className = 'piece-selector white';
+                normalSelector.textContent = '●';
+                scienceSelector.className = 'piece-selector white science';
+                scienceSelector.textContent = '★';
+            }
+
+            // 更新科学子数量显示和可用性
+            const remaining = gameState.currentPlayer === 'black' ? gameState.blackScience : gameState.whiteScience;
+            scienceCount.textContent = `(剩余: ${remaining})`;
+            
+            if (remaining <= 0) {
+                scienceSelector.classList.add('disabled');
+                scienceContainer.style.opacity = '0.5';
+            } else {
+                scienceSelector.classList.remove('disabled');
+                scienceContainer.style.opacity = '1';
+            }
+
+            // 重置选择状态
+            normalContainer.classList.remove('selected');
+            scienceContainer.classList.remove('selected');
+
+            // 如果科学子不可用，强制选择普通棋子
+            if (remaining <= 0 && gameState.selectedPieceType === 'science') {
+                gameState.selectedPieceType = 'normal';
+            }
+
+            // 设置选中状态
+            if (gameState.selectedPieceType === 'science') {
+                scienceContainer.classList.add('selected');
+            } else {
+                normalContainer.classList.add('selected');
+            }
+        }
+
+        // 处理棋盘点击
+        function handleCellClick(row, col) {
+            if (gameState.board[row][col]) return; // 已有棋子
+            
+            const isScience = gameState.scienceGrids.find(g => g.row === row && g.col === col);
+            const isUsingSciencePiece = gameState.selectedPieceType === 'science';
+            
+            if (isScience || isUsingSciencePiece) {
+                // 需要答题
+                const subject = isScience ? isScience.subject : 'random';
+                showQuestion(subject, row, col);
+            } else {
+                // 直接下棋
+                placePiece(row, col, false);
+            }
+        }
+
+        // 显示题目
+        function showQuestion(subject, row, col) {
+            gameState.pendingMove = { row, col, isScience: gameState.selectedPieceType === 'science' };
+            
+            let questions;
+            if (subject === 'random') {
+                const subjects = ['chinese', 'math', 'english'];
+                subject = subjects[Math.floor(Math.random() * 3)];
+            }
+            questions = questionBank[subject];
+            
+            const question = questions[Math.floor(Math.random() * questions.length)];
+            
+            document.getElementById('questionSubject').textContent = 
+                subject === 'chinese' ? '语文' : subject === 'math' ? '数学' : '英语';
+            document.getElementById('questionText').textContent = question.question;
+            
+            const optionsDiv = document.getElementById('questionOptions');
+            optionsDiv.innerHTML = '';
+            question.options.forEach((option, index) => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-100';
+                label.innerHTML = `
+                    <input type="radio" name="answer" value="${index}" class="form-radio">
+                    <span>${option}</span>
+                `;
+                optionsDiv.appendChild(label);
+            });
+            
+            gameState.selectedAnswer = null;
+            gameState.currentQuestion = question;
+            document.getElementById('questionModal').classList.remove('hidden');
+            document.getElementById('questionModal').classList.add('flex');
+        }
+
+        // 提交答案
+        function submitAnswer() {
+            const selected = document.querySelector('input[name="answer"]:checked');
+            if (!selected) {
+                alert('请选择一个答案！');
+                return;
+            }
+            
+            const answer = parseInt(selected.value);
+            const isCorrect = answer === gameState.currentQuestion.answer;
+            
+            // 更新统计
+            if (gameState.currentPlayer === 'black') {
+                gameState.blackTotal++;
+                if (isCorrect) gameState.blackCorrect++;
+            } else {
+                gameState.whiteTotal++;
+                if (isCorrect) gameState.whiteCorrect++;
+            }
+            
+            // 关闭弹窗
+            document.getElementById('questionModal').classList.add('hidden');
+            document.getElementById('questionModal').classList.remove('flex');
+            
+            if (isCorrect) {
+                // 答对了，可以下棋
+                const { row, col, isScience } = gameState.pendingMove;
+                placePiece(row, col, isScience);
+            } else {
+                // 答错了，需要重新选择位置
+                alert('答错了！请重新选择位置下普通棋子');
+                gameState.selectedPieceType = 'normal';
+                updatePieceSelectors();
+            }
+            
+            updateDisplay();
+        }
+
+        // 下棋
+        function placePiece(row, col, isScience) {
+            gameState.board[row][col] = {
+                player: gameState.currentPlayer,
+                isScience: isScience,
+                scienceType: isScience ? 'any' : null
+            };
+            
+            // 更新科学子数量
+            if (isScience) {
+                if (gameState.currentPlayer === 'black') {
+                    gameState.blackScience--;
+                } else {
+                    gameState.whiteScience--;
+                }
+            }
+            
+            // 渲染棋子
+            renderPiece(row, col);
+            
+            // 检查连线
+            checkLines();
+            
+            // 切换玩家
+            gameState.currentPlayer = gameState.currentPlayer === 'black' ? 'white' : 'black';
+            gameState.selectedPieceType = 'normal'; // 重置为普通棋子
+            
+            updateDisplay();
+            updatePieceSelectors();
+            
+            // 检查游戏结束
+            if (isGameOver()) {
+                setTimeout(showGameOver, 500);
+            }
+        }
+
+        // 渲染棋子 - 修改以支持响应式和科学格标识
+        function renderPiece(row, col) {
+            const piece = document.createElement('div');
+            const pieceData = gameState.board[row][col];
+            
+            piece.className = `piece ${pieceData.player}`;
+            
+            // 检查是否在科学格上
+            const scienceGrid = gameState.scienceGrids.find(g => g.row === row && g.col === col);
+            
+            if (pieceData.isScience) {
+                piece.classList.add('science');
+                piece.textContent = '★';
+            } else if (scienceGrid) {
+                // 在科学格上的普通棋子，显示学科标识
+                const text = scienceGrid.subject === 'chinese' ? '语' : 
+                           scienceGrid.subject === 'math' ? '数' : '外';
+                piece.textContent = text;
+                piece.style.fontSize = '14px';
+                piece.style.fontWeight = 'bold';
+                // 黑子白字，白子黑字
+                if (pieceData.player === 'black') {
+                    piece.style.color = '#fff';
+                } else {
+                    piece.style.color = '#000';
+                }
+            }
+            
+            // 计算位置 - 响应式
+            const board = document.getElementById('gameBoard');
+            const boardRect = board.getBoundingClientRect();
+            const boardSize = Math.min(boardRect.width, boardRect.height);
+            const cellSize = boardSize / 15;
+            const x = cellSize / 2 + col * cellSize;
+            const y = cellSize / 2 + row * cellSize;
+            piece.style.position = 'absolute';
+            piece.style.left = x + 'px';
+            piece.style.top = y + 'px';
+            piece.style.transform = 'translate(-50%, -50%)';
+            piece.style.zIndex = '15';
+            
+            document.getElementById('board-cells').appendChild(piece);
+            
+            // 标记cell已有棋子
+            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            if (cell) {
+                cell.classList.add('has-piece');
+            }
+        }
+
+        // 检查连线
+        function checkLines() {
+            const directions = [[0,1], [1,0], [1,1], [1,-1]];
+            
+            for (let i = 0; i < 15; i++) {
+                for (let j = 0; j < 15; j++) {
+                    if (!gameState.board[i][j]) continue;
+                    
+                    const player = gameState.board[i][j].player;
+                    
+                    for (let [dx, dy] of directions) {
+                        const line = [[i, j]];
+                        
+                        // 向前搜索
+                        let x = i + dx, y = j + dy;
+                        while (x >= 0 && x < 15 && y >= 0 && y < 15 && 
+                               gameState.board[x][y] && gameState.board[x][y].player === player) {
+                            line.push([x, y]);
+                            x += dx;
+                            y += dy;
+                        }
+                        
+                        if (line.length >= 5) {
+                            // 创建线条标识符
+                            const lineId = `${line[0][0]},${line[0][1]}-${dx},${dy}-${line.length}`;
+                            
+                            if (!gameState.scoredLines.has(lineId)) {
+                                const score = calculateLineScore(line);
+                                if (player === 'black') {
+                                    gameState.blackScore += score;
+                                } else {
+                                    gameState.whiteScore += score;
+                                }
+                                gameState.scoredLines.add(lineId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 计算连线分数
+        function calculateLineScore(line) {
+            let scienceCount = 0;
+            let gridCount = {};
+            
+            for (let [x, y] of line) {
+                const piece = gameState.board[x][y];
+                if (piece.isScience) {
+                    scienceCount++;
+                }
+                
+                const grid = gameState.scienceGrids.find(g => g.row === x && g.col === y);
+                if (grid) {
+                    gridCount[grid.subject] = (gridCount[grid.subject] || 0) + 1;
+                }
+            }
+            
+            // 检查是否有2个同类科学子或科学格
+            if (scienceCount >= 2) return 2;
+            for (let subject in gridCount) {
+                if (gridCount[subject] >= 2) return 2;
+            }
+            
+            return 1;
+        }
+
+        // 更新显示
+        function updateDisplay() {
+            document.getElementById('currentPlayer').textContent = gameState.currentPlayer === 'black' ? '黑方' : '白方';
+            document.getElementById('blackScore').textContent = gameState.blackScore;
+            document.getElementById('whiteScore').textContent = gameState.whiteScore;
+            document.getElementById('blackScience').textContent = gameState.blackScience;
+            document.getElementById('whiteScience').textContent = gameState.whiteScience;
+            
+            const blackAccuracy = gameState.blackTotal > 0 ? Math.round(gameState.blackCorrect / gameState.blackTotal * 100) : 0;
+            const whiteAccuracy = gameState.whiteTotal > 0 ? Math.round(gameState.whiteCorrect / gameState.whiteTotal * 100) : 0;
+            document.getElementById('blackAccuracy').textContent = blackAccuracy + '%';
+            document.getElementById('whiteAccuracy').textContent = whiteAccuracy + '%';
+        }
+
+        // 检查游戏结束
+        function isGameOver() {
+            let emptyCount = 0;
+            for (let i = 0; i < 15; i++) {
+                for (let j = 0; j < 15; j++) {
+                    if (!gameState.board[i][j]) emptyCount++;
+                }
+            }
+            return emptyCount === 0 || Math.abs(gameState.blackScore - gameState.whiteScore) >= 10;
+        }
+
+        // 显示游戏结束
+        function showGameOver() {
+            let result;
+            if (gameState.blackScore > gameState.whiteScore) {
+                result = `🎉 黑方获胜！<br>得分：${gameState.blackScore} : ${gameState.whiteScore}`;
+            } else if (gameState.whiteScore > gameState.blackScore) {
+                result = `🎉 白方获胜！<br>得分：${gameState.whiteScore} : ${gameState.blackScore}`;
+            } else {
+                result = `🤝 平局！<br>得分：${gameState.blackScore} : ${gameState.whiteScore}`;
+            }
+            
+            document.getElementById('gameResult').innerHTML = result;
+            document.getElementById('gameOverModal').classList.remove('hidden');
+            document.getElementById('gameOverModal').classList.add('flex');
+        }
+
+        // 重置游戏
+        function resetGame() {
+            // 重置游戏状态
+            gameState.board = Array(15).fill().map(() => Array(15).fill(null));
+            gameState.currentPlayer = 'black';
+            gameState.selectedPieceType = 'normal';
+            gameState.blackScore = 0;
+            gameState.whiteScore = 0;
+            gameState.blackScience = gameConfig.sciencePieceCount;
+            gameState.whiteScience = gameConfig.sciencePieceCount;
+            gameState.blackCorrect = 0;
+            gameState.blackTotal = 0;
+            gameState.whiteCorrect = 0;
+            gameState.whiteTotal = 0;
+            gameState.scoredLines = new Set();
+            // 重置时清空科学格数据，强制重新生成
+            gameState.scienceGrids = [];
+            
+            // 隐藏弹窗
+            document.getElementById('gameOverModal').classList.add('hidden');
+            document.getElementById('gameOverModal').classList.remove('flex');
+            
+            // 重新初始化
+            initGame();
+        }
+
+        // 棋子选择器事件
+        function setupPieceSelectors() {
+            document.getElementById('normalPieceContainer').addEventListener('click', () => {
+                gameState.selectedPieceType = 'normal';
+                updatePieceSelectors();
+            });
+
+            document.getElementById('sciencePieceContainer').addEventListener('click', () => {
+                const remaining = gameState.currentPlayer === 'black' ? gameState.blackScience : gameState.whiteScience;
+                if (remaining > 0) {
+                    gameState.selectedPieceType = 'science';
+                    updatePieceSelectors();
+                }
+            });
+        }
+
+        // 事件监听
+        document.getElementById('resetBtn').addEventListener('click', resetGame);
+        document.getElementById('newGameBtn').addEventListener('click', resetGame);
+        document.getElementById('submitAnswer').addEventListener('click', submitAnswer);
+        document.getElementById('cancelAnswer').addEventListener('click', () => {
+            document.getElementById('questionModal').classList.add('hidden');
+            document.getElementById('questionModal').classList.remove('flex');
+            gameState.selectedPieceType = 'normal';
+            updatePieceSelectors();
+        });
+
+        // 初始化游戏
+        initGame();
+        setupPieceSelectors();
+
+        // 监听窗口大小变化，重新绘制棋盘
+        window.addEventListener('resize', () => {
+            setTimeout(() => {
+                createBoard();
+                // 只重新渲染科学格位置，不重新生成数据
+                renderScienceGrids();
+                
+                // 重新渲染所有棋子
+                for (let i = 0; i < 15; i++) {
+                    for (let j = 0; j < 15; j++) {
+                        if (gameState.board[i][j]) {
+                            renderPiece(i, j);
+                        }
+                    }
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

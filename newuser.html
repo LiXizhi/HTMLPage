@@ -1,0 +1,477 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麦思星球 - 新手教学</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .slide-container {
+            position: relative;
+            width: 90vw; /* 5% margin on each side */
+            height: 90vh; /* 5% margin on top and bottom */
+            max-width: calc(90vh * 4/3); /* Maintain aspect ratio */
+            overflow: visible; /* Allow navigation elements to show outside */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        
+        .slide-wrapper {
+            position: relative;
+            width: 100%;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .slide-image {
+            position: absolute;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            /* Fixed shadow for rounded borders */
+            box-shadow: 
+                0 10px 25px rgba(0, 0, 0, 0.2),
+                0 4px 10px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            /* Border radius will be set dynamically via JavaScript */
+            object-fit: contain;
+            display: block;
+        }
+        
+        .slide-image.active {
+            opacity: 1;
+            position: relative;
+        }
+        
+        .navigation-area {
+            position: relative;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding-top: 20px;
+            z-index: 100;
+        }
+        
+        .nav-dots {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .nav-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        
+        .nav-dot.active {
+            background: rgba(255, 255, 255, 0.9);
+            transform: scale(1.3);
+            border-color: #fff;
+            box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+        }
+        
+        .nav-button {
+            display: flex;
+            margin-left: 10px; /* Small right margin from dots */
+        }
+        
+        .btn-next {
+            background: #22c55e;
+            border: 2px solid #ffffff;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            white-space: nowrap; /* Keep text in single line */
+            min-width: fit-content;
+        }
+        
+        .btn-next:hover {
+            background: #16a34a;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+        
+        .btn-start {
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            border: 2px solid #ffffff;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            white-space: nowrap; /* Keep text in single line */
+            min-width: fit-content;
+        }
+        
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            z-index: 200;
+        }
+        
+        @media (max-width: 768px) {
+            .slide-container {
+                width: 90vw;
+                height: 90vh;
+            }
+            
+            .navigation-area {
+                gap: 15px;
+                padding-top: 15px;
+            }
+            
+            .nav-button {
+                margin-left: 8px;
+            }
+            
+            .btn-next, .btn-start {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            
+            .nav-dot {
+                width: 10px;
+                height: 10px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .slide-container {
+                width: 95vw;
+                height: 95vh;
+            }
+            
+            .navigation-area {
+                flex-direction: column;
+                gap: 10px;
+                padding-top: 10px;
+            }
+            
+            .nav-button {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="slide-container">
+        <!-- Loading indicator -->
+        <div id="loading" class="loading">加载中...</div>
+        
+        <!-- Slide wrapper -->
+        <div class="slide-wrapper">
+            <!-- Image slides will be dynamically created here -->
+        </div>
+        
+        <!-- Navigation area - dots and button together, right below image -->
+        <div class="navigation-area">
+            <div id="navDots" class="nav-dots"></div>
+            <div class="nav-button">
+                <button id="nextBtn" class="btn-next" onclick="nextPage()">
+                    下一步 →
+                </button>
+                <button id="startBtn" class="btn-start" onclick="startExperience()" style="display: none;">
+                    🚀 开始体验
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 更精确的平台检测函数
+        function detectPlatform() {
+            // 检查是否支持触摸事件
+            const hasTouchSupport = 'ontouchstart' in window || 
+                                  navigator.maxTouchPoints > 0 || 
+                                  navigator.msMaxTouchPoints > 0;
+            
+            // 检查用户代理字符串
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+            
+            // 检查是否为触摸设备
+            const isTouchDevice = hasTouchSupport || isMobileUA;
+            
+            // 额外检查：排除触摸屏的桌面设备（如Surface）
+            const isDesktopWithTouch = window.innerWidth > 1024 && 
+                                     window.innerHeight > 768 && 
+                                     !isMobileUA;
+            
+            // 如果是桌面设备但有触摸功能，仍然视为PC
+            if (isDesktopWithTouch && !isMobileUA) {
+                return 'pc';
+            }
+            
+            // 基于触摸支持和用户代理判断
+            return isTouchDevice ? 'mobile' : 'pc';
+        }
+
+        // Page configuration
+        const baseGuideImages = [
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46160/raw#新手引导-1.jpg", platform: "all" },
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46161/raw#新手引导-2.jpg", platform: "all" },
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46162/raw#新手引导-3.jpg", platform: "all" },
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46164/raw#新手引导-5.jpg", platform: "all" },
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46165/raw#新手引导-6.jpg", platform: "all" },
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46166/raw#新手引导-7.jpg", platform: "pc" },
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46167/raw#新手引导-8.jpg", platform: "mobile" },
+            { imgurl: "https://api.keepwork.com/ts-storage/siteFiles/46168/raw#新手引导-9.jpg", platform: "all" }
+        ];
+
+        function getFilteredImages() {
+            const currentPlatform = detectPlatform();
+            return baseGuideImages.filter(config => 
+                config.platform === 'all' || config.platform === currentPlatform
+            );
+        }
+
+        let page_config = getFilteredImages();
+        let currentPage = 0;
+        let totalPages = page_config.length;
+        let imagesLoaded = 0;
+
+        // Function to set border radius based on image height (6% of height)
+        function setBorderRadius(img) {
+            const imgHeight = img.offsetHeight || img.naturalHeight;
+            if (imgHeight > 0) {
+                const borderRadius = Math.round(imgHeight * 0.1);
+                img.style.borderRadius = `${borderRadius}px`;
+            }
+        }
+
+        function preloadImages(startIndex = 0) {
+            // Preload next 2 images
+            for (let i = startIndex; i < Math.min(startIndex + 3, totalPages); i++) {
+                if (i < page_config.length) {
+                    const img = new Image();
+                    img.src = page_config[i].imgurl;
+                }
+            }
+        }
+
+        function initializeSlides() {
+            const slideWrapper = document.querySelector('.slide-wrapper');
+            const navDots = document.getElementById('navDots');
+            
+            // Clear existing content
+            const existingImages = slideWrapper.querySelectorAll('.slide-image');
+            existingImages.forEach(img => img.remove());
+            navDots.innerHTML = '';
+            
+            // Reset variables
+            page_config = getFilteredImages();
+            totalPages = page_config.length;
+            imagesLoaded = 0;
+            currentPage = 0;
+            
+            // Show loading initially
+            document.getElementById('loading').style.display = 'block';
+            
+            // Create image elements
+            page_config.forEach((config, index) => {
+                // Create image element
+                const img = document.createElement('img');
+                img.src = config.imgurl;
+                img.className = `slide-image ${index === 0 ? 'active' : ''}`;
+                img.alt = `新手引导 ${index + 1}`;
+                img.id = `slide-${index}`;
+                
+                img.onload = function() {
+                    imagesLoaded++;
+                    
+                    // Set border radius based on image height (6%)
+                    setBorderRadius(this);
+                    
+                    // Hide loading when first image loads
+                    if (index === 0) {
+                        document.getElementById('loading').style.display = 'none';
+                    }
+                    
+                    // Preload next images when current image loads
+                    if (index === currentPage) {
+                        preloadImages(index + 1);
+                    }
+                };
+                
+                img.onerror = () => {
+                    console.warn(`Failed to load image: ${config.imgurl}`);
+                    imagesLoaded++;
+                    // Hide loading if first image fails
+                    if (index === 0) {
+                        document.getElementById('loading').style.display = 'none';
+                    }
+                };
+                
+                slideWrapper.appendChild(img);
+                
+                // Create navigation dot
+                const dot = document.createElement('div');
+                dot.className = `nav-dot ${index === 0 ? 'active' : ''}`;
+                dot.onclick = () => goToPage(index);
+                navDots.appendChild(dot);
+            });
+            
+            // Start preloading first few images
+            preloadImages(0);
+            
+            updatePage();
+        }
+
+        function updatePage() {
+            // Update slide visibility
+            for (let i = 0; i < totalPages; i++) {
+                const slide = document.getElementById(`slide-${i}`);
+                const dot = document.querySelectorAll('.nav-dot')[i];
+                
+                if (slide && dot) {
+                    if (i === currentPage) {
+                        slide.classList.add('active');
+                        dot.classList.add('active');
+                        // Set border radius for active image
+                        setBorderRadius(slide);
+                        // Preload next images
+                        preloadImages(i + 1);
+                    } else {
+                        slide.classList.remove('active');
+                        dot.classList.remove('active');
+                    }
+                }
+            }
+            
+            // Update navigation buttons
+            const nextBtn = document.getElementById('nextBtn');
+            const startBtn = document.getElementById('startBtn');
+            
+            if (currentPage === totalPages - 1) {
+                nextBtn.style.display = 'none';
+                startBtn.style.display = 'block';
+            } else {
+                nextBtn.style.display = 'block';
+                startBtn.style.display = 'none';
+            }
+        }
+
+        function goToPage(pageNumber) {
+            if (pageNumber >= 0 && pageNumber < totalPages) {
+                currentPage = pageNumber;
+                updatePage();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages - 1) {
+                currentPage++;
+                updatePage();
+            }
+        }
+
+        function startExperience() {
+            alert('🎉 欢迎来到麦思星球！即将开始您的思维训练之旅！');
+            // 这里可以添加跳转到游戏主页面的逻辑
+        }
+
+        // Touch swipe support for mobile
+        let startX = 0;
+        let startY = 0;
+
+        document.addEventListener('touchstart', function(e) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        });
+
+        document.addEventListener('touchend', function(e) {
+            if (!startX || !startY) return;
+            
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            
+            const diffX = startX - endX;
+            const diffY = startY - endY;
+            
+            // Only handle horizontal swipes
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                if (diffX > 0) {
+                    // Swipe left - next page
+                    nextPage();
+                }
+            }
+            
+            startX = 0;
+            startY = 0;
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowRight') {
+                nextPage();
+            }
+        });
+
+        // Handle window resize - recalculate border radius
+        window.addEventListener('resize', function() {
+            // Recalculate border radius for active image
+            const activeImage = document.querySelector('.slide-image.active');
+            if (activeImage) {
+                setTimeout(() => setBorderRadius(activeImage), 100);
+            }
+            
+            // Re-initialize slides when platform changes
+            const newPlatform = detectPlatform();
+            const newConfig = getFilteredImages();
+            
+            if (newConfig.length !== page_config.length) {
+                initializeSlides();
+            }
+        });
+
+        // Initialize the page
+        initializeSlides();
+        
+    </script>
+</body>
+</html>

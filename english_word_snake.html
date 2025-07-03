@@ -124,6 +124,11 @@
     let gameRunning = false;
     let wordPlayInterval = null;
     
+    // Add new variables for tracking highest score and game config
+    let highestScore = 0;
+    let game_config = null;
+    let gameLoaded = false;
+    
     const word_config = `
 apple,苹果
 banana,香蕉
@@ -142,6 +147,36 @@ notebook,笔记本
 orange,橙子
 `;
     
+    // Add message event listener for host communication
+    window.addEventListener('message', function (e) {
+      switch (e.data.type) {
+        case 'setGameConfig':
+          game_config = e.data.config; // this is markdown or text string
+          // Update config logic - if it's word configuration, update wordsList
+          if (game_config && typeof game_config === 'string') {
+            try {
+              const newWordsList = parseWordConfig(game_config);
+              if (newWordsList.length > 0) {
+                wordsList = newWordsList;
+                console.log('Game config updated with new words:', newWordsList.length);
+              }
+            } catch (error) {
+              console.error('Error parsing new game config:', error);
+            }
+          }
+          break;
+        case 'getGameStats':
+          window.parent.postMessage({ 
+            type: 'gameStats', 
+            data: {
+              score: highestScore, // Always return the highest score achieved
+              difficulty: level
+            }
+          }, '*');
+          break;
+      }
+    });
+
     // 解析CSV格式的单词配置
     function parseWordConfig(configText) {
       return configText.split('\n')
@@ -157,7 +192,7 @@ orange,橙子
     }
     
     // Words database with Chinese meanings
-    const wordsList = parseWordConfig(word_config);
+    let wordsList = parseWordConfig(word_config);
     
     // 初始化音频上下文
     function initAudioContext() {
@@ -236,6 +271,12 @@ orange,橙子
       
       // 在任何用户交互时初始化音频上下文
       document.addEventListener('click', initAudioContext);
+      
+      // Send gameLoaded event after initialization
+      if (!gameLoaded) {
+        gameLoaded = true;
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+      }
     }
     
     // 重置游戏状态
@@ -317,6 +358,9 @@ orange,橙子
         gameRunning = true;
         startBtn.textContent = '暂停游戏';
         
+        // Send gameStarted event when game actually starts
+        window.parent.postMessage({ type: 'gameStarted' }, '*');
+        
         if (wordBlocks.length === 0) {
           generateWordBlocks();
           selectRandomTargetWord();
@@ -395,6 +439,12 @@ orange,橙子
             // 吃到正确单词
             score += 10;
             scoreElement.textContent = score;
+            
+            // Update highest score if current score is higher
+            if (score > highestScore) {
+              highestScore = score;
+            }
+            
             ateWord = true;
             
             const blockElement = document.getElementById(`word-${index}`);
@@ -577,7 +627,6 @@ orange,橙子
       const head = snake[0];
       
       // 移除墙壁碰撞检测，因为我们已经在moveSnake中处理了边界情况
-      
       // 只保留自身碰撞检测
       for (let i = 1; i < snake.length; i++) {
         if (head.x === snake[i].x && head.y === snake[i].y) {
@@ -834,6 +883,20 @@ orange,橙子
       gameInterval = null;
       wordPlayInterval = null;
       gameRunning = false;
+      
+      // Update highest score if current score is higher
+      if (score > highestScore) {
+        highestScore = score;
+      }
+      
+      // Send gameFinished event with stats
+      window.parent.postMessage({ 
+        type: 'gameFinished', 
+        data: {
+          score: highestScore, // Always send the highest score achieved
+          difficulty: level
+        }
+      }, '*');
       
       alert(`游戏结束！你的分数是：${score}`);
       resetGame();

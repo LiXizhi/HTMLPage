@@ -1,0 +1,363 @@
+
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资讯中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 主要内容区 -->
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8 text-center">资讯中心</h1>
+        
+        <!-- 加载状态显示 -->
+        <div id="loading" class="text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <p class="mt-2 text-gray-600">正在加载数据...</p>
+        </div>
+        
+        <!-- 赛事资讯和通知公告区域 - 左右结构 (已交换位置) -->
+        <div id="featured-sections" class="hidden mb-8">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div id="competition-container" class="w-full lg:w-1/2">
+                    <!-- 赛事资讯内容将动态加载 -->
+                </div>
+                <div id="announcements-container" class="w-full lg:w-1/2">
+                    <!-- 通知公告内容将动态加载 -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 其他分类新闻 -->
+        <div id="categories-container" class="hidden">
+            <!-- 分类内容将动态加载 -->
+        </div>
+        
+        <!-- 错误提示 -->
+        <div id="error-container" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-8">
+            <span id="error-message">加载数据时出错</span>
+        </div>
+    </div>
+
+    <script>
+        // 解析markdown文本为分类和新闻项数组
+        function parseNewsConfig(markdown) {
+            const categories = {};
+            let currentCategory = null;
+            
+            const lines = markdown.split('\n').filter(line => line.trim());
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // 处理大分类
+                if (line.startsWith('# ')) {
+                    currentCategory = line.substring(2).trim();
+                    categories[currentCategory] = [];
+                }
+                // 处理新闻项
+                else if (line.startsWith('## ') && currentCategory) {
+                    const title = line.substring(3).trim();
+                    const newsItem = {
+                        title: title,
+                        category: currentCategory,
+                        date: '',
+                        desc: '',
+                        image: '',
+                        url: '',
+                        isFull: false
+                    };
+                    
+                    // 收集新闻项的属性
+                    let j = i + 1;
+                    while (j < lines.length && !lines[j].startsWith('#')) {
+                        const attrLine = lines[j].trim();
+                        if (attrLine.startsWith('- date:')) {
+                            newsItem.date = attrLine.replace('- date:', '').trim();
+                        } else if (attrLine.startsWith('- desc:')) {
+                            newsItem.desc = attrLine.replace('- desc:', '').trim();
+                        } else if (attrLine.startsWith('- image:')) {
+                            newsItem.image = attrLine.replace('- image:', '').trim();
+                        } else if (attrLine.startsWith('- url:')) {
+                            newsItem.url = attrLine.replace('- url:', '').trim();
+                        }else if (attrLine.startsWith('- isfullpicture:')) {
+                            newsItem.isFull = attrLine.replace('- isfullpicture:', '').trim() == "true"
+                        }
+                        j++;
+                    }
+                    
+                    categories[currentCategory].push(newsItem);
+                    i = j - 1; // 调整索引到最后处理的行
+                }
+            }
+            
+            return categories;
+        }
+
+        // 处理URL，添加?layout=none
+        function processUrl(url) {
+            return url;
+        }
+
+        // 创建新闻卡片元素
+        function createNewsCard(item) {
+            const newsCard = document.createElement('div');
+            newsCard.className = 'bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full';
+            
+            // 只有当提供了图片URL时才显示图片
+            let imageHtml = '';
+            if (item.image && item.image.trim() !== '') {
+                imageHtml = `
+                    <div class="aspect-w-16 aspect-h-9">
+                        <img src="${item.image}" alt="${item.title}" class="w-full object-cover">
+                    </div>
+                `;
+            }
+            
+            // 只有当提供了URL时才显示"阅读更多"按钮
+            let buttonHtml = '';
+            if (item.url && item.url.trim() !== '') {
+                const url = processUrl(item.url);
+                buttonHtml = `
+                    <a href="${url}" class="inline-block bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md">
+                        阅读更多
+                    </a>
+                `;
+            }
+            
+            newsCard.innerHTML = `
+                ${imageHtml}
+                <div class="p-4">
+                    <h2 class="text-xl font-semibold mb-2">${item.title}</h2>
+                    <p class="text-gray-500 text-sm mb-2">${item.date || ''}</p>
+                    <p class="text-gray-700 ${buttonHtml ? 'mb-4' : ''}">${item.desc || ''}</p>
+                    ${buttonHtml}
+                </div>
+            `;
+            
+            return newsCard;
+        }
+
+        // 创建新闻卡片元素
+        function createNewsCard2(item) {
+            const newsCard = document.createElement('div');
+            newsCard.className = 'bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full';
+            
+            // 只有当提供了图片URL时才显示图片
+            let imageHtml = '';
+            if (item.image && item.image.trim() !== '') {
+                imageHtml = `
+                    <div class="aspect-w-16 aspect-h-9">
+                        <img src="${item.image}" alt="${item.title}" class="w-full object-cover">
+                    </div>
+                `;
+            }
+            
+            // 只有当提供了URL时才显示"阅读更多"按钮
+            let buttonHtml = '';
+            if (item.url && item.url.trim() !== '') {
+                const url = processUrl(item.url);
+                buttonHtml = `
+                    <a href="${url}" class="inline-block bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md">
+                        阅读更多
+                    </a>
+                `;
+            }
+            
+            newsCard.innerHTML = `
+                <div class="p-4">
+                    <h2 class="text-xl font-semibold mb-2">${item.title}</h2>
+                    <p class="text-gray-500 text-sm mb-2">${item.date || ''}</p>
+                    <p class="text-gray-700 ${buttonHtml ? 'mb-4' : ''}">${item.desc || ''}</p>
+                    ${imageHtml}
+                </div>
+            `;
+            
+            return newsCard;
+        }
+
+        // 渲染新闻项到页面
+        function renderNews(news_config) {
+            const loadingElement = document.getElementById('loading');
+            const featuredSections = document.getElementById('featured-sections');
+            const announcementsContainer = document.getElementById('announcements-container');
+            const competitionContainer = document.getElementById('competition-container');
+            const categoriesContainer = document.getElementById('categories-container');
+            const errorContainer = document.getElementById('error-container');
+            
+            // 隐藏加载状态
+            loadingElement.classList.add('hidden');
+            
+            const categorizedNews = parseNewsConfig(news_config);
+            
+            // 清空容器
+            announcementsContainer.innerHTML = '';
+            competitionContainer.innerHTML = '';
+            categoriesContainer.innerHTML = '';
+            
+            // 检查是否存在通知公告或赛事资讯分类
+            const hasAnnouncements = categorizedNews['通知公告'] && categorizedNews['通知公告'].length > 0;
+            const hasCompetition = categorizedNews['赛事资讯'] && categorizedNews['赛事资讯'].length > 0;
+            
+            // 仅当至少有一个分类存在时，才显示featured sections
+            if (hasAnnouncements || hasCompetition) {
+                featuredSections.classList.remove('hidden');
+                
+                // 处理赛事资讯（左侧显示）
+                if (hasCompetition) {
+                    competitionContainer.innerHTML = `
+                        <h2 class="text-2xl font-bold mb-4 text-blue-600 border-b-2 border-blue-200 pb-2">赛事资讯</h2>
+                        <div class="grid grid-cols-1 gap-6"></div>
+                    `;
+                    
+                    const competitionGrid = competitionContainer.querySelector('.grid');
+                    
+                    categorizedNews['赛事资讯'].forEach(item => {
+                        const newsCard = createNewsCard(item);
+                        competitionGrid.appendChild(newsCard);
+                    });
+                    
+                    // 从categorizedNews中移除已处理的赛事资讯
+                    delete categorizedNews['赛事资讯'];
+                } else {
+                    // 如果没有赛事资讯，隐藏其容器
+                    competitionContainer.classList.add('hidden');
+                }
+                
+                // 处理通知公告（右侧显示）
+                if (hasAnnouncements) {
+                    announcementsContainer.innerHTML = `
+                        <h2 class="text-2xl font-bold mb-4 text-blue-600 border-b-2 border-blue-200 pb-2">通知公告</h2>
+                        <div class="grid grid-cols-1 gap-6"></div>
+                    `;
+                    
+                    const announcementsGrid = announcementsContainer.querySelector('.grid');
+                    
+                    categorizedNews['通知公告'].forEach(item => {
+                        if (item.isFull) {
+                            const newsCard = createNewsCard2(item);
+                            announcementsGrid.appendChild(newsCard);
+                            return;
+                        }
+                        const newsCard = createNewsCard(item);
+                        console.log(item)
+                        announcementsGrid.appendChild(newsCard);
+                    });
+                    
+                    // 从categorizedNews中移除已处理的通知公告
+                    delete categorizedNews['通知公告'];
+                } else {
+                    // 如果没有通知公告，隐藏其容器
+                    announcementsContainer.classList.add('hidden');
+                }
+            } else {
+                // 如果两个分类都不存在，隐藏整个featured sections
+                featuredSections.classList.add('hidden');
+            }
+            
+            // 处理其他分类
+            let hasOtherCategories = false;
+            
+            for (const category in categorizedNews) {
+                if (categorizedNews[category].length > 0) {
+                    hasOtherCategories = true;
+                    const categorySection = document.createElement('div');
+                    categorySection.className = 'mb-10';
+                    categorySection.innerHTML = `
+                        <h2 class="text-2xl font-bold mb-4 text-blue-600 border-b-2 border-blue-200 pb-2">${category}</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    `;
+                    
+                    const categoryGrid = categorySection.querySelector('.grid');
+                    
+                    categorizedNews[category].forEach(item => {
+                        const newsCard = createNewsCard(item);
+                        categoryGrid.appendChild(newsCard);
+                    });
+                    
+                    categoriesContainer.appendChild(categorySection);
+                }
+            }
+            
+            // 仅当有其他分类时，才显示categories container
+            if (hasOtherCategories) {
+                categoriesContainer.classList.remove('hidden');
+            } else {
+                categoriesContainer.classList.add('hidden');
+            }
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const loadingElement = document.getElementById('loading');
+            const errorContainer = document.getElementById('error-container');
+            const errorMessage = document.getElementById('error-message');
+            
+            // 隐藏加载状态
+            loadingElement.classList.add('hidden');
+            
+            // 显示错误信息
+            errorContainer.classList.remove('hidden');
+            errorMessage.textContent = message;
+        }
+      
+        const getTokenFromCookie = () => {
+            const cookies = window.parent.document.cookie;
+            if (!cookies) return null;
+            
+            const cookieArray = cookies.split('; ');
+            for (let cookie of cookieArray) {
+                if (cookie.startsWith('token=')) {
+                    return cookie.substring(6); // 'token='.length
+                }
+            }
+            return null;
+        };
+        
+        // Generic function to fetch data from any URL with optional authentication
+        function fetchPageDataFromUrl(url) {
+            const token = getTokenFromCookie();
+
+            // Create headers object
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            // Add Authorization header if token exists
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            return fetch(url, {
+                method: 'GET',
+                headers: headers
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络请求失败');
+                }
+                return response.text();
+            });
+        }
+
+        // 获取新闻数据并渲染
+        function fetchNewsData() {
+            const apiUrl = 'https://api.keepwork.com/core/v0/repos/eduyse%2Fweb/files/eduyse%2Fweb%2Fnews_data.md';
+            
+            fetchPageDataFromUrl(apiUrl)
+                .then(data => {
+                    renderNews(data);
+                })
+                .catch(error => {
+                    console.error('获取数据失败:', error);
+                    showError(`获取新闻数据失败: ${error.message}`);
+                });
+        }
+
+        // 立即执行获取数据函数
+        fetchNewsData();
+    </script>
+</body>
+</html>
