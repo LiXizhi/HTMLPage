@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>青少年用户画像</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: linear-gradient(135deg, #f3e8ff 0%, #fce7f3 100%);
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(168, 85, 247, 0.1);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(168, 85, 247, 0.3);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(168, 85, 247, 0.5);
+        }
+        
+        .profile-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(168, 85, 247, 0.15);
+            margin: 10px;
+            width: calc(100% - 20px);
+            height: calc(100% - 20px);
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .profile-container.loaded {
+            opacity: 1;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 12px 12px 0 0;
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .header-title {
+            display: inline-block;
+        }
+        
+        .content {
+            flex: 1;
+            display: flex;
+            padding: 15px;
+            gap: 15px;
+        }
+        
+        .left-panel {
+            width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .personal-info {
+            background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            border: 2px solid #e879f9;
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .personal-info:hover {
+            box-shadow: 0 4px 20px rgba(168, 85, 247, 0.25);
+        }
+        
+        .avatar {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+            margin: 0 auto 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: white;
+        }
+        
+        .nickName {
+            font-size: 20px;
+            font-weight: bold;
+            color: #581c87;
+            margin-bottom: 8px;
+        }
+        
+        .userName {
+            color: #a855f7;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+        
+        .radar-container {
+            background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%);
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #e879f9;
+            flex: 1;
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .radar-container:hover {
+            box-shadow: 0 4px 20px rgba(168, 85, 247, 0.25);
+        }
+        
+        .radar-title {
+            text-align: center;
+            font-weight: bold;
+            color: #581c87;
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+        
+        .radar-chart-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            position: relative;
+        }
+        
+        .radar-chart {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: min(100%, 300px);
+            max-height: min(100%, 300px);
+        }
+        
+        /* Canvas高DPI优化 */
+        #radarChart {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+            -ms-interpolation-mode: nearest-neighbor;
+            image-rendering: optimizeQuality;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+        }
+        
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .ability-section {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e879f9;
+            overflow: hidden;
+            margin-bottom: 1vh;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .section-header {
+            background: linear-gradient(135deg, #c084fc 0%, #f0abfc 100%);
+            color: #581c87;
+            padding: 1vh 2vw;
+            font-weight: bold;
+            font-size: clamp(12px, 2vw, 16px);
+            text-align: center;
+        }
+        
+        .section-header:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(168, 85, 247, 0.25);
+        }
+        
+        .section-content {
+            flex: 1;
+            display: flex;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 2px;
+            background: #f3e8ff;
+            height: 100%;
+        }
+        
+        .ability-item {
+            background: white;
+            padding: 8px;
+            text-align: center;
+            font-size: 11px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-left: -1px;
+        }
+        
+        .ability-item:hover {
+            background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(168, 85, 247, 0.25);
+        }
+        
+        .ability-item:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(168, 85, 247, 0.15);
+        }
+        
+        .ability-label {
+            color: #a855f7;
+            margin-bottom: 2px;
+        }
+        
+        .ability-value {
+            font-weight: bold;
+            color: #581c87;
+            font-size: 13px;
+        }
+        
+        .ability-value.empty {
+            color: #d8b4fe;
+        }
+        
+        .cognitive-section .section-header {
+            background: linear-gradient(135deg, #c084fc 0%, #f0abfc 100%);
+        }
+        
+        .strategy-section .section-header {
+            background: linear-gradient(135deg, #ddd6fe 0%, #e9d5ff 100%);
+        }
+        
+        .motivation-section .section-header {
+            background: linear-gradient(135deg, #f3e8ff 0%, #fae8ff 100%);
+        }
+        
+        .emotion-section .section-header {
+            background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+        }
+        
+        .quality-section .section-header {
+            background: linear-gradient(135deg, #f9a8d4 0%, #f472b6 100%);
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: clamp(14px, 3vw, 20px);
+            color: #a855f7;
+        }
+        
+        /* 移动端适配 */
+        @media screen and (max-width: 768px) {
+            .content {
+                flex-direction: column;
+                padding: 1vh 2vw;
+                gap: 2vh;
+                overflow-y: auto;
+            }
+            
+            .left-panel {
+                width: 100%;
+                flex-direction: row;
+                gap: 2vw;
+                flex-shrink: 0;
+            }
+            
+            .personal-info {
+                flex: 1;
+                min-width: 0;
+            }
+            
+            .radar-container {
+                flex: 1;
+                min-width: 0;
+                min-height: 200px;
+            }
+            
+            .radar-chart {
+                max-width: min(100%, 200px);
+                max-height: min(100%, 200px);
+            }
+            
+            .right-panel {
+                gap: 1vh;
+            }
+            
+            .section-content {
+                grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            }
+            
+            .ability-item {
+                padding: 1vh 1vw;
+                font-size: clamp(9px, 2.5vw, 12px);
+            }
+            
+            .ability-value {
+                font-size: clamp(10px, 2.8vw, 14px);
+            }
+        }
+        
+        /* 横屏移动端适配 */
+        @media screen and (max-width: 1024px) and (orientation: landscape) {
+            .header {
+                padding: 1vh 4vw;
+                font-size: clamp(14px, 3vw, 20px);
+            }
+            
+            .content {
+                padding: 1vh 2vw;
+            }
+            
+            .left-panel {
+                width: clamp(200px, 20vw, 280px);
+            }
+            
+            .personal-info {
+                padding: 1vh 1vw;
+            }
+            
+            .avatar {
+                width: clamp(40px, 6vw, 60px);
+                height: clamp(40px, 6vw, 60px);
+                font-size: clamp(16px, 3vw, 24px);
+            }
+        }
+        
+        /* 竖屏移动端适配 */
+        @media screen and (max-width: 480px) and (orientation: portrait) {
+            .header {
+                font-size: clamp(16px, 5vw, 22px);
+                padding: 2vh 4vw;
+            }
+            
+            .left-panel {
+                flex-direction: column;
+                gap: 1vh;
+            }
+            
+            .personal-info, .radar-container {
+                flex: none;
+            }
+            
+            .radar-container {
+                min-height: 180px;
+            }
+            
+            .radar-chart {
+                max-width: min(100%, 160px);
+                max-height: min(100%, 160px);
+            }
+            
+            .section-content {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .ability-item {
+                padding: 1.5vh 2vw;
+            }
+        }
+        
+        /* 大屏幕适配 */
+        @media screen and (min-width: 1440px) {
+            .left-panel {
+                width: clamp(320px, 22vw, 400px);
+            }
+            
+            .section-content {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+            
+            .radar-chart {
+                max-width: min(100%, 350px);
+                max-height: min(100%, 350px);
+            }
+        }
+        
+        /* 超小屏幕适配 */
+        @media screen and (max-width: 320px) {
+            .header {
+                font-size: 16px;
+                padding: 1vh 2vw;
+            }
+            
+            .content {
+                padding: 1vh 1vw;
+            }
+            
+            .section-content {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .ability-item {
+                padding: 1vh;
+                font-size: 10px;
+            }
+        }
+        
+        /* 触摸设备优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .ability-item {
+                min-height: 44px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                cursor: pointer;
+                transition: background-color 0.2s ease;
+            }
+            
+            .ability-item:active {
+                background-color: #f0f0f0;
+            }
+            
+            .section-header {
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="profile-container" id="profileContainer">
+        <div class="header">
+            <span class="header-title">个人信息</span>
+        </div>
+        
+        <div class="content">
+            <div class="left-panel">
+                <!-- 个人信息卡片 -->
+                <div class="personal-info">
+                    <div class="avatar">👤</div>
+                    <div class="nickName">用户昵称：</div>
+                    <div class="userName">账号：</div>
+                    <div class="user-info-extra" style="display: none;"></div>
+                </div>
+                <!-- 雷达图 -->
+                <div class="radar-container">
+                    <div class="radar-title">综合能力</div>
+                    <div class="radar-chart-container">
+                        <canvas id="radarChart" class="radar-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="right-panel">
+                <!-- 认知能力 -->
+                <div class="ability-section cognitive-section">
+                    <div class="section-header">认知能力</div>
+                    <div class="section-content">
+                        <div class="ability-item">
+                            <div class="ability-label">集中性注意力</div>
+                            <div class="ability-value" id="focusedAttention">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">选择性注意力</div>
+                            <div class="ability-value" id="selectiveAttention">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">转移性注意力</div>
+                            <div class="ability-value" id="shiftingAttention">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">分配性注意力</div>
+                            <div class="ability-value" id="distributedAttention">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">视觉记忆</div>
+                            <div class="ability-value" id="visualMemory">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">听觉记忆</div>
+                            <div class="ability-value" id="auditoryMemory">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">工作记忆</div>
+                            <div class="ability-value" id="workingMemory">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 思维能力 -->
+                <div class="ability-section cognitive-section">
+                    <div class="section-header">思维能力</div>
+                    <div class="section-content">
+                        <div class="ability-item">
+                            <div class="ability-label">归纳推理能力</div>
+                            <div class="ability-value" id="inductiveReasoning">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">演绎推理能力</div>
+                            <div class="ability-value" id="deductiveReasoning">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">类比推理能力</div>
+                            <div class="ability-value" id="analogicalReasoning">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">言语理解能力</div>
+                            <div class="ability-value" id="verbalComprehension">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">抽象推理能力</div>
+                            <div class="ability-value" id="abstractReasoning">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">视觉空间智能</div>
+                            <div class="ability-value" id="visualSpatialIntelligence">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 学习策略 -->
+                <div class="ability-section strategy-section">
+                    <div class="section-header">学习策略</div>
+                    <div class="section-content">
+                        <div class="ability-item">
+                            <div class="ability-label">复述策略</div>
+                            <div class="ability-value" id="elaborationStrategy">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">精细加工</div>
+                            <div class="ability-value" id="detailedProcessingStrategy">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">组织策略</div>
+                            <div class="ability-value" id="organizationalStrategy">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">元认知计划</div>
+                            <div class="ability-value" id="metacognitivePlanning">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">元认知监控</div>
+                            <div class="ability-value" id="metacognitiveMonitoring">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">元认知调节</div>
+                            <div class="ability-value" id="metacognitiveRegulation">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">努力管理</div>
+                            <div class="ability-value" id="effortManagement">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">时间管理</div>
+                            <div class="ability-value" id="timeManagement">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">外界资源利用</div>
+                            <div class="ability-value" id="externalResourceUtilization">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 学习动机 -->
+                <div class="ability-section motivation-section">
+                    <div class="section-header">学习动机</div>
+                    <div class="section-content">
+                        <div class="ability-item">
+                            <div class="ability-label">成长</div>
+                            <div class="ability-value" id="growth">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">自主</div>
+                            <div class="ability-value" id="autonomy">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">互动</div>
+                            <div class="ability-value" id="interaction">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">兴趣</div>
+                            <div class="ability-value" id="interest">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">认可</div>
+                            <div class="ability-value" id="recognition">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">竞争</div>
+                            <div class="ability-value" id="competition">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">物质奖励</div>
+                            <div class="ability-value" id="materialReward">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 情绪智力 -->
+                <div class="ability-section emotion-section">
+                    <div class="section-header">情绪智力</div>
+                    <div class="section-content">
+                        <div class="ability-item">
+                            <div class="ability-label">情绪感知理解</div>
+                            <div class="ability-value" id="emotionalAwareness">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">情绪调节表达</div>
+                            <div class="ability-value" id="emotionalRegulation">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 学习品质 -->
+                <div class="ability-section quality-section">
+                    <div class="section-header">学习品质</div>
+                    <div class="section-content">
+                        <div class="ability-item">
+                            <div class="ability-label">责任心</div>
+                            <div class="ability-value" id="responsibility">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">严谨性</div>
+                            <div class="ability-value" id="seriousness">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">坚毅性</div>
+                            <div class="ability-value" id="perseverance">-</div>
+                        </div>
+                        <div class="ability-item">
+                            <div class="ability-label">创新性</div>
+                            <div class="ability-value" id="creativity">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let radarChart;
+        let profileData = {};
+        let userInfoData = {};
+        let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        let isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isLandscape = () => window.innerWidth > window.innerHeight;
+        const getScreenSize = () => ({
+            width: window.innerWidth,
+            height: window.innerHeight,
+            ratio: window.devicePixelRatio || 1
+        });
+        
+        // 监听来自父页面的消息
+        window.addEventListener('message', function(event) {
+            console.log("收到消息",event.data)
+            if (event.data && event.data.type === 'setGameConfig') {
+                profileData = event.data.data.profileData;
+                userInfoData = event.data.data.userInfoData;
+                profileData && updateProfile(profileData);
+                userInfoData && updateUserInfo(userInfoData);
+            }
+        });
+        
+        // 页面加载完成后发送消息
+        window.addEventListener('load', function() {
+            // 通知父页面页面已加载
+            window.parent.postMessage({
+                type: 'pageLoaded'
+            }, '*');
+            
+            // 请求数据
+            window.parent.postMessage({
+                type: 'requestProfileData'
+            }, '*');
+            
+            // 性能优化：使用 requestAnimationFrame
+            requestAnimationFrame(() => {
+                initRadarChart();
+                // adjustLayout();
+                if (isTouch) {
+                    addTouchEvents();
+                }
+                
+                // 添加加载完成的视觉反馈
+                const container = document.getElementById('profileContainer');
+                container.classList.add('loaded');
+                
+                // 预加载优化
+                preloadOptimizations();
+            });
+        });
+        
+        // 预设置一些样式以避免闪烁
+        const container = document.getElementById('profileContainer');
+        if (container) {
+            container.style.visibility = 'visible';
+        }
+        
+        // 添加加载指示器
+        showLoadingIndicator();
+        
+        // 预加载优化
+        function preloadOptimizations() {
+            // 预计算一些值以提高性能
+            const screenSize = getScreenSize();
+            
+            // 缓存DOM元素
+            window.cachedElements = {
+                container: document.getElementById('profileContainer'),
+                content: document.querySelector('.content'),
+                leftPanel: document.querySelector('.left-panel'),
+                rightPanel: document.querySelector('.right-panel'),
+                radarContainer: document.querySelector('.radar-container')
+            };
+            
+            // 移除加载指示器
+            hideLoadingIndicator();
+        }
+        
+        // 显示加载指示器
+        function showLoadingIndicator() {
+            const loadingDiv = document.querySelector('.loading');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'flex';
+            }
+        }
+        
+        // 隐藏加载指示器
+        function hideLoadingIndicator() {
+            const loadingDiv = document.querySelector('.loading');
+            if (loadingDiv) {
+                loadingDiv.style.opacity = '0';
+                setTimeout(() => {
+                    loadingDiv.style.display = 'none';
+                }, 300);
+            }
+        }
+            
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        function OnClickProfileItem(){
+
+        }
+        
+        // 触摸事件处理（优化版本）
+        function addTouchEvents() {
+            const abilityItems = document.querySelectorAll('.ability-item');
+            const sectionHeaders = document.querySelectorAll('.section-header');
+            
+            // 为能力项添加触摸事件
+            abilityItems.forEach(item => {
+                let touchStartTime = 0;
+                
+                item.addEventListener('touchstart', function(e) {
+                    touchStartTime = Date.now();
+                    this.style.backgroundColor = '#e3f2fd';
+                    this.style.transform = 'scale(0.98)';
+                    
+                    // 添加触觉反馈（如果支持）
+                    if (navigator.vibrate) {
+                        navigator.vibrate(10);
+                    }
+                }, { passive: true });
+                
+                item.addEventListener('touchend', function(e) {
+                    const touchDuration = Date.now() - touchStartTime;
+                    const delay = touchDuration < 100 ? 150 : 50;
+                    
+                    setTimeout(() => {
+                        this.style.backgroundColor = 'white';
+                        this.style.transform = '';
+                    }, delay);
+                }, { passive: true });
+                
+                item.addEventListener('touchcancel', function(e) {
+                    this.style.backgroundColor = 'white';
+                    this.style.transform = '';
+                }, { passive: true });
+            });
+            
+            // 为节标题添加触摸事件
+            sectionHeaders.forEach(header => {
+                header.addEventListener('touchstart', function(e) {
+                    this.style.transform = 'translateY(-1px) scale(0.99)';
+                }, { passive: true });
+                
+                header.addEventListener('touchend', function(e) {
+                    setTimeout(() => {
+                        this.style.transform = '';
+                    }, 100);
+                }, { passive: true });
+            });
+        }
+        
+        // 动态调整布局（优化版本）
+        function adjustLayout() {
+            const elements = window.cachedElements || {
+                container: document.getElementById('profileContainer'),
+                content: document.querySelector('.content'),
+                leftPanel: document.querySelector('.left-panel'),
+                rightPanel: document.querySelector('.right-panel'),
+                radarContainer: document.querySelector('.radar-container')
+            };
+            
+            const screenSize = getScreenSize();
+            
+            // 根据屏幕尺寸调整布局
+            if (screenSize.width < 768) {
+                elements.content.style.flexDirection = 'column';
+                elements.leftPanel.style.width = '100%';
+                elements.rightPanel.style.width = '100%';
+            } else {
+                elements.content.style.flexDirection = 'row';
+                elements.leftPanel.style.width = '';
+                elements.rightPanel.style.width = '';
+            }
+            
+            // 调整雷达图大小并重新优化Canvas分辨率
+            if (elements.radarContainer && radarChart) {
+                // 使用 requestAnimationFrame 优化性能
+                requestAnimationFrame(() => {
+                    const canvas = document.getElementById('radarChart');
+                    if (canvas) {
+                        // 重新优化Canvas高DPI显示
+                        optimizeCanvasForHighDPI(canvas);
+                        // 调整图表大小
+                        radarChart.resize();
+                        // 强制重绘以确保清晰度
+                        radarChart.update('none');
+                    }
+                });
+            }
+        }
+        
+        // 防止双击缩放
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(e) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+        
+        // 优化Canvas高DPI显示
+        function optimizeCanvasForHighDPI(canvas) {
+            const ctx = canvas.getContext('2d');
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const backingStoreRatio = ctx.webkitBackingStorePixelRatio ||
+                                    ctx.mozBackingStorePixelRatio ||
+                                    ctx.msBackingStorePixelRatio ||
+                                    ctx.oBackingStorePixelRatio ||
+                                    ctx.backingStorePixelRatio || 1;
+            
+            const ratio = devicePixelRatio / backingStoreRatio;
+            
+            if (devicePixelRatio !== backingStoreRatio) {
+                const oldWidth = canvas.width;
+                const oldHeight = canvas.height;
+                
+                canvas.width = oldWidth * ratio;
+                canvas.height = oldHeight * ratio;
+                
+                canvas.style.width = oldWidth + 'px';
+                canvas.style.height = oldHeight + 'px';
+                
+                ctx.scale(ratio, ratio);
+            }
+            
+            return ratio;
+        }
+        
+        function initRadarChart() {
+            const canvas = document.getElementById('radarChart');
+            const ctx = canvas.getContext('2d');
+            
+            // 优化Canvas高DPI显示
+            // const pixelRatio = optimizeCanvasForHighDPI(canvas);
+            const pixelRatio = 1
+            
+            // 设置Canvas抗锯齿
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['认知能力', '学习策略', '学习动机', '情绪智力', '学习品质'],
+                    datasets: [{
+                        label: '60分基准线',
+                        data: [60, 60, 60, 60, 60],
+                        backgroundColor: 'transparent',
+                        borderColor: '#ffcc00',
+                        borderWidth: 2 * pixelRatio,
+                        borderDash: [5 * pixelRatio, 5 * pixelRatio],
+                        pointRadius: 0,
+                        pointHoverRadius: 0
+                    }, {
+                        label: '90分基准线',
+                        data: [90, 90, 90, 90, 90],
+                        backgroundColor: 'transparent',
+                        borderColor: '#00cc00',
+                        borderWidth: 2 * pixelRatio,
+                        borderDash: [5 * pixelRatio, 5 * pixelRatio],
+                        pointRadius: 0,
+                        pointHoverRadius: 0
+                    }, {
+                        label: '我的能力',
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: 'rgba(116, 185, 255, 0.2)',
+                        borderColor: 'rgba(116, 185, 255, 1)',
+                        borderWidth: 2 * pixelRatio,
+                        pointBackgroundColor: 'rgba(116, 185, 255, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(116, 185, 255, 1)',
+                        pointRadius: 4 * pixelRatio,
+                        pointHoverRadius: 6 * pixelRatio
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    devicePixelRatio: window.devicePixelRatio || 1,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeInOutQuart'
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: Math.max(10 * pixelRatio, 10)
+                                },
+                                padding: 10 * pixelRatio,
+                                usePointStyle: true
+                            }
+                        }
+                    },
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                stepSize: 20,
+                                font: {
+                                    size: Math.max(10 * pixelRatio, 10)
+                                },
+                                backdropPadding: 2 * pixelRatio
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: Math.max((isMobile ? 10 : 11) * pixelRatio, isMobile ? 10 : 11),
+                                    family: 'Arial, sans-serif'
+                                },
+                                padding: (isMobile ? 15 : 20) * pixelRatio,
+                                color: '#333'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                lineWidth: 1 * pixelRatio
+                            },
+                            angleLines: {
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                lineWidth: 1 * pixelRatio
+                            }
+                        }
+                    },
+                }
+            });
+            
+            // 存储pixelRatio供后续使用
+            window.canvasPixelRatio = pixelRatio;
+        }
+        
+        function updateUserInfo(data) {
+            // 更新用户信息
+            const fields = ['nickName', 'userName'];
+            fields.forEach(field => {
+                const element = document.querySelector(`.${field}`);
+                if (element) {
+                    const value = data[field];
+                    if (value !== undefined && value !== null && value !== '') {
+                        if (field == 'nickName'){
+                            element.textContent = '用户昵称：' + decodeURIComponent(escape(atob(value)));
+                        }else if(field == 'userName'){
+                            element.textContent = '账号：' + value;
+                        }
+                    } else {
+                        element.textContent = '-';
+                    }
+                }
+            });
+        }
+
+        function updateProfile(data) {
+            // 更新各项能力值
+            const fields = [
+                'focusedAttention', 'selectiveAttention', 'shiftingAttention', 'distributedAttention',
+                'visualMemory', 'auditoryMemory', 'workingMemory',
+                'inductiveReasoning', 'deductiveReasoning', 'analogicalReasoning', 
+                'verbalComprehension', 'abstractReasoning', 'visualSpatialIntelligence',
+                'elaborationStrategy', 'detailedProcessingStrategy', 'organizationalStrategy',
+                'metacognitivePlanning', 'metacognitiveMonitoring', 'metacognitiveRegulation',
+                'effortManagement', 'timeManagement', 'externalResourceUtilization',
+                'growth', 'autonomy', 'interaction', 'interest', 'recognition', 'competition', 'materialReward',
+                'emotionalAwareness', 'emotionalRegulation',
+                'responsibility', 'seriousness', 'perseverance', 'creativity'
+            ];
+            fields.forEach(field => {
+                const element = document.getElementById(field);
+                if (element) {
+                    const value = data[field];
+                    if (value !== undefined && value !== null && value !== '' && value !== '0' && value !== 0) {
+                        element.textContent = value;
+                        element.classList.remove('empty');
+                    } else {
+                        element.textContent = '-';
+                        element.classList.add('empty');
+                    }
+                }
+            });
+            
+            // 更新雷达图
+            updateRadarChart(data);
+        }
+        
+        function updateRadarChart(data) {
+            if (!radarChart) return;
+            
+            // 计算各维度平均值
+            const cognitiveAvg = calculateAverage(data, [
+                'focusedAttention', 'selectiveAttention', 'shiftingAttention', 'distributedAttention',
+                'visualMemory', 'auditoryMemory', 'workingMemory',
+                'inductiveReasoning', 'deductiveReasoning', 'analogicalReasoning', 
+                'verbalComprehension', 'abstractReasoning', 'visualSpatialIntelligence'
+            ]);
+            
+            const strategyAvg = calculateAverage(data, [
+                'elaborationStrategy', 'detailedProcessingStrategy', 'organizationalStrategy',
+                'metacognitivePlanning', 'metacognitiveMonitoring', 'metacognitiveRegulation',
+                'effortManagement', 'timeManagement', 'externalResourceUtilization'
+            ]);
+            
+            const motivationAvg = calculateAverage(data, [
+                'growth', 'autonomy', 'interaction', 'interest', 'recognition', 'competition', 'materialReward'
+            ]);
+            
+            const emotionAvg = calculateAverage(data, [
+                'emotionalAwareness', 'emotionalRegulation'
+            ]);
+            
+            const qualityAvg = calculateAverage(data, [
+                'responsibility', 'seriousness', 'perseverance', 'creativity'
+            ]);
+            
+            radarChart.data.datasets[2].data = [cognitiveAvg, strategyAvg, motivationAvg, emotionAvg, qualityAvg];
+            radarChart.update();
+        }
+        
+        function calculateAverage(data, fields) {
+            const validValues = fields
+                .map(field => data[field])
+                .filter(value => value !== undefined && value !== null && value !== '' && !isNaN(value))
+                .map(value => Number(value));
+            
+            if (validValues.length === 0) return 0;
+            return Math.round(validValues.reduce((sum, value) => sum + value, 0) / validValues.length);
+        }
+    </script>
+</body>
+</html>

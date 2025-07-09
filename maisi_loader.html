@@ -416,8 +416,9 @@
         let currentSlide = 0;
         let slideImages = [];
         let slideInterval;
-        let loadingProgress = 0;
-        let loadingInterval;
+        let loadingProgress1 = 0;
+        let loadingProgress2 = 0;
+        let loadingComplete = false;
 
         // 加载提示文字数组
         const loadingTexts = [
@@ -492,27 +493,43 @@
             }
         }
 
+        window.addEventListener('message', function (event) {
+            if (event.data.type === 'loadingProgress1') {
+                const progress = Math.max(0, Math.min(100, event.data.progress));
+                loadingProgress1 = progress;
+                updateProgress();
+            }
+            if (event.data.type === 'loadingProgress2') {
+                const progress = Math.max(0, Math.min(100, event.data.progress));
+                loadingProgress2 = progress;
+                updateProgress();
+            }
+        });
+
         // 开始加载进度
-        function startLoading() {
-            loadingInterval = setInterval(() => {
-                loadingProgress += Math.random() * 3 + 1; // 随机增加1-4%
-                
-                if (loadingProgress >= 100) {
-                    loadingProgress = 100;
-                    clearInterval(loadingInterval);
-                    completeLoading();
-                }
-                
-                // 更新进度条
-                document.getElementById('progressBar').style.width = loadingProgress + '%';
-                document.getElementById('progressText').textContent = Math.round(loadingProgress) + '%';
-                
-                // 更新加载文字
-                const textIndex = Math.floor(loadingProgress / 20);
-                if (textIndex < loadingTexts.length) {
-                    document.getElementById('loadingText').textContent = loadingTexts[textIndex];
-                }
-            }, 200);
+        function updateProgress() {
+            if (loadingComplete) return;
+            
+            const progress = Math.floor(loadingProgress1 * 0.7 + loadingProgress2 * 0.3);
+            if (progress >= 100) {
+                loadingComplete = true;
+                setTimeout(() => {
+                    window.parent.postMessage({
+                        type: 'customLoader',
+                        data: { name: 'remove' },
+                    }, '*');
+                }, 2000);
+            }
+            
+            // 更新进度条
+            document.getElementById('progressBar').style.width = progress + '%';
+            document.getElementById('progressText').textContent = Math.round(progress) + '%';
+            
+            // 更新加载文字
+            const textIndex = Math.floor(progress / 20);
+            if (textIndex < loadingTexts.length) {
+                document.getElementById('loadingText').textContent = loadingTexts[textIndex];
+            }
         }
 
         // 加载完成
@@ -579,7 +596,6 @@
         // 直接初始化页面（不使用load事件）
         initSlider();
         initSliderHover();
-        startLoading();
     </script>
 </body>
 </html>

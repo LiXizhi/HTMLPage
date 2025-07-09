@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>听力记忆排序游戏</title>
+    <script>
+        (function (w, d, s, q, i) {
+            w[q] = w[q] || [];
+            var f = d.getElementsByTagName(s)[0], j = d.createElement(s);
+            j.async = true;
+            j.id = 'beacon-aplus';
+            j.src = 'https://d.alicdn.com/alilog/mlog/aplus/' + i + '.js';
+            f.parentNode.insertBefore(j, f);
+
+        })(window, document, 'script', 'aplus_queue', '203467608');
+
+        //集成应用的appKey
+        aplus_queue.push({
+            action: 'aplus.setMetaInfo',
+            arguments: ['appKey', '68624fdc79267e0210996355']
+        });
+
+        /* 如果使用的是单页面应用，例如：React、Vue、Angular等，则需要添加下面的代码 */
+        /* 关闭自动PV发送，如果不是单页面应用，请删掉下方代码 */
+        aplus_queue.push({
+            action: 'aplus.setMetaInfo',
+            arguments: ['aplus-waiting', 'MAN']
+        });
+
+        //是否开启调试模式
+        aplus_queue.push({
+            action: 'aplus.setMetaInfo',
+            arguments: ['DEBUG', true]
+        });
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #6B73FF 0%, #000DFF 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "微软雅黑", sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px !important;
+        }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 40px 20px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 15px !important;
+            font-size: 32px !important;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 10px;
+        }
+
+        .status-item {
+            font-size: 16px;
+            color: #666;
+        }
+
+            .status-item strong {
+                color: #333;
+            }
+
+        .display-area {
+            min-height: 90px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .number-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            min-height: 30px;
+            display: none; /* 隐藏数字显示 */
+            align-items: center;
+            justify-content: center;
+        }
+
+        .msg {
+            color: #f60909;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .input-area {
+            margin-bottom: 30px;
+        }
+
+        .number-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 24px;
+            text-align: center;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            transition: border-color 0.3s;
+        }
+
+            .number-input:focus {
+                outline: none;
+                border-color: #6B73FF;
+            }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: #6B73FF;
+            color: white;
+        }
+
+            .btn-primary:hover {
+                background: #5a62e0;
+                transform: translateY(-2px);
+            }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+            .btn-secondary:hover {
+                background: #e0e0e0;
+            }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            display: none;
+        }
+
+            .message.success {
+                background: #d4edda;
+                color: #155724;
+                border: 1px solid #c3e6cb;
+            }
+
+            .message.error {
+                background: #f8d7da;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+            }
+
+            .message.info {
+                background: #d1ecf1;
+                color: #0c5460;
+                border: 1px solid #bee5eb;
+            }
+
+        .game-over {
+            display: none;
+            text-align: center;
+        }
+
+            .game-over h2 {
+                color: #333;
+                margin-bottom: 20px;
+            }
+
+        .score {
+            font-size: 48px;
+            color: #6B73FF;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+            .instructions h3 {
+                margin-bottom: 10px;
+                color: #333;
+            }
+
+            .instructions ul {
+                list-style-position: inside;
+                color: #666;
+                line-height: 1.8;
+            }
+
+        .headmsg {
+            padding-bottom: 15px;
+            font-size: 14px;
+            color: #f60909;
+        }
+        .foot{
+           padding-left:10px;
+        }
+        .cont{
+          color:#000;
+        }
+        ul li{
+          list-style:none;
+        }
+        .icon-img{
+            width:1.5rem
+        }
+         .h3-1 {
+            display: flex;
+        }
+
+        /* 数字键盘样式 */
+        .number-keyboard {
+            display: none; /* 初始隐藏 */
+            grid-template-columns: repeat(12, 1fr); /* 修改为12列一行显示 */
+            gap: 8px;
+            max-width: 100%; /* 确保不超出 */
+            margin: 20px auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .number-key {
+            width: auto; /* 改为自适应宽度 */
+            height: 50px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #fff;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            min-width: 0; /* 防止按钮过小 */
+        }
+        
+        .number-key:hover {
+            background: #e3f2fd;
+            border-color: #2196F3;
+            transform: scale(1.05);
+        }
+        
+        .number-key:active {
+            transform: scale(0.95);
+            background: #bbdefb;
+        }
+        
+        .number-key.backspace {
+            background: #ff5722;
+            color: white;
+            font-size: 14px; /* 稍微调小字体 */
+        }
+        
+        .number-key.backspace:hover {
+            background: #d84315;
+        }
+        
+        .number-key.clear {
+            background: #f44336;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .number-key.clear:hover {
+            background: #c62828;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .number-keyboard {
+                grid-template-columns: repeat(12, 1fr); /* 保持12列 */
+                max-width: 100%;
+                gap: 4px; /* 减小间距 */
+                padding: 15px;
+            }
+            
+            .number-key {
+                height: 40px;
+                font-size: 16px;
+            }
+            
+            .number-key.backspace,
+            .number-key.clear {
+                font-size: 12px;
+            }
+            
+            .number-input {
+                font-size: 20px;
+            }
+        }
+        
+        /* 移除键盘切换按钮样式 */
+        .keyboard-toggle {
+            display: none !important; /* 完全隐藏切换按钮 */
+        }
+        
+        /* 输入区域初始隐藏 */
+        .input-area {
+            margin-bottom: 30px;
+            display: none; /* 初始隐藏 */
+        }
+        
+        /* 添加数字显示区域样式 */
+        .number-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            min-height: 30px;
+            display: none; /* 隐藏数字显示 */
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>听觉记忆测试</h1>
+        <div class="headmsg">
+            ※ 本测试会播放音频，请关闭静音，调整音量
+        </div>
+        <div class="instructions" id="instructions">
+             <h3 class="h3-1" onclick="playRules()">测试规则：<img class="icon-img" src="data:image/png;base64,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" /></h3>
+            <ul>
+                <li>1. <span class="cont">记忆数字：</span>仔细听并记住所有数字。</li>
+                <li>2. <span class="cont">排序要求：</span><span class="msg">将数字按从小到大排列。</span></li>
+                <li>3. <span class="cont">数字数量：</span>题目从 3 个数字开始，最多 16 个。</li>
+                <li>4. <span class="cont">答题规则：</span></li>
+                <li class="foot">• 填对数字：直接进入下一题。</li>
+                <li class="foot">• 填错数字：重新播放相同数量的数字，再次尝试；若再次错误则测试结束。</li>
+            </ul>
+        </div>
+
+        <div class="status-bar" id="statusBar" style="display: none;">
+            <div class="status-item" style="display: none;">
+                <strong> <span id="currentGroup">1</span> </strong> /14题
+            </div>
+            <div class="status-item">
+                <strong><span id="currentAttempt">1</span></strong> / 2次
+            </div>
+            <div class="status-item">
+                <strong><span id="numberCount">3</span> 个数字</strong>
+            </div>
+        </div>
+
+        <div class="display-area" id="displayArea" style="display: none;">
+            <!--<div class="number-display" id="numberDisplay">准备开始...</div>-->
+            将听到的数字按从小到大的顺序排列
+        </div>
+
+        <div class="input-area" id="inputArea" style="display: none;">
+            <div class="number-display" id="numberDisplay">输入的数字：</div>
+            <input type="text" class="number-input" id="answerInput"
+                   placeholder="请输入数字" disabled readonly>
+            
+            <!-- 键盘切换按钮 -->
+            <button class="keyboard-toggle" id="keyboardToggle">显示数字键盘</button>
+            
+            <!-- 数字键盘 -->
+            <div class="number-keyboard" id="numberKeyboard">
+                <div class="number-key" data-number="1">1</div>
+                <div class="number-key" data-number="2">2</div>
+                <div class="number-key" data-number="3">3</div>
+                <div class="number-key" data-number="4">4</div>
+                <div class="number-key" data-number="5">5</div>
+                <div class="number-key" data-number="6">6</div>
+                <div class="number-key" data-number="7">7</div>
+                <div class="number-key" data-number="8">8</div>
+                <div class="number-key" data-number="9">9</div>
+                <div class="number-key" data-number="0">0</div>
+                <div class="number-key backspace">删除</div>
+                <div class="number-key clear">清空</div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="btn btn-primary" id="startBtn">开始测试</button>
+            <button class="btn btn-secondary" id="playBtn" style="display: none;">播放数字</button>
+            <button class="btn btn-primary" id="submitBtn" style="display: none;" disabled>提交答案</button>
+        </div>
+
+        <div class="message" id="message"></div>
+
+        <div class="game-over" id="gameOver">
+            <h2>测试结束！</h2>
+            <div class="score" id="finalScore">0</div>
+            <p>你完成了 <span id="completedGroups">0</span> 组题目</p>
+            <button class="btn btn-primary" onclick="location.reload()">重新开始</button>
+        </div>
+        <div>
+            <audio id="audio"></audio>
+        </div>
+    </div>
+
+    <script>
+        // 游戏状态
+        let gameState = {
+            currentGroup: 1,
+            currentAttempt: 1,
+            numberCount: 3,
+            currentNumbers: [],
+            isPlaying: false,
+            maxGroups: 14
+        };
+
+        // DOM元素
+        const elements = {
+            startBtn: document.getElementById('startBtn'),
+            playBtn: document.getElementById('playBtn'),
+            submitBtn: document.getElementById('submitBtn'),
+            answerInput: document.getElementById('answerInput'),
+            audioPlay: document.getElementById('audio'),
+            numberDisplay: document.getElementById('numberDisplay'), // 添加这一行
+            message: document.getElementById('message'),
+            currentGroup: document.getElementById('currentGroup'),
+            currentAttempt: document.getElementById('currentAttempt'),
+            numberCount: document.getElementById('numberCount'),
+            instructions: document.getElementById('instructions'),
+            statusBar: document.getElementById('statusBar'),
+            displayArea: document.getElementById('displayArea'),
+            inputArea: document.getElementById('inputArea'),
+            gameOver: document.getElementById('gameOver'),
+            finalScore: document.getElementById('finalScore'),
+            completedGroups: document.getElementById('completedGroups'),
+            numberKeyboard: document.getElementById('numberKeyboard'),
+            keyboardToggle: document.getElementById('keyboardToggle')
+        };
+
+
+        // 生成不重复的随机数字数组
+        function generateNumbers(count) {
+            const numbers = [];
+            let lastNumber = -1;
+
+            while (numbers.length < count) {
+                const num = Math.floor(Math.random() * 10);
+                if (num !== lastNumber) {
+                    numbers.push(num);
+                    lastNumber = num;
+                }
+            }
+
+            return numbers;
+        }
+
+        const videoList = [];
+
+        function getVideo(number) {
+
+            //"{\"text\":\"小明，你好呀！我是喜洋洋，很高兴见到你！😊 今天你想问些什么问题呢？我可以陪你一起探索这个神奇的世界哦！ 比如说，你知道为什么天是蓝的吗？或者，你知道小蚂蚁是怎么找到回家的路的吗？如果你有其他问题，也可以随时问我！你想先从哪个开始呢？\",\"key\":\"488de86a0e967d78b3055057a5e09a82\",\"options\":{\"per\":20001,\"spd\":5,\"pit\":5,\"vol\":5}}"
+
+            var txtdata = {}
+            if (number == 10) {
+                const txt = '1. 记忆数字：仔细听并记住所有数字。2.排序要求：将数字按从小到大排列。3. 数字数量：题目从 3 个数字开始，最多 16 个。4. 答题规则：填对数字：直接进入下一题。填错数字：重新播放相同数量的数字，再次尝试；若再次错误则测试结束。';
+                txtdata = { text: txt, key: 'maseai/' + number.toString(), options: { per: 4, spd: 5, pit: 5, vol: 5 } };
+            } else {
+                txtdata = { text: number.toString(), key: 'maseai/' + number.toString(), options: { per: 4, spd: 5, pit: 5, vol: 5 } };
+            }
+          
+            fetch("https://api.keepwork.com/ts-storage/text2audio", {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0",
+                    "Accept": "application/json",
+                    "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
+                    "content-type": "application/json",
+                    "Sec-Fetch-Dest": "empty",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Site": "same-site",
+                    "Priority": "u=0",
+                },
+                referrer: "https://keepwork.com/",
+                body: JSON.stringify(txtdata),
+                method: "POST",
+                mode: "cors"
+            })
+                .then(response => response.json())
+                .then(res => {
+                    videoList[number] = res.data
+                })
+                .catch(error => {
+                    console.log(error)
+                });
+        }
+
+
+        function initPage() {
+            const { aplus_queue } = window;
+            var now = new Date(); // 创建一个Date对象，它代表当前日期和时间
+            var timeString = now.toLocaleTimeString(); // 将日期和时间转换为本地时间字符串
+            //一个简单的demo
+            aplus_queue.push({
+                action: 'aplus.record',
+                arguments: ['$$_exposure', 'MaSiAi', {
+                    //key为字符串类型, value为字符串或Number类型，长度均限制在128位字符以内
+                    pageName: "hearing",
+                    time: timeString,
+                }]
+            });
+            for (var i = 0; i <= 10; i++) {
+                getVideo(i)
+            }
+            
+            // 初始化数字键盘
+            initNumberKeyboard();
+            
+            // 初始状态：隐藏输入区域和键盘
+            elements.inputArea.style.display = 'none';
+            elements.numberKeyboard.style.display = 'none';
+            elements.keyboardToggle.style.display = 'none';
+            // 设置输入框为只读，直到播放完成
+            elements.answerInput.setAttribute('readonly', 'readonly');
+        }
+        
+        // 播放数字
+        async function playNumbers(numbers) {
+            gameState.isPlaying = true;
+            elements.playBtn.disabled = true;
+            elements.submitBtn.disabled = true;
+            elements.answerInput.disabled = true;
+            elements.answerInput.value = '';
+            
+            // 播放时隐藏输入区域和键盘
+            elements.inputArea.style.display = 'none';
+            elements.numberKeyboard.style.display = 'none';
+
+            for (let i = 0; i < numbers.length; i++) {
+
+                elements.audioPlay.pause(); // 暂停音频
+                elements.audioPlay.currentTime = 0; // 重置当前播放时间为0
+
+                elements.audioPlay.src = videoList[numbers[i]];
+                elements.audioPlay.load();
+                elements.audioPlay.play();
+
+                // 等待1秒
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // 如果不是最后一个数字，显示间隔
+                if (i < numbers.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+
+            // 播放完成后显示输入区域和键盘
+            elements.inputArea.style.display = 'block';
+            elements.numberKeyboard.style.display = 'grid';
+            elements.answerInput.disabled = false;
+            elements.answerInput.removeAttribute('readonly');
+            elements.submitBtn.disabled = false;
+            elements.answerInput.focus();
+            gameState.isPlaying = false;
+            elements.playBtn.disabled = false;
+        }
+
+        // 检查答案
+        function checkAnswer() {
+            const userInput = elements.answerInput.value.trim();
+            const userarr = Array.from(userInput);
+
+            // 正确答案是原数字从小到大排序
+            const correctAnswer = [...gameState.currentNumbers].sort((a, b) => a - b);
+
+            // 检查答案
+            const isCorrect = userarr.length === correctAnswer.length &&
+                userarr.every((num, index) => parseInt(num) === correctAnswer[index]);
+
+            showMessage(
+                isCorrect ? 'success' : 'error',
+                isCorrect ? '回答正确！' : `回答错误！正确答案是：${correctAnswer.join(' ')}`
+            );
+
+            return isCorrect;
+        }
+
+        // 显示消息
+        function showMessage(type, text) {
+            elements.message.className = `message ${type}`;
+            elements.message.textContent = text;
+            elements.message.style.display = 'block';
+
+            setTimeout(() => {
+                elements.message.style.display = 'none';
+            }, 3000);
+        }
+
+        // 下一组题目
+        function nextGroup() {
+            gameState.currentGroup++;
+            gameState.currentAttempt = 1;
+            gameState.numberCount = Math.min(gameState.numberCount + 1, 16);
+            updateStatus();
+            startRound();
+        }
+
+        // 开始一轮
+        function startRound() {
+            gameState.currentNumbers = generateNumbers(gameState.numberCount);
+            elements.answerInput.value = '';
+            //elements.numberDisplay.textContent = '准备开始...';
+
+            setTimeout(() => {
+                playNumbers(gameState.currentNumbers);
+            }, 1000);
+        }
+
+        // 更新状态显示
+        function updateStatus() {
+            elements.currentGroup.textContent = gameState.currentGroup;
+            elements.currentAttempt.textContent = gameState.currentAttempt;
+            elements.numberCount.textContent = gameState.numberCount;
+        }
+
+        // 游戏结束
+        function endGame() {
+            elements.displayArea.style.display = 'none';
+            elements.inputArea.style.display = 'none';
+            elements.playBtn.style.display = 'none';
+            elements.submitBtn.style.display = 'none';
+            elements.statusBar.style.display = 'none';
+            elements.gameOver.style.display = 'block';
+
+            const score = (gameState.currentGroup - 1) * 10;
+            elements.finalScore.textContent = score;
+            elements.completedGroups.textContent = gameState.currentGroup - 1;
+        }
+
+        // 事件监听
+        elements.startBtn.addEventListener('click', () => {
+
+            const { aplus_queue } = window;
+            const eventCode = 'hearing'
+            const eventType = 'CLK'
+            var now = new Date(); // 创建一个Date对象，它代表当前日期和时间
+            var timeString = now.toLocaleTimeString(); // 将日期和时间转换为本地时间字符串
+            const eventParams = { name: 'startBtn', time: timeString }
+            aplus_queue.push({
+                action: 'aplus.record',
+                arguments: [eventCode, eventType, eventParams]
+            });
+            elements.instructions.style.display = 'none';
+            elements.statusBar.style.display = 'flex';
+            elements.displayArea.style.display = 'flex';
+            elements.inputArea.style.display = 'block';
+            elements.startBtn.style.display = 'none';
+            elements.playBtn.style.display = 'inline-block';
+            elements.submitBtn.style.display = 'inline-block';
+
+            elements.audioPlay.pause(); // 暂停音频
+            elements.audioPlay.currentTime = 0; // 重置当前播放时间为0
+          
+            gameState.currentNumbers = generateNumbers(gameState.numberCount);
+            playNumbers(gameState.currentNumbers);
+        });
+
+        elements.playBtn.addEventListener('click', () => {
+
+            const { aplus_queue } = window;
+            const eventCode = 'hearing'
+            const eventType = 'CLK'
+            var now = new Date(); // 创建一个Date对象，它代表当前日期和时间
+            var timeString = now.toLocaleTimeString(); // 将日期和时间转换为本地时间字符串
+            const eventParams = { name: 'playBtn', time: timeString }
+            aplus_queue.push({
+                action: 'aplus.record',
+                arguments: [eventCode, eventType, eventParams]
+            });
+            if (!gameState.isPlaying) {
+                 playNumbers(gameState.currentNumbers);
+            }
+        });
+
+        elements.submitBtn.addEventListener('click', () => {
+
+            const { aplus_queue } = window;
+            const eventCode = 'hearing'
+            const eventType = 'CLK'
+            var now = new Date(); // 创建一个Date对象，它代表当前日期和时间
+            var timeString = now.toLocaleTimeString(); // 将日期和时间转换为本地时间字符串
+            const eventParams = { name: 'submit', time: timeString }
+            aplus_queue.push({
+                action: 'aplus.record',
+                arguments: [eventCode, eventType, eventParams]
+            });
+            const isCorrect = checkAnswer();
+
+            if (isCorrect) {
+                if (gameState.currentGroup >= gameState.maxGroups) {
+                    alert("体验完成！感谢您的参与！");
+                    window.parent.postMessage({type: 'keepwork_goto_url', 
+                      url: 'https://keepwork.com/maisi/maisi/landingpage/report2?count=16'}, '*');
+                } else {
+                    setTimeout(nextGroup, 2000);
+                }
+            } else {
+                if (gameState.currentAttempt === 1) {
+                    gameState.currentAttempt = 2;
+                    updateStatus();
+                    showMessage('info', '再试一次！');
+                    setTimeout(startRound, 2000);
+                } else {
+                    alert("体验完成！感谢您的参与！");
+                  
+                    const count = parseInt(gameState.numberCount) - 1
+                    if (count < 6) {
+                        window.parent.postMessage({type: 'keepwork_goto_url', 
+                           url: 'https://keepwork.com/maisi/maisi/landingpage/report?count='+count+'&code=7',
+                           params: { count : count , code : 7 }            }, '*');
+                    } else {
+                        window.parent.postMessage({type: 'keepwork_goto_url', 
+                           url: 'https://keepwork.com/maisi/maisi/landingpage/report2?count='+ count}, '*');
+                    }
+                }
+            }
+        });
+        //播放规则
+        function playRules() {
+
+         const { aplus_queue } = window;
+         const eventCode = 'hearing'
+         const eventType = 'CLK'
+         var now = new Date(); // 创建一个Date对象，它代表当前日期和时间
+         var timeString = now.toLocaleTimeString(); // 将日期和时间转换为本地时间字符串
+         const eventParams = { name: 'playRules', time: timeString }
+         aplus_queue.push({
+             action: 'aplus.record',
+             arguments: [eventCode, eventType, eventParams]
+         });
+            const timer = setInterval(()=> {
+
+                if (videoList.length > 10 && videoList[10] != null) {
+                    elements.audioPlay.src = videoList[10];
+                    elements.audioPlay.play();
+                    clearInterval(timer);
+                }
+            },300)
+        }
+        
+        // 数字键盘功能
+        function initNumberKeyboard() {
+            const numberKeys = document.querySelectorAll('.number-key');
+            
+            numberKeys.forEach(key => {
+                key.addEventListener('click', () => {
+                    const number = key.getAttribute('data-number');
+                    const currentValue = elements.answerInput.value;
+                    
+                    if (number) {
+                        // 添加数字
+                        elements.answerInput.value = currentValue + number;
+                    } else if (key.classList.contains('backspace')) {
+                        // 删除最后一个字符
+                        elements.answerInput.value = currentValue.slice(0, -1);
+                    } else if (key.classList.contains('clear')) {
+                        // 清空
+                        elements.answerInput.value = '';
+                    }
+                    
+                    // 触发input事件以便其他功能正常工作
+                    elements.answerInput.dispatchEvent(new Event('input'));
+                });
+            });
+        }
+        
+        // 修改播放数字函数，去掉updateNumberDisplay调用
+        async function playNumbers(numbers) {
+            gameState.isPlaying = true;
+            elements.playBtn.disabled = true;
+            elements.submitBtn.disabled = true;
+            elements.answerInput.disabled = true;
+            elements.answerInput.value = '';
+            
+            // 播放时隐藏输入区域和键盘
+            elements.inputArea.style.display = 'none';
+            elements.numberKeyboard.style.display = 'none';
+
+            for (let i = 0; i < numbers.length; i++) {
+
+                elements.audioPlay.pause(); // 暂停音频
+                elements.audioPlay.currentTime = 0; // 重置当前播放时间为0
+
+                elements.audioPlay.src = videoList[numbers[i]];
+                elements.audioPlay.load();
+                elements.audioPlay.play();
+
+                // 等待1秒
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // 如果不是最后一个数字，显示间隔
+                if (i < numbers.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+
+            // 播放完成后显示输入区域和键盘
+            elements.inputArea.style.display = 'block';
+            elements.numberKeyboard.style.display = 'grid';
+            elements.answerInput.disabled = false;
+            elements.answerInput.removeAttribute('readonly');
+            elements.submitBtn.disabled = false;
+            elements.answerInput.focus();
+            gameState.isPlaying = false;
+            elements.playBtn.disabled = false;
+        }
+
+        // 删除input事件监听中的updateNumberDisplay调用
+        elements.answerInput.addEventListener('input', function() {
+            // 只保留必要的功能，不再更新数字显示
+        });
+        
+        // 保留回车提交事件并添加input事件监听
+        elements.answerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !elements.submitBtn.disabled) {
+                elements.submitBtn.click();
+            }
+        });
+        
+        // 为所有设备添加触摸反馈
+        document.addEventListener('touchstart', function(e) {
+            if (e.target.classList.contains('number-key')) {
+                e.target.style.transform = 'scale(0.95)';
+            }
+        });
+        
+        document.addEventListener('touchend', function(e) {
+            if (e.target.classList.contains('number-key')) {
+                setTimeout(() => {
+                    e.target.style.transform = 'scale(1)';
+                }, 100);
+            }
+        });
+        
+        // 初始化页面,获取音频
+        initPage();
+    </script>
+</body>
+</html>
