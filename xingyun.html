@@ -875,10 +875,55 @@
                     ttsUrl: 'https://ark.cn-beijing.volces.com/api/v3/audio/speech',
                     modelName: 'doubao-seed-1-6-flash-250615',
                     ttsVoice: 'zh_female_shuangkuaisisi',
+                    maxTextureSize: 512,       // 最大纹理尺寸限制
+                    // 全局默认WebGL设置
+                    defaultWebglParams: {
+                        whiteThreshold: 0.35,       // 白色检测阈值 (0.1-0.8)
+                        fadeRange: 0.15,            // 渐变范围 (0.05-0.3)
+                        saturationBoost: 1.15,      // 饱和度增强 (1.0-2.0)
+                        transparentColor: [1.0, 1.0, 1.0], // RGB透明色 (0.0-1.0)
+                        colorThreshold: 0.1,        // 颜色匹配阈值
+                        enableSmoothing: true,      // 启用边缘平滑
+                        compressionQuality: 0.85    // 纹理压缩质量 (0.1-1.0)
+                    },
+                    
                     videos: {
-                        idle: 'https://api.keepwork.com/ts-storage/siteFiles/46367/raw#dragon_eggy_idle.mp4',
-                        talking: 'https://api.keepwork.com/ts-storage/siteFiles/46368/raw#dragon_eggy_talk.mp4',
-                        listening: 'https://cdn.keepwork.com/digitalhuman/v1/male/pikachu/idle.mp4'
+                        idle: {
+                            url: 'https://api.keepwork.com/ts-storage/siteFiles/46367/raw#dragon_eggy_idle.mp4',
+                            webglParams: {
+                                whiteThreshold: 0.35,    
+                                fadeRange: 0.15,         
+                                saturationBoost: 1.15,   
+                                transparentColor: [1.0, 1.0, 1.0], 
+                                colorThreshold: 0.1,     
+                                enableSmoothing: true,   
+                                compressionQuality: 0.9  
+                            }
+                        },
+                        talking: {
+                            url: 'https://api.keepwork.com/ts-storage/siteFiles/46368/raw#dragon_eggy_talk.mp4',
+                            webglParams: {
+                                whiteThreshold: 0.40,  
+                                fadeRange: 0.12,
+                                saturationBoost: 1.20,
+                                transparentColor: [1.0, 1.0, 1.0],
+                                colorThreshold: 0.08,  
+                                enableSmoothing: true,
+                                compressionQuality: 0.9
+                            }
+                        },
+                        listening: {
+                            url: 'https://cdn.keepwork.com/digitalhuman/v1/male/pikachu/idle.mp4',
+                            webglParams: {
+                                whiteThreshold: 0.30,  
+                                fadeRange: 0.18,
+                                saturationBoost: 1.10,
+                                transparentColor: [0.95, 0.95, 0.95], 
+                                colorThreshold: 0.12,
+                                enableSmoothing: true,
+                                compressionQuality: 0.85 
+                            }
+                        }
                     }
                 };
                 
@@ -893,12 +938,8 @@
                 this.currentVideoType = 'idle';
                 this.thinkingStartTime = null;
                 
-                // WebGL透明度效果参数
-                this.webglParams = {
-                    whiteThreshold: 0.35,    // 白色检测阈值 (0.1-0.8)
-                    fadeRange: 0.15,         // 渐变范围 (0.05-0.3)
-                    saturationBoost: 1.15    // 饱和度增强 (1.0-2.0)
-                };
+                // 当前视频的WebGL参数（从配置中动态获取）
+                this.currentWebglParams = { ...this.config.videos[this.currentVideoType].webglParams };
                 
                 this.initElements();
                 this.initWebGL();
@@ -1151,12 +1192,24 @@
                     return;
                 }
 
+                const video = this.elements.digitalHuman;
+                
                 this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
-                this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.elements.digitalHuman);
+                
+                // Simply use the video as texture source - no repeated resizing logic
+                this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, video);
+                
+                // 设置纹理参数，考虑启用的平滑选项
                 this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
                 this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
-                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+                
+                if (this.currentWebglParams.enableSmoothing) {
+                    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+                    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+                } else {
+                    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+                    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+                }
             }
 
             renderFrame() {
@@ -1210,10 +1263,10 @@
                 this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
                 this.gl.uniform1i(this.programInfo.uniformLocations.uTexture, 0);
                 
-                // 设置透明度处理参数
-                this.gl.uniform1f(this.programInfo.uniformLocations.uWhiteThreshold, this.webglParams.whiteThreshold);
-                this.gl.uniform1f(this.programInfo.uniformLocations.uFadeRange, this.webglParams.fadeRange);
-                this.gl.uniform1f(this.programInfo.uniformLocations.uSaturationBoost, this.webglParams.saturationBoost);
+                // 设置透明度处理参数（使用当前视频的参数）
+                this.gl.uniform1f(this.programInfo.uniformLocations.uWhiteThreshold, this.currentWebglParams.whiteThreshold);
+                this.gl.uniform1f(this.programInfo.uniformLocations.uFadeRange, this.currentWebglParams.fadeRange);
+                this.gl.uniform1f(this.programInfo.uniformLocations.uSaturationBoost, this.currentWebglParams.saturationBoost);
 
                 // 绘制
                 this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
@@ -1254,20 +1307,26 @@
                     this.saveSettings();
                 });
 
-                // WebGL参数实时调整
+                // WebGL参数实时调整（更新当前视频的参数）
                 this.elements.whiteThreshold.addEventListener('input', (e) => {
-                    this.webglParams.whiteThreshold = parseFloat(e.target.value);
+                    this.currentWebglParams.whiteThreshold = parseFloat(e.target.value);
                     this.elements.whiteThresholdValue.textContent = e.target.value;
+                    // 同步更新配置中的参数
+                    this.config.videos[this.currentVideoType].webglParams.whiteThreshold = this.currentWebglParams.whiteThreshold;
                 });
                 
                 this.elements.fadeRange.addEventListener('input', (e) => {
-                    this.webglParams.fadeRange = parseFloat(e.target.value);
+                    this.currentWebglParams.fadeRange = parseFloat(e.target.value);
                     this.elements.fadeRangeValue.textContent = e.target.value;
+                    // 同步更新配置中的参数
+                    this.config.videos[this.currentVideoType].webglParams.fadeRange = this.currentWebglParams.fadeRange;
                 });
                 
                 this.elements.saturationBoost.addEventListener('input', (e) => {
-                    this.webglParams.saturationBoost = parseFloat(e.target.value);
+                    this.currentWebglParams.saturationBoost = parseFloat(e.target.value);
                     this.elements.saturationBoostValue.textContent = e.target.value;
+                    // 同步更新配置中的参数
+                    this.config.videos[this.currentVideoType].webglParams.saturationBoost = this.currentWebglParams.saturationBoost;
                 });
 
                 // Other controls
@@ -1398,9 +1457,15 @@
                     const video = this.elements.digitalHuman;
                     const source = video.querySelector('source');
                     
-                    // 设置待机视频源
-                    source.src = this.config.videos.idle;
+                    // 设置待机视频源和WebGL参数
+                    const idleConfig = this.config.videos.idle;
+                    source.src = idleConfig.url;
                     this.currentVideoType = 'idle';
+                    this.currentWebglParams = { ...idleConfig.webglParams }; // 创建副本
+                    
+                    console.log('Loading idle video with config:', idleConfig);
+                    console.log('Current WebGL params:', this.currentWebglParams);
+                    
                     video.load();
 
                     // 等待视频加载完成
@@ -1410,8 +1475,11 @@
                             this.videoLoaded = true;
                             this.setStatus('ready', '准备好了');
                             
-                            // Adjust video size after loading
-                            this.adjustVideoSize();
+                            // Small delay to ensure video dimensions are fully available
+                            setTimeout(() => {
+                                // Adjust video size after loading
+                                this.adjustVideoSize();
+                            }, 100);
                             
                             // 自动播放待机动画（静音）
                             video.muted = true;
@@ -1888,14 +1956,23 @@
                 }
 
                 let videoUrl;
+                let webglParams;
+                
                 if (customVideoUrl) {
                     videoUrl = customVideoUrl;
+                    // 对于自定义视频URL，使用默认WebGL参数
+                    webglParams = { ...this.config.defaultWebglParams };
                 } else {
-                    videoUrl = this.config.videos[type];
+                    const videoConfig = this.config.videos[type];
                     // 如果没有配置thinking视频且请求thinking类型，则使用idle视频
                     if (type === 'thinking' && !this.config.videos.thinking) {
-                        videoUrl = this.config.videos.idle;
+                        const idleConfig = this.config.videos.idle;
+                        videoUrl = idleConfig.url;
+                        webglParams = idleConfig.webglParams;
                         type = 'idle'; // 修正类型，避免重复切换
+                    } else if (videoConfig) {
+                        videoUrl = videoConfig.url;
+                        webglParams = videoConfig.webglParams;
                     }
                 }
 
@@ -1905,19 +1982,44 @@
                     return;
                 }
                 
-                if (videoUrl) {
+                if (videoUrl && webglParams) {
                     const video = this.elements.digitalHuman;
                     const source = video.querySelector('source');
                     
+                    // 更新当前WebGL参数 - 合并默认参数和视频特定参数
+                    this.currentVideoType = type;
+                    this.currentWebglParams = { 
+                        ...this.config.defaultWebglParams, 
+                        ...webglParams 
+                    };
+                    
+                    // 更新设置面板中的滑块值
+                    if (this.elements.whiteThreshold) {
+                        this.elements.whiteThreshold.value = this.currentWebglParams.whiteThreshold;
+                        this.elements.whiteThresholdValue.textContent = this.currentWebglParams.whiteThreshold;
+                    }
+                    if (this.elements.fadeRange) {
+                        this.elements.fadeRange.value = this.currentWebglParams.fadeRange;
+                        this.elements.fadeRangeValue.textContent = this.currentWebglParams.fadeRange;
+                    }
+                    if (this.elements.saturationBoost) {
+                        this.elements.saturationBoost.value = this.currentWebglParams.saturationBoost;
+                        this.elements.saturationBoostValue.textContent = this.currentWebglParams.saturationBoost;
+                    }
+                    
+                    console.log(`Switching to ${type} video with WebGL params:`, this.currentWebglParams);
+                    
                     // 检查是否需要切换视频源
                     if (source.src !== videoUrl) {
-                        this.currentVideoType = type;
                         source.src = videoUrl;
                         video.load();
                         
                         video.onloadeddata = () => {
-                            // Adjust video size when switching videos
-                            this.adjustVideoSize();
+                            // Small delay to ensure video dimensions are fully available
+                            setTimeout(() => {
+                                // Adjust video size when switching videos
+                                this.adjustVideoSize();
+                            }, 100);
                             
                             // 对于说话动画，不要静音，其他动画保持静音
                             if (type === 'talking') {
@@ -1935,7 +2037,6 @@
                         };
                     } else {
                         // 视频源相同，只更新当前类型和静音状态
-                        this.currentVideoType = type;
                         
                         // 更新静音状态
                         if (type === 'talking') {
@@ -2005,19 +2106,39 @@
                 this.config.modelName = document.getElementById('modelName').value;
                 this.config.ttsApiKey = document.getElementById('ttsApiKey').value;
                 this.config.ttsVoice = document.getElementById('ttsVoice').value;
-                this.config.videos.idle = document.getElementById('idleVideo').value;
-                this.config.videos.thinking = document.getElementById('thinkingVideo').value || null; // 允许为空
-                this.config.videos.talking = document.getElementById('talkingVideo').value;
-                this.config.videos.listening = document.getElementById('listeningVideo').value;
+                
+                // 更新视频URL（保持新的配置结构）
+                if (this.config.videos.idle) {
+                    this.config.videos.idle.url = document.getElementById('idleVideo').value;
+                }
+                if (this.config.videos.talking) {
+                    this.config.videos.talking.url = document.getElementById('talkingVideo').value;
+                }
+                if (this.config.videos.listening) {
+                    this.config.videos.listening.url = document.getElementById('listeningVideo').value;
+                }
+                
+                const thinkingVideo = document.getElementById('thinkingVideo').value;
+                if (thinkingVideo) {
+                    if (!this.config.videos.thinking) {
+                        this.config.videos.thinking = {
+                            url: thinkingVideo,
+                            webglParams: { ...this.config.videos.idle.webglParams } // 使用idle的参数作为默认
+                        };
+                    } else {
+                        this.config.videos.thinking.url = thinkingVideo;
+                    }
+                }
 
-                // Save WebGL parameters
-                this.webglParams.whiteThreshold = parseFloat(this.elements.whiteThreshold.value);
-                this.webglParams.fadeRange = parseFloat(this.elements.fadeRange.value);
-                this.webglParams.saturationBoost = parseFloat(this.elements.saturationBoost.value);
+                // 保存当前视频的WebGL参数到配置中
+                if (this.config.videos[this.currentVideoType]) {
+                    this.config.videos[this.currentVideoType].webglParams.whiteThreshold = parseFloat(this.elements.whiteThreshold.value);
+                    this.config.videos[this.currentVideoType].webglParams.fadeRange = parseFloat(this.elements.fadeRange.value);
+                    this.config.videos[this.currentVideoType].webglParams.saturationBoost = parseFloat(this.elements.saturationBoost.value);
+                }
 
                 // Save to localStorage
                 localStorage.setItem('digitalHumanConfig', JSON.stringify(this.config));
-                localStorage.setItem('digitalHumanWebGLParams', JSON.stringify(this.webglParams));
                 
                 // Switch to idle video if available
                 this.switchVideo('idle');
@@ -2029,19 +2150,113 @@
             loadSettings() {
                 const saved = localStorage.getItem('digitalHumanConfig');
                 if (saved) {
-                    const savedConfig = JSON.parse(saved);
-                    this.config = { ...this.config, ...savedConfig };
-                    
-                    // Load default video if available
-                    this.switchVideo('idle');
+                    try {
+                        const savedConfig = JSON.parse(saved);
+                        // 深度合并配置，保持视频配置结构
+                        if (savedConfig.videos) {
+                            Object.keys(savedConfig.videos).forEach(videoType => {
+                                if (this.config.videos[videoType]) {
+                                    // 如果是旧格式（字符串），转换为新格式
+                                    if (typeof savedConfig.videos[videoType] === 'string') {
+                                        this.config.videos[videoType].url = savedConfig.videos[videoType];
+                                    } else {
+                                        // 新格式，深度合并
+                                        this.config.videos[videoType] = {
+                                            ...this.config.videos[videoType],
+                                            ...savedConfig.videos[videoType]
+                                        };
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // 合并其他配置
+                        const { videos, ...otherConfig } = savedConfig;
+                        this.config = { ...this.config, ...otherConfig };
+                        
+                        // 更新当前WebGL参数
+                        if (this.config.videos[this.currentVideoType]) {
+                            this.currentWebglParams = { ...this.config.videos[this.currentVideoType].webglParams };
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error loading settings:', error);
+                    }
                 }
                 
-                // Load WebGL parameters
-                const savedWebGLParams = localStorage.getItem('digitalHumanWebGLParams');
-                if (savedWebGLParams) {
-                    const savedParams = JSON.parse(savedWebGLParams);
-                    this.webglParams = { ...this.webglParams, ...savedParams };
+                // 更新设置UI中的当前WebGL参数值
+                this.updateWebGLSettingsUI();
+            }
+            
+            updateWebGLSettingsUI() {
+                // 更新设置面板中的滑块值以反映当前视频的WebGL参数
+                if (this.elements.whiteThreshold && this.currentWebglParams) {
+                    this.elements.whiteThreshold.value = this.currentWebglParams.whiteThreshold;
+                    this.elements.whiteThresholdValue.textContent = this.currentWebglParams.whiteThreshold.toFixed(2);
                 }
+                if (this.elements.fadeRange && this.currentWebglParams) {
+                    this.elements.fadeRange.value = this.currentWebglParams.fadeRange;
+                    this.elements.fadeRangeValue.textContent = this.currentWebglParams.fadeRange.toFixed(2);
+                }
+                if (this.elements.saturationBoost && this.currentWebglParams) {
+                    this.elements.saturationBoost.value = this.currentWebglParams.saturationBoost;
+                    this.elements.saturationBoostValue.textContent = this.currentWebglParams.saturationBoost.toFixed(2);
+                }
+            }
+
+            /**
+             * 添加新的视频配置
+             * @param {string} videoType - 视频类型名称 (如: 'excited', 'sad', 'angry')
+             * @param {string} videoUrl - 视频URL
+             * @param {Object} webglParams - WebGL参数配置
+             */
+            addVideoConfig(videoType, videoUrl, webglParams = {}) {
+                // 合并默认参数和自定义参数
+                const finalParams = {
+                    ...this.config.defaultWebglParams,
+                    ...webglParams
+                };
+
+                this.config.videos[videoType] = {
+                    url: videoUrl,
+                    webglParams: finalParams
+                };
+
+                console.log(`Added new video config for ${videoType}:`, this.config.videos[videoType]);
+                return this.config.videos[videoType];
+            }
+
+            /**
+             * 更新现有视频的WebGL参数
+             * @param {string} videoType - 视频类型
+             * @param {Object} webglParams - 新的WebGL参数
+             */
+            updateVideoWebGLParams(videoType, webglParams) {
+                if (this.config.videos[videoType]) {
+                    this.config.videos[videoType].webglParams = {
+                        ...this.config.videos[videoType].webglParams,
+                        ...webglParams
+                    };
+                    
+                    // 如果是当前播放的视频，立即更新参数
+                    if (this.currentVideoType === videoType) {
+                        this.currentWebglParams = { ...this.config.videos[videoType].webglParams };
+                        this.updateWebGLSettingsUI();
+                    }
+                    
+                    console.log(`Updated WebGL params for ${videoType}:`, this.config.videos[videoType].webglParams);
+                } else {
+                    console.warn(`Video type ${videoType} not found in config`);
+                }
+            }
+
+            /**
+             * 获取视频的WebGL参数
+             * @param {string} videoType - 视频类型
+             * @returns {Object} WebGL参数对象
+             */
+            getVideoWebGLParams(videoType) {
+                return this.config.videos[videoType]?.webglParams || null;
             }
 
             showToast(message, type = 'success') {
@@ -2059,11 +2274,6 @@
             }
         }
 
-        // Initialize the app when DOM is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            window.digitalHumanChat = new DigitalHumanChat();
-        });
-
         // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden && window.digitalHumanChat) {
@@ -2077,6 +2287,7 @@
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
+        window.digitalHumanChat = new DigitalHumanChat();
     </script>
 </body>
 </html>
