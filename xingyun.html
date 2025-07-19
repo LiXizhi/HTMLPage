@@ -33,7 +33,7 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #000;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             position: relative;
             overflow: hidden;
         }
@@ -45,14 +45,22 @@
             justify-content: center;
             position: relative;
             overflow: hidden;
-            background: #000;
+            background: transparent;
         }
 
         #digitalHuman {
             width: 100%;
             height: 100%;
             object-fit: contain;
-            background: #000;
+            background: transparent;
+            display: none; /* Hide original video, we'll use canvas */
+        }
+
+        #humanCanvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: transparent;
         }
 
         .video-overlay {
@@ -439,6 +447,45 @@
             border-color: #667eea;
         }
 
+        /* 滑块样式 */
+        .form-group input[type="range"] {
+            width: 70%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            margin-right: 10px;
+        }
+
+        .form-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .form-group input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .form-group span {
+            display: inline-block;
+            min-width: 40px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
         .save-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -676,10 +723,11 @@
         <!-- Digital Human Section -->
         <div class="human-section">
             <div class="video-container">
-                <video id="digitalHuman" muted loop playsinline>
+                <video id="digitalHuman" muted loop playsinline crossorigin="anonymous">
                     <source src="" type="video/mp4">
                     您的浏览器不支持视频标签。
                 </video>
+                <canvas id="humanCanvas"></canvas>
                 <div class="video-loading" id="videoLoading" style="display: none;">
                     <div class="loading-spinner"></div>
                     <div>正在加载数字人...</div>
@@ -791,6 +839,24 @@
                     <input type="url" id="listeningVideo" placeholder="输入听取动画视频URL">
                 </div>
                 
+                <div class="form-group">
+                    <label for="whiteThreshold">白色透明阈值 (0.1-0.8):</label>
+                    <input type="range" id="whiteThreshold" min="0.1" max="0.8" step="0.05" value="0.35">
+                    <span id="whiteThresholdValue">0.35</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="fadeRange">边缘渐变范围 (0.05-0.3):</label>
+                    <input type="range" id="fadeRange" min="0.05" max="0.3" step="0.01" value="0.15">
+                    <span id="fadeRangeValue">0.15</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="saturationBoost">色彩饱和度增强 (1.0-2.0):</label>
+                    <input type="range" id="saturationBoost" min="1.0" max="2.0" step="0.05" value="1.15">
+                    <span id="saturationBoostValue">1.15</span>
+                </div>
+                
                 <button type="submit" class="save-btn">保存设置</button>
             </form>
         </div>
@@ -827,7 +893,15 @@
                 this.currentVideoType = 'idle';
                 this.thinkingStartTime = null;
                 
+                // WebGL透明度效果参数
+                this.webglParams = {
+                    whiteThreshold: 0.35,    // 白色检测阈值 (0.1-0.8)
+                    fadeRange: 0.15,         // 渐变范围 (0.05-0.3)
+                    saturationBoost: 1.15    // 饱和度增强 (1.0-2.0)
+                };
+                
                 this.initElements();
+                this.initWebGL();
                 this.initEventListeners();
                 this.initSpeechRecognition();
                 this.loadSettings();
@@ -842,6 +916,7 @@
             initElements() {
                 this.elements = {
                     digitalHuman: document.getElementById('digitalHuman'),
+                    humanCanvas: document.getElementById('humanCanvas'),
                     statusIndicator: document.getElementById('statusIndicator'),
                     statusText: document.getElementById('statusText'),
                     chatMessages: document.getElementById('chatMessages'),
@@ -856,8 +931,303 @@
                     settingsForm: document.getElementById('settingsForm'),
                     welcomePopup: document.getElementById('welcomePopup'),
                     welcomeStartBtn: document.getElementById('welcomeStartBtn'),
-                    videoLoading: document.getElementById('videoLoading')
+                    videoLoading: document.getElementById('videoLoading'),
+                    // WebGL透明度控制元素
+                    whiteThreshold: document.getElementById('whiteThreshold'),
+                    whiteThresholdValue: document.getElementById('whiteThresholdValue'),
+                    fadeRange: document.getElementById('fadeRange'),
+                    fadeRangeValue: document.getElementById('fadeRangeValue'),
+                    saturationBoost: document.getElementById('saturationBoost'),
+                    saturationBoostValue: document.getElementById('saturationBoostValue')
                 };
+            }
+
+            initWebGL() {
+                const canvas = this.elements.humanCanvas;
+                this.gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                
+                if (!this.gl) {
+                    console.warn('WebGL not supported, falling back to regular video');
+                    this.elements.digitalHuman.style.display = 'block';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                // WebGL着色器源码 - 顶点着色器
+                const vertexShaderSource = `
+                    attribute vec2 a_position;
+                    attribute vec2 a_texCoord;
+                    varying vec2 v_texCoord;
+                    
+                    void main() {
+                        gl_Position = vec4(a_position, 0.0, 1.0);
+                        v_texCoord = a_texCoord;
+                    }
+                `;
+
+                // WebGL着色器源码 - 片段着色器
+                const fragmentShaderSource = `
+                    precision mediump float;
+                    uniform sampler2D u_texture;
+                    uniform float u_whiteThreshold;      // 白色阈值控制
+                    uniform float u_fadeRange;           // 渐变范围控制
+                    uniform float u_saturationBoost;     // 饱和度增强
+                    varying vec2 v_texCoord;
+                    
+                    void main() {
+                        vec4 color = texture2D(u_texture, v_texCoord);
+                        
+                        // 使用更精确的白色检测方法
+                        // 计算RGB各通道与白色的差异
+                        vec3 whiteDiff = vec3(1.0) - color.rgb;
+                        float whiteDistance = length(whiteDiff);
+                        
+                        // 动态阈值设置
+                        float pureWhiteThreshold = u_whiteThreshold * 0.4;         // 纯白色阈值
+                        float fadeStartThreshold = u_whiteThreshold * 0.8;         // 开始渐变的阈值
+                        float fadeEndThreshold = u_whiteThreshold * 1.2 + u_fadeRange; // 结束渐变的阈值
+                        
+                        float alpha = 1.0;
+                        
+                        if (whiteDistance < pureWhiteThreshold) {
+                            // 纯白色区域，完全透明
+                            alpha = 0.0;
+                        } else if (whiteDistance < fadeStartThreshold) {
+                            // 接近白色区域，快速衰减到透明
+                            float fadeProgress = (whiteDistance - pureWhiteThreshold) / (fadeStartThreshold - pureWhiteThreshold);
+                            alpha = fadeProgress * 0.3; // 最大透明度为0.3
+                        } else if (whiteDistance < fadeEndThreshold) {
+                            // 过渡区域，平滑渐变
+                            float fadeProgress = (whiteDistance - fadeStartThreshold) / (fadeEndThreshold - fadeStartThreshold);
+                            
+                            // 使用smoothstep获得更自然的渐变曲线
+                            fadeProgress = smoothstep(0.0, 1.0, fadeProgress);
+                            alpha = 0.3 + fadeProgress * 0.7; // 从0.3渐变到1.0
+                        } else {
+                            // 非白色区域，完全不透明
+                            alpha = 1.0;
+                        }
+                        
+                        // 对于非常暗的区域（可能是阴影），稍微降低透明度以避免边缘过硬
+                        float brightness = (color.r + color.g + color.b) / 3.0;
+                        if (brightness < 0.1) {
+                            alpha *= 0.95;
+                        }
+                        
+                        // 应用色彩增强，让非白色区域更加鲜艳
+                        vec3 enhancedColor = color.rgb;
+                        if (whiteDistance > fadeStartThreshold) {
+                            // 对非白色区域进行可调节的饱和度增强
+                            vec3 gray = vec3((color.r + color.g + color.b) / 3.0);
+                            enhancedColor = mix(gray, color.rgb, u_saturationBoost);
+                        }
+                        
+                        // 简化的边缘软化（移除textureSize依赖）
+                        // 使用固定的texel偏移来检测边缘
+                        float texelOffset = 0.001; // 近似texel大小
+                        vec4 colorRight = texture2D(u_texture, v_texCoord + vec2(texelOffset, 0.0));
+                        vec4 colorDown = texture2D(u_texture, v_texCoord + vec2(0.0, texelOffset));
+                        
+                        vec3 rightWhiteDiff = vec3(1.0) - colorRight.rgb;
+                        vec3 downWhiteDiff = vec3(1.0) - colorDown.rgb;
+                        float rightWhiteDistance = length(rightWhiteDiff);
+                        float downWhiteDistance = length(downWhiteDiff);
+                        
+                        float edgeDetection = abs(whiteDistance - rightWhiteDistance) + abs(whiteDistance - downWhiteDistance);
+                        
+                        // 如果检测到边缘，稍微调整alpha以获得更好的混合效果
+                        if (edgeDetection > 0.1 && alpha > 0.3 && alpha < 1.0) {
+                            alpha = mix(alpha, alpha * 0.9, min(edgeDetection * 2.0, 0.5));
+                        }
+                        
+                        gl_FragColor = vec4(enhancedColor, alpha * color.a);
+                    }
+                `;
+
+                // 创建着色器
+                this.shaderProgram = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
+                
+                if (!this.shaderProgram) {
+                    console.warn('Failed to create shader program, falling back to regular video');
+                    this.elements.digitalHuman.style.display = 'block';
+                    canvas.style.display = 'none';
+                    return;
+                }
+
+                // 获取属性和uniform位置
+                this.programInfo = {
+                    attribLocations: {
+                        vertexPosition: this.gl.getAttribLocation(this.shaderProgram, 'a_position'),
+                        textureCoord: this.gl.getAttribLocation(this.shaderProgram, 'a_texCoord'),
+                    },
+                    uniformLocations: {
+                        uTexture: this.gl.getUniformLocation(this.shaderProgram, 'u_texture'),
+                        uWhiteThreshold: this.gl.getUniformLocation(this.shaderProgram, 'u_whiteThreshold'),
+                        uFadeRange: this.gl.getUniformLocation(this.shaderProgram, 'u_fadeRange'),
+                        uSaturationBoost: this.gl.getUniformLocation(this.shaderProgram, 'u_saturationBoost'),
+                    },
+                };
+
+                // 创建缓冲区
+                this.initBuffers();
+                
+                // 创建纹理
+                this.texture = this.gl.createTexture();
+                
+                // 设置WebGL启用透明度混合
+                this.gl.enable(this.gl.BLEND);
+                this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+                
+                // 隐藏原视频，显示canvas
+                this.elements.digitalHuman.style.display = 'none';
+                canvas.style.display = 'block';
+                
+                console.log('WebGL initialized successfully');
+            }
+
+            createShaderProgram(vertexSource, fragmentSource) {
+                const vertexShader = this.loadShader(this.gl.VERTEX_SHADER, vertexSource);
+                const fragmentShader = this.loadShader(this.gl.FRAGMENT_SHADER, fragmentSource);
+
+                if (!vertexShader || !fragmentShader) {
+                    return null;
+                }
+
+                const shaderProgram = this.gl.createProgram();
+                this.gl.attachShader(shaderProgram, vertexShader);
+                this.gl.attachShader(shaderProgram, fragmentShader);
+                this.gl.linkProgram(shaderProgram);
+
+                if (!this.gl.getProgramParameter(shaderProgram, this.gl.LINK_STATUS)) {
+                    console.error('Unable to initialize the shader program:', this.gl.getProgramInfoLog(shaderProgram));
+                    return null;
+                }
+
+                return shaderProgram;
+            }
+
+            loadShader(type, source) {
+                const shader = this.gl.createShader(type);
+                this.gl.shaderSource(shader, source);
+                this.gl.compileShader(shader);
+
+                if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+                    console.error('An error occurred compiling the shaders:', this.gl.getShaderInfoLog(shader));
+                    this.gl.deleteShader(shader);
+                    return null;
+                }
+
+                return shader;
+            }
+
+            initBuffers() {
+                // 创建矩形的顶点位置 (Triangle strip format)
+                const positions = [
+                    -1.0,  1.0,  // 左上
+                     1.0,  1.0,  // 右上  
+                    -1.0, -1.0,  // 左下
+                     1.0, -1.0,  // 右下
+                ];
+
+                this.positionBuffer = this.gl.createBuffer();
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+                this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(positions), this.gl.STATIC_DRAW);
+
+                // 创建纹理坐标 (Triangle strip format)
+                const textureCoordinates = [
+                    0.0, 0.0,  // 左上 (对应纹理坐标系的左上)
+                    1.0, 0.0,  // 右上
+                    0.0, 1.0,  // 左下
+                    1.0, 1.0,  // 右下
+                ];
+
+                this.textureCoordBuffer = this.gl.createBuffer();
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.textureCoordBuffer);
+                this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(textureCoordinates), this.gl.STATIC_DRAW);
+            }
+
+            updateVideoTexture() {
+                if (!this.gl || !this.texture || !this.elements.digitalHuman.videoWidth) {
+                    return;
+                }
+
+                this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+                this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.elements.digitalHuman);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+            }
+
+            renderFrame() {
+                if (!this.gl || !this.shaderProgram) {
+                    return;
+                }
+
+                // 更新canvas尺寸
+                const canvas = this.elements.humanCanvas;
+                const video = this.elements.digitalHuman;
+                
+                if (video.videoWidth && video.videoHeight) {
+                    const aspectRatio = video.videoWidth / video.videoHeight;
+                    const containerWidth = canvas.parentElement.clientWidth;
+                    const containerHeight = canvas.parentElement.clientHeight;
+                    const containerAspectRatio = containerWidth / containerHeight;
+
+                    if (aspectRatio > containerAspectRatio) {
+                        canvas.width = containerWidth;
+                        canvas.height = containerWidth / aspectRatio;
+                    } else {
+                        canvas.width = containerHeight * aspectRatio;
+                        canvas.height = containerHeight;
+                    }
+
+                    this.gl.viewport(0, 0, canvas.width, canvas.height);
+                }
+
+                // 更新纹理
+                this.updateVideoTexture();
+
+                // 清除画布
+                this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
+                this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+                // 使用着色器程序
+                this.gl.useProgram(this.shaderProgram);
+
+                // 绑定位置缓冲区
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+                this.gl.vertexAttribPointer(this.programInfo.attribLocations.vertexPosition, 2, this.gl.FLOAT, false, 0, 0);
+                this.gl.enableVertexAttribArray(this.programInfo.attribLocations.vertexPosition);
+
+                // 绑定纹理坐标缓冲区
+                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.textureCoordBuffer);
+                this.gl.vertexAttribPointer(this.programInfo.attribLocations.textureCoord, 2, this.gl.FLOAT, false, 0, 0);
+                this.gl.enableVertexAttribArray(this.programInfo.attribLocations.textureCoord);
+
+                // 绑定纹理
+                this.gl.activeTexture(this.gl.TEXTURE0);
+                this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+                this.gl.uniform1i(this.programInfo.uniformLocations.uTexture, 0);
+                
+                // 设置透明度处理参数
+                this.gl.uniform1f(this.programInfo.uniformLocations.uWhiteThreshold, this.webglParams.whiteThreshold);
+                this.gl.uniform1f(this.programInfo.uniformLocations.uFadeRange, this.webglParams.fadeRange);
+                this.gl.uniform1f(this.programInfo.uniformLocations.uSaturationBoost, this.webglParams.saturationBoost);
+
+                // 绘制
+                this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+
+                // 如果视频正在播放，继续渲染下一帧
+                if (!video.paused && !video.ended) {
+                    requestAnimationFrame(() => this.renderFrame());
+                }
+            }
+
+            startWebGLRendering() {
+                if (this.gl && this.elements.digitalHuman.videoWidth) {
+                    this.renderFrame();
+                }
             }
 
             initEventListeners() {
@@ -882,6 +1252,22 @@
                 this.elements.settingsForm.addEventListener('submit', (e) => {
                     e.preventDefault();
                     this.saveSettings();
+                });
+
+                // WebGL参数实时调整
+                this.elements.whiteThreshold.addEventListener('input', (e) => {
+                    this.webglParams.whiteThreshold = parseFloat(e.target.value);
+                    this.elements.whiteThresholdValue.textContent = e.target.value;
+                });
+                
+                this.elements.fadeRange.addEventListener('input', (e) => {
+                    this.webglParams.fadeRange = parseFloat(e.target.value);
+                    this.elements.fadeRangeValue.textContent = e.target.value;
+                });
+                
+                this.elements.saturationBoost.addEventListener('input', (e) => {
+                    this.webglParams.saturationBoost = parseFloat(e.target.value);
+                    this.elements.saturationBoostValue.textContent = e.target.value;
                 });
 
                 // Other controls
@@ -914,11 +1300,16 @@
                 clearTimeout(this.resizeTimeout);
                 this.resizeTimeout = setTimeout(() => {
                     this.adjustVideoSize();
+                    // 重新启动WebGL渲染以适应新尺寸
+                    if (this.gl && this.elements.digitalHuman.videoWidth) {
+                        this.startWebGLRendering();
+                    }
                 }, 100);
             }
 
             adjustVideoSize() {
                 const video = this.elements.digitalHuman;
+                const canvas = this.elements.humanCanvas;
                 const container = video.parentElement;
                 
                 if (!video || !container) return;
@@ -936,22 +1327,44 @@
                 const containerAspect = containerWidth / containerHeight;
                 const videoAspect = videoWidth / videoHeight;
 
+                let displayWidth, displayHeight;
+
                 // Apply object-fit: contain logic manually for better control
                 if (containerAspect > videoAspect) {
                     // Container is wider, fit to height
-                    video.style.width = `${containerHeight * videoAspect}px`;
-                    video.style.height = `${containerHeight}px`;
+                    displayWidth = containerHeight * videoAspect;
+                    displayHeight = containerHeight;
                 } else {
                     // Container is taller, fit to width
-                    video.style.width = `${containerWidth}px`;
-                    video.style.height = `${containerWidth / videoAspect}px`;
+                    displayWidth = containerWidth;
+                    displayHeight = containerWidth / videoAspect;
                 }
 
-                // Center the video
-                video.style.position = 'absolute';
-                video.style.top = '50%';
-                video.style.left = '50%';
-                video.style.transform = 'translate(-50%, -50%)';
+                // Apply sizing to both video and canvas
+                const elements = [video, canvas];
+                elements.forEach(element => {
+                    if (element) {
+                        element.style.width = `${displayWidth}px`;
+                        element.style.height = `${displayHeight}px`;
+                        
+                        // Center the element
+                        element.style.position = 'absolute';
+                        element.style.top = '50%';
+                        element.style.left = '50%';
+                        element.style.transform = 'translate(-50%, -50%)';
+                    }
+                });
+
+                // Update canvas internal resolution if using WebGL
+                if (this.gl && canvas) {
+                    canvas.width = displayWidth * (window.devicePixelRatio || 1);
+                    canvas.height = displayHeight * (window.devicePixelRatio || 1);
+                    canvas.style.width = `${displayWidth}px`;
+                    canvas.style.height = `${displayHeight}px`;
+                    
+                    // Update WebGL viewport
+                    this.gl.viewport(0, 0, canvas.width, canvas.height);
+                }
             }
 
             handleInitialLoad() {
@@ -1004,6 +1417,10 @@
                             video.muted = true;
                             video.play().then(() => {
                                 console.log('Idle video started playing');
+                                
+                                // 启动WebGL渲染
+                                this.startWebGLRendering();
+                                
                                 resolve();
                             }).catch(error => {
                                 console.error('Error playing idle video:', error);
@@ -1509,7 +1926,10 @@
                                 video.muted = true;
                             }
                             
-                            video.play().catch(error => {
+                            video.play().then(() => {
+                                // 启动WebGL渲染
+                                this.startWebGLRendering();
+                            }).catch(error => {
                                 console.error('Error playing video:', error);
                             });
                         };
@@ -1565,6 +1985,14 @@
                 document.getElementById('talkingVideo').value = this.config.videos.talking;
                 document.getElementById('listeningVideo').value = this.config.videos.listening;
                 
+                // Load WebGL settings
+                this.elements.whiteThreshold.value = this.webglParams.whiteThreshold;
+                this.elements.whiteThresholdValue.textContent = this.webglParams.whiteThreshold;
+                this.elements.fadeRange.value = this.webglParams.fadeRange;
+                this.elements.fadeRangeValue.textContent = this.webglParams.fadeRange;
+                this.elements.saturationBoost.value = this.webglParams.saturationBoost;
+                this.elements.saturationBoostValue.textContent = this.webglParams.saturationBoost;
+                
                 this.elements.settingsModal.classList.add('show');
             }
 
@@ -1582,8 +2010,14 @@
                 this.config.videos.talking = document.getElementById('talkingVideo').value;
                 this.config.videos.listening = document.getElementById('listeningVideo').value;
 
+                // Save WebGL parameters
+                this.webglParams.whiteThreshold = parseFloat(this.elements.whiteThreshold.value);
+                this.webglParams.fadeRange = parseFloat(this.elements.fadeRange.value);
+                this.webglParams.saturationBoost = parseFloat(this.elements.saturationBoost.value);
+
                 // Save to localStorage
                 localStorage.setItem('digitalHumanConfig', JSON.stringify(this.config));
+                localStorage.setItem('digitalHumanWebGLParams', JSON.stringify(this.webglParams));
                 
                 // Switch to idle video if available
                 this.switchVideo('idle');
@@ -1600,6 +2034,13 @@
                     
                     // Load default video if available
                     this.switchVideo('idle');
+                }
+                
+                // Load WebGL parameters
+                const savedWebGLParams = localStorage.getItem('digitalHumanWebGLParams');
+                if (savedWebGLParams) {
+                    const savedParams = JSON.parse(savedWebGLParams);
+                    this.webglParams = { ...this.webglParams, ...savedParams };
                 }
             }
 
