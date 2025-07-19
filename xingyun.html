@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星云 - 数字人AI聊天</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Digital Human Video Section */
+        .human-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #digitalHuman {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .status-indicator.listening {
+            background: #ff4444;
+        }
+
+        .status-indicator.thinking {
+            background: #ffaa00;
+        }
+
+        .status-indicator.speaking {
+            background: #00aaff;
+        }
+
+        /* Chat Section */
+        .chat-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+
+        .chat-header {
+            padding: 20px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.ai .message-avatar {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+
+        .message-content {
+            background: #f5f5f5;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 70%;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.ai .message-content {
+            background: #e8f5e8;
+            color: #333;
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: #e8f5e8;
+            border-radius: 18px;
+            max-width: 70%;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dots span {
+            width: 8px;
+            height: 8px;
+            background: #666;
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Input Section */
+        .chat-input {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 0 0 20px 0;
+            border-top: 1px solid #eee;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .text-input-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #messageInput {
+            width: 100%;
+            min-height: 40px;
+            max-height: 120px;
+            padding: 12px 50px 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.4;
+            transition: border-color 0.3s ease;
+        }
+
+        #messageInput:focus {
+            border-color: #667eea;
+        }
+
+        .voice-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .voice-btn:hover {
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .voice-btn.listening {
+            background: linear-gradient(135deg, #ff4444 0%, #cc3333 100%);
+            animation: pulse 1s infinite;
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 15px;
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .control-btn.active {
+            background: #667eea;
+        }
+
+        /* Settings Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #333;
+            font-size: 20px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .save-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+                margin: 0;
+                border-radius: 0;
+                height: 100vh;
+            }
+
+            .human-section {
+                flex: 0 0 40%;
+                border-radius: 0;
+            }
+
+            .chat-section {
+                flex: 1;
+                border-radius: 0;
+            }
+
+            .chat-header {
+                border-radius: 0;
+            }
+
+            .chat-input {
+                border-radius: 0;
+            }
+
+            .control-panel {
+                bottom: 10px;
+                right: 10px;
+                padding: 10px;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Success/Error Messages */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 1001;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.error {
+            background: #f44336;
+        }
+
+        .toast.warning {
+            background: #ff9800;
+        }
+
+        /* Streaming cursor animation */
+        .streaming-cursor {
+            animation: blink 1s infinite;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .message.streaming .message-content {
+            background: #e8f5e8;
+            color: #333;
+            border: 2px solid #667eea;
+        }
+
+        /* Welcome Popup for mobile devices */
+        .welcome-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .welcome-popup.hidden {
+            display: none;
+        }
+
+        .welcome-content {
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .welcome-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .welcome-subtitle {
+            font-size: 16px;
+            margin-bottom: 40px;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        .welcome-start-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            min-width: 160px;
+        }
+
+        .welcome-start-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .welcome-start-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Animation for welcome popup */
+        .welcome-popup {
+            animation: fadeInWelcome 0.8s ease-out;
+        }
+
+        @keyframes fadeInWelcome {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Video loading state */
+        .video-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 16px;
+            z-index: 10;
+        }
+
+        .video-loading .loading-spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Welcome Popup for mobile devices -->
+    <div class="welcome-popup" id="welcomePopup">
+        <div class="welcome-content">
+            <h1 class="welcome-title">欢迎来到星云AI助手</h1>
+            <p class="welcome-subtitle">您的智能数字人对话伙伴，让我们开始愉快的交流吧！</p>
+            <button class="welcome-start-btn" id="welcomeStartBtn">开始体验</button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Digital Human Section -->
+        <div class="human-section">
+            <div class="video-container">
+                <video id="digitalHuman" muted loop playsinline>
+                    <source src="" type="video/mp4">
+                    您的浏览器不支持视频标签。
+                </video>
+                <div class="video-loading" id="videoLoading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <div>正在加载数字人...</div>
+                </div>
+                <div class="video-overlay">
+                    <span class="status-indicator" id="statusIndicator"></span>
+                    <span id="statusText">准备好了</span>
+                </div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <button class="control-btn" id="settingsBtn" title="设置">
+                    ⚙️
+                </button>
+                <button class="control-btn" id="muteBtn" title="静音/取消静音">
+                    🔊
+                </button>
+                <button class="control-btn" id="clearBtn" title="清空聊天">
+                    🗑️
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="chat-section">
+            <div class="chat-header">
+                <h1>星云 AI 助手</h1>
+                <p>您的智能数字人对话伙伴</p>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        你好！我是星云，你的AI数字人助手。我可以和你进行多轮对话，有什么我可以帮助你的吗？
+                        <div class="message-time" id="welcomeTime"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input">
+                <div class="input-container">
+                    <div class="text-input-container">
+                        <textarea id="messageInput" placeholder="输入消息或点击麦克风说话..." rows="1"></textarea>
+                        <button class="voice-btn" id="voiceBtn" title="语音输入">
+                            🎤
+                        </button>
+                    </div>
+                    <button class="send-btn" id="sendBtn" title="发送消息">
+                        ➤
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>设置</h2>
+                <button class="close-btn" id="closeSettingsBtn">×</button>
+            </div>
+            
+            <form id="settingsForm">
+                <div class="form-group">
+                    <label for="llmApiKey">豆包 LLM API 密钥:</label>
+                    <input type="password" id="llmApiKey" placeholder="输入您的 API Key">
+                </div>
+                
+                <div class="form-group">
+                    <label for="modelName">模型名称:</label>
+                    <input type="text" id="modelName" placeholder="输入模型名称">
+                </div>
+                
+                <div class="form-group">
+                    <label for="ttsApiKey">豆包 TTS API 密钥:</label>
+                    <input type="password" id="ttsApiKey" placeholder="输入您的 TTS API Key">
+                </div>
+                
+                <div class="form-group">
+                    <label for="ttsVoice">语音模型:</label>
+                    <select id="ttsVoice">
+                        <option value="zh_female_shuangkuaisisi">女声-双快思思</option>
+                        <option value="zh_male_jingqiangkuaishou">男声-京腔快手</option>
+                        <option value="zh_female_wenxiaoyan">女声-文小雁</option>
+                        <option value="zh_male_zhengxiaogang">男声-正小刚</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="idleVideo">待机视频 URL:</label>
+                    <input type="url" id="idleVideo" placeholder="输入待机动画视频URL">
+                </div>
+                
+                <div class="form-group">
+                    <label for="thinkingVideo">思考视频 URL:</label>
+                    <input type="url" id="thinkingVideo" placeholder="输入思考动画视频URL（可选，为空则使用待机视频）">
+                </div>
+                
+                <div class="form-group">
+                    <label for="talkingVideo">说话视频 URL:</label>
+                    <input type="url" id="talkingVideo" placeholder="输入说话动画视频URL">
+                </div>
+                
+                <div class="form-group">
+                    <label for="listeningVideo">听取视频 URL:</label>
+                    <input type="url" id="listeningVideo" placeholder="输入听取动画视频URL">
+                </div>
+                
+                <button type="submit" class="save-btn">保存设置</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer"></div>
+
+    <script>
+        class DigitalHumanChat {
+            constructor() {
+                this.config = {
+                    llmApiKey: 'ec978213-eff1-4a6f-9c15-7aeb71c082c7',
+                    ttsApiKey: '',
+                    llmUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+                    ttsUrl: 'https://ark.cn-beijing.volces.com/api/v3/audio/speech',
+                    modelName: 'doubao-seed-1-6-flash-250615',
+                    ttsVoice: 'zh_female_shuangkuaisisi',
+                    videos: {
+                        idle: 'https://api.keepwork.com/ts-storage/siteFiles/46367/raw#dragon_eggy_idle.mp4',
+                        talking: 'https://api.keepwork.com/ts-storage/siteFiles/46368/raw#dragon_eggy_talk.mp4',
+                        listening: 'https://cdn.keepwork.com/digitalhuman/v1/male/pikachu/idle.mp4'
+                    }
+                };
+                
+                this.conversationHistory = [];
+                this.isListening = false;
+                this.isSpeaking = false;
+                this.isMuted = false;
+                this.currentAudio = null;
+                this.recognition = null;
+                this.videoLoaded = false;
+                this.isMobile = this.detectMobile();
+                this.currentVideoType = 'idle';
+                this.thinkingStartTime = null;
+                
+                this.initElements();
+                this.initEventListeners();
+                this.initSpeechRecognition();
+                this.loadSettings();
+                this.setWelcomeTime();
+                this.autoResizeTextarea();
+                this.handleInitialLoad();
+                
+                // Initial resize adjustment
+                setTimeout(() => this.adjustVideoSize(), 100);
+            }
+
+            initElements() {
+                this.elements = {
+                    digitalHuman: document.getElementById('digitalHuman'),
+                    statusIndicator: document.getElementById('statusIndicator'),
+                    statusText: document.getElementById('statusText'),
+                    chatMessages: document.getElementById('chatMessages'),
+                    messageInput: document.getElementById('messageInput'),
+                    sendBtn: document.getElementById('sendBtn'),
+                    voiceBtn: document.getElementById('voiceBtn'),
+                    settingsBtn: document.getElementById('settingsBtn'),
+                    muteBtn: document.getElementById('muteBtn'),
+                    clearBtn: document.getElementById('clearBtn'),
+                    settingsModal: document.getElementById('settingsModal'),
+                    closeSettingsBtn: document.getElementById('closeSettingsBtn'),
+                    settingsForm: document.getElementById('settingsForm'),
+                    welcomePopup: document.getElementById('welcomePopup'),
+                    welcomeStartBtn: document.getElementById('welcomeStartBtn'),
+                    videoLoading: document.getElementById('videoLoading')
+                };
+            }
+
+            initEventListeners() {
+                // Welcome popup
+                this.elements.welcomeStartBtn.addEventListener('click', () => this.startExperience());
+
+                // Send message
+                this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.elements.messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // Voice input
+                this.elements.voiceBtn.addEventListener('click', () => this.toggleVoiceInput());
+
+                // Settings
+                this.elements.settingsBtn.addEventListener('click', () => this.showSettings());
+                this.elements.closeSettingsBtn.addEventListener('click', () => this.hideSettings());
+                this.elements.settingsForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveSettings();
+                });
+
+                // Other controls
+                this.elements.muteBtn.addEventListener('click', () => this.toggleMute());
+                this.elements.clearBtn.addEventListener('click', () => this.clearChat());
+
+                // Close modal on outside click
+                this.elements.settingsModal.addEventListener('click', (e) => {
+                    if (e.target === this.elements.settingsModal) {
+                        this.hideSettings();
+                    }
+                });
+
+                // Handle window resize for video responsiveness
+                window.addEventListener('resize', () => this.handleResize());
+                
+                // Handle orientation change for mobile devices
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(() => this.handleResize(), 100);
+                });
+            }
+
+            detectMobile() {
+                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       (navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
+            }
+
+            handleResize() {
+                // Debounce resize events
+                clearTimeout(this.resizeTimeout);
+                this.resizeTimeout = setTimeout(() => {
+                    this.adjustVideoSize();
+                }, 100);
+            }
+
+            adjustVideoSize() {
+                const video = this.elements.digitalHuman;
+                const container = video.parentElement;
+                
+                if (!video || !container) return;
+
+                // Get container dimensions
+                const containerRect = container.getBoundingClientRect();
+                const containerWidth = containerRect.width;
+                const containerHeight = containerRect.height;
+
+                // Get video dimensions (if loaded)
+                let videoWidth = video.videoWidth || 16;
+                let videoHeight = video.videoHeight || 9;
+
+                // Calculate aspect ratios
+                const containerAspect = containerWidth / containerHeight;
+                const videoAspect = videoWidth / videoHeight;
+
+                // Apply object-fit: contain logic manually for better control
+                if (containerAspect > videoAspect) {
+                    // Container is wider, fit to height
+                    video.style.width = `${containerHeight * videoAspect}px`;
+                    video.style.height = `${containerHeight}px`;
+                } else {
+                    // Container is taller, fit to width
+                    video.style.width = `${containerWidth}px`;
+                    video.style.height = `${containerWidth / videoAspect}px`;
+                }
+
+                // Center the video
+                video.style.position = 'absolute';
+                video.style.top = '50%';
+                video.style.left = '50%';
+                video.style.transform = 'translate(-50%, -50%)';
+            }
+
+            handleInitialLoad() {
+                if (this.isMobile) {
+                    // 在移动设备上显示欢迎弹窗
+                    this.elements.welcomePopup.classList.remove('hidden');
+                } else {
+                    // 在桌面设备上直接加载视频
+                    this.elements.welcomePopup.classList.add('hidden');
+                    this.loadIdleVideo();
+                }
+            }
+
+            async startExperience() {
+                // 隐藏欢迎弹窗
+                this.elements.welcomePopup.classList.add('hidden');
+                
+                // 加载待机视频
+                await this.loadIdleVideo();
+            }
+
+            async loadIdleVideo() {
+                if (this.videoLoaded) {
+                    return;
+                }
+
+                this.elements.videoLoading.style.display = 'block';
+                this.setStatus('ready', '正在加载数字人...');
+
+                try {
+                    const video = this.elements.digitalHuman;
+                    const source = video.querySelector('source');
+                    
+                    // 设置待机视频源
+                    source.src = this.config.videos.idle;
+                    this.currentVideoType = 'idle';
+                    video.load();
+
+                    // 等待视频加载完成
+                    await new Promise((resolve, reject) => {
+                        video.onloadeddata = () => {
+                            this.elements.videoLoading.style.display = 'none';
+                            this.videoLoaded = true;
+                            this.setStatus('ready', '准备好了');
+                            
+                            // Adjust video size after loading
+                            this.adjustVideoSize();
+                            
+                            // 自动播放待机动画（静音）
+                            video.muted = true;
+                            video.play().then(() => {
+                                console.log('Idle video started playing');
+                                resolve();
+                            }).catch(error => {
+                                console.error('Error playing idle video:', error);
+                                reject(error);
+                            });
+                        };
+
+                        video.onerror = () => {
+                            this.elements.videoLoading.style.display = 'none';
+                            this.showToast('视频加载失败', 'error');
+                            reject(new Error('Video load failed'));
+                        };
+
+                        // 设置超时
+                        setTimeout(() => {
+                            if (!this.videoLoaded) {
+                                this.elements.videoLoading.style.display = 'none';
+                                this.showToast('视频加载超时', 'warning');
+                                reject(new Error('Video load timeout'));
+                            }
+                        }, 10000);
+                    });
+
+                } catch (error) {
+                    console.error('Error loading idle video:', error);
+                    this.elements.videoLoading.style.display = 'none';
+                    this.setStatus('ready', '准备好了');
+                }
+            }
+
+            initSpeechRecognition() {
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    this.recognition = new SpeechRecognition();
+                    this.recognition.continuous = false;
+                    this.recognition.interimResults = false;
+                    this.recognition.lang = 'zh-CN';
+
+                    this.recognition.onstart = () => {
+                        this.setStatus('listening', '正在听取...');
+                        this.elements.voiceBtn.classList.add('listening');
+                        this.switchVideo('listening');
+                    };
+
+                    this.recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        this.elements.messageInput.value = transcript;
+                        this.autoResizeTextarea();
+                        this.sendMessage();
+                    };
+
+                    this.recognition.onerror = (event) => {
+                        console.error('Speech recognition error:', event.error);
+                        this.showToast('语音识别出错: ' + event.error, 'error');
+                        this.stopListening();
+                    };
+
+                    this.recognition.onend = () => {
+                        this.stopListening();
+                    };
+                } else {
+                    console.warn('Speech recognition not supported');
+                    this.elements.voiceBtn.style.display = 'none';
+                }
+            }
+
+            setWelcomeTime() {
+                const welcomeTimeElement = document.getElementById('welcomeTime');
+                if (welcomeTimeElement) {
+                    welcomeTimeElement.textContent = new Date().toLocaleTimeString();
+                }
+            }
+
+            autoResizeTextarea() {
+                const textarea = this.elements.messageInput;
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+            }
+
+            toggleVoiceInput() {
+                if (this.isListening) {
+                    this.stopListening();
+                } else {
+                    this.startListening();
+                }
+            }
+
+            startListening() {
+                if (!this.recognition) {
+                    this.showToast('语音识别不可用', 'error');
+                    return;
+                }
+
+                if (this.isSpeaking) {
+                    this.stopSpeaking();
+                }
+
+                try {
+                    this.isListening = true;
+                    this.recognition.start();
+                } catch (error) {
+                    console.error('Error starting recognition:', error);
+                    this.showToast('无法启动语音识别', 'error');
+                    this.isListening = false;
+                }
+            }
+
+            stopListening() {
+                if (this.recognition && this.isListening) {
+                    this.recognition.stop();
+                }
+                this.isListening = false;
+                this.elements.voiceBtn.classList.remove('listening');
+                this.setStatus('ready', '准备就绪');
+                this.switchVideo('idle');
+            }
+
+            async sendMessage() {
+                const message = this.elements.messageInput.value.trim();
+                if (!message) return;
+
+                if (!this.config.llmApiKey) {
+                    this.showToast('请先配置 LLM API Key', 'warning');
+                    this.showSettings();
+                    return;
+                }
+
+                // Add user message
+                this.addMessage('user', message);
+                this.elements.messageInput.value = '';
+                this.autoResizeTextarea();
+
+                // Remove typing indicator and start streaming
+                this.hideTypingIndicator();
+
+                try {
+                    // Add to conversation history
+                    this.conversationHistory.push({ role: 'user', content: message });
+
+                    // Keep conversation history manageable (last 10 exchanges)
+                    if (this.conversationHistory.length > 20) {
+                        this.conversationHistory = this.conversationHistory.slice(-20);
+                    }
+
+                    const response = await this.callLLM();
+                    
+                    if (response) {
+                        this.conversationHistory.push({ role: 'assistant', content: response });
+                        await this.speakText(response);
+                    }
+                } catch (error) {
+                    this.hideTypingIndicator();
+                    console.error('Error sending message:', error);
+                    this.showToast('发送消息失败', 'error');
+                    this.addMessage('ai', '抱歉，我现在无法回复。请稍后再试。');
+                }
+            }
+
+            async callLLM() {
+                this.thinkingStartTime = Date.now();
+                this.setStatus('thinking', '思考中...');
+                
+                // 判断是否需要播放thinking动画
+                const shouldShowThinking = true; // 先设置为true，稍后根据响应时间决定
+                if (shouldShowThinking) {
+                    // 如果配置了thinking视频则使用，否则使用idle视频
+                    const thinkingVideo = this.config.videos.thinking || this.config.videos.idle;
+                    this.switchVideo('thinking', thinkingVideo);
+                }
+
+                const payload = {
+                    model: this.config.modelName,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: '你是星云，一个友善、智能的AI数字人助手。请用简洁、自然的中文回复用户，回复长度控制在100字以内。保持对话的连贯性和个性化。'
+                        },
+                        ...this.conversationHistory
+                    ],
+                    max_tokens: 512,
+                    temperature: 0.7,
+                    stream: true  // Enable streaming
+                };
+
+                const response = await fetch(this.config.llmUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.config.llmApiKey}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`LLM API error: ${response.status}`);
+                }
+
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                let firstChunkReceived = false;
+                
+                // Create streaming message element
+                const streamingMessageDiv = this.createStreamingMessage();
+                const contentDiv = streamingMessageDiv.querySelector('.message-content');
+                
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = line.slice(6);
+                                if (data === '[DONE]') {
+                                    break;
+                                }
+                                
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    const delta = parsed.choices[0]?.delta?.content;
+                                    if (delta) {
+                                        // 检查是否是第一个内容chunk
+                                        if (!firstChunkReceived) {
+                                            firstChunkReceived = true;
+                                            const responseTime = Date.now() - this.thinkingStartTime;
+                                            
+                                            // 如果响应时间小于2秒，直接切换到ready状态，不播放thinking动画
+                                            // 说话动画将在speakText中处理
+                                            if (responseTime < 2000) {
+                                                this.setStatus('ready', '正在准备回复...');
+                                                this.switchVideo('idle');
+                                            } else {
+                                                // 响应时间超过2秒，保持thinking状态一会儿再切换
+                                                setTimeout(() => {
+                                                    this.setStatus('ready', '正在准备回复...');
+                                                    this.switchVideo('idle');
+                                                }, 500);
+                                            }
+                                        }
+                                        
+                                        fullResponse += delta;
+                                        // Update the streaming message with new content
+                                        this.updateStreamingMessage(contentDiv, fullResponse);
+                                    }
+                                } catch (e) {
+                                    // Skip invalid JSON
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Streaming error:', error);
+                    throw error;
+                }
+                
+                // Finalize the streaming message
+                this.finalizeStreamingMessage(streamingMessageDiv, fullResponse);
+                
+                return fullResponse;
+            }
+
+            createStreamingMessage() {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message ai streaming';
+                messageDiv.id = 'streamingMessage';
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = '🤖';
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                messageContent.innerHTML = '<span class="streaming-cursor">|</span>';
+                
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(messageContent);
+                
+                this.elements.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+                
+                return messageDiv;
+            }
+
+            updateStreamingMessage(contentDiv, text) {
+                contentDiv.innerHTML = text + '<span class="streaming-cursor">|</span>';
+                this.scrollToBottom();
+            }
+
+            finalizeStreamingMessage(messageDiv, finalText) {
+                const contentDiv = messageDiv.querySelector('.message-content');
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                
+                contentDiv.innerHTML = finalText;
+                contentDiv.appendChild(timeDiv);
+                
+                messageDiv.classList.remove('streaming');
+                messageDiv.removeAttribute('id');
+            }
+
+            async speakText(text) {
+                if (this.isMuted || !this.config.ttsApiKey) {
+                    this.setStatus('ready', '准备就绪');
+                    this.switchVideo('idle');
+                    return;
+                }
+
+                try {
+                    this.setStatus('speaking', '正在说话...');
+                    this.isSpeaking = true;
+                    
+                    // 记录开始说话的时间，确保说话动画至少播放3秒
+                    const speakStartTime = Date.now();
+                    this.switchVideo('talking');
+
+                    const response = await fetch(this.config.ttsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.config.ttsApiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: 'tts',
+                            voice: this.config.ttsVoice,
+                            input: text,
+                            speed: 1.0
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`TTS API error: ${response.status}`);
+                    }
+
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    this.currentAudio = new Audio(audioUrl);
+                    
+                    const finishSpeaking = () => {
+                        const speakDuration = Date.now() - speakStartTime;
+                        const minSpeakTime = 3000; // 3秒最小说话时间
+                        
+                        const finishAction = () => {
+                            URL.revokeObjectURL(audioUrl);
+                            this.isSpeaking = false;
+                            this.setStatus('ready', '准备就绪');
+                            this.switchVideo('idle');
+                        };
+                        
+                        if (speakDuration < minSpeakTime) {
+                            // 如果说话时间不足3秒，延迟切换回idle状态
+                            setTimeout(finishAction, minSpeakTime - speakDuration);
+                        } else {
+                            finishAction();
+                        }
+                    };
+                    
+                    this.currentAudio.onended = finishSpeaking;
+                    this.currentAudio.onerror = () => {
+                        this.isSpeaking = false;
+                        this.setStatus('ready', '准备就绪');
+                        this.switchVideo('idle');
+                    };
+
+                    await this.currentAudio.play();
+                } catch (error) {
+                    console.error('TTS error:', error);
+                    this.isSpeaking = false;
+                    this.setStatus('ready', '准备就绪');
+                    this.switchVideo('idle');
+                    this.showToast('语音合成失败', 'error');
+                }
+            }
+
+            stopSpeaking() {
+                if (this.currentAudio) {
+                    this.currentAudio.pause();
+                    this.currentAudio.currentTime = 0;
+                    this.isSpeaking = false;
+                    // 立即切换回idle状态
+                    this.setStatus('ready', '准备就绪');
+                    this.switchVideo('idle');
+                }
+            }
+
+            addMessage(type, content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = type === 'user' ? '👤' : '🤖';
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                messageContent.textContent = content;
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                messageContent.appendChild(timeDiv);
+                
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(messageContent);
+                
+                this.elements.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            showTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'message ai';
+                typingDiv.id = 'typingIndicator';
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = '🤖';
+                
+                const typingContent = document.createElement('div');
+                typingContent.className = 'typing-indicator';
+                typingContent.innerHTML = `
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <span>正在思考...</span>
+                `;
+                
+                typingDiv.appendChild(avatar);
+                typingDiv.appendChild(typingContent);
+                
+                this.elements.chatMessages.appendChild(typingDiv);
+                this.scrollToBottom();
+            }
+
+            hideTypingIndicator() {
+                const typingIndicator = document.getElementById('typingIndicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+            }
+
+            scrollToBottom() {
+                this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+            }
+
+            setStatus(type, text) {
+                this.elements.statusIndicator.className = `status-indicator ${type}`;
+                this.elements.statusText.textContent = text;
+            }
+
+            switchVideo(type, customVideoUrl = null) {
+                if (!this.videoLoaded) {
+                    console.log('Video not loaded yet, skipping video switch');
+                    return;
+                }
+
+                let videoUrl;
+                if (customVideoUrl) {
+                    videoUrl = customVideoUrl;
+                } else {
+                    videoUrl = this.config.videos[type];
+                    // 如果没有配置thinking视频且请求thinking类型，则使用idle视频
+                    if (type === 'thinking' && !this.config.videos.thinking) {
+                        videoUrl = this.config.videos.idle;
+                        type = 'idle'; // 修正类型，避免重复切换
+                    }
+                }
+
+                // 如果要切换的动画类型和当前一样，且视频URL也一样，则跳过
+                if (this.currentVideoType === type && !customVideoUrl) {
+                    console.log(`Already playing ${type} video, skipping switch`);
+                    return;
+                }
+                
+                if (videoUrl) {
+                    const video = this.elements.digitalHuman;
+                    const source = video.querySelector('source');
+                    
+                    // 检查是否需要切换视频源
+                    if (source.src !== videoUrl) {
+                        this.currentVideoType = type;
+                        source.src = videoUrl;
+                        video.load();
+                        
+                        video.onloadeddata = () => {
+                            // Adjust video size when switching videos
+                            this.adjustVideoSize();
+                            
+                            // 对于说话动画，不要静音，其他动画保持静音
+                            if (type === 'talking') {
+                                video.muted = false;
+                            } else {
+                                video.muted = true;
+                            }
+                            
+                            video.play().catch(error => {
+                                console.error('Error playing video:', error);
+                            });
+                        };
+                    } else {
+                        // 视频源相同，只更新当前类型和静音状态
+                        this.currentVideoType = type;
+                        
+                        // 更新静音状态
+                        if (type === 'talking') {
+                            video.muted = false;
+                        } else {
+                            video.muted = true;
+                        }
+                        
+                        console.log(`Same video URL for ${type}, not reloading`);
+                    }
+                }
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                this.elements.muteBtn.textContent = this.isMuted ? '🔇' : '🔊';
+                this.elements.muteBtn.classList.toggle('active', this.isMuted);
+                
+                if (this.isMuted && this.isSpeaking) {
+                    this.stopSpeaking();
+                }
+            }
+
+            clearChat() {
+                if (confirm('确定要清空对话记录吗？')) {
+                    this.elements.chatMessages.innerHTML = `
+                        <div class="message ai">
+                            <div class="message-avatar">🤖</div>
+                            <div class="message-content">
+                                对话已清空。我是星云，有什么可以帮助你的吗？
+                                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+                            </div>
+                        </div>
+                    `;
+                    this.conversationHistory = [];
+                }
+            }
+
+            showSettings() {
+                // Load current settings
+                document.getElementById('llmApiKey').value = this.config.llmApiKey;
+                document.getElementById('modelName').value = this.config.modelName;
+                document.getElementById('ttsApiKey').value = this.config.ttsApiKey;
+                document.getElementById('ttsVoice').value = this.config.ttsVoice;
+                document.getElementById('idleVideo').value = this.config.videos.idle;
+                document.getElementById('thinkingVideo').value = this.config.videos.thinking || '';
+                document.getElementById('talkingVideo').value = this.config.videos.talking;
+                document.getElementById('listeningVideo').value = this.config.videos.listening;
+                
+                this.elements.settingsModal.classList.add('show');
+            }
+
+            hideSettings() {
+                this.elements.settingsModal.classList.remove('show');
+            }
+
+            saveSettings() {
+                this.config.llmApiKey = document.getElementById('llmApiKey').value;
+                this.config.modelName = document.getElementById('modelName').value;
+                this.config.ttsApiKey = document.getElementById('ttsApiKey').value;
+                this.config.ttsVoice = document.getElementById('ttsVoice').value;
+                this.config.videos.idle = document.getElementById('idleVideo').value;
+                this.config.videos.thinking = document.getElementById('thinkingVideo').value || null; // 允许为空
+                this.config.videos.talking = document.getElementById('talkingVideo').value;
+                this.config.videos.listening = document.getElementById('listeningVideo').value;
+
+                // Save to localStorage
+                localStorage.setItem('digitalHumanConfig', JSON.stringify(this.config));
+                
+                // Switch to idle video if available
+                this.switchVideo('idle');
+                
+                this.hideSettings();
+                this.showToast('设置已保存', 'success');
+            }
+
+            loadSettings() {
+                const saved = localStorage.getItem('digitalHumanConfig');
+                if (saved) {
+                    const savedConfig = JSON.parse(saved);
+                    this.config = { ...this.config, ...savedConfig };
+                    
+                    // Load default video if available
+                    this.switchVideo('idle');
+                }
+            }
+
+            showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+                
+                document.getElementById('toastContainer').appendChild(toast);
+                
+                setTimeout(() => toast.classList.add('show'), 100);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            window.digitalHumanChat = new DigitalHumanChat();
+        });
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && window.digitalHumanChat) {
+                window.digitalHumanChat.stopListening();
+                window.digitalHumanChat.stopSpeaking();
+            }
+        });
+
+        // Auto-resize textarea
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+    </script>
+</body>
+</html>
