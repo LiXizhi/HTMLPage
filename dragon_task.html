@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抱抱龙成长任务</title>
+      <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            overflow-x: auto;
+        }
+        
+        .dragon-container {
+            min-width: 1024px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .task-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .task-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .task-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1);
+        }
+        
+        .dragon-avatar {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            animation: float 3s ease-in-out infinite;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .progress-ring {
+            width: 80px;
+            height: 80px;
+            position: relative;
+        }
+        
+        .progress-ring svg {
+            transform: rotate(-90deg);
+        }
+        
+        .progress-ring circle {
+            fill: none;
+            stroke-width: 6;
+        }
+        
+        .progress-bg {
+            stroke: #e5e7eb;
+        }
+        
+        .progress-bar {
+            stroke: #4ade80;
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.3s ease;
+        }
+        
+        .level-badge {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #92400e;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+        
+        .task-button {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+        }
+        
+        .task-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(74, 222, 128, 0.4);
+        }
+        
+        .task-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .status-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-pending { background: #fbbf24; }
+        .status-active { background: #10b981; animation: pulse 2s infinite; }
+        .status-completed { background: #6366f1; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .main-task {
+            border: 3px solid #ffd700;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+        
+        .reward-item {
+            background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        
+        .reward-item:hover {
+            transform: scale(1.05);
+        }
+        
+        /* 横屏优化 */
+        @media (orientation: landscape) and (max-height: 600px) {
+            .dragon-container {
+                padding: 20px;
+            }
+            
+            .task-grid {
+                gap: 20px;
+            }
+            
+            .dragon-avatar {
+                width: 100px;
+                height: 100px;
+                font-size: 50px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dragon-container">
+        <!-- 头部信息 -->
+        <header class="flex items-center justify-between p-6 text-white">
+            <div class="flex items-center space-x-6">
+                <div class="dragon-avatar">🐉</div>
+                <div>
+                    <h1 class="text-3xl font-bold mb-2">抱抱龙的成长之旅</h1>
+                    <div class="flex items-center space-x-4">
+                        <div class="level-badge">Lv.3 智慧龙</div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-yellow-300">💎</span>
+                            <span class="font-semibold">经验值: 1250/2000</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 总进度 -->
+            <div class="text-center">
+                <div class="progress-ring mx-auto mb-2">
+                    <svg width="80" height="80">
+                        <circle class="progress-bg" cx="40" cy="40" r="36"></circle>
+                        <circle class="progress-bar" cx="40" cy="40" r="36" 
+                                stroke-dasharray="67.8 226.2" stroke-dashoffset="0"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-lg font-bold text-white">30%</span>
+                    </div>
+                </div>
+                <p class="text-sm opacity-90">总体进度</p>
+            </div>
+        </header>
+
+        <!-- 主要内容区域 -->
+        <main class="flex-1 px-6 pb-6">
+            <div class="grid grid-cols-3 gap-6 h-full">
+                
+                <!-- 主线任务1：天赋觉醒（孵化龙蛋） -->
+                <div class="task-card main-task p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">🥚 天赋觉醒（孵化龙蛋）</h2>
+                        <div class="flex items-center">
+                            <div class="status-indicator status-active"></div>
+                            <span class="text-sm text-gray-600">进行中</span>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <!-- 龙蛋状态 -->
+                        <div class="bg-purple-50 rounded-lg p-4">
+                            <h3 class="font-semibold text-purple-700 mb-3">🔮 觉醒神殿</h3>
+                            <div class="text-center mb-3">
+                                <div class="text-6xl mb-2">🥚</div>
+                                <p class="text-sm text-purple-600">神秘龙蛋正在等待觉醒</p>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">✅ 第1天：注意力测试</span>
+                                    <span class="text-xs text-green-600">已完成</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">🔄 第2天：记忆力测试</span>
+                                    <span class="text-xs text-blue-600">进行中</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm">⏳ 第3-7天：能力测试</span>
+                                    <span class="text-xs text-gray-500">待开启</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 进度条 -->
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div class="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full" style="width: 30%"></div>
+                        </div>
+                        <div class="flex justify-between text-sm text-gray-600">
+                            <span>进度: 2/7天</span>
+                            <span>预计5天完成</span>
+                        </div>
+                        
+                        <!-- 孵化奖励 -->
+                        <div class="bg-yellow-50 rounded-lg p-3">
+                            <h4 class="text-sm font-semibold text-yellow-800 mb-2">孵化奖励</h4>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="reward-item">
+                                    <div class="text-xl">🐉</div>
+                                    <div class="text-xs">幼年抱抱龙</div>
+                                </div>
+                                <div class="reward-item">
+                                    <div class="text-xl">🎮</div>
+                                    <div class="text-xs">互动功能</div>
+                                </div>
+                                <div class="reward-item">
+                                    <div class="text-xl">❤️</div>
+                                    <div class="text-xs">陪伴模式</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="task-button w-full">继续测试</button>
+                    </div>
+                </div>
+
+                <!-- 主线任务2：飞翔的心（解锁飞行能力） -->
+                <div class="task-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">� 飞翔的心</h2>
+                        <div class="flex items-center">
+                            <div class="status-indicator status-pending"></div>
+                            <span class="text-sm text-gray-600">待开启</span>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <!-- 解锁条件 -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h3 class="font-semibold text-blue-800 mb-2">🔒 解锁条件</h3>
+                            <p class="text-sm text-blue-700">认知能力达到60分且完成龙蛋孵化</p>
+                            <div class="flex items-center space-x-2 mt-2">
+                                <span class="text-xs">认知能力:</span>
+                                <div class="flex-1 bg-blue-200 rounded-full h-2">
+                                    <div class="bg-blue-500 h-2 rounded-full" style="width: 45%"></div>
+                                </div>
+                                <span class="text-xs">45分</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 任务预览 -->
+                        <div class="bg-gray-50 rounded-lg p-4 opacity-75">
+                            <h3 class="font-semibold text-gray-700 mb-3">🗼 星光塔探险</h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>� 跑酷挑战</span>
+                                </div>
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>� 机关谜题</span>
+                                </div>
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>� 收集心之碎片(7个)</span>
+                                </div>
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>✨ 心灵连接仪式</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 飞行奖励 -->
+                        <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 border-2 border-blue-200">
+                            <h4 class="text-sm font-semibold text-blue-800 mb-2">飞翔奖励</h4>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="reward-item">
+                                    <div class="text-xl">🚀</div>
+                                    <div class="text-xs">飞行能力</div>
+                                </div>
+                                <div class="reward-item">
+                                    <div class="text-xl">🐲</div>
+                                    <div class="text-xs">成年形态</div>
+                                </div>
+                                <div class="reward-item">
+                                    <div class="text-xl">🏆</div>
+                                    <div class="text-xs">征服者称号</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="task-button w-full" disabled>需要解锁</button>
+                    </div>
+                </div>
+
+                <!-- 主线任务3：龙之谷（解锁家园系统） -->
+                <div class="task-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">� 龙之谷</h2>
+                        <div class="flex items-center">
+                            <div class="status-indicator status-pending"></div>
+                            <span class="text-sm text-gray-600">待开启</span>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <!-- 解锁条件 -->
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <h3 class="font-semibold text-green-800 mb-2">🔒 解锁条件</h3>
+                            <p class="text-sm text-green-700">完成"飞翔的心"任务</p>
+                            <div class="flex items-center space-x-2 mt-2">
+                                <span class="text-xs">前置任务:</span>
+                                <div class="flex-1 bg-green-200 rounded-full h-2">
+                                    <div class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
+                                </div>
+                                <span class="text-xs">0%</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 家园模板预览 -->
+                        <div class="bg-gray-50 rounded-lg p-4 opacity-75">
+                            <h3 class="font-semibold text-gray-700 mb-3">🏞️ 家园模板选择</h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>🌅 晨曦花园</span>
+                                </div>
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>� 星夜森林</span>
+                                </div>
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>☁️ 云海峡谷</span>
+                                </div>
+                                <div class="flex items-center text-sm text-gray-500">
+                                    <span>🌱 种菜养成系统</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 家园奖励 -->
+                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border-2 border-green-200">
+                            <h4 class="text-sm font-semibold text-green-800 mb-2">🌟 家园奖励</h4>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="reward-item bg-gradient-to-r from-green-100 to-emerald-100">
+                                    <div class="text-xl">🏠</div>
+                                    <div class="text-xs">专属家园</div>
+                                </div>
+                                <div class="reward-item bg-gradient-to-r from-yellow-100 to-green-100">
+                                    <div class="text-xl">🎨</div>
+                                    <div class="text-xs">装饰功能</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="task-button w-full" disabled>暂未解锁</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部状态栏 -->
+        <footer class="flex items-center justify-between px-6 py-4 bg-white bg-opacity-20 backdrop-blur-sm text-white">
+            <div class="flex items-center space-x-6">
+                <div class="flex items-center space-x-2">
+                    <span class="text-yellow-300">⭐</span>
+                    <span class="text-sm">今日活跃度: 85%</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-green-300">🔥</span>
+                    <span class="text-sm">连续学习: 7天</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-sm transition-all">
+                    📊 成长报告
+                </button>
+                <button class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-sm transition-all">
+                    🎁 奖励商店
+                </button>
+                <button class="bg-yellow-400 hover:bg-yellow-500 text-gray-800 px-4 py-2 rounded-lg text-sm font-semibold transition-all">
+                    🏠 返回首页
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // 游戏逻辑
+        class DragonTaskManager {
+            constructor() {
+                this.initializeEvents();
+                this.updateProgress();
+            }
+            
+            initializeEvents() {
+                // 任务按钮点击事件
+                document.querySelectorAll('.task-button').forEach((button, index) => {
+                    button.addEventListener('click', () => this.handleTaskAction(index));
+                });
+                
+                // 底部按钮事件
+                document.querySelector('[data-action="report"]')?.addEventListener('click', () => this.showReport());
+                document.querySelector('[data-action="shop"]')?.addEventListener('click', () => this.showShop());
+                document.querySelector('[data-action="home"]')?.addEventListener('click', () => this.goHome());
+            }
+            
+            handleTaskAction(taskIndex) {
+                switch(taskIndex) {
+                    case 0: // 天赋觉醒（孵化龙蛋）
+                        this.startDragonEggHatching();
+                        break;
+                    case 1: // 飞翔的心
+                        if (this.checkCognitiveScore(60)) {
+                            this.startFlyingHeartQuest();
+                        } else {
+                            this.showUnlockMessage('需要认知能力达到60分才能解锁此任务！');
+                        }
+                        break;
+                    case 2: // 龙之谷
+                        this.showDragonValleyLocked();
+                        break;
+                }
+            }
+            
+            startDragonEggHatching() {
+                console.log('开始天赋觉醒任务');
+                alert('🥚 进入觉醒神殿，开始今日的能力测试！');
+                // 这里可以跳转到具体的测试页面
+            }
+            
+            startFlyingHeartQuest() {
+                console.log('开始飞翔的心任务');
+                alert('� 抱抱龙渴望飞翔！前往星光塔寻找飞翔的心！');
+            }
+            
+            checkCognitiveScore(requiredScore) {
+                // 模拟检查认知能力分数
+                const currentScore = 45; // 当前分数
+                return currentScore >= requiredScore;
+            }
+            
+            showUnlockMessage(message) {
+                alert(`🔒 ${message}`);
+            }
+            
+            showDragonValleyLocked() {
+                alert('� 龙之谷需要完成飞翔的心任务才能解锁！');
+            }
+            
+            updateProgress() {
+                // 更新进度显示
+                const progressRing = document.querySelector('.progress-bar');
+                const totalProgress = 30; // 总进度30%
+                const circumference = 2 * Math.PI * 36; // 圆周长
+                const offset = circumference * (1 - totalProgress / 100);
+                
+                if (progressRing) {
+                    progressRing.style.strokeDasharray = `${circumference * totalProgress / 100} ${circumference}`;
+                }
+            }
+            
+            showReport() {
+                alert('📊 打开成长报告页面');
+            }
+            
+            showShop() {
+                alert('🎁 打开奖励商店页面');
+            }
+            
+            goHome() {
+                // 返回首页
+                window.location.href = './maisi_index.html';
+            }
+        }
+        
+        // 初始化游戏管理器
+        document.addEventListener('DOMContentLoaded', () => {
+            new DragonTaskManager();
+        });
+        
+        // 横屏检测和优化
+        function checkOrientation() {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            if (!isLandscape && window.innerWidth <= 768) {
+                // 提示用户横屏
+                if (!document.querySelector('.orientation-tip')) {
+                    const tip = document.createElement('div');
+                    tip.className = 'orientation-tip fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 text-white text-center';
+                    tip.innerHTML = `
+                        <div class="p-8">
+                            <div class="text-6xl mb-4">📱</div>
+                            <h3 class="text-xl font-bold mb-2">请横屏体验</h3>
+                            <p class="text-sm opacity-90">为了更好的游戏体验，请将设备横屏使用</p>
+                        </div>
+                    `;
+                    document.body.appendChild(tip);
+                }
+            } else {
+                // 移除提示
+                const tip = document.querySelector('.orientation-tip');
+                if (tip) tip.remove();
+            }
+        }
+        
+        // 监听屏幕方向变化
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(checkOrientation, 100);
+        });
+        
+        // 初始检查
+        checkOrientation();
+    </script>
+</body>
+</html>
