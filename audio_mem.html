@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>音乐记忆大师</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        /* 全屏基础样式 */
+        * {
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            font-size: 16px; /* 设置根字体大小 */
+        }
+
+        /* 动画效果 */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes slideDown {
+            from { transform: translateY(0); opacity: 1; }
+            to { transform: translateY(100%); opacity: 0; }
+        }
+        
+        .playing {
+            animation: pulse 0.5s ease-in-out;
+            transform: scale(1.05);
+        }
+        
+        .correct {
+            animation: pulse 0.3s ease-in-out;
+            background-color: #10b981 !important;
+        }
+        
+        .wrong {
+            animation: pulse 0.3s ease-in-out;
+            background-color: #ef4444 !important;
+        }
+
+        /* 规则弹窗样式 */
+        .rules-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        .rules-modal.hide {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .rules-content {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            max-width: 768px;
+            border-radius: 16px;
+            padding: 36px;
+            background: white;
+            height: auto;
+            max-height: 25rem;
+            overflow-y: auto;
+            box-shadow: 0 1.25rem 2.5rem rgba(0, 0, 0, 0.3);
+        }
+
+        .rules-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 36px;
+            font-size: 36px;
+        }
+
+        .rules-list {
+            list-style-type: decimal;
+            margin-left: 36px;
+            font-weight: 500;
+            font-size: 27px;
+        }
+
+        .rules-list li {
+            margin-bottom: 18px;
+        }
+
+        .rules-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+            padding: 12px 36px;
+            border-radius: 16px;
+            font-weight: bold;
+            font-size: 24px;
+        }
+
+        /* 游戏主容器 */
+        .game-container {
+            width: 100%;
+            height: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* 音符网格 */
+        .sound-grid {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        /* 大神难度特殊布局 - 7个位置排成一行 */
+        .sound-grid.genius {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+        }
+        
+        .sound-grid.genius .sound-btn {
+            height: 6rem;
+            font-size: 2rem;
+        }
+        
+        /* 音符按钮 */
+        .sound-btn {
+            aspect-ratio: 1;
+            height: 7rem;
+            border: none;
+            border-radius: 1.2rem;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.3);
+            touch-action: manipulation;
+        }
+
+        .sound-btn:active {
+            transform: scale(0.95);
+        }
+
+        .sound-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* 大神难度音调背景色 - 彩虹色调 */
+        .tone-1 { 
+            background: linear-gradient(135deg, #ef4444, #dc2626) !important; 
+            border: 3px solid #fca5a5 !important;
+        } /* 红色 - Do */
+        .tone-2 { 
+            background: linear-gradient(135deg, #f97316, #ea580c) !important; 
+            border: 3px solid #fdba74 !important;
+        } /* 橙色 - Re */
+        .tone-3 { 
+            background: linear-gradient(135deg, #eab308, #ca8a04) !important; 
+            border: 3px solid #fde047 !important;
+        } /* 黄色 - Mi */
+        .tone-4 { 
+            background: linear-gradient(135deg, #22c55e, #16a34a) !important; 
+            border: 3px solid #86efac !important;
+        } /* 绿色 - Fa */
+        .tone-5 { 
+            background: linear-gradient(135deg, #3b82f6, #2563eb) !important; 
+            border: 3px solid #93c5fd !important;
+        } /* 蓝色 - Sol */
+        .tone-6 { 
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; 
+            border: 3px solid #c4b5fd !important;
+        } /* 紫色 - La */
+        .tone-7 { 
+            background: linear-gradient(135deg, #ec4899, #db2777) !important; 
+            border: 3px solid #f9a8d4 !important;
+        } /* 粉色 - Si */
+
+        /* 悬浮规则按钮 */
+        .rules-float-btn {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            box-shadow: 0 0.3rem 0.8rem rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            font-size: 1.8rem;
+            z-index: 100;
+            transition: all 0.2s ease;
+        }
+
+        .rules-float-btn:hover {
+            transform: scale(1.1);
+            background: white;
+        }
+        
+        /* 结果反馈样式 */
+        .feedback-item {
+            display: inline-flex;
+            align-items: center;
+            margin: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .feedback-correct {
+            background-color: #10b981;
+            color: white;
+        }
+        
+        .feedback-wrong {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        /* 主界面难度选择按钮样式 */
+        .main-difficulty-btn {
+            border: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .main-difficulty-btn.selected {
+            border-color: #fff;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .flex-1 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- 游戏规则弹窗 -->
+    <div id="rulesModal" class="rules-modal" style="display: none;">
+        <div class="rules-content">
+            <div class="rules-header">
+                <h2 class="font-bold text-purple-800">🎵 音乐记忆挑战</h2>
+                <button id="closeRules" class="text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+            <ol class="rules-list text-gray-700">
+                <li>记住不同乐器演奏的音调</li>
+                <li>按听到的音调顺序点击对应乐器</li>
+            </ol>
+            <button id="startTrainingBtn" class="rules-button bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg">
+                开始训练
+            </button>
+        </div>
+    </div>
+
+    <!-- 主游戏界面 -->
+    <div class="game-container">
+        <!-- 顶部状态栏 -->
+        <div class="flex-shrink-0 p-4">
+            <div class="flex justify-center gap-6 text-2xl">
+                <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg text-white">
+                    <span class="font-semibold">关卡:</span> <span id="level">-</span>
+                </div>
+                <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg text-white">
+                    <span class="font-semibold">得分:</span> <span id="score">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏区域 -->
+        <div class="flex-1 flex flex-col justify-center p-4">
+            <!-- 试听阶段界面 -->
+            <div id="previewSection" class="text-center mb-6" style="display: none;">
+                <h3 class="text-white text-4xl font-bold mb-4">试听不同音调</h3>
+                <p class="text-white text-2xl mb-6">点击乐器图标熟悉各音调，准备好后点击开始挑战</p>
+                <button id="startChallengeBtn" class="bg-gradient-to-r from-green-500 to-blue-500 text-white px-8 py-4 rounded-full text-3xl font-bold hover:from-green-600 hover:to-blue-600 transition-all transform hover:scale-105 shadow-lg">
+                    开始挑战
+                </button>
+            </div>
+            
+            <!-- 挑战阶段界面 -->
+            <div id="challengeSection" class="text-center mb-6" style="display: none;">
+                <h3 class="text-white text-4xl font-bold mb-4">第 <span id="currentRound">1</span> 关</h3>
+                <p id="challengeMessage" class="text-white text-2xl mb-4">准备听音调序列...</p>
+                <!-- 
+                <div class="text-2xl bg-white bg-opacity-20 px-4 py-2 rounded-lg text-white inline-block mb-4">
+                    <span class="font-semibold">本关音调数:</span> <span id="sequenceLength">0</span>
+                </div>
+                -->
+                
+                <!-- 用户输入显示和控制按钮 -->
+                <div id="inputSection" class="mt-6" style="display: none;">
+                    <div id="userSequenceDisplay" class="text-white text-3xl mb-4 min-h-[3rem] bg-white bg-opacity-20 p-4 rounded-lg">
+                        等待输入...
+                    </div>
+                    <div class="flex justify-center gap-4">
+                        <button id="resetAnswerBtn" class="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg text-xl font-bold transition-all transform hover:scale-105">
+                            重新输入
+                        </button>
+                        <button id="confirmAnswerBtn" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg text-xl font-bold transition-all transform hover:scale-105" disabled>
+                            确认答案
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 结算阶段界面 -->
+            <div id="resultSection" class="text-center mb-6" style="display: none;">
+                <!-- <h3 class="text-white text-2xl font-bold mb-4">关卡结算</h3> -->
+                <div id="resultDisplay" class="bg-white bg-opacity-20 p-6 rounded-lg text-white mb-4">
+                    <div id="answerFeedback" class="mb-4"></div>
+                    <div id="scoreInfo" class="text-2xl"></div>
+                </div>
+            </div>
+
+            <div class="sound-grid mb-6" id="soundGrid">
+                <button class="sound-btn bg-red-400 hover:bg-red-500" data-sound="0">🎹</button>
+                <button class="sound-btn bg-orange-400 hover:bg-orange-500" data-sound="1">🎸</button>
+                <button class="sound-btn bg-yellow-400 hover:bg-yellow-500" data-sound="2">🥁</button>
+                <button class="sound-btn bg-green-400 hover:bg-green-500" data-sound="3">🎺</button>
+                <button class="sound-btn bg-blue-400 hover:bg-blue-500" data-sound="4">🎻</button>
+                <button class="sound-btn bg-purple-400 hover:bg-purple-500" data-sound="5">🎷</button>
+                <button class="sound-btn bg-pink-400 hover:bg-pink-500" data-sound="6">🎼</button>
+            </div>
+
+            <!-- 难度选择界面 -->
+            <div id="difficultySection" class="text-center">
+                <h3 class="text-white text-4xl font-bold mb-6">选择游戏难度</h3>
+                <div class="grid grid-cols-2 gap-6 max-w-3xl mx-auto mb-8">
+                    <button class="main-difficulty-btn bg-green-400 hover:bg-green-500 text-white py-4 px-6 rounded-xl text-2xl font-bold transition-all transform hover:scale-105 shadow-lg" data-difficulty="easy">
+                        简单<br><span class="text-lg">3种音调</span>
+                    </button>
+                    <button class="main-difficulty-btn bg-orange-400 hover:bg-orange-500 text-white py-4 px-6 rounded-xl text-2xl font-bold transition-all transform hover:scale-105 shadow-lg" data-difficulty="medium">
+                        中等<br><span class="text-lg">4种音调</span>
+                    </button>
+                    <button class="main-difficulty-btn bg-red-400 hover:bg-red-500 text-white py-4 px-6 rounded-xl text-2xl font-bold transition-all transform hover:scale-105 shadow-lg" data-difficulty="hard">
+                        困难<br><span class="text-lg">6种音调</span>
+                    </button>
+                    <button class="main-difficulty-btn bg-purple-600 hover:bg-purple-700 text-white py-4 px-6 rounded-xl text-2xl font-bold transition-all transform hover:scale-105 shadow-lg" data-difficulty="genius">
+                        大神<br><span class="text-lg">7个位置+音调</span>
+                    </button>
+                </div>
+                <button id="startGameBtn" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-12 py-5 rounded-full text-4xl font-bold hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg" disabled>
+                    选择难度后开始
+                </button>
+            </div>
+
+            <!-- 消息和控制区域 -->
+            <div class="text-center mt-6">
+                <p id="message" class="text-white text-3xl font-semibold min-h-[32px]"></p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 悬浮规则按钮 -->
+    <button id="rulesFloatBtn" class="rules-float-btn" title="查看游戏规则">
+        ❓
+    </button>
+
+    <script>
+        // 全局变量和配置
+        let game_config = '';
+        let gameStarted = false;
+        
+        // 音频上下文
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // 音符频率（C大调音阶）
+        let frequencies = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88]; // C4 到 B4，7个音调
+        
+        // 难度配置
+        const difficultyConfig = {
+            easy: { instruments: 3, rounds: 5, name: '简单' },
+            medium: { instruments: 4, rounds: 7, name: '中等' },
+            hard: { instruments: 6, rounds: 10, name: '困难' },
+            genius: { instruments: 7, rounds: 12, name: '大神' }
+        };
+        
+        // 游戏状态
+        let gameState = {
+            difficulty: null,
+            currentRound: 1,
+            totalRounds: 0,
+            instrumentCount: 0,
+            currentSequence: [],
+            playerSequence: [],
+            totalScore: 0,
+            gamePhase: 'menu', // menu, preview, challenge, playing, answering, result, finished
+            roundScores: [],
+            // 大神难度专用配置
+            geniusMode: false,
+            currentInstruments: [], // 大神难度下每个位置的实际乐器
+            currentTones: [] // 大神难度下每个位置的音调(1-7)
+        };
+
+        // DOM 元素
+        const rulesModal = document.getElementById('rulesModal');
+        const closeRulesBtn = document.getElementById('closeRules');
+        const rulesFloatBtn = document.getElementById('rulesFloatBtn');
+        const startTrainingBtn = document.getElementById('startTrainingBtn');
+        const mainDifficultyBtns = document.querySelectorAll('.main-difficulty-btn');
+        const difficultySection = document.getElementById('difficultySection');
+        const previewSection = document.getElementById('previewSection');
+        const challengeSection = document.getElementById('challengeSection');
+        const resultSection = document.getElementById('resultSection');
+        const startChallengeBtn = document.getElementById('startChallengeBtn');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const soundBtns = document.querySelectorAll('.sound-btn');
+        
+        // 新增的DOM元素
+        const inputSection = document.getElementById('inputSection');
+        const userSequenceDisplay = document.getElementById('userSequenceDisplay');
+        const resetAnswerBtn = document.getElementById('resetAnswerBtn');
+        const confirmAnswerBtn = document.getElementById('confirmAnswerBtn');
+
+        // 主界面难度选择处理
+        mainDifficultyBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                mainDifficultyBtns.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                gameState.difficulty = btn.dataset.difficulty;
+                startGameBtn.disabled = false;
+                startGameBtn.textContent = `开始${difficultyConfig[gameState.difficulty].name}挑战`;
+            });
+        });
+
+        // 规则弹窗控制
+        function showRules() {
+            rulesModal.style.display = 'flex';
+        }
+
+        function hideRules() {
+            rulesModal.style.display = 'none';
+        }
+
+        function resetMainDifficultySelection() {
+            mainDifficultyBtns.forEach(b => b.classList.remove('selected'));
+            gameState.difficulty = null;
+            startGameBtn.disabled = true;
+            startGameBtn.textContent = '选择难度后开始';
+        }
+
+        // 从主界面开始游戏
+        function startGameFromMain() {
+            if (!gameState.difficulty) return;
+            
+            // 检查是否为大神难度
+            gameState.geniusMode = (gameState.difficulty === 'genius');
+            
+            // 大神难度特殊初始化
+            if (gameState.geniusMode) {
+                initGeniusMode();
+            }
+            
+            difficultySection.style.display = 'none';
+            initGame();
+        }
+
+        // 初始化大神难度
+        function initGeniusMode() {
+            // 为7个位置随机分配乐器（可能相同）
+            const availableInstruments = ['piano', 'guitar', 'drum', 'trumpet', 'violin', 'saxophone'];
+            gameState.currentInstruments = [];
+            gameState.currentTones = [];
+            
+            for (let i = 0; i < 7; i++) {
+                // 随机选择乐器（可能重复）
+                const randomInstrument = availableInstruments[Math.floor(Math.random() * availableInstruments.length)];
+                gameState.currentInstruments.push(randomInstrument);
+                
+                // 音调从1到7排列
+                gameState.currentTones.push(i + 1);
+            }
+            
+            console.log('大神难度初始化:', gameState.currentInstruments, gameState.currentTones);
+        }
+
+        // 播放音符
+        function playSound(index, duration = 600, showAnimation = true) {
+            // 在主界面时允许播放所有乐器，在游戏中时限制乐器数量
+            if (gameState.gamePhase !== 'menu' && index >= gameState.instrumentCount) return;
+            
+            // 大神难度下使用特殊逻辑
+            if (gameState.geniusMode && gameState.currentInstruments.length > 0) {
+                if (index < gameState.currentInstruments.length) {
+                    const instrument = gameState.currentInstruments[index];
+                    const tone = gameState.currentTones[index];
+                    const notes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4']; // 7个音调
+                    const note = notes[tone - 1]; // tone 是 1-7，数组索引是 0-6
+                    
+                    const volume = instrument === 'drum' ? 3.5 : 1;
+                    playInstrument(instrument, note, duration, volume, showAnimation, index);
+                }
+                return;
+            }
+            
+            // 普通难度的逻辑
+            const instruments = ['piano', 'guitar', 'drum', 'trumpet', 'violin', 'saxophone', 'organ'];
+            const notes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
+            
+            if (index < instruments.length) {
+                // 使用对应的乐器音色，鼓声需要更大音量
+                const volume = instruments[index] === 'drum' ? 3.5 : 1;
+                playInstrument(instruments[index], notes[index], duration, volume, showAnimation, index);
+            } else {
+                // 后备方案：使用原来的简单音调
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = frequencies[index];
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.8, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration / 1000);
+                
+                // 只在允许显示动画时才添加跳动效果
+                if (showAnimation) {
+                    const btn = document.querySelector(`[data-sound="${index}"]`);
+                    if (btn) {
+                        btn.classList.add('playing');
+                        setTimeout(() => btn.classList.remove('playing'), duration);
+                    }
+                }
+            }
+        }
+
+        // 乐器音色配置
+        const instrumentConfig = {
+            piano: {
+                type: 'triangle',
+                attack: 0.01,
+                decay: 0.3,
+                sustain: 0.3,
+                release: 0.8,
+                harmonics: [1, 0.5, 0.25, 0.125]
+            },
+            guitar: {
+                type: 'sawtooth',
+                attack: 0.02,
+                decay: 0.1,
+                sustain: 0.7,
+                release: 1.5,
+                harmonics: [1, 0.7, 0.4, 0.2, 0.1]
+            },
+            violin: {
+                type: 'sawtooth',
+                attack: 0.1,
+                decay: 0.2,
+                sustain: 0.8,
+                release: 0.5,
+                harmonics: [1, 0.8, 0.6, 0.4, 0.3, 0.2]
+            },
+            flute: {
+                type: 'sine',
+                attack: 0.05,
+                decay: 0.1,
+                sustain: 0.9,
+                release: 0.3,
+                harmonics: [1, 0.3, 0.1, 0.05]
+            },
+            trumpet: {
+                type: 'square',
+                attack: 0.05,
+                decay: 0.2,
+                sustain: 0.6,
+                release: 0.4,
+                harmonics: [1, 0.6, 0.4, 0.3, 0.2, 0.1]
+            },
+            saxophone: {
+                type: 'square',
+                attack: 0.08,
+                decay: 0.15,
+                sustain: 0.7,
+                release: 0.6,
+                harmonics: [1, 0.8, 0.5, 0.3, 0.2]
+            },
+            organ: {
+                type: 'square',
+                attack: 0.01,
+                decay: 0.05,
+                sustain: 0.9,
+                release: 0.2,
+                harmonics: [1, 0.8, 0.6, 0.4, 0.3, 0.2, 0.1]
+            },
+            bell: {
+                type: 'triangle',
+                attack: 0.01,
+                decay: 0.8,
+                sustain: 0.1,
+                release: 2.0,
+                harmonics: [1, 0.6, 0.4, 0.3, 0.2, 0.15, 0.1, 0.08]
+            },
+            drum: {
+                type: 'white_noise',
+                attack: 0.005,
+                decay: 0.05,
+                sustain: 0.2,
+                release: 0.5,
+                filter: { type: 'lowpass', frequency: 500 }
+            },
+            bass: {
+                type: 'triangle',
+                attack: 0.02,
+                decay: 0.1,
+                sustain: 0.8,
+                release: 0.5,
+                harmonics: [1, 0.8, 0.3, 0.1]
+            }
+        };
+
+        // 音符频率表 (C4-B7)
+        const noteFrequencies = {
+            'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63, 'F4': 349.23,
+            'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88,
+            'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.25, 'F5': 698.46,
+            'F#5': 739.99, 'G5': 783.99, 'G#5': 830.61, 'A5': 880.00, 'A#5': 932.33, 'B5': 987.77,
+            'C6': 1046.50, 'C#6': 1108.73, 'D6': 1174.66, 'D#6': 1244.51, 'E6': 1318.51, 'F6': 1396.91,
+            'F#6': 1479.98, 'G6': 1567.98, 'G#6': 1661.22, 'A6': 1760.00, 'A#6': 1864.66, 'B6': 1975.53,
+            'C7': 2093.00, 'C#7': 2217.46, 'D7': 2349.32, 'D#7': 2489.02, 'E7': 2637.02, 'F7': 2793.83,
+            'F#7': 2959.96, 'G7': 3135.96, 'G#7': 3322.44, 'A7': 3520.00, 'A#7': 3729.31, 'B7': 3951.07
+        };
+
+        // 播放乐器音色
+        function playInstrument(instrument, note, duration = 600, volume = 1, showAnimation = true, buttonIndex = null) {
+            if (!instrumentConfig[instrument]) {
+                console.warn(`乐器 "${instrument}" 不存在，使用默认钢琴音色`);
+                instrument = 'piano';
+            }
+
+            const frequency = typeof note === 'string' ? noteFrequencies[note] : note;
+            if (!frequency) {
+                console.warn(`音符 "${note}" 不存在`);
+                return;
+            }
+
+            const config = instrumentConfig[instrument];
+            const durationInSeconds = duration / 1000;
+
+            // 创建音频节点
+            const gainNode = audioContext.createGain();
+            gainNode.connect(audioContext.destination);
+
+            if (config.type === 'white_noise') {
+                // 创建白噪声用于打击乐器
+                playWhiteNoise(gainNode, config, durationInSeconds, volume);
+            } else {
+                // 创建主振荡器
+                const oscillator = audioContext.createOscillator();
+                oscillator.connect(gainNode);
+                oscillator.frequency.value = frequency;
+                oscillator.type = config.type;
+
+                // 如果有泛音，添加额外的振荡器
+                if (config.harmonics && config.harmonics.length > 1) {
+                    for (let i = 1; i < config.harmonics.length; i++) {
+                        const harmonic = audioContext.createOscillator();
+                        const harmonicGain = audioContext.createGain();
+                        
+                        harmonic.connect(harmonicGain);
+                        harmonicGain.connect(gainNode);
+                        
+                        harmonic.frequency.value = frequency * (i + 1);
+                        harmonic.type = config.type;
+                        
+                        harmonicGain.gain.setValueAtTime(
+                            volume * config.harmonics[i], 
+                            audioContext.currentTime
+                        );
+                        
+                        harmonic.start(audioContext.currentTime);
+                        harmonic.stop(audioContext.currentTime + durationInSeconds);
+                    }
+                }
+
+                // 设置包络线 (ADSR)
+                setADSREnvelope(gainNode, config, durationInSeconds, volume);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + durationInSeconds);
+            }
+
+            // 动画效果
+            if (showAnimation) {
+                if (gameState.geniusMode && gameState.currentInstruments.length > 0) {
+                    // 使用传入的按钮索引，确保动画显示在正确的按钮上
+                    if (buttonIndex !== null && buttonIndex >= 0) {
+                        const btn = document.querySelector(`[data-sound="${buttonIndex}"]`);
+                        if (btn) {
+                            btn.classList.add('playing');
+                            setTimeout(() => btn.classList.remove('playing'), duration);
+                        }
+                    }
+                } else {
+                    // 普通难度：找到对应的按钮索引
+                    const instruments = ['piano', 'guitar', 'drum', 'trumpet', 'violin', 'saxophone', 'organ'];
+                    const instrumentIndex = instruments.indexOf(instrument);
+                    if (instrumentIndex !== -1) {
+                        const btn = document.querySelector(`[data-sound="${instrumentIndex}"]`);
+                        if (btn) {
+                            btn.classList.add('playing');
+                            setTimeout(() => btn.classList.remove('playing'), duration);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 设置ADSR包络线
+        function setADSREnvelope(gainNode, config, duration, volume) {
+            const currentTime = audioContext.currentTime;
+            const attackTime = config.attack || 0.01;
+            const decayTime = config.decay || 0.1;
+            const sustainLevel = (config.sustain || 0.7) * volume;
+            const releaseTime = config.release || 0.5;
+
+            // Attack
+            gainNode.gain.setValueAtTime(0, currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, currentTime + attackTime);
+
+            // Decay
+            gainNode.gain.linearRampToValueAtTime(sustainLevel, currentTime + attackTime + decayTime);
+
+            // Sustain (持续到释放开始)
+            const sustainDuration = Math.max(0, duration - attackTime - decayTime - releaseTime);
+            
+            // Release
+            const releaseStartTime = currentTime + attackTime + decayTime + sustainDuration;
+            gainNode.gain.setValueAtTime(sustainLevel, releaseStartTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, releaseStartTime + releaseTime);
+        }
+
+        // 播放白噪声（用于打击乐器）
+        function playWhiteNoise(gainNode, config, duration, volume) {
+            const bufferSize = audioContext.sampleRate * duration;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // 生成白噪声
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * volume;
+            }
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+
+            // 添加滤波器
+            if (config.filter) {
+                const filter = audioContext.createBiquadFilter();
+                filter.type = config.filter.type;
+                filter.frequency.value = config.filter.frequency;
+                source.connect(filter);
+                filter.connect(gainNode);
+            } else {
+                source.connect(gainNode);
+            }
+
+            // 设置包络线
+            setADSREnvelope(gainNode, config, duration, volume);
+
+            source.start(audioContext.currentTime);
+        }
+
+        // 播放和弦
+        function playChord(instrument, notes, duration = 600, volume = 1) {
+            notes.forEach((note, index) => {
+                setTimeout(() => {
+                    playInstrument(instrument, note, duration, volume, false);
+                }, index * 10); // 轻微延迟创造和弦效果
+            });
+        }
+
+
+        // 初始化游戏
+        function initGame() {
+            if (!gameStarted) {
+                window.parent.postMessage({ type: 'gameStarted' }, '*');
+                gameStarted = true;
+            }
+
+            const config = difficultyConfig[gameState.difficulty];
+            gameState.currentRound = 1;
+            gameState.totalRounds = config.rounds;
+            gameState.instrumentCount = config.instruments;
+            gameState.totalScore = 0;
+            gameState.roundScores = [];
+            gameState.gamePhase = 'preview';
+
+            updateDisplay();
+            showPreviewPhase();
+        }
+
+        // 显示试听阶段
+        function showPreviewPhase() {
+            hideAllSections();
+            previewSection.style.display = 'block';
+            
+            // 更新音符网格布局
+            updateSoundGridLayout();
+            
+            // 隐藏超出难度的乐器
+            soundBtns.forEach((btn, index) => {
+                if (index < gameState.instrumentCount) {
+                    btn.style.display = 'block';
+                    btn.disabled = false;
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
+
+            // 更新消息文本
+            if (gameState.geniusMode) {
+                updateMessage(`${difficultyConfig[gameState.difficulty].name}难度 - 试听7个位置的不同乐器和音调组合`);
+            } else {
+                updateMessage(`${difficultyConfig[gameState.difficulty].name}难度 - 试听${gameState.instrumentCount}种不同音调`);
+            }
+        }
+
+        // 更新音符网格布局
+        function updateSoundGridLayout() {
+            const soundGrid = document.getElementById('soundGrid');
+            soundGrid.className = `sound-grid ${gameState.difficulty}`;
+            
+            // 大神难度下更新按钮外观
+            if (gameState.geniusMode && gameState.currentInstruments.length > 0) {
+                updateGeniusButtons();
+            }
+        }
+
+        // 更新大神难度下的按钮外观
+        function updateGeniusButtons() {
+            const soundBtns = document.querySelectorAll('.sound-btn');
+            const instrumentEmojis = {
+                'piano': '🎹',
+                'guitar': '🎸', 
+                'drum': '🥁',
+                'trumpet': '🎺',
+                'violin': '🎻',
+                'saxophone': '🎷',
+                'organ': '🎼'
+            };
+            
+            soundBtns.forEach((btn, index) => {
+                if (index < gameState.currentInstruments.length) {
+                    // 移除所有音调类
+                    btn.classList.remove('tone-1', 'tone-2', 'tone-3', 'tone-4', 'tone-5', 'tone-6', 'tone-7');
+                    
+                    // 添加当前音调类
+                    const tone = gameState.currentTones[index];
+                    btn.classList.add(`tone-${tone}`);
+                    
+                    // 更新乐器图标
+                    const instrument = gameState.currentInstruments[index];
+                    btn.textContent = instrumentEmojis[instrument] || '🎼';
+                    
+                    btn.style.display = 'block';
+                    btn.disabled = false;
+                } else {
+                    btn.style.display = 'none';
+                    btn.disabled = true;
+                }
+            });
+        }
+
+        // 开始挑战
+        function startChallenge() {
+            gameState.gamePhase = 'challenge';
+            startNewRound();
+        }
+
+        // 开始新一轮
+        function startNewRound() {
+            hideAllSections();
+            challengeSection.style.display = 'block';
+            
+            // 更新音符网格布局
+            updateSoundGridLayout();
+            
+            // 生成当前轮次的音色序列（长度递增）
+            const sequenceLength = Math.min(gameState.currentRound + 1, 8); // 最多8个音符
+            gameState.currentSequence = [];
+            for (let i = 0; i < sequenceLength; i++) {
+                gameState.currentSequence.push(Math.floor(Math.random() * gameState.instrumentCount));
+            }
+            
+            gameState.playerSequence = [];
+            
+            document.getElementById('currentRound').textContent = gameState.currentRound;
+            // document.getElementById('sequenceLength').textContent = sequenceLength;
+            
+            // 隐藏输入区域并禁用所有按钮
+            inputSection.style.display = 'none';
+            disableAllButtons();
+            
+            // 播放序列
+            playSequence();
+        }
+
+        // 播放音色序列
+        async function playSequence() {
+            document.getElementById('challengeMessage').textContent = '仔细听音色序列... 🎧';
+            inputSection.style.display = 'none'; // 隐藏输入区域
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            for (let i = 0; i < gameState.currentSequence.length; i++) {
+                playSound(gameState.currentSequence[i], 800, false); // 挑战阶段不显示跳动动画
+                await new Promise(resolve => setTimeout(resolve, 800));
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 启用按钮，允许用户作答
+            enableAnswerButtons();
+            document.getElementById('challengeMessage').textContent = '请按顺序点击对应的乐器 🎵';
+            gameState.gamePhase = 'answering';
+            
+            // 显示输入区域和初始化显示
+            inputSection.style.display = 'block';
+            updateUserSequenceDisplay();
+            updateConfirmButton();
+        }
+
+        // 处理用户点击
+        function handlePlayerInput(soundIndex) {
+            if (gameState.gamePhase !== 'answering') return;
+            if (soundIndex >= gameState.instrumentCount) return;
+            
+            playSound(soundIndex, 600, true); // 用户点击时显示跳动动画
+            gameState.playerSequence.push(soundIndex);
+            
+            // 更新显示
+            updateUserSequenceDisplay();
+            updateConfirmButton();
+        }
+        
+        // 更新用户序列显示
+        function updateUserSequenceDisplay() {
+            if (gameState.playerSequence.length === 0) {
+                userSequenceDisplay.innerHTML = '等待输入...';
+            } else {
+                let displaySequence;
+                if (gameState.geniusMode && gameState.currentInstruments.length > 0) {
+                    // 大神难度：显示实际的乐器图标
+                    const instrumentEmojis = {
+                        'piano': '🎹',
+                        'guitar': '🎸', 
+                        'drum': '🥁',
+                        'trumpet': '🎺',
+                        'violin': '🎻',
+                        'saxophone': '🎷',
+                        'organ': '🎼'
+                    };
+                    displaySequence = gameState.playerSequence.map(index => {
+                        const instrument = gameState.currentInstruments[index];
+                        return instrumentEmojis[instrument] || '🎼';
+                    }).join(' ');
+                } else {
+                    // 普通难度：使用固定的乐器图标
+                    const instruments = ['🎹', '🎸', '🥁', '🎺', '🎻', '🎷', '🎼'];
+                    displaySequence = gameState.playerSequence.map(index => instruments[index]).join(' ');
+                }
+                userSequenceDisplay.innerHTML = displaySequence;
+            }
+        }
+        
+        // 更新确认按钮状态
+        function updateConfirmButton() {
+            const hasInput = gameState.playerSequence.length > 0;
+            const isComplete = gameState.playerSequence.length === gameState.currentSequence.length;
+            
+            confirmAnswerBtn.disabled = !hasInput;
+            
+            if (isComplete) {
+                confirmAnswerBtn.textContent = '确认答案';
+                confirmAnswerBtn.className = 'bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg text-xl font-bold transition-all transform hover:scale-105';
+            } else {
+                confirmAnswerBtn.textContent = `确认答案 (${gameState.playerSequence.length}/${gameState.currentSequence.length})`;
+                confirmAnswerBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg text-xl font-bold transition-all transform hover:scale-105';
+            }
+        }
+        
+        // 重置用户答案
+        function resetPlayerAnswer() {
+            gameState.playerSequence = [];
+            updateUserSequenceDisplay();
+            updateConfirmButton();
+        }
+        
+        // 确认用户答案
+        function confirmPlayerAnswer() {
+            if (gameState.playerSequence.length === 0) return;
+            
+            disableAllButtons();
+            inputSection.style.display = 'none';
+            setTimeout(() => showRoundResult(), 500);
+        }
+
+        // 显示本轮结果
+        async function showRoundResult() {
+            hideAllSections();
+            resultSection.style.display = 'block';
+            gameState.gamePhase = 'result';
+            
+            // 更新音符网格布局
+            updateSoundGridLayout();
+            
+            // 计算正确数量
+            let correctCount = 0;
+            const feedback = [];
+            
+            for (let i = 0; i < gameState.currentSequence.length; i++) {
+                const isCorrect = gameState.playerSequence[i] === gameState.currentSequence[i];
+                if (isCorrect) correctCount++;
+                feedback.push({
+                    index: i,
+                    correct: isCorrect,
+                    expected: gameState.currentSequence[i],
+                    actual: gameState.playerSequence[i]
+                });
+            }
+            
+            // 显示反馈
+            await showDetailedFeedback(feedback);
+            
+            // 计算本轮得分
+            const maxRoundScore = 100 / gameState.totalRounds;
+            const roundScore = (correctCount / gameState.currentSequence.length) * maxRoundScore;
+            gameState.roundScores.push(roundScore);
+            gameState.totalScore += roundScore;
+            
+            // 显示得分信息
+            document.getElementById('scoreInfo').innerHTML = `
+                <div class="mb-2">正确: ${correctCount}/${gameState.currentSequence.length}</div>
+                <div class="mb-2">本关得分: ${roundScore.toFixed(1)}</div>
+                <div class="text-3xl font-bold">总分: ${gameState.totalScore.toFixed(1)}</div>
+            `;
+            
+            updateDisplay();
+            
+            // 等待2秒后自动执行下一步
+            setTimeout(() => {
+                if (gameState.currentRound >= gameState.totalRounds) {
+                    finishGame();
+                } else {
+                    gameState.currentRound++;
+                    startNewRound();
+                }
+            }, 2000);
+        }
+
+        // 显示详细反馈
+        async function showDetailedFeedback(feedback) {
+            const feedbackContainer = document.getElementById('answerFeedback');
+            feedbackContainer.innerHTML = '<div class="text-2xl font-bold mb-3">正在重放音色序列...</div>';
+            
+            // 重新播放序列并显示反馈
+            for (let i = 0; i < feedback.length; i++) {
+                const item = feedback[i];
+                playSound(item.expected, 800, false); // 结算阶段重放时不显示跳动动画
+                
+                // 添加反馈图标（删除数字序号）
+                const feedbackElement = document.createElement('div');
+                feedbackElement.className = `feedback-item ${item.correct ? 'feedback-correct' : 'feedback-wrong'}`;
+                feedbackElement.innerHTML = `${item.correct ? '✓' : '✗'}`;
+                feedbackContainer.appendChild(feedbackElement);
+                
+                await new Promise(resolve => setTimeout(resolve, 800));
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // 完成游戏
+        function finishGame() {
+            gameState.gamePhase = 'finished';
+            
+            // 发送游戏完成消息
+            const difficulty = gameState.difficulty === 'easy' ? 1 : (gameState.difficulty === 'medium' ? 2 : 3);
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: Math.round(gameState.totalScore),
+                    level: gameState.currentRound,
+                    difficulty: difficulty,
+                    completed: true
+                }
+            }, '*');
+            
+            updateMessage(`🎉 ${difficultyConfig[gameState.difficulty].name}难度挑战完成！最终得分：${gameState.totalScore.toFixed(1)} 分`);
+            
+            // 重新显示难度选择界面
+            hideAllSections();
+            difficultySection.style.display = 'block';
+            
+            // 重置游戏状态
+            gameState.gamePhase = 'menu';
+            
+            // 重置难度选择状态
+            resetMainDifficultySelection();
+            // 重新初始化主界面
+            initMainInterface();
+            updateDisplay();
+        }
+
+        // 辅助函数
+        function hideAllSections() {
+            difficultySection.style.display = 'none';
+            previewSection.style.display = 'none';
+            challengeSection.style.display = 'none';
+            resultSection.style.display = 'none';
+        }
+
+        function disableAllButtons() {
+            soundBtns.forEach(btn => btn.disabled = true);
+            resetAnswerBtn.disabled = true;
+            confirmAnswerBtn.disabled = true;
+        }
+
+        function enableAnswerButtons() {
+            soundBtns.forEach((btn, index) => {
+                if (index < gameState.instrumentCount) {
+                    btn.disabled = false;
+                }
+            });
+            resetAnswerBtn.disabled = false;
+            // confirmAnswerBtn 的状态由 updateConfirmButton() 控制
+        }
+
+        function updateDisplay() {
+            if (gameState.gamePhase === 'menu' || gameState.gamePhase === 'finished') {
+                document.getElementById('level').textContent = '-';
+                document.getElementById('score').textContent = '0';
+            } else {
+                document.getElementById('level').textContent = `${gameState.currentRound} / ${gameState.totalRounds}`;
+                document.getElementById('score').textContent = Math.round(gameState.totalScore);
+            }
+        }
+
+        function updateMessage(text) {
+            document.getElementById('message').textContent = text;
+        }
+
+        // 事件监听器
+        closeRulesBtn.addEventListener('click', hideRules);
+        rulesFloatBtn.addEventListener('click', showRules);
+        startTrainingBtn.addEventListener('click', hideRules);
+        startChallengeBtn.addEventListener('click', startChallenge);
+        startGameBtn.addEventListener('click', startGameFromMain);
+        
+        // 新增按钮事件监听
+        resetAnswerBtn.addEventListener('click', resetPlayerAnswer);
+        confirmAnswerBtn.addEventListener('click', confirmPlayerAnswer);
+
+        // 为乐器按钮添加事件监听
+        soundBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const soundIndex = parseInt(btn.getAttribute('data-sound'));
+                
+                if (gameState.gamePhase === 'menu') {
+                    // 主界面阶段，允许试听所有乐器音色
+                    playSound(soundIndex, 600, true);
+                } else if (gameState.gamePhase === 'preview') {
+                    // 试听阶段，直接播放音色（显示跳动动画）
+                    playSound(soundIndex, 600, true);
+                } else if (gameState.gamePhase === 'answering') {
+                    // 作答阶段，记录用户选择（显示跳动动画）
+                    handlePlayerInput(soundIndex);
+                }
+            });
+        });
+
+        // 消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data;
+                    updateGameConfig(game_config);
+                    break;
+                case 'getGameStats':
+                    const difficulty = gameState.difficulty === 'easy' ? 1 : (gameState.difficulty === 'medium' ? 2 : 3);
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: Math.round(gameState.totalScore),
+                            difficulty: difficulty || 1
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        // 更新游戏配置
+        function updateGameConfig(config) {
+            try {
+                if (typeof config === 'string' && config.trim()) {
+                    const newConfig = parseGameConfig(config);
+                    if (newConfig.frequencies && newConfig.frequencies.length > 0) {
+                        frequencies = newConfig.frequencies;
+                        console.log(`配置已更新，加载了 ${frequencies.length} 个音符频率`);
+                    }
+                }
+            } catch (error) {
+                console.warn('解析游戏配置失败，保持原配置:', error);
+            }
+        }
+
+        // 解析游戏配置
+        function parseGameConfig(config) {
+            const result = { frequencies: [] };
+            
+            try {
+                const jsonData = JSON.parse(config);
+                if (jsonData.frequencies && Array.isArray(jsonData.frequencies)) {
+                    result.frequencies = jsonData.frequencies.filter(f => typeof f === 'number' && f > 0);
+                } else if (Array.isArray(jsonData)) {
+                    result.frequencies = jsonData.filter(f => typeof f === 'number' && f > 0);
+                }
+            } catch (e) {
+                const lines = config.trim().split('\n');
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    const numbers = line.split(/[,\s]+/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+                    result.frequencies.push(...numbers);
+                }
+            }
+            
+            return result;
+        }
+
+        // 触摸事件优化
+        function addTouchSupport() {
+            soundBtns.forEach(btn => {
+                btn.addEventListener('mousedown', () => {
+                    btn.style.transform = 'scale(0.95)';
+                });
+                
+                btn.addEventListener('mouseup', () => {
+                    btn.style.transform = '';
+                });
+                
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.transform = '';
+                });
+            });
+        }
+
+        // 初始化主界面
+        function initMainInterface() {
+            // 确保所有乐器按钮在主界面都可见和可点击
+            soundBtns.forEach((btn, index) => {
+                btn.style.display = 'block';
+                btn.disabled = false;
+            });
+        }
+
+        // 初始化
+        updateDisplay();
+        addTouchSupport();
+        initMainInterface(); // 初始化主界面
+        showRules();
+        
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+        // 初始显示难度选择界面，不再自动显示规则弹窗
+    </script>
+</body>
+</html>
+
