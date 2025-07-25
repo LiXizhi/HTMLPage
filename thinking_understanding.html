@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>谁想吃什么 - 言语理解测试</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        /* 全屏设置 */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* 游戏容器全屏 */
+        .game-container {
+            min-height: 100vh;
+            min-height: 100dvh; /* 动态视口高度 */
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .option {
+            transition: all 0.3s ease;
+            min-height: 48px; /* 移动端友好的最小触控区域 */
+            touch-action: manipulation;
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .progress {
+            transition: width 0.3s ease;
+        }
+        
+        /* 选项状态样式 */
+        .option.selected {
+            background-color: #2563eb;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transform: scale(1.02);
+        }
+        
+        .option.correct {
+            background-color: #16a34a;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .option.incorrect {
+            background-color: #dc2626;
+            color: white;
+            font-weight: bold;
+        }
+        
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .game-container {
+                padding: 0.5rem;
+            }
+            
+            .game-content {
+                padding: 1rem !important;
+            }
+            
+            .option {
+                min-height: 52px;
+                font-size: 0.9rem;
+            }
+            
+            h1 {
+                font-size: 1.5rem !important;
+            }
+            
+            .text-xl {
+                font-size: 1.125rem !important;
+            }
+        }
+        
+        /* 横屏移动端适配 */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .game-container {
+                padding: 0.25rem;
+            }
+            
+            .game-content {
+                padding: 0.75rem !important;
+            }
+            
+            h1 {
+                font-size: 1.25rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+            
+            .stats-row {
+                flex-direction: row !important;
+                justify-content: space-between !important;
+                margin-bottom: 0.5rem !important;
+            }
+            
+            .question-area {
+                padding: 0.75rem !important;
+                margin-bottom: 0.75rem !important;
+            }
+            
+            .options-grid {
+                margin-bottom: 0.75rem !important;
+            }
+        }
+        
+        /* 规则弹窗样式 */
+        .rules-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        
+        .rules-content {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            position: relative;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        /* 规则按钮 */
+        .rules-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+        
+        .rules-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.5);
+        }
+        
+        /* 隐藏类 */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* 触控反馈 */
+        .option:active {
+            transform: scale(0.98);
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        /* 小屏幕优化 */
+        @media (max-height: 600px) {
+            .game-content {
+                padding: 0.5rem !important;
+            }
+            
+            .question-area {
+                padding: 0.5rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+            
+            .options-grid {
+                gap: 0.5rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+            
+            .stats-row > div {
+                font-size: 1rem !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-400 via-purple-500 to-pink-400">
+    <!-- 规则弹窗 -->
+    <div id="rules-modal" class="rules-modal">
+        <div class="rules-content">
+            <div class="text-center mb-4">
+                <h2 class="text-2xl font-bold text-purple-600 mb-2">谁想吃什么？</h2>
+            </div>
+            <div class="space-y-4 text-gray-700">
+                <div>
+                    <h3 class="font-bold text-lg mb-2">🎯 目标</h3>
+                    <p>根据题目描述，选择最适合的选项，测试你的言语理解能力！</p>
+                </div>
+            </div>
+            <div class="text-center mt-6">
+                <button id="start-game-btn" class="bg-green-500 text-white px-8 py-3 rounded-lg text-2xl font-bold hover:bg-green-600 transition-colors">
+                    开始训练
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规则按钮 -->
+    <button id="rules-btn" class="rules-btn hidden" title="查看游戏规则">
+        ❓
+    </button>
+
+    <div class="game-container">
+        <div class="container mx-auto p-2 max-w-4xl flex-1 flex flex-col">
+            <!-- 游戏主界面 -->
+            <div class="game-content bg-white rounded-lg shadow-2xl p-4 md:p-6 mb-4 flex-1 flex flex-col">
+                <!-- 得分和进度显示 -->
+                <div class="stats-row flex flex-col md:flex-row justify-evenly items-center mb-4">
+                    <div class="text-lg md:text-2xl font-bold text-blue-600 mb-2 md:mb-0">
+                        得分: <span id="score">0</span>/<span id="total-questions">0</span>
+                    </div>
+                    <div class="text-lg md:text-2xl font-bold text-purple-600 mb-2 md:mb-0 hidden">
+                        最高分: <span id="best-score">0</span>/<span id="best-total">0</span>
+                    </div>
+                    <div class="text-lg md:text-2xl font-bold text-green-600">
+                        进度: <span id="progress-text">0</span>%
+                    </div>
+                </div>
+                
+                <!-- 进度条 -->
+                <div class="w-full bg-gray-200 rounded-full h-3 md:h-4 mb-4">
+                    <div id="progress" class="progress h-3 md:h-4 rounded-full bg-blue-500" style="width: 0%"></div>
+                </div>
+
+                <!-- 问题显示区 -->
+                <div class="question-area bg-gray-50 rounded-lg p-3 md:p-6 mb-4 flex-1">
+                    <div id="question" class="text-lg md:text-xl font-medium text-gray-800 fade-in"></div>
+                </div>
+
+                <!-- 选项区 -->
+                <div class="options-grid grid grid-cols-1 gap-3 mb-4">
+                    <div id="options" class="space-y-3"></div>
+                </div>
+
+                <!-- 反馈信息 -->
+                <div id="feedback" class="feedback hidden p-3 md:p-4 rounded-lg mb-4"></div>
+
+                <!-- 控制按钮 -->
+                <div class="buttons-row flex justify-center gap-4 mt-auto">
+                    <button id="next-btn" disabled class="bg-blue-500 text-white px-6 md:px-8 py-3 rounded-lg text-lg md:text-xl font-bold hover:bg-blue-600 transition-colors disabled:bg-blue-300 min-h-[48px]">
+                        提交
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 结果区域 -->
+        <div id="result-container" class="hidden container mx-auto p-2 max-w-4xl">
+            <div class="bg-white rounded-lg shadow-2xl p-4 md:p-6 text-center">
+                <h2 class="text-2xl md:text-3xl font-bold text-purple-600 mb-4">测试完成!</h2>
+                <p class="text-lg md:text-xl mb-2">
+                    你的最终得分是: <span id="final-score" class="font-bold">0</span>/<span id="final-total" class="font-bold">0</span>
+                </p>
+                <p class="text-lg md:text-xl mb-4">
+                    最高分: <span id="final-best-score" class="font-bold">0</span>/<span id="final-best-total" class="font-bold">0</span>
+                </p>
+                <p id="result-message" class="text-base md:text-lg mb-6"></p>
+                <button id="restart-btn" class="bg-green-500 text-white px-6 md:px-8 py-3 rounded-lg text-lg md:text-xl font-bold hover:bg-green-600 transition-colors min-h-[48px]">
+                    重新开始
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 默认游戏数据
+        let defaultQuestions = [
+            {
+                question: "小明不喜欢吃甜食，但今天他想尝试一种新的早餐选择。下列哪种食物最适合他？",
+                options: ["蜂蜜蛋糕", "全麦面包配牛油果", "巧克力甜甜圈", "水果酸奶"],
+                answer: 1,
+                explanation: "全麦面包配牛油果不含大量糖分，是不甜的健康选择，适合不喜欢甜食的人。"
+            },
+            {
+                question: "张阿姨正在控制钠的摄入量，她想做一道适合自己吃的菜。下列哪种最合适？",
+                options: ["腌制的咸鱼", "清蒸新鲜鲈鱼", "酱油炒饭", "泡菜汤"],
+                answer: 1,
+                explanation: "清蒸新鲜鲈鱼不需要额外加盐，使用新鲜食材本身的鲜味，是最低钠的选择。"
+            },
+            {
+                question: "小李是素食主义者，他想点一份外卖。下列哪种食物他可以吃？",
+                options: ["牛肉汉堡", "蔬菜沙拉配鸡蛋", "纯素蔬菜卷", "芝士披萨"],
+                answer: 2,
+                explanation: "纯素蔬菜卷不含任何动物制品，是严格的素食选择。"
+            },
+            {
+                question: "王奶奶牙口不好，想吃些软的食物。下列哪种最适合她？",
+                options: ["坚果杂粮", "蒸蛋羹", "脆皮烧肉", "生胡萝卜条"],
+                answer: 1,
+                explanation: "蒸蛋羹质地柔软，不需要咀嚼，非常适合牙口不好的老年人。"
+            },
+            {
+                question: "小美正在减肥，她想选一份低热量的午餐。下列哪种最合适？",
+                options: ["炸鸡套餐", "蔬菜沙拉配橄榄油", "奶油意面", "芝士汉堡配薯条"],
+                answer: 1,
+                explanation: "蔬菜沙拉配少量橄榄油是低热量且营养均衡的选择，适合减肥期间食用。"
+            },
+            {
+                question: "陈先生对海鲜过敏，他想吃一顿安全的晚餐。下列哪种他应该避免？",
+                options: ["烤牛排", "清炒时蔬", "清蒸大闸蟹", "番茄鸡蛋汤"],
+                answer: 2,
+                explanation: "清蒸大闸蟹是海鲜，海鲜过敏者应避免食用。"
+            },
+            {
+                question: "林小姐是乳糖不耐受者，她想喝一杯热饮。下列哪种最适合她？",
+                options: ["全脂牛奶", "豆奶", "奶油咖啡", "奶酪奶茶"],
+                answer: 1,
+                explanation: "豆奶不含乳糖，是乳糖不耐受者的良好替代品。"
+            },
+            {
+                question: "老张有糖尿病，需要控制血糖。下列哪种零食他应该避免？",
+                options: ["无糖酸奶", "一小把坚果", "高纤维饼干", "蜂蜜蛋糕"],
+                answer: 3,
+                explanation: "蜂蜜蛋糕含糖量高，会迅速升高血糖，不适合糖尿病患者。"
+            }
+        ];
+
+        // 游戏数据 - 可以被配置覆盖
+        let questions = [...defaultQuestions];
+        let selectedQuestions = []; // 存储随机选择的题目
+
+        // 游戏状态
+        let currentQuestion = 0;
+        let score = 0;
+        let selectedOption = null;
+        let answered = false;
+        let bestScore = 0; // 最高分
+        let difficulty = 2; // 难度等级 1-3，默认为2
+        let game_config = null; // 游戏配置
+        let questionCount = 5; // 题目数量
+
+        // 添加随机数组打乱函数
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // 随机选择题目
+        function selectRandomQuestions(questionPool, minCount = 8) {
+            const availableQuestions = [...questionPool];
+            const targetCount = Math.max(minCount, Math.min(questionPool.length, minCount));
+            
+            // 首先打乱所有题目的顺序
+            const shuffledQuestions = shuffleArray(availableQuestions);
+            
+            // 如果题目数量少于或等于目标数量，返回所有题目（已打乱）
+            if (shuffledQuestions.length <= targetCount) {
+                return shuffledQuestions;
+            }
+            
+            // 从打乱后的题目中选择指定数量
+            return shuffledQuestions.slice(0, targetCount);
+        }
+
+        // 为题目选项添加随机打乱功能
+        function createShuffledQuestion(originalQuestion) {
+            const shuffledQuestion = { ...originalQuestion };
+            
+            // 创建选项索引映射
+            const originalOptions = [...originalQuestion.options];
+            const indexMap = originalOptions.map((_, index) => index);
+            const shuffledIndexMap = shuffleArray(indexMap);
+            
+            // 根据打乱的索引重新排列选项
+            shuffledQuestion.options = shuffledIndexMap.map(index => originalOptions[index]);
+            
+            // 找到正确答案在新数组中的位置
+            const originalCorrectIndex = originalQuestion.answer;
+            shuffledQuestion.answer = shuffledIndexMap.indexOf(originalCorrectIndex);
+            
+            return shuffledQuestion;
+        }
+
+        // DOM元素
+        const questionEl = document.getElementById('question');
+        const optionsEl = document.getElementById('options');
+        const feedbackEl = document.getElementById('feedback');
+        const nextBtn = document.getElementById('next-btn');
+        const scoreEl = document.getElementById('score');
+        const totalQuestionsEl = document.getElementById('total-questions');
+        const progressEl = document.getElementById('progress');
+        const progressTextEl = document.getElementById('progress-text');
+        const gameContainer = document.querySelector('.game-content');
+        const resultContainer = document.getElementById('result-container');
+        const finalScoreEl = document.getElementById('final-score');
+        const finalTotalEl = document.getElementById('final-total');
+        const resultMessageEl = document.getElementById('result-message');
+        const restartBtn = document.getElementById('restart-btn');
+        const bestScoreEl = document.getElementById('best-score');
+        const bestTotalEl = document.getElementById('best-total');
+        const finalBestScoreEl = document.getElementById('final-best-score');
+        const finalBestTotalEl = document.getElementById('final-best-total');
+        const gameTitleEl = document.getElementById('game-title');
+        const gameSubtitleEl = document.getElementById('game-subtitle');
+
+        // 应用游戏配置
+        function applyGameConfig(config) {
+            try {
+                // 解析配置（如果是字符串）
+                const parsedConfig = typeof config === 'string' ? JSON.parse(config) : config;
+                
+                // 更新游戏标题和副标题
+                if (parsedConfig.title) {
+                    gameTitleEl.textContent = parsedConfig.title;
+                }
+                if (parsedConfig.subtitle) {
+                    gameSubtitleEl.textContent = parsedConfig.subtitle;
+                }
+                
+                // 更新难度
+                if (parsedConfig.difficulty) {
+                    difficulty = parsedConfig.difficulty;
+                }
+                
+                // 更新问题集
+                if (parsedConfig.questions && Array.isArray(parsedConfig.questions)) {
+                    questions = [...parsedConfig.questions];
+                }
+                
+                // 重新选择随机题目
+                selectedQuestions = selectRandomQuestions(questions, questionCount).map(q => createShuffledQuestion(q));
+                
+                // 重置游戏状态
+                currentQuestion = 0;
+                score = 0;
+                answered = false;
+                selectedOption = null;
+                
+                // 更新UI
+                scoreEl.textContent = score;
+                totalQuestionsEl.textContent = selectedQuestions.length;
+                bestTotalEl.textContent = selectedQuestions.length;
+                finalTotalEl.textContent = selectedQuestions.length;
+                finalBestTotalEl.textContent = selectedQuestions.length;
+                
+                // 如果游戏正在进行，重新加载当前问题
+                if (gameContainer.style.display !== 'none') {
+                    loadQuestion();
+                }
+                
+                console.log('Game config applied successfully:', parsedConfig);
+                return true;
+            } catch (error) {
+                console.error('Error applying game config:', error);
+                return false;
+            }
+        }
+
+        // 重置到默认配置
+        function resetToDefaultConfig() {
+            questions = [...defaultQuestions];
+            selectedQuestions = selectRandomQuestions(questions, questionCount).map(q => createShuffledQuestion(q));
+            difficulty = 2;
+            gameTitleEl.textContent = "🍽️ 谁想吃什么 🍽️";
+            gameSubtitleEl.textContent = "言语理解测试，提升你的思维能力！";
+            
+            currentQuestion = 0;
+            score = 0;
+            answered = false;
+            selectedOption = null;
+            
+            scoreEl.textContent = score;
+            totalQuestionsEl.textContent = selectedQuestions.length;
+            bestTotalEl.textContent = selectedQuestions.length;
+            finalTotalEl.textContent = selectedQuestions.length;
+            finalBestTotalEl.textContent = selectedQuestions.length;
+        }
+
+        // 游戏配置和统计消息监听
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data; // this is JSON object or string
+                    const success = applyGameConfig(game_config);
+                    
+                    // 发送配置更新结果消息
+                    // window.parent.postMessage({ 
+                    //     type: 'configUpdated', 
+                    //     data: { 
+                    //         success: success,
+                    //         difficulty: difficulty,
+                    //         questionCount: questions.length
+                    //     }
+                    // }, '*');
+                    break;
+                case 'getGameStats':
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: bestScore, // 返回最高分
+                            difficulty: difficulty,
+                            totalQuestions: questions.length,
+                            currentQuestion: currentQuestion,
+                            gameTitle: gameTitleEl.textContent
+                        }
+                    }, '*');
+                    break;
+                // case 'resetConfig':
+                //     resetToDefaultConfig();
+                //     window.parent.postMessage({ 
+                //         type: 'configReset', 
+                //         data: { success: true }
+                //     }, '*');
+                //     break;
+            }
+        });
+
+        // 初始化游戏
+        function initGame() {
+            // 如果还没有选择题目，先选择随机题目
+            if (selectedQuestions.length === 0) {
+                selectedQuestions = selectRandomQuestions(questions, questionCount).map(q => createShuffledQuestion(q));
+            }
+            
+            totalQuestionsEl.textContent = selectedQuestions.length;
+            bestTotalEl.textContent = selectedQuestions.length;
+            finalBestTotalEl.textContent = selectedQuestions.length;
+            updateBestScoreDisplay();
+            loadQuestion();
+            
+            // 发送游戏加载完成消息
+            window.parent.postMessage({ type: 'gameLoaded' }, '*');
+        }
+
+        // 更新最高分显示
+        function updateBestScoreDisplay() {
+            bestScoreEl.textContent = bestScore;
+            finalBestScoreEl.textContent = bestScore;
+        }
+
+        // 加载问题
+        function loadQuestion() {
+            // 如果是第一题，发送游戏开始消息
+            if (currentQuestion === 0 && score === 0) {
+                window.parent.postMessage({ type: 'gameStarted' }, '*');
+            }
+            
+            answered = false;
+            selectedOption = null;
+            nextBtn.disabled = true;
+            nextBtn.textContent = "提交"; // 重置按钮文本为"提交"
+            feedbackEl.style.display = 'none';
+            feedbackEl.className = 'feedback hidden p-4 rounded-lg mb-6';
+            
+            const q = selectedQuestions[currentQuestion]; // 使用选择的题目
+            questionEl.textContent = `${currentQuestion + 1}. ${q.question}`;
+            questionEl.classList.remove('fade-in');
+            void questionEl.offsetWidth;
+            questionEl.classList.add('fade-in');
+            
+            optionsEl.innerHTML = '';
+            q.options.forEach((option, index) => {
+                const optionEl = document.createElement('button');
+                optionEl.className = 'option w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-3 px-4 rounded-lg transition-colors';
+                optionEl.textContent = option;
+                optionEl.dataset.index = index;
+                optionEl.addEventListener('click', selectOption);
+                optionsEl.appendChild(optionEl);
+            });
+            
+            updateProgress();
+        }
+
+        // 选择选项
+        function selectOption(e) {
+            if (answered) return;
+            
+            const selectedEl = e.target;
+            const optionIndex = parseInt(selectedEl.dataset.index);
+            
+            // 移除之前的选择
+            if (selectedOption !== null) {
+                document.querySelectorAll('.option')[selectedOption].classList.remove('selected');
+            }
+            
+            selectedOption = optionIndex;
+            selectedEl.classList.add('selected');
+            nextBtn.disabled = false;
+        }
+
+        // 检查答案
+        function checkAnswer() {
+            if (selectedOption === null || answered) return;
+            
+            answered = true;
+            const q = selectedQuestions[currentQuestion]; // 使用选择的题目
+            const options = document.querySelectorAll('.option');
+            
+            options.forEach((option, index) => {
+                option.classList.remove('selected');
+                if (index === q.answer) {
+                    option.classList.add('correct');
+                } else if (index === selectedOption && selectedOption !== q.answer) {
+                    option.classList.add('incorrect');
+                }
+            });
+            
+            if (selectedOption === q.answer) {
+                score++;
+                scoreEl.textContent = score;
+                feedbackEl.textContent = "✓ 正确! " + q.explanation;
+                feedbackEl.className = "feedback p-4 rounded-lg mb-6 bg-green-100 text-green-800 fade-in";
+            } else {
+                feedbackEl.textContent = "✗ 不正确。正确答案是: " + q.options[q.answer] + ". " + q.explanation;
+                feedbackEl.className = "feedback p-4 rounded-lg mb-6 bg-red-100 text-red-800 fade-in";
+            }
+            
+            feedbackEl.style.display = 'block';
+            nextBtn.disabled = false;
+            
+            // 更新按钮文本
+            if (currentQuestion < selectedQuestions.length - 1) {
+                nextBtn.textContent = "下一题";
+            } else {
+                nextBtn.textContent = "查看结果";
+            }
+        }
+
+        // 下一题
+        function nextQuestion() {
+            currentQuestion++;
+            if (currentQuestion < selectedQuestions.length) {
+                loadQuestion();
+            } else {
+                showResults();
+            }
+        }
+
+        // 更新进度条
+        function updateProgress() {
+            const progress = ((currentQuestion) / selectedQuestions.length) * 100;
+            progressEl.style.width = `${progress}%`;
+            progressTextEl.textContent = Math.round(progress);
+        }
+
+        // 显示结果
+        function showResults() {
+            // 更新最高分
+            if (score > bestScore) {
+                bestScore = score;
+                updateBestScoreDisplay();
+            }
+            
+            gameContainer.style.display = 'none';
+            resultContainer.classList.remove('hidden');
+            finalScoreEl.textContent = score;
+            finalTotalEl.textContent = selectedQuestions.length;
+            
+            const percentage = (score / selectedQuestions.length) * 100;
+            // 将分数换算成百分制
+            const normalizedScore = Math.round(percentage);
+            const normalizedBestScore = Math.round((bestScore / selectedQuestions.length) * 100);
+            
+            let message = "";
+            if (percentage >= 90) {
+                message = "太棒了! 你的言语理解能力非常出色!";
+            } else if (percentage >= 70) {
+                message = "做得不错! 你的言语理解能力良好。";
+            } else if (percentage >= 50) {
+                message = "还可以。你的言语理解能力有提升空间。";
+            } else {
+                message = "需要加强练习。多注意理解题目中的关键信息。";
+            }
+            
+            // 如果达到新的最高分，添加祝贺信息
+            if (score === bestScore && score > 0) {
+                message += " 🎉 这是你的最高分！";
+            }
+            
+            resultMessageEl.textContent = message;
+            
+            // 发送游戏完成消息 - 分数已换算为百分制
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: normalizedScore,  // 百分制分数
+                    bestScore: normalizedBestScore,  // 百分制最高分
+                    totalQuestions: selectedQuestions.length,
+                    percentage: percentage,
+                    difficulty: difficulty,
+                    rawScore: score,  // 保留原始分数供参考
+                    rawBestScore: bestScore  // 保留原始最高分供参考
+                }
+            }, '*');
+        }
+
+        // 重新开始游戏
+        function restartGame() {
+            // 重新选择随机题目并打乱选项
+            selectedQuestions = selectRandomQuestions(questions, questionCount).map(q => createShuffledQuestion(q));
+            
+            currentQuestion = 0;
+            score = 0;
+            scoreEl.textContent = score;
+            totalQuestionsEl.textContent = selectedQuestions.length;
+            gameContainer.style.display = 'flex';
+            resultContainer.classList.add('hidden');
+            loadQuestion();
+        }
+
+        // 新增：规则弹窗控制
+        const rulesModal = document.getElementById('rules-modal');
+        const startGameBtn = document.getElementById('start-game-btn');
+        const rulesBtn = document.getElementById('rules-btn');
+        
+        // 显示规则弹窗
+        function showRules() {
+            rulesModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        // 隐藏规则弹窗
+        function hideRules() {
+            rulesModal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            rulesBtn.classList.remove('hidden');
+        }
+        
+        // 开始游戏
+        function startGame() {
+            hideRules();
+            // 如果游戏已经开始，不重新初始化
+            if (currentQuestion === 0 && score === 0) {
+                initGame();
+            }
+        }
+        
+        // 移动端触控优化
+        function addTouchSupport() {
+            // 为所有按钮添加触控反馈
+            document.addEventListener('touchstart', function(e) {
+                if (e.target.tagName === 'BUTTON' || e.target.classList.contains('option')) {
+                    e.target.style.transform = 'scale(0.98)';
+                }
+            });
+            
+            document.addEventListener('touchend', function(e) {
+                if (e.target.tagName === 'BUTTON' || e.target.classList.contains('option')) {
+                    setTimeout(() => {
+                        e.target.style.transform = '';
+                    }, 150);
+                }
+            });
+        }
+        
+        // 屏幕方向变化处理
+        function handleOrientationChange() {
+            // 延迟处理，确保浏览器完成方向切换
+            setTimeout(() => {
+                // 重新计算视口高度
+                document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+                
+                // 触发重排
+                window.dispatchEvent(new Event('resize'));
+            }, 100);
+        }
+        
+        // 初始化移动端适配
+        function initMobileAdaptation() {
+            // 设置视口高度变量
+            document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+            
+            // 监听屏幕方向变化
+            window.addEventListener('orientationchange', handleOrientationChange);
+            window.addEventListener('resize', () => {
+                document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+            });
+            
+            // 添加触控支持
+            addTouchSupport();
+            
+            // 防止移动端缩放
+            document.addEventListener('gesturestart', function (e) {
+                e.preventDefault();
+            });
+            
+            document.addEventListener('gesturechange', function (e) {
+                e.preventDefault();
+            });
+            
+            document.addEventListener('gestureend', function (e) {
+                e.preventDefault();
+            });
+        }
+
+        // 初始化游戏
+        function initGame() {
+            // 如果还没有选择题目，先选择随机题目
+            if (selectedQuestions.length === 0) {
+                selectedQuestions = selectRandomQuestions(questions, questionCount).map(q => createShuffledQuestion(q));
+            }
+            
+            totalQuestionsEl.textContent = selectedQuestions.length;
+            bestTotalEl.textContent = selectedQuestions.length;
+            finalBestTotalEl.textContent = selectedQuestions.length;
+            updateBestScoreDisplay();
+            loadQuestion();
+            
+            // 发送游戏加载完成消息
+            window.parent.postMessage({ type: 'gameLoaded' }, '*');
+        }
+
+        // 事件监听
+        nextBtn.addEventListener('click', () => {
+            if (!answered) {
+                checkAnswer();
+            } else {
+                nextQuestion();
+            }
+        });
+
+        restartBtn.addEventListener('click', restartGame);
+        
+        // 新增事件监听
+        startGameBtn.addEventListener('click', startGame);
+        rulesBtn.addEventListener('click', showRules);
+        
+        // 点击弹窗外部关闭
+        rulesModal.addEventListener('click', (e) => {
+            if (e.target === rulesModal) {
+                hideRules();
+            }
+        });
+
+        initMobileAdaptation();
+        showRules(); // 显示规则弹窗
+    </script>
+</body>
+</html>

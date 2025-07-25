@@ -3,13 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>空间思维训练游戏</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>影子骑士</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script src="https://cdnproxy.keepwork.com/jsdelivr/npm/three@0.128.0/build/three.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; font-family: Arial, sans-serif;min-height:700px;height:90vh}
         #gameContainer { position: relative; width: 100%; height: 100%; }
-        #ui { position: absolute; top: 10px; left: 10px; z-index: 100; }
+        #ui { 
+            position: fixed; 
+            top: 0; 
+            left: 15px; 
+            z-index: 100; 
+            width: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none; /* 让UI区域默认不阻挡鼠标事件 */
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 100vh;
+        }
         #successEffect { 
             position: absolute; 
             top: 50%; 
@@ -28,39 +42,446 @@
             opacity: 1 !important;
             transform: translate(-50%, -50%) scale(1.2) !important;
         }
+        
+        /* 游戏规则弹窗样式 */
+        .modal-overlay {
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .modal-content {
+            animation: slideIn 0.3s ease;
+            max-width: 90vw;
+            max-height: 90vh;
+            width: 100%;
+            height: auto;
+        }
+        
+        .modal-body {
+            max-height: calc(90vh - 160px);
+            overflow-y: auto;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* 帮助按钮 */
+        .help-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 40;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .help-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        /* 左侧悬浮面板样式 */
+        .ui-section {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            pointer-events: auto; /* 恢复UI元素的鼠标事件 */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .ui-section #cubeCount {
+            font-size: 1.2rem;
+        }
+        
+        .ui-button {
+            width: 100%;
+            padding: 10px 16px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            text-align: center;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .ui-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .ui-button:active {
+            transform: translateY(0);
+        }
+        
+        .ui-select {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            border-radius: 8px;
+            background: #374151;
+            color: white;
+            border: 1px solid #4b5563;
+            min-height: 44px;
+        }
+        
+        .ui-label {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .info-display {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        /* 专门为移动设备优化的样式 */
+        @media (max-width: 768px) {
+            #ui {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                bottom: auto;
+                width: auto;
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 8px;
+                max-height: 180px;
+                overflow-y: auto;
+            }
+            
+            #gameCanvas {
+                width: 100%;
+                height: 100vh;
+            }
+            
+            .ui-section {
+                flex: 1;
+                min-width: calc(50% - 8px);
+                padding: 10px;
+            }
+            
+            .ui-button {
+                padding: 10px 12px;
+                font-size: 12px;
+                min-height: 40px;
+            }
+            
+            .ui-select {
+                padding: 10px;
+                font-size: 12px;
+                min-height: 40px;
+            }
+            
+            .ui-label {
+                font-size: 14px;
+                margin-bottom: 6px;
+            }
+            
+            .info-display {
+                font-size: 12px;
+                padding: 10px;
+            }
+            
+            .help-btn {
+                width: 50px;
+                height: 50px;
+                bottom: 15px;
+                right: 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .ui-section {
+                min-width: 100%;
+                margin-bottom: 6px;
+            }
+            
+            .ui-button {
+                padding: 8px 12px;
+                font-size: 11px;
+                min-height: 36px;
+            }
+            
+            .ui-select {
+                padding: 8px;
+                font-size: 11px;
+                min-height: 36px;
+            }
+        }
+        
+        /* 小屏幕时隐藏部分UI以节省空间 */
+        @media (max-height: 600px) {
+            .ui-section:last-child {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <div id="ui" class="text-white">
-            <div class="bg-black bg-opacity-50 p-4 rounded">
-                <h2 class="text-xl mb-2">空间思维训练</h2>
-                <div class="mb-2">
-                    <label>网格大小: </label>
-                    <select id="gridSize" class="bg-gray-700 text-white p-1 rounded">
-                        <option value="3" selected>3×3</option>
-                        <option value="4">4×4</option>
-                        <option value="5">5×5</option>
-                    </select>
+    <!-- 游戏规则弹窗 -->
+    <div id="rulesModal" class="fixed inset-0 bg-black bg-opacity-50 modal-overlay hidden flex items-center justify-center z-50 p-4" style="z-index: 9999;">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl max-w-4xl">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">影子骑士规则</h2>
+                    <button id="closeRules" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button>
                 </div>
-                <button id="newGame" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mr-2">新游戏</button>
-                <button id="undo" class="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded">撤销</button>
-                <div class="mt-2">
-                    <button id="rotateLeft" class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded mr-1">⟲ 左转</button>
-                    <button id="rotateRight" class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded">⟳ 右转</button>
+                
+                <div class="modal-body">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <h3 class="font-bold text-blue-800 text-lg mb-2">🎯 游戏目标</h3>
+                                <p class="text-gray-700">根据墙壁上的投影，在3D空间中放置立方体，使其产生正确的正面和右侧投影。</p>
+                            </div>
+                            
+                            <div class="bg-green-50 p-4 rounded-lg">
+                                <h3 class="font-bold text-green-800 text-lg mb-2">🎮 操作方法</h3>
+                                <ul class="text-gray-700 space-y-1 text-sm">
+                                    <li><strong>左键点击</strong>：在平台上放置方块</li>
+                                    <li><strong>右键/长按</strong>：删除方块</li>
+                                    <li><strong>旋转按钮</strong>：改变观察角度</li>
+                                    <li><strong>撤销按钮</strong>：撤销上一步操作</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-purple-50 p-4 rounded-lg">
+                                <h3 class="font-bold text-purple-800 text-lg mb-2">📊 投影说明</h3>
+                                <ul class="text-gray-700 space-y-1 text-sm">
+                                    <li><strong>黑色方块</strong>：正确的投影位置</li>
+                                    <li><strong>灰色方块</strong>：目标投影但未实现</li>
+                                    <li><strong>红色X</strong>：错误的投影位置</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-orange-50 p-4 rounded-lg">
+                                <h3 class="font-bold text-orange-800 text-lg mb-2">🏆 计分规则</h3>
+                                <ul class="text-gray-700 space-y-1 text-sm">
+                                    <li>使用最少的方块完成挑战获得高分</li>
+                                    <li>错误次数会影响最终得分</li>
+                                    <li>完成时间越短得分越高</li>
+                                    <li>共5关，最终得分为综合评分</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-yellow-50 p-4 rounded-lg">
+                                <h3 class="font-bold text-yellow-800 text-lg mb-2">💡 游戏技巧</h3>
+                                <ul class="text-gray-700 space-y-1 text-sm">
+                                    <li>仔细观察两个墙面的投影</li>
+                                    <li>从底层开始搭建，确保连通性</li>
+                                    <li>多角度旋转观察空间结构</li>
+                                    <li>善用撤销功能调整布局</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-red-50 p-4 rounded-lg">
+                                <h3 class="font-bold text-red-800 text-lg mb-2">⚠️ 注意事项</h3>
+                                <ul class="text-gray-700 space-y-1 text-sm">
+                                    <li>方块必须连通（相邻或在地面）</li>
+                                    <li>投影是从正面和右侧观察的结果</li>
+                                    <li>旋转不会改变投影，只改变视角</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="cubeCount" class="mt-2 text-sm font-bold text-yellow-300"></div>
-                <div class="mt-2 text-xs text-gray-300">
-                    左键: 放置方块<br>
-                    右键/长按: 删除方块<br>
-                    黑色: 正确投影 | 灰色X: 错误投影
+                
+                <div class="mt-6 text-center">
+                    <button id="startGameFromRules" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg transition-all transform hover:scale-105">
+                        开始游戏
+                    </button>
                 </div>
             </div>
         </div>
-        <div id="successEffect">🎉 完美！下一关...</div>
     </div>
 
+    <div id="gameContainer">
+        <!-- 左侧UI面板 -->
+        <div id="ui" class="text-white">
+            <!-- 网格设置区域 -->
+            <div class="ui-section" style="height: 0; visibility: hidden">
+                <label class="ui-label">网格大小</label>
+                <select id="gridSize" class="ui-select">
+                    <option value="3" selected>3×3 网格</option>
+                    <option value="4">4×4 网格</option>
+                    <option value="5">5×5 网格</option>
+                </select>
+            </div>
+            
+            <!-- 游戏控制区域 -->
+            <div class="ui-section">
+                <button id="newGame" class="ui-button bg-blue-600 hover:bg-blue-700 text-white mb-3">
+                    🎮 新游戏
+                </button>
+                <button id="undo" class="ui-button bg-orange-600 hover:bg-orange-700 text-white">
+                    ↩️ 撤销操作
+                </button>
+            </div>
+            
+            <!-- 视角控制区域 -->
+            <div class="ui-section">
+                <button id="rotateLeft" class="ui-button bg-purple-600 hover:bg-purple-700 text-white mb-3">
+                    ⟲ 向左旋转
+                </button>
+                <button id="rotateRight" class="ui-button bg-purple-600 hover:bg-purple-700 text-white">
+                    ⟳ 向右旋转
+                </button>
+            </div>
+            
+            <!-- 游戏信息区域 -->
+            <div class="ui-section">
+                <div id="cubeCount" class="info-display text-center">
+                    <!-- 游戏信息将在这里显示 -->
+                </div>
+            </div>
+            
+            <!-- 操作说明区域 -->
+            <div class="ui-section">
+                <div class="info-display text-base">
+                    <div class="mb-2"><strong>操作说明：</strong></div>
+                    <div>• 左键：放置方块</div>
+                    <div>• 右键/长按：删除方块</div>
+                    <div class="mt-2"><strong>投影说明：</strong></div>
+                    <div>• 黑色：正确投影</div>
+                    <div>• 灰色：目标投影</div>
+                    <div>• 红色X：错误投影</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 游戏画布区域 -->
+        <div id="gameCanvas"></div>
+        
+        <div id="successEffect">🎉 完美！下一关...</div>
+    </div>
+    
+    <!-- 帮助按钮 -->
+    <button id="helpBtn" class="help-btn bg-blue-500 hover:bg-blue-600 text-white" title="查看游戏规则">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    </button>
+
     <script>
+        // 游戏统计和消息通信
+        let game_config = '';
+        let bestScore = 0;
+        let currentGameScore = 0;
+        let gameStarted = false;
+
+        // 计算分数：基于网格大小、用时和错误次数，最高100分
+        function calculateGameScore(gridSize, timeInSeconds, errorCount) {
+            const maxScore = 100;
+            
+            // 基础分数：网格越大分数越高
+            let baseScore = 0;
+            if (gridSize === 3) baseScore = 30;      // 简单：30分
+            else if (gridSize === 4) baseScore = 50; // 中等：50分
+            else if (gridSize === 5) baseScore = 70; // 困难：70分
+            
+            // 时间奖励：在合理时间内完成有时间奖励
+            const timeTargets = { 3: 60, 4: 120, 5: 180 }; // 各难度的目标时间(秒)
+            const targetTime = timeTargets[gridSize] || 120;
+            const timeBonus = Math.max(0, 20 - Math.floor(timeInSeconds / targetTime * 20)); // 最多20分时间奖励
+            
+            // 错误惩罚：每次错误扣5分
+            const errorPenalty = Math.min(errorCount * 5, 20); // 最多扣20分
+            
+            return Math.min(maxScore, Math.max(10, baseScore + timeBonus - errorPenalty));
+        }
+
+        // 获取难度等级
+        function getDifficultyLevel(gridSize) {
+            if (gridSize === 3) return 1; // 简单
+            if (gridSize === 4) return 2; // 中等
+            return 3; // 困难
+        }
+
+        // 消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data; // this is markdown or text string
+                    // 更新游戏配置逻辑
+                    console.log('Game config updated:', game_config);
+                    break;
+                case 'getGameStats':
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: bestScore, // 永远返回最高分
+                            difficulty: getDifficultyLevel(game.gridSize)
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        // 规则弹窗控制
+        function initRulesModal() {
+            const rulesModal = document.getElementById('rulesModal');
+            const closeRules = document.getElementById('closeRules');
+            const startGameFromRules = document.getElementById('startGameFromRules');
+            const helpBtn = document.getElementById('helpBtn');
+            
+            // 关闭规则弹窗
+            function closeRulesModal() {
+                rulesModal.classList.add('hidden');
+            }
+            
+            // 打开规则弹窗
+            function openRulesModal() {
+                rulesModal.classList.remove('hidden');
+            }
+            
+            closeRules.addEventListener('click', closeRulesModal);
+            helpBtn.addEventListener('click', openRulesModal);
+            
+            // 从规则弹窗开始游戏
+            startGameFromRules.addEventListener('click', () => {
+                closeRulesModal();
+                if (game) {
+                    game.newGame();
+                }
+            });
+            
+            // 点击遮罩关闭
+            rulesModal.addEventListener('click', (e) => {
+                if (e.target === rulesModal) {
+                    closeRulesModal();
+                }
+            });
+        }
+        
         class SpatialGame {
             constructor() {
                 this.scene = new THREE.Scene();
@@ -81,19 +502,35 @@
                 this.isLongPressing = false;
                 this.touchStartPos = null;
                 
+                this.startTime = 0;
+                this.errorCount = 0; // 改为错误次数
+                this.gameLoaded = false;
+                
+                // 新增：游戏关卡和总体计分系统
+                this.currentLevel = 1;
+                this.maxLevels = 5; // 总共5关
+                this.levelScores = []; // 记录各关分数
+                this.gameStartTime = 0; // 整个游戏开始时间
+                this.totalErrors = 0; // 总错误次数
+                this.isGameFinished = false; // 游戏是否已结束
+                
                 this.init();
                 this.setupEventListeners();
                 this.newGame();
+                
+                // 初始化规则弹窗
+                initRulesModal();
             }
             
             init() {
+                // 修改渲染器附加到游戏画布区域，使用全屏空间
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
                 this.renderer.setClearColor(0x87CEEB);
-                document.getElementById('gameContainer').appendChild(this.renderer.domElement);
+                document.getElementById('gameCanvas').appendChild(this.renderer.domElement);
                 
-                // Set initial camera position (will be optimized by autoZoomCamera)
-                this.camera.position.set(-6, 6, 6);
-                this.camera.lookAt(-this.gridSize/4, 1, this.gridSize/4);
+                // 调整初始相机位置，向下移动场景并放大
+                this.camera.position.set(-4, 4, 4);
+                this.camera.lookAt(-this.gridSize/6, 0.5, this.gridSize/6);
                 
                 // 添加环境光和方向光（不产生阴影）
                 const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
@@ -105,10 +542,14 @@
                 
                 // 创建可旋转的平台组
                 this.platformGroup = new THREE.Group();
+                this.platformGroup.position.set(1.6, -1.6, 0); // 向上移动，减少下方空白
+                this.platformGroup.scale.setScalar(1.5); // 整体放大1.8倍
                 this.scene.add(this.platformGroup);
                 
                 // 创建固定的投影墙组
                 this.wallGroup = new THREE.Group();
+                this.wallGroup.position.set(1.6, -1.6, 0); // 与平台组保持一致
+                this.wallGroup.scale.setScalar(1.5); // 整体放大1.8倍
                 this.scene.add(this.wallGroup);
                 
                 this.createPlatform();
@@ -118,6 +559,12 @@
                 setTimeout(() => this.autoZoomCamera(), 100);
                 
                 this.animate();
+                
+                // 发送游戏加载完成事件
+                if (!this.gameLoaded) {
+                    window.parent.postMessage({ type: 'gameLoaded' }, '*');
+                    this.gameLoaded = true;
+                }
             }
             
             // 获取精确的旋转变换参数，避免浮点数误差
@@ -212,8 +659,8 @@
                     this.wallGroup.remove(this.wallGroup.children[0]);
                 }
                 
-                // 增加墙壁高度以适应更高层的投影显示
-                const wallHeight = this.gridSize * 1.2; // 比原来高20%
+                // 增加墙壁高度以适应更高层的投影显示，并进一步放大
+                const wallHeight = this.gridSize; // 从1.2增加到1.5
                 
                 // 正面墙
                 const frontWallGeometry = new THREE.PlaneGeometry(this.gridSize, wallHeight);
@@ -224,7 +671,7 @@
                     side: THREE.DoubleSide
                 });
                 const frontWall = new THREE.Mesh(frontWallGeometry, frontWallMaterial);
-                frontWall.position.set(0, wallHeight/2, -this.gridSize/2 - 0.5);
+                frontWall.position.set(0, wallHeight/2, -this.gridSize/2 - 0.4); // 减少距离让墙更近
                 frontWall.userData = { type: 'wall' };
                 this.wallGroup.add(frontWall);
                 
@@ -237,7 +684,7 @@
                     side: THREE.DoubleSide
                 });
                 const rightWall = new THREE.Mesh(rightWallGeometry, rightWallMaterial);
-                rightWall.position.set(this.gridSize/2 + 0.5, wallHeight/2, 0);
+                rightWall.position.set(this.gridSize/2 + 0.4, wallHeight/2, 0); // 减少距离让墙更近
                 rightWall.rotation.y = Math.PI / 2;
                 rightWall.userData = { type: 'wall' };
                 this.wallGroup.add(rightWall);
@@ -300,32 +747,7 @@
             }
             
             calculateMinCubes() {
-                // 计算实现目标投影所需的最少方块数
-                const frontProjection = new Set();
-                const rightProjection = new Set();
-                
-                // 收集目标投影位置
-                for (const [key, target] of this.targetCubes) {
-                    const originalX = target.x - this.gridSize/2 + 0.5;
-                    const originalZ = target.z - this.gridSize/2 + 0.5;
-                    const originalY = target.y;
-                    
-                    // 使用精确的旋转参数
-                    const { cos, sin } = this.getRotationParams();
-                    const rotatedX = originalX * cos - originalZ * sin;
-                    const rotatedZ = originalX * sin + originalZ * cos;
-                    
-                    // 投影位置
-                    const frontProjKey = `${Math.round(rotatedX * 2)},${Math.round((originalY + 0.5) * 2)}`;
-                    const rightProjKey = `${Math.round(rotatedZ * 2)},${Math.round((originalY + 0.5) * 2)}`;
-                    
-                    frontProjection.add(frontProjKey);
-                    rightProjection.add(rightProjKey);
-                }
-                
-                // 简化计算：最少方块数约等于两个投影的最大值
-                this.minCubesNeeded = Math.max(frontProjection.size, rightProjection.size);
-                this.minCubesNeeded = Math.max(this.minCubesNeeded, Math.ceil(this.targetCubes.size * 0.7));
+                this.minCubesNeeded = this.targetCubes.size;
             }
             
             getRandomColor() {
@@ -417,15 +839,15 @@
                     let projCube;
                     
                     if (isTarget && isCurrent) {
-                        // 正确投影 - 深黑色
-                        const projGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.1);
+                        // 正确投影 - 深黑色，增大尺寸
+                        const projGeometry = new THREE.BoxGeometry(0.9, 0.9, 0.1); // 从0.8增加到0.9
                         const projMaterial = new THREE.MeshLambertMaterial({ 
                             color: 0x222222
                         });
                         projCube = new THREE.Mesh(projGeometry, projMaterial);
                     } else if (isTarget && !isCurrent) {
-                        // 目标投影但用户未实现 - 灰色
-                        const projGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.1);
+                        // 目标投影但用户未实现 - 灰色，增大尺寸
+                        const projGeometry = new THREE.BoxGeometry(0.9, 0.9, 0.1); // 从0.8增加到0.9
                         const projMaterial = new THREE.MeshLambertMaterial({ 
                             color: 0xeeeeee, 
                             emissive: 0x888888,
@@ -433,25 +855,25 @@
                         });
                         projCube = new THREE.Mesh(projGeometry, projMaterial);
                     } else if (!isTarget && isCurrent) {
-                        // 错误投影 - 显示X
-                        projCube = this.createXMark(0.8);
+                        // 错误投影 - 显示X，增大尺寸
+                        projCube = this.createXMark(0.9); // 从0.8增加到0.9
                     }
                     
                     if (projCube) {
                         // 放宽显示范围限制，允许更高层的投影显示
-                        const maxWallHeight = this.gridSize * 1.2;
+                        const maxWallHeight = this.gridSize * 1.5; // 从1.2增加到1.5
                         
                         if (wall === 'front') {
                             // 正面墙投影显示条件
                             if (Math.abs(coord) <= this.gridSize/2 && y <= maxWallHeight && y > 0) {
-                                projCube.position.set(coord, y, -this.gridSize/2 - 0.6);
+                                projCube.position.set(coord, y, -this.gridSize/2 - 0.5); // 调整位置
                                 this.wallGroup.add(projCube);
                                 this.projectionCubes.push(projCube);
                             }
                         } else if (wall === 'right') {
                             // 右侧墙投影显示条件
                             if (Math.abs(coord) <= this.gridSize/2 && y <= maxWallHeight && y > 0) {
-                                projCube.position.set(this.gridSize/2 + 0.6, y, coord);
+                                projCube.position.set(this.gridSize/2 + 0.5, y, coord); // 调整位置
                                 if (projCube.rotation) {
                                     projCube.rotation.y = Math.PI / 2;
                                 }
@@ -696,6 +1118,15 @@
                 // 添加到历史记录
                 this.cubeHistory.push({ x, y, z });
                 
+                // 检查错误：只有当方块数等于最少数量且投影错误时计为错误
+                // 从更多方块数减少到最少数量的过程中不计入错误
+                if (this.cubes.size === this.minCubesNeeded) {
+                    const isProjectionCorrect = this.checkProjectionMatch();
+                    if (!isProjectionCorrect) {
+                        this.errorCount++;
+                    }
+                }
+                
                 this.updateCubeCount();
                 this.updateProjections(); // 实时更新投影显示
                 this.autoCheckAnswer();
@@ -706,6 +1137,9 @@
                 const key = `${x},${y},${z}`;
                 const cube = this.cubes.get(key);
                 if (cube) {
+                    // 记录移除前的方块数量
+                    const previousCubeCount = this.cubes.size;
+                    
                     this.platformGroup.remove(cube);
                     this.cubes.delete(key);
                     
@@ -713,6 +1147,18 @@
                     const index = this.cubeHistory.findIndex(item => item.x === x && item.y === y && item.z === z);
                     if (index !== -1) {
                         this.cubeHistory.splice(index, 1);
+                    }
+                    
+                    // 检查错误：只有当移除后方块数等于最少数量且投影错误时计为错误
+                    // 但如果是从大于最少数量减少到最少数量，则不计入错误
+                    const currentCubeCount = this.cubes.size;
+                    const wasReducingFromExcess = previousCubeCount > this.minCubesNeeded && currentCubeCount === this.minCubesNeeded;
+                    
+                    if (currentCubeCount === this.minCubesNeeded && !wasReducingFromExcess) {
+                        const isProjectionCorrect = this.checkProjectionMatch();
+                        if (!isProjectionCorrect) {
+                            this.errorCount++;
+                        }
                     }
                     
                     this.updateCubeCount();
@@ -747,8 +1193,12 @@
             
             updateCubeCount() {
                 const currentCount = this.cubes.size;
-                document.getElementById('cubeCount').textContent = 
-                    `用最少的方块: ${currentCount}/${this.minCubesNeeded}`;
+                const gameTimeInSeconds = this.startTime > 0 ? (Date.now() - this.startTime) / 1000 : 0;
+                
+                document.getElementById('cubeCount').innerHTML = 
+                    `用最少的方块: ${currentCount}/${this.minCubesNeeded}<br>` +
+                    `<span>时间: ${Math.floor(gameTimeInSeconds)}s | 错误: ${this.errorCount}</span><br>` +
+                    `<span>关卡: ${this.currentLevel}/${this.maxLevels}</span>`;
                 
                 if (currentCount > this.minCubesNeeded) {
                     document.getElementById('cubeCount').style.color = '#f87171';
@@ -759,8 +1209,8 @@
                 }
             }
             
+            // 检查当前方块是否产生正确的投影
             checkProjectionMatch() {
-                // 检查当前方块是否产生正确的投影
                 const currentFrontProjection = new Set();
                 const currentRightProjection = new Set();
                 
@@ -819,17 +1269,102 @@
             }
             
             showSuccessEffect() {
-                const effect = document.getElementById('successEffect');
-                effect.classList.add('success-show');
+                if (this.isGameFinished) return; // 防止重复触发
                 
-                // 3秒后隐藏特效并自动开始下一关
+                const effect = document.getElementById('successEffect');
+                
+                // 计算当前关卡分数
+                const levelTimeInSeconds = (Date.now() - this.startTime) / 1000;
+                const levelScore = calculateGameScore(this.gridSize, levelTimeInSeconds, this.errorCount);
+                this.levelScores.push(levelScore);
+                this.totalErrors += this.errorCount;
+                
+                // 检查是否完成所有关卡
+                if (this.currentLevel >= this.maxLevels) {
+                    // 游戏结束，计算最终分数
+                    this.finishGame();
+                    return;
+                }
+                
+                // 显示关卡完成效果
+                effect.classList.add('success-show');
+                effect.innerHTML = `🎉 第${this.currentLevel}关完成！<br><span style="font-size: 1.5rem;">本关: ${levelScore}分</span><br>准备下一关...`;
+                
+                // 3秒后隐藏特效并进入下一关
                 setTimeout(() => {
                     effect.classList.remove('success-show');
-                    // 再延迟1秒开始下一关
                     setTimeout(() => {
+                        this.currentLevel++;
                         this.newGame();
                     }, 1000);
                 }, 3000);
+            }
+            
+            finishGame() {
+                if (this.isGameFinished) return; // 防止重复触发
+                this.isGameFinished = true;
+                
+                const effect = document.getElementById('successEffect');
+                const totalGameTime = (Date.now() - this.gameStartTime) / 1000;
+                
+                // 计算最终百分制分数
+                const finalScore = this.calculateFinalScore();
+                
+                // 更新最高分
+                if (finalScore > bestScore) {
+                    bestScore = finalScore;
+                    localStorage.setItem('spatialGameBestScore', bestScore.toString());
+                }
+                
+                // 显示游戏完成效果
+                effect.classList.add('success-show');
+                effect.innerHTML = `🎊 游戏完成！<br><span style="font-size: 1.5rem;">最终得分: ${finalScore}分</span><br><span style="font-size: 1rem;">最高纪录: ${bestScore}分</span>`;
+                
+                // 发送游戏完成事件
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: { 
+                        score: finalScore, // 确保是百分制分数
+                        bestScore: bestScore,
+                        difficulty: getDifficultyLevel(this.gridSize),
+                        gridSize: this.gridSize,
+                        totalTime: Math.round(totalGameTime),
+                        totalErrors: this.totalErrors,
+                        levelsCompleted: this.currentLevel,
+                        maxLevels: this.maxLevels,
+                        levelScores: this.levelScores
+                    }
+                }, '*');
+                
+                // 5秒后可以重新开始游戏
+                setTimeout(() => {
+                    effect.innerHTML += '<br><span style="font-size: 1rem;">点击"新游戏"重新开始</span>';
+                }, 5000);
+            }
+            
+            calculateFinalScore() {
+                // 将游戏分数统一换算为百分制
+                if (this.levelScores.length === 0) return 0;
+                
+                // 基础分数：各关卡平均分
+                const averageScore = this.levelScores.reduce((sum, score) => sum + score, 0) / this.levelScores.length;
+                
+                // 完成度奖励：完成关卡越多奖励越高
+                const completionBonus = (this.currentLevel / this.maxLevels) * 20; // 最多20分奖励
+                
+                // 总时间因素：控制在合理时间内有奖励
+                const totalGameTime = (Date.now() - this.gameStartTime) / 1000;
+                const expectedTime = this.maxLevels * 90; // 每关预期90秒
+                const timeBonus = Math.max(0, 10 - Math.floor((totalGameTime - expectedTime) / expectedTime * 10)); // 最多10分时间奖励
+                
+                // 错误惩罚：总错误数越多扣分越多
+                const errorPenalty = Math.min(this.totalErrors * 2, 20); // 每个错误扣2分，最多扣20分
+                
+                // 计算最终分数并确保在0-100范围内
+                let finalScore = averageScore + completionBonus + timeBonus - errorPenalty;
+                finalScore = Math.min(100, Math.max(0, Math.round(finalScore)));
+                
+                return finalScore;
             }
             
             rotatePlatform(direction) {
@@ -882,7 +1417,25 @@
             }
             
             newGame() {
+                // 如果游戏已结束，重置所有状态
+                if (this.isGameFinished) {
+                    this.currentLevel = 1;
+                    this.levelScores = [];
+                    this.totalErrors = 0;
+                    this.isGameFinished = false;
+                    this.gameStartTime = Date.now();
+                }
+                
                 this.gridSize = parseInt(document.getElementById('gridSize').value);
+                
+                // 重置当前关卡统计
+                this.startTime = Date.now();
+                this.errorCount = 0; // 重置错误次数
+                
+                // 如果是第一关，记录游戏开始时间
+                if (this.currentLevel === 1 && this.gameStartTime === 0) {
+                    this.gameStartTime = Date.now();
+                }
                 
                 // 重置所有状态
                 this.rotationSteps = 0;
@@ -906,6 +1459,12 @@
                 // 生成新的目标
                 this.generateTarget();
                 this.updateUndoButton();
+                
+                // 发送游戏开始事件
+                if (!gameStarted) {
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
+                    gameStarted = true;
+                }
             }
             
             setupEventListeners() {
@@ -956,12 +1515,16 @@
             }
             
             handleResize() {
+                // 响应式处理 - 使用全屏空间
+                const canvasWidth = window.innerWidth;
+                const canvasHeight = window.innerHeight;
+                
                 // Update camera aspect ratio
-                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.aspect = canvasWidth / canvasHeight;
                 this.camera.updateProjectionMatrix();
                 
                 // Update renderer size
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setSize(canvasWidth, canvasHeight);
                 
                 // Auto-adjust camera position for optimal viewing
                 this.autoZoomCamera();
@@ -969,31 +1532,31 @@
 
             autoZoomCamera() {
                 const aspect = window.innerWidth / window.innerHeight;
-                const sceneSize = this.gridSize + 2; // Add padding for walls and projections
+                const sceneSize = this.gridSize + 2; // 增加场景大小计算
                 
                 // Calculate optimal distance based on grid size and aspect ratio
                 const fov = this.camera.fov * (Math.PI / 180); // Convert to radians
                 const targetDistance = sceneSize / (2 * Math.tan(fov / 2));
                 
-                // Adjust distance based on aspect ratio
+                // Adjust distance based on aspect ratio - 使场景更大更易操作
                 let optimalDistance;
                 if (aspect > 1) {
                     // Landscape: use height as limiting factor
-                    optimalDistance = targetDistance * 1.2;
+                    optimalDistance = targetDistance * 0.6; // 进一步减小让场景更大
                 } else {
                     // Portrait: use width as limiting factor and move camera further
-                    optimalDistance = targetDistance * 1.5 / aspect;
+                    optimalDistance = targetDistance * 0.8 / aspect; // 进一步减小
                 }
                 
-                // Ensure minimum and maximum distances
-                optimalDistance = Math.max(optimalDistance, this.gridSize * 2);
-                optimalDistance = Math.min(optimalDistance, this.gridSize * 8);
+                // Ensure minimum and maximum distances - 调整范围让场景更大
+                optimalDistance = Math.max(optimalDistance, this.gridSize * 1.2); // 减小最小距离
+                optimalDistance = Math.min(optimalDistance, this.gridSize * 5); // 减小最大距离
                 
-                // Smoothly animate camera to new position
+                // Smoothly animate camera to new position - 向下移动场景
                 this.animateCameraToPosition(
-                    -optimalDistance * 0.7, 
-                    optimalDistance * 0.7, 
-                    optimalDistance * 0.7
+                    -optimalDistance * 0.8, 
+                    optimalDistance * 1.2, // 进一步降低Y轴位置
+                    optimalDistance * 0.8
                 );
             }
 
@@ -1016,8 +1579,8 @@
                     // Interpolate camera position
                     this.camera.position.lerpVectors(startPosition, targetPosition, easeProgress);
                     
-                    // Update camera to look at the scene center
-                    this.camera.lookAt(-this.gridSize/4, 1, this.gridSize/4);
+                    // Update camera to look at the scene center - 调整观察点
+                    this.camera.lookAt(0, 1, 0); // 简化观察点，让视角更居中
                     
                     if (progress < 1) {
                         requestAnimationFrame(animate);
@@ -1033,7 +1596,12 @@
             }
         }
         
-        new SpatialGame();
+        // 从本地存储加载最高分
+        bestScore = parseInt(localStorage.getItem('spatialGameBestScore') || '0');
+        
+        // 启动游戏
+        const game = new SpatialGame();
     </script>
 </body>
 </html>
+

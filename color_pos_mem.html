@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>视觉记忆游戏 - 颜色记忆挑战</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        
+        @keyframes highlight {
+            0%, 100% { box-shadow: 0 0 0 3px #FFD700; }
+            50% { box-shadow: 0 0 0 6px #FFD700; }
+        }
+        
+        @keyframes slideUp {
+            0% { transform: translateY(100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes slideDown {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(100%); opacity: 0; }
+        }
+        
+        @keyframes selectedBorder {
+            0%, 100% { box-shadow: 0 0 0 4px #8B5CF6; }
+            50% { box-shadow: 0 0 0 6px #8B5CF6; }
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        
+        .pulse-animation {
+            animation: pulse 0.5s ease-in-out;
+        }
+        
+        .fade-out {
+            animation: fadeOut 0.5s ease-in-out;
+        }
+        
+        .highlight {
+            animation: highlight 1s ease-in-out infinite;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .bounce-animation {
+            animation: bounce 0.6s ease-in-out;
+        }
+        
+        .card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: absolute;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 3px solid white;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .card:active {
+            transform: scale(0.95) !important;
+        }
+        
+        .card.selectable {
+            cursor: pointer;
+        }
+        
+        .card.selecting {
+            animation: selectedBorder 0.8s ease-in-out infinite;
+            z-index: 20;
+            transform: scale(1.1);
+        }
+        
+        .card.answered {
+            box-shadow: 0 0 0 4px #10B981;
+            transform: scale(1.05);
+        }
+        
+        .game-container {
+            position: relative;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            min-height: 200px;
+        }
+        
+        .color-option {
+            transition: all 0.2s ease;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            border-radius: 12px;
+        }
+        
+        .color-option:active {
+            transform: scale(0.9);
+        }
+        
+        .color-option.selected {
+            box-shadow: 0 0 0 4px #3B82F6;
+            transform: scale(1.1);
+        }
+        
+        .color-popup {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 3px solid #e5e7eb;
+            box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.2);
+            z-index: 50;
+            max-height: 40vh;
+            overflow-y: auto;
+            border-radius: 20px 20px 0 0;
+        }
+        
+        /* 顶部固定区域 */
+        .top-fixed-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #fae8ff 0%, #f3e8ff 50%, #e9d5ff 100%);
+            border-bottom: 2px solid #e5e7eb;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 40;
+            padding: 16px;
+        }
+        
+        /* 顶部内容居中 */
+        .top-content {
+            max-width: 1280px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        /* 底部固定区域 */
+        .bottom-fixed-area {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 2px solid #e5e7eb;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 40;
+            padding: 16px;
+        }
+        
+        /* 主内容区域，为顶部和底部留出空间 */
+        .main-layout {
+            width: 100%;
+            margin: 0 auto;
+            height: 100%;
+            overflow: hidden;
+            padding-top: 120px; /* 为顶部固定区域留出空间 */
+            padding-bottom: 120px; /* 为底部固定区域留出空间 */
+        }
+        
+        .compact-header {
+            padding: 12px 20px;
+        }
+        
+        .compact-section {
+            padding: 12px 20px;
+        }
+        
+        /* 按钮基础样式 */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            outline: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 按钮尺寸 */
+        .btn-large {
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 12px;
+        }
+
+        /* 成功按钮 */
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 12px 12px;
+        }
+        
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, #059669, #047857);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-success:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* 主要按钮 */
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* 帮助按钮 */
+        .btn-help {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            padding: 0;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-help:hover {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        #colorOptions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 16px; /* Fixed gap */
+            justify-content: center;
+            justify-items: center;
+            align-items: center;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Ensure color options have consistent size */
+        .color-option {
+            width: 60px !important;
+            height: 60px !important;
+            min-width: 60px;
+            min-height: 60px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 根据颜色数量动态调整大小 */
+        .color-options-4 .color-option {
+            width: 80px !important;
+            height: 80px !important;
+            min-width: 80px;
+            min-height: 80px;
+        }
+
+        .color-options-5 .color-option,
+        .color-options-6 .color-option {
+            width: 75px !important;
+            height: 75px !important;
+            min-width: 75px;
+            min-height: 75px;
+        }
+
+        .color-options-7 .color-option,
+        .color-options-8 .color-option {
+            width: 70px !important;
+            height: 70px !important;
+            min-width: 70px;
+            min-height: 70px;
+        }
+
+        .color-options-9 .color-option,
+        .color-options-10 .color-option {
+            width: 65px !important;
+            height: 65px !important;
+            min-width: 65px;
+            min-height: 65px;
+        }
+
+        /* 响应式布局 */
+        @media (max-width: 768px) {
+            .mobile-stack {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            .mobile-full-width {
+                width: 100%;
+                text-align: center;
+            }
+            
+            .game-container {
+                padding: 12px;
+                min-height: 150px;
+            }
+            
+            .main-layout {
+                padding-top: 140px; /* 移动端增加顶部间距 */
+                padding-bottom: 140px; /* 移动端增加底部间距 */
+            }
+            
+            .btn {
+                padding: 10px 18px;
+                font-size: 15px;
+            }
+            
+            .btn-large {
+                padding: 14px 28px;
+                font-size: 17px;
+            }
+        }
+        
+        /* 横屏适配 */
+        @media (orientation: landscape) and (max-height: 600px) {
+            .landscape-compact {
+                padding: 6px;
+            }
+            
+            .landscape-text {
+                font-size: 16px;
+            }
+            
+            .main-layout {
+                padding-top: 100px;
+                padding-bottom: 100px;
+            }
+        }
+        
+        /* 触屏优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .card {
+                min-width: 60px;
+                min-height: 60px;
+            }
+            
+            .color-option {
+                min-width: 60px;
+                min-height: 60px;
+            }
+        }
+        
+        /* 确保1280*720内显示完整 */
+        @media (max-width: 1280px) and (max-height: 720px) {
+            .main-layout {
+                height: 720px;
+                display: flex;
+                flex-direction: column;
+                padding-top: 120px;
+                padding-bottom: 120px;
+            }
+            
+            .flex-game-area {
+                flex: 1;
+                overflow: hidden;
+            }
+            
+            .compact-header {
+                padding: 8px 16px;
+            }
+            
+            .compact-section {
+                padding: 8px 16px;
+            }
+            
+            .game-container {
+                padding: 8px;
+                min-height: 120px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen overflow-x-hidden">
+    <!-- 游戏说明弹窗 -->
+    <div id="instructionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-6 max-w-md mx-4 text-center shadow-2xl">
+            <div class="text-4xl mb-4">🧠</div>
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">训练说明</h2>
+            <div class="text-gray-600 mb-6 text-left space-y-2">
+                <p>📝 <strong>规则：</strong></p>
+                <p>• 记住每个格子的颜色</p>
+                <p>• 时间结束后，点击高亮格子并选择之前的颜色</p>
+            </div>
+            <div class="space-y-3">
+                <button id="startGameFromInstructions" class="btn-success btn-large w-full">
+                    🚀 开始训练
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 顶部固定区域 -->
+    <div class="top-fixed-area">
+        <div class="top-content">
+            <div class="flex flex-wrap items-center justify-evenly gap-4">
+                <!-- 左侧：得分和难度 -->
+                <div class="flex flex-wrap items-center gap-6">
+                    <div class="flex items-center gap-4">
+                        <div class="text-center">
+                            <div class="text-base text-gray-500">当前分</div>
+                            <div id="score" class="text-2xl font-bold text-blue-600">0</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-base text-gray-500">最高分</div>
+                            <div id="highScore" class="text-2xl font-bold text-green-600">0</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-base text-gray-500">轮次</div>
+                            <div id="round" class="text-2xl font-bold text-purple-600">0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <label class="text-base font-medium text-gray-700">难度:</label>
+                        <select id="difficulty" class="px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                            <!-- 动态生成选项 -->
+                        </select>
+                    </div>
+                </div>
+                <!-- 游戏状态提示 -->
+                <div class="compact-section">
+                    <div id="gameStatus" class="text-center">
+                        <div class="text-xl font-semibold text-gray-700">选择难度级别，点击"开始游戏"开始挑战！</div>
+                        <div id="difficultyInfo" class="text-sm text-gray-500 mt-1"></div>
+                    </div>
+                </div>
+                
+                <!-- 右侧：开始按钮 -->
+                <div class="flex items-center gap-2">
+                    <button id="showInstructions" class="btn-help" title="游戏说明">
+                        ?
+                    </button>
+                    <button id="startGame" class="btn-success">
+                        🎮 开始训练
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主游戏界面 -->
+    <div class="main-layout">
+        <div class="flex-game-area flex flex-col h-full">
+            <!-- 游戏区域 -->
+            <div class="items-center justify-center bg-gray-50">
+                <div class="game-container">
+                    <div id="gameBoard" class="relative"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 底部固定区域 -->
+    <div class="bottom-fixed-area">
+        <!-- 倒计时显示 -->
+        <div id="countdownContainer" class="mb-4 hidden">
+            <div class="bg-orange-100 border-2 border-orange-300 rounded-2xl p-4 text-center">
+                <div class="text-lg font-semibold text-orange-800">⏰ 记忆时间剩余</div>
+                <div id="countdown" class="text-3xl font-bold text-orange-600 mt-2">10</div>
+            </div>
+        </div>
+        
+        <!-- 我记住了按钮 -->
+        <div id="readyButtonContainer" class="text-center mb-4 hidden">
+            <button id="readyButton" class="btn-success btn-large bounce-animation w-full">
+                ✅ 我记住了！
+            </button>
+        </div>
+        
+        <!-- 答题进度 -->
+        <div id="progressArea" class="hidden">
+            <div class="flex justify-between items-center mb-3">
+                <div class="text-lg text-gray-600">📊 答题进度:</div>
+                <div id="progressText" class="text-lg font-semibold text-blue-600">0/3</div>
+            </div>
+            <div class="bg-gray-200 rounded-full h-3 mb-4">
+                <div id="progressBar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div class="text-center">
+                <button id="submitAnswer" class="btn-primary btn-large w-full disabled:opacity-50 disabled:cursor-not-allowed">
+                    📤 提交答案
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 颜色选择浮窗 -->
+    <div id="colorPopup" class="color-popup hidden">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold text-gray-800">🎨 选择颜色</h3>
+                <button id="closePopup" class="text-gray-500 hover:text-gray-700 text-4xl font-bold leading-none">&times;</button>
+            </div>
+            <div id="colorOptions"></div>
+        </div>
+    </div>
+    
+    <!-- 结果弹窗 -->
+    <div id="resultModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl">
+            <div id="resultIcon" class="text-6xl mb-4"></div>
+            <h2 id="resultTitle" class="text-2xl font-bold mb-4"></h2>
+            <div id="resultText" class="text-gray-600 mb-6 text-lg"></div>
+            <div class="space-y-3">
+                <button id="continueGame" class="btn-success w-full btn-large">
+                    🎮 继续训练
+                </button>
+                <button id="restartGame" class="btn-primary w-full btn-large">
+                    🔄 重新训练
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class VisualMemoryGame {
+            constructor() {
+                this.board = document.getElementById('gameBoard');
+                this.startBtn = document.getElementById('startGame');
+                this.startGameFromInstructionsBtn = document.getElementById('startGameFromInstructions');
+                this.showInstructionsBtn = document.getElementById('showInstructions');
+                this.instructionModal = document.getElementById('instructionModal');
+                this.difficultySelect = document.getElementById('difficulty');
+                this.gameStatus = document.getElementById('gameStatus');
+                this.difficultyInfo = document.getElementById('difficultyInfo');
+                this.countdownContainer = document.getElementById('countdownContainer');
+                this.countdown = document.getElementById('countdown');
+                this.readyButtonContainer = document.getElementById('readyButtonContainer');
+                this.readyButton = document.getElementById('readyButton');
+                this.progressArea = document.getElementById('progressArea');
+                this.progressText = document.getElementById('progressText');
+                this.progressBar = document.getElementById('progressBar');
+                this.colorPopup = document.getElementById('colorPopup');
+                this.colorOptions = document.getElementById('colorOptions');
+                this.closePopup = document.getElementById('closePopup');
+                this.submitAnswer = document.getElementById('submitAnswer');
+                this.resultModal = document.getElementById('resultModal');
+                this.continueBtn = document.getElementById('continueGame');
+                this.restartBtn = document.getElementById('restartGame');
+                this.scoreDisplay = document.getElementById('score');
+                this.highScoreDisplay = document.getElementById('highScore');
+                this.roundDisplay = document.getElementById('round');
+                
+                this.gameStarted = false;
+                this.gamePhase = 'waiting';
+                this.score = 0;
+                this.highScore = 0;
+                this.round = 0;
+                this.cards = [];
+                this.currentQuestions = [];
+                this.selectedAnswers = new Map();
+                this.currentSelectedCard = null;
+                this.countdownTimer = null;
+                this.gameColors = [];
+                this.cardClickHandlers = new Map();
+                this.gameConfig = '';
+                this.allTimers = new Set();
+                this.instructionsSeen = false;
+                
+                // 15个难度级别配置
+                this.difficultyLevels = this.generateDifficultyLevels();
+                
+                // 扩展颜色数组
+                this.allColors = [
+                    { name: '红色', value: '#FF6B6B' },
+                    { name: '蓝色', value: '#4ECDC4' },
+                    { name: '绿色', value: '#96CEB4' },
+                    { name: '黄色', value: '#FFEAA7' },
+                    { name: '紫色', value: '#DDA0DD' },
+                    { name: '橙色', value: '#FFB347' },
+                    { name: '粉色', value: '#FFB6C1' },
+                    { name: '青色', value: '#98D8C8' },
+                    { name: '棕色', value: '#D2B48C' },
+                    { name: '灰色', value: '#B0B0B0' },
+                    { name: '深蓝', value: '#4169E1' },
+                    { name: '深绿', value: '#228B22' },
+                    { name: '深红', value: '#DC143C' },
+                    { name: '深紫', value: '#8B008B' },
+                    { name: '深橙', value: '#FF8C00' },
+                    { name: '深粉', value: '#FF1493' },
+                    { name: '深青', value: '#008B8B' },
+                    { name: '深棕', value: '#8B4513' },
+                    { name: '深灰', value: '#696969' },
+                    { name: '酒红', value: '#8B0000' },
+                    { name: '橄榄', value: '#808000' },
+                    { name: '海军', value: '#000080' },
+                    { name: '栗色', value: '#800000' },
+                    { name: '紫罗兰', value: '#9400D3' }
+                ];
+                
+                this.init();
+            }
+            
+            // 生成难度级别配置
+            generateDifficultyLevels() {
+                const levels = {};
+                const difficultyNames = [
+                    '入门', '新手', '简单', '容易', '初级',
+                    '轻松', '基础', '普通', '中等', '进阶',
+                    '挑战', '困难', '艰难', '专家', '大师'
+                ];
+                
+                const configurations = [
+                    { rows: 2, cols: 2, colors: 4, time: 12 },
+                    { rows: 2, cols: 3, colors: 5, time: 10 },
+                    { rows: 3, cols: 3, colors: 6, time: 12 },
+                    { rows: 3, cols: 4, colors: 7, time: 14 },
+                    { rows: 4, cols: 3, colors: 8, time: 13 },
+                    { rows: 4, cols: 4, colors: 9, time: 15 },
+                    { rows: 4, cols: 5, colors: 10, time: 16 },
+                    { rows: 5, cols: 4, colors: 11, time: 15 },
+                    { rows: 5, cols: 5, colors: 12, time: 18 },
+                    { rows: 5, cols: 6, colors: 13, time: 20 },
+                    { rows: 6, cols: 5, colors: 14, time: 19 },
+                    { rows: 6, cols: 6, colors: 15, time: 22 },
+                    { rows: 6, cols: 7, colors: 16, time: 25 },
+                    { rows: 7, cols: 6, colors: 17, time: 24 },
+                    { rows: 7, cols: 7, colors: 18, time: 28 }
+                ];
+                
+                configurations.forEach((config, index) => {
+                    const levelKey = `level${index + 1}`;
+                    const totalCells = config.rows * config.cols;
+                    const difficulty = this.calculateDifficulty(totalCells, config.colors, config.time);
+                    
+                    levels[levelKey] = {
+                        name: difficultyNames[index],
+                        rows: config.rows,
+                        cols: config.cols,
+                        colors: config.colors,
+                        time: config.time,
+                        multiplier: 1.0 + (index * 0.2),
+                        floatRange: this.calculateFloatRange(index),
+                        description: `${config.rows}×${config.cols}, ${config.colors}色, ${config.time}秒`,
+                        difficultyLevel: this.mapToDifficultyLevel(index)
+                    };
+                });
+                
+                return levels;
+            }
+            
+            // 将15个级别映射到1-3难度级别
+            mapToDifficultyLevel(levelIndex) {
+                if (levelIndex <= 4) return 1;
+                if (levelIndex <= 9) return 2;
+                return 3;
+            }
+            
+            // 计算难度系数
+            calculateDifficulty(cells, colors, time) {
+                return Math.round((cells * colors) / time * 10) / 10;
+            }
+            
+            // 计算浮动范围
+            calculateFloatRange(levelIndex) {
+                const baseRange = 0.1;
+                const maxRange = 0.25;
+                return Math.min(baseRange + (levelIndex * 0.01), maxRange);
+            }
+            
+            // 清除所有计时器
+            clearAllTimers() {
+                this.allTimers.forEach(timer => {
+                    clearInterval(timer);
+                });
+                this.allTimers.clear();
+                
+                if (this.countdownTimer) {
+                    clearInterval(this.countdownTimer);
+                    this.countdownTimer = null;
+                }
+            }
+            
+            // 添加计时器到集合
+            addTimer(timer) {
+                this.allTimers.add(timer);
+                return timer;
+            }
+            
+            // 移除计时器
+            removeTimer(timer) {
+                this.allTimers.delete(timer);
+                clearInterval(timer);
+            }
+            
+            // 更新最高分
+            updateHighScore() {
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    this.highScoreDisplay.textContent = this.highScore;
+                    this.highScoreDisplay.classList.add('pulse-animation');
+                    setTimeout(() => {
+                        this.highScoreDisplay.classList.remove('pulse-animation');
+                    }, 500);
+                }
+            }
+            
+            // 发送游戏统计
+            sendGameStats() {
+                const currentConfig = this.getDifficultySettings();
+                window.parent.postMessage({
+                    type: 'gameStats',
+                    data: {
+                        score: this.highScore,
+                        difficulty: currentConfig.difficultyLevel,
+                        currentScore: this.score,
+                        round: this.round,
+                        gameStarted: this.gameStarted
+                    }
+                }, '*');
+            }
+            
+            // 游戏结束事件
+            gameFinished(score, isHighScore = false) {
+                const currentConfig = this.getDifficultySettings();
+                // Only send gameFinished message when round > 3
+                if (this.round > 3) {
+                    window.parent.postMessage({
+                        type: 'gameFinished',
+                        data: {
+                            score: score,
+                            highScore: this.highScore,
+                            difficulty: currentConfig.difficultyLevel,
+                            isHighScore: isHighScore,
+                            round: this.round
+                        }
+                    }, '*');
+                }
+            }
+            
+            // 显示说明
+            showInstructions() {
+                this.instructionModal.classList.remove('hidden');
+            }
+            
+            // 隐藏说明
+            hideInstructions() {
+                this.instructionModal.classList.add('hidden');
+                this.instructionsSeen = true;
+            }
+            
+            init() {
+                this.populateDifficultyOptions();
+                
+                // 按钮事件
+                this.startBtn.addEventListener('click', () => this.startGame());
+                this.startGameFromInstructionsBtn.addEventListener('click', () => {
+                    this.hideInstructions();
+                    this.startGame();
+                });
+                this.showInstructionsBtn.addEventListener('click', () => this.showInstructions());
+                
+                this.readyButton.addEventListener('click', () => this.onReadyClicked());
+                this.submitAnswer.addEventListener('click', () => this.submitAnswers());
+                this.continueBtn.addEventListener('click', () => this.nextRound());
+                this.restartBtn.addEventListener('click', () => this.resetGame());
+                this.closePopup.addEventListener('click', () => this.hideColorPopup());
+                
+                // 修改难度选择事件 - 添加自动开始功能
+                this.difficultySelect.addEventListener('change', () => {
+                    this.clearAllTimers();
+                    this.updateDifficultyInfo();
+                    
+                    // 如果游戏已经开始过，自动开始新游戏
+                    if (this.gameStarted || this.instructionsSeen) {
+                        setTimeout(() => {
+                            this.startGame();
+                        }, 100);
+                    }
+                });
+                
+                // 初始化显示难度信息
+                this.updateDifficultyInfo();
+                
+                // 点击浮窗外部关闭
+                this.colorPopup.addEventListener('click', (e) => {
+                    if (e.target === this.colorPopup) {
+                        this.hideColorPopup();
+                    }
+                });
+                
+                // 监听外部消息
+                this.setupMessageListener();
+                
+                // 发送游戏加载完成事件
+                window.parent.postMessage({ type: 'gameLoaded' }, '*');
+            }
+
+            
+            // 设置消息监听器
+            setupMessageListener() {
+                window.addEventListener('message', (e) => {
+                    switch (e.data.type) {
+                        case 'setGameConfig':
+                            this.gameConfig = e.data.data;
+                            console.log('Game config updated:', this.gameConfig);
+                            break;
+                        case 'getGameStats':
+                            this.sendGameStats();
+                            break;
+                    }
+                });
+            }
+            
+            // 填充难度选项
+            populateDifficultyOptions() {
+                this.difficultySelect.innerHTML = '';
+                Object.keys(this.difficultyLevels).forEach(levelKey => {
+                    const config = this.difficultyLevels[levelKey];
+                    const option = document.createElement('option');
+                    option.value = levelKey;
+                    option.textContent = `${config.name}`;
+                    this.difficultySelect.appendChild(option);
+                });
+            }
+            
+            updateDifficultyInfo() {
+                const levelKey = this.difficultySelect.value;
+                const config = this.difficultyLevels[levelKey];
+                const totalCells = config.rows * config.cols;
+                const difficulty = this.calculateDifficulty(totalCells, config.colors, config.time);
+                
+                this.difficultyInfo.textContent = `${totalCells}个格子 | ${config.colors}种颜色 | ${config.time}秒记忆时间 | 难度系数: ${difficulty}`;
+            }
+            
+            getDifficultySettings() {
+                const levelKey = this.difficultySelect.value;
+                return this.difficultyLevels[levelKey];
+            }
+            
+            startGame() {
+                this.clearAllTimers();
+                
+                this.gameStarted = true;
+                this.score = 0;
+                this.round = 0;
+                this.updateScore();
+                this.nextRound();
+                this.startBtn.textContent = '🔄 重新训练';
+                
+                window.parent.postMessage({ type: 'gameStarted' }, '*');
+            }
+            
+            nextRound() {
+                this.clearAllTimers();
+                
+                this.round++;
+                this.updateScore();
+                this.gamePhase = 'memorizing';
+                this.selectedAnswers.clear();
+                this.currentSelectedCard = null;
+                this.hideAllPanels();
+                this.clearBoard();
+                this.createBoard();
+                this.startMemoryPhase();
+            }
+            
+            // 清除游戏板和所有事件监听器
+            clearBoard() {
+                this.cardClickHandlers.forEach((handler, card) => {
+                    card.removeEventListener('click', handler);
+                });
+                this.cardClickHandlers.clear();
+                
+                this.board.innerHTML = '';
+                this.cards = [];
+                this.currentQuestions = [];
+            }
+            
+            createBoard() {
+                const config = this.getDifficultySettings();
+                const { rows, cols, colors, floatRange } = config;
+                
+                const shuffledColors = [...this.allColors].sort(() => 0.5 - Math.random());
+                this.gameColors = shuffledColors.slice(0, colors);
+                
+                this.cards = [];
+                for (let i = 0; i < rows * cols; i++) {
+                    const randomColor = this.gameColors[Math.floor(Math.random() * this.gameColors.length)];
+                    this.cards.push({
+                        index: i,
+                        color: randomColor,
+                        row: Math.floor(i / cols),
+                        col: i % cols
+                    });
+                }
+                
+                const baseSize = this.calculateCellSize(rows * cols);
+                const spacing = parseInt(baseSize) * 0.3;
+                const boardWidth = cols * parseInt(baseSize) + (cols - 1) * spacing;
+                const boardHeight = rows * parseInt(baseSize) + (rows - 1) * spacing;
+                
+                this.board.style.width = `${boardWidth}px`;
+                this.board.style.height = `${boardHeight}px`;
+                
+                this.cards.forEach((cardData, index) => {
+                    const card = this.createCard(cardData, index, baseSize, spacing, floatRange);
+                    this.board.appendChild(card);
+                });
+            }
+            
+            calculateCellSize(totalCells) {
+                // 根据1280*720屏幕优化尺寸
+                if (totalCells <= 12) return '60px';
+                if (totalCells <= 25) return '50px';
+                if (totalCells <= 36) return '45px';
+                return '40px';
+            }
+            
+            createCard(cardData, index, baseSize, spacing, floatRange) {
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                const row = cardData.row;
+                const col = cardData.col;
+                const baseSizeNum = parseInt(baseSize);
+                
+                const baseX = col * (baseSizeNum + spacing);
+                const baseY = row * (baseSizeNum + spacing);
+                
+                const floatRangePixels = baseSizeNum * floatRange;
+                const randomX = (Math.random() - 0.5) * 2 * floatRangePixels;
+                const randomY = (Math.random() - 0.5) * 2 * floatRangePixels;
+                
+                const sizeFloat = (Math.random() - 0.5) * 2 * floatRange;
+                const actualSize = baseSizeNum * (1 + sizeFloat);
+                
+                card.style.left = `${baseX + randomX}px`;
+                card.style.top = `${baseY + randomY}px`;
+                card.style.width = `${actualSize}px`;
+                card.style.height = `${actualSize}px`;
+                card.style.backgroundColor = cardData.color.value;
+                
+                card.dataset.index = index;
+                card.dataset.row = cardData.row;
+                card.dataset.col = cardData.col;
+                
+                return card;
+            }
+            
+            startMemoryPhase() {
+                const config = this.getDifficultySettings();
+                this.gameStatus.innerHTML = `<div class="text-xl font-semibold text-blue-700">🧠 记住每个格子的颜色！</div>`;
+                this.countdownContainer.classList.remove('hidden');
+                this.readyButtonContainer.classList.remove('hidden');
+                
+                this.countdown.textContent = config.time;
+                let timeLeft = config.time;
+                
+                this.countdownTimer = this.addTimer(setInterval(() => {
+                    timeLeft--;
+                    this.countdown.textContent = timeLeft;
+                    
+                    if (timeLeft <= 0) {
+                        this.onReadyClicked();
+                    }
+                }, 1000));
+            }
+            
+            onReadyClicked() {
+                this.clearAllTimers();
+                
+                this.gamePhase = 'answering';
+                this.hideColors();
+                this.generateQuestions();
+                this.showQuestions();
+            }
+            
+            hideColors() {
+                this.countdownContainer.classList.add('hidden');
+                this.readyButtonContainer.classList.add('hidden');
+                
+                const cards = this.board.querySelectorAll('.card');
+                cards.forEach((card, index) => {
+                    card.classList.add('fade-out');
+                    setTimeout(() => {
+                        card.style.backgroundColor = '#f8f9fa';
+                        card.classList.remove('fade-out');
+                    }, 500);
+                });
+            }
+            
+            generateQuestions() {
+                if (this.gamePhase !== 'answering') return;
+                
+                const shuffled = [...this.cards].sort(() => 0.5 - Math.random());
+                this.currentQuestions = shuffled.slice(0, 3);
+                
+                setTimeout(() => {
+                    if (this.gamePhase !== 'answering') return;
+                    
+                    this.currentQuestions.forEach(question => {
+                        const card = this.board.querySelector(`[data-index="${question.index}"]`);
+                        if (card) {
+                            card.classList.add('highlight', 'selectable');
+                            
+                            const handler = () => this.selectCard(card, question);
+                            card.addEventListener('click', handler);
+                            this.cardClickHandlers.set(card, handler);
+                        }
+                    });
+                }, 600);
+            }
+            
+            selectCard(card, question) {
+                if (this.gamePhase !== 'answering') return;
+                
+                this.board.querySelectorAll('.card.selecting').forEach(c => {
+                    c.classList.remove('selecting');
+                });
+                
+                card.classList.add('selecting');
+                
+                this.currentSelectedCard = { card, question };
+                this.showColorPopup();
+            }
+            
+            showColorPopup() {
+                this.colorPopup.classList.remove('hidden');
+                this.colorPopup.classList.add('slide-up');
+                this.createColorOptions();
+            }
+            
+            hideColorPopup() {
+                if (this.currentSelectedCard) {
+                    this.currentSelectedCard.card.classList.remove('selecting');
+                }
+                
+                this.colorPopup.classList.add('slide-down');
+                setTimeout(() => {
+                    this.colorPopup.classList.add('hidden');
+                    this.colorPopup.classList.remove('slide-up', 'slide-down');
+                }, 300);
+            }
+            
+            createColorOptions() {
+                this.colorOptions.innerHTML = '';
+                
+                // 根据颜色数量添加对应的CSS类
+                const colorCount = this.gameColors.length;
+                this.colorOptions.className = `color-options-${colorCount}`;
+                
+                // 根据颜色数量调整网格列数
+                let gridCols;
+                if (colorCount <= 4) {
+                    gridCols = 2; // 2x2
+                } else if (colorCount <= 6) {
+                    gridCols = 3; // 3x2 or 3x3
+                } else if (colorCount <= 9) {
+                    gridCols = 3; // 3x3
+                } else if (colorCount <= 12) {
+                    gridCols = 4; // 4x3
+                } else {
+                    gridCols = 5; // 5x4 or more
+                }
+                
+                this.colorOptions.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+                
+                this.gameColors.forEach(color => {
+                    const option = document.createElement('div');
+                    option.className = 'color-option border-2 border-gray-300 cursor-pointer';
+                    option.style.backgroundColor = color.value;
+                    option.title = color.name;
+                    
+                    option.addEventListener('click', () => this.selectColor(color));
+                    
+                    this.colorOptions.appendChild(option);
+                });
+            }
+            
+            selectColor(color) {
+                if (!this.currentSelectedCard) return;
+                
+                const { card, question } = this.currentSelectedCard;
+                const questionIndex = question.index;
+                
+                this.selectedAnswers.set(questionIndex, color);
+                
+                card.style.backgroundColor = color.value;
+                card.classList.add('answered');
+                card.classList.remove('highlight', 'selecting');
+                
+                const handler = this.cardClickHandlers.get(card);
+                if (handler) {
+                    card.removeEventListener('click', handler);
+                    this.cardClickHandlers.delete(card);
+                }
+                
+                this.updateProgress();
+                this.hideColorPopup();
+                this.currentSelectedCard = null;
+            }
+            
+            showQuestions() {
+                this.gameStatus.innerHTML = `<div class="text-xl font-semibold text-purple-700">🎯 点击高亮的格子选择颜色</div>`;
+                this.progressArea.classList.remove('hidden');
+                this.updateProgress();
+            }
+            
+            updateProgress() {
+                const answeredCount = this.selectedAnswers.size;
+                const totalCount = this.currentQuestions.length;
+                const progressPercent = (answeredCount / totalCount) * 100;
+                
+                this.progressText.textContent = `${answeredCount}/${totalCount}`;
+                this.progressBar.style.width = `${progressPercent}%`;
+                
+                this.submitAnswer.disabled = answeredCount < totalCount;
+            }
+            
+            submitAnswers() {
+                if (this.selectedAnswers.size !== this.currentQuestions.length) {
+                    alert('请选择所有高亮格子的颜色！');
+                    return;
+                }
+                
+                let correct = 0;
+                this.currentQuestions.forEach(question => {
+                    const userAnswer = this.selectedAnswers.get(question.index);
+                    const correctAnswer = question.color;
+                    
+                    if (userAnswer && userAnswer.name === correctAnswer.name) {
+                        correct++;
+                    }
+                });
+                
+                const config = this.getDifficultySettings();
+                const baseScore = correct * 10;
+                const bonusScore = Math.floor(baseScore * config.multiplier);
+                
+                const oldScore = this.score;
+                this.score += bonusScore;
+                this.updateScore();
+                
+                const isNewHighScore = this.score > this.highScore;
+                this.updateHighScore();
+                
+                this.gameFinished(bonusScore, isNewHighScore);
+                this.showResult(correct, bonusScore, isNewHighScore);
+            }
+            
+            showResult(correct, score, isNewHighScore) {
+                const total = this.currentQuestions.length;
+                const config = this.getDifficultySettings();
+                const resultIcon = document.getElementById('resultIcon');
+                const resultTitle = document.getElementById('resultTitle');
+                const resultText = document.getElementById('resultText');
+                
+                let resultHTML = '';
+                
+                if (correct === total) {
+                    resultIcon.textContent = '🎉';
+                    resultTitle.textContent = '完美！';
+                    resultTitle.className = 'text-2xl font-bold mb-4 text-green-600';
+                    resultHTML = `太棒了！你答对了所有${total}道题！<br>获得 ${score} 分（${config.name}难度加成）`;
+                } else if (correct >= total / 2) {
+                    resultIcon.textContent = '👍';
+                    resultTitle.textContent = '不错！';
+                    resultTitle.className = 'text-2xl font-bold mb-4 text-blue-600';
+                    resultHTML = `你答对了${correct}/${total}道题！<br>获得 ${score} 分`;
+                } else {
+                    resultIcon.textContent = '💪';
+                    resultTitle.textContent = '继续努力！';
+                    resultTitle.className = 'text-2xl font-bold mb-4 text-orange-600';
+                    resultHTML = `你答对了${correct}/${total}道题<br>获得 ${score} 分，再试试！`;
+                }
+                
+                if (isNewHighScore) {
+                    resultHTML += '<br><br>🏆 <span class="text-green-600 font-bold">新的最高分！</span>';
+                }
+                
+                resultText.innerHTML = resultHTML;
+                this.resultModal.classList.remove('hidden');
+            }
+            
+            hideAllPanels() {
+                this.countdownContainer.classList.add('hidden');
+                this.readyButtonContainer.classList.add('hidden');
+                this.progressArea.classList.add('hidden');
+                this.colorPopup.classList.add('hidden');
+                this.resultModal.classList.add('hidden');
+            }
+            
+            updateScore() {
+                this.scoreDisplay.textContent = this.score;
+                this.roundDisplay.textContent = this.round;
+            }
+            
+            resetGame() {
+                this.clearAllTimers();
+                
+                this.gameStarted = false;
+                this.gamePhase = 'waiting';
+                this.score = 0;
+                this.round = 0;
+                this.selectedAnswers.clear();
+                this.currentSelectedCard = null;
+                this.gameColors = [];
+                this.updateScore();
+                
+                this.hideAllPanels();
+                this.clearBoard();
+                this.gameStatus.innerHTML = `<div class="text-base font-semibold text-gray-700">选择难度级别，点击"开始训练"开始挑战！</div>`;
+                this.updateDifficultyInfo();
+                
+                this.startBtn.textContent = '🎮 开始训练';
+            }
+        }
+        
+        // 启动游戏
+        const game = new VisualMemoryGame();
+    </script>
+</body>
+</html>

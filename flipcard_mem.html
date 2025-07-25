@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>顺序记忆游戏</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        /* 全屏基础样式 */
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            touch-action: manipulation;
+        }
+        
+        /* 游戏主容器 */
+        .game-container {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        /* 游戏信息面板 */
+        .game-info {
+            display: flex;
+            justify-content: space-evenly;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background: rgba(31, 41, 55, 0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #374151;
+            font-size: 1.4rem;
+            min-height: 50px;
+        }
+
+        @media (max-width: 640px) {
+            .game-info {
+                padding: 0.25rem 0.5rem;
+                font-size: 1.1rem;
+                min-height: 40px;
+            }
+        }
+
+        /* 游戏状态栏 */
+        .status-bar {
+            text-align: center;
+            padding: 0.5rem;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(31, 41, 55, 0.5);
+            font-size: 1.2rem;
+        }
+
+        @media (max-width: 640px) {
+            .status-bar {
+                font-size: 1.1rem;
+            }
+        }
+
+        /* 游戏主体区域 */
+        .game-board-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0.5rem;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* 控制按钮 */
+        .control-buttons {
+            padding: 0.5rem;
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        /* 设置面板 */
+        .settings-panel {
+            padding: 0.5rem;
+            background: rgba(31, 41, 55, 0.9);
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .setting-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.1rem;
+            color: #85888b;
+        }
+
+        .setting-select {
+            background: #374151;
+            color: white;
+            border: 1px solid #4b5563;
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        @media (max-width: 640px) {
+            .settings-panel {
+                padding: 0.25rem;
+                gap: 0.5rem;
+            }
+            .setting-item {
+                font-size: 1rem;
+            }
+            .setting-select {
+                padding: 0.2rem 0.4rem;
+                font-size: 1rem;
+            }
+        }
+
+        /* 按钮样式 */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            min-height: 36px;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        @media (max-width: 640px) {
+            .btn {
+                padding: 0.4rem 0.8rem;
+                font-size: 1.1rem;
+                min-height: 32px;
+            }
+        }
+
+        /* 游戏网格容器 */
+        .grid-container {
+            display: grid;
+            gap: 6px;
+            padding: 12px;
+            background-color: #374151;
+            border-radius: 12px;
+            max-width: 90vmin;
+            max-height: 75vh;
+            margin: 0 auto;
+            width: fit-content;
+            height: fit-content;
+        }
+
+        @media (max-width: 640px) {
+            .grid-container {
+                gap: 5px;
+                padding: 10px;
+                max-height: 70vh;
+                max-width: 95vmin;
+            }
+        }
+
+        @media (max-height: 600px) {
+            .grid-container {
+                gap: 4px;
+                padding: 8px;
+                max-height: 60vh;
+                max-width: 95vmin;
+            }
+        }
+
+        /* 网格单元格样式 */
+        .grid-cell {
+            transition: all 0.3s ease;
+            background-color: #4b5563 !important;
+            cursor: pointer;
+            border: 1px solid #6b7280;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            position: relative;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            min-height: 60px;
+            min-width: 60px;
+            font-size: 1.6rem;
+        }
+
+        @media (hover: hover) {
+            .grid-cell:hover {
+                background-color: #6b7280 !important;
+                transform: scale(1.05);
+            }
+        }
+
+        .grid-cell:active {
+            background-color: #6b7280 !important;
+            transform: scale(1.05);
+        }
+
+        /* 响应式网格大小 */
+        .grid-3 { 
+            grid-template-columns: repeat(3, 1fr);
+        }
+        .grid-3 .grid-cell {
+            min-height: 80px !important;
+            min-width: 80px !important;
+            font-size: 1.8rem !important;
+        }
+
+        .grid-4 { 
+            grid-template-columns: repeat(4, 1fr);
+        }
+        .grid-4 .grid-cell {
+            min-height: 70px !important;
+            min-width: 70px !important;
+            font-size: 1.6rem !important;
+        }
+
+        .grid-5 { 
+            grid-template-columns: repeat(5, 1fr);
+        }
+        .grid-5 .grid-cell {
+            min-height: 60px !important;
+            min-width: 60px !important;
+            font-size: 1.4rem !important;
+        }
+
+        .grid-6 { 
+            grid-template-columns: repeat(6, 1fr);
+        }
+        .grid-6 .grid-cell {
+            min-height: 50px !important;
+            min-width: 50px !important;
+            font-size: 1.2rem !important;
+        }
+        
+        /* 状态样式 */
+        .highlighted {
+            background-color: #10b981 !important;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.6);
+        }
+        .correct {
+            background-color: #10b981 !important;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        .incorrect {
+            background-color: #ef4444 !important;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+        .highlighting {
+            background-color: #3b82f6 !important;
+            box-shadow: 0 0 20px #3b82f6;
+            animation: highlight 0.8s ease-in-out;
+        }
+
+        .sequence-word {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 8px rgba(0,0,0,0.8);
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        /* 动画效果 */
+        @keyframes highlight {
+            0% { background-color: #3b82f6; transform: scale(1); }
+            50% { background-color: #60a5fa; transform: scale(1.1); }
+            100% { background-color: #3b82f6; transform: scale(1); }
+        }
+
+        @keyframes correctPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        @keyframes wrongShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .pulse {
+            animation: correctPulse 0.6s ease-in-out;
+        }
+
+        .wrong {
+            animation: wrongShake 0.6s ease-in-out;
+        }
+
+        /* 规则弹窗 */
+        .rules-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        
+        .rules-content {
+            background: #1f2937;
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            font-size: 1.2rem;
+        }
+
+        .rules-content h2 {
+            font-size: 1.8rem;
+        }
+
+        .rules-content h3 {
+            font-size: 1.4rem;
+        }
+
+        @media (max-width: 640px) {
+            .rules-content {
+                padding: 1rem;
+                max-width: 95vw;
+                max-height: 85vh;
+                font-size: 1.1rem;
+            }
+            
+            .rules-content h2 {
+                font-size: 1.6rem;
+            }
+
+            .rules-content h3 {
+                font-size: 1.3rem;
+            }
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+        
+        /* 规则图标 */
+        .rules-icon {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: rgba(59, 130, 246, 0.9);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .rules-icon:hover {
+            background: rgba(59, 130, 246, 1);
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        @media (max-width: 640px) {
+            .rules-icon {
+                width: 50px;
+                height: 50px;
+                bottom: 15px;
+                right: 15px;
+                font-size: 1.6rem;
+            }
+        }
+
+        /* 序列显示 */
+        .sequence-display {
+            font-size: 0.9rem;
+            color: #a78bfa;
+            text-align: center;
+            min-height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 0.5rem;
+        }
+        .setting-text {
+            color: #676869;
+            font-weight: 500;
+            padding: 0.2rem 0.2rem;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 防止双击缩放 */
+        * {
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-gray-900">
+    <div class="game-container">
+        <!-- 游戏信息面板 -->
+        <div class="game-info">
+            <div class="flex items-center gap-2 text-yellow-400">
+                <span class="text-base font-medium">得分:</span>
+                <span id="score" class="font-bold text-xl">0</span>
+            </div>
+            <div class="flex items-center gap-2 text-blue-400">
+                <span class="text-base font-medium">关卡:</span>
+                <span id="currentLevel" class="font-bold text-xl">1</span>
+            </div>
+            <div class="flex items-center gap-2 text-green-400">
+                <span class="text-base font-medium">序列:</span>
+                <span id="sequenceLength" class="font-bold text-xl">4</span>
+            </div>
+            <div class="flex items-center gap-2 text-red-400">
+                <span class="text-base font-medium">错误:</span>
+                <span id="mistakes" class="font-bold text-xl">0</span>
+                <span class="font-bold text-xl">/</span>
+                <span class="font-bold text-xl">5</span>
+            </div>
+            <div class="flex items-center gap-2 text-purple-400">
+                <span class="text-base font-medium">步骤:</span>
+                <span id="currentStep" class="font-bold text-xl">0</span>
+            </div>
+        </div>
+
+        <!-- 游戏状态栏 -->
+        <div id="gameStatus" class="status-bar">
+            <span class="text-white text-base font-medium">点击"开始游戏"开始挑战</span>
+        </div>
+
+        <!-- 游戏主体区域 -->
+        <div class="game-board-area">
+            <div id="gameGrid" class="grid-container grid-4">
+                <!-- 网格单元格将由JavaScript生成 -->
+            </div>
+            <!-- 序列显示 -->
+            <div id="sequenceDisplay" class="sequence-display"></div>
+
+            <div class="control-buttons">
+                <button id="startBtn" class="btn bg-green-600 hover:bg-green-700 text-white">
+                    开始游戏
+                </button>
+            </div>
+        </div>
+
+        
+        <!-- 设置面板 -->
+        <div class="settings-panel">
+            <div class="setting-item">
+                <label>难度:</label>
+                <select id="difficultySelect" class="setting-select">
+                    <option value="1">1级 - 入门</option>
+                    <option value="2">2级 - 初学</option>
+                    <option value="3">3级 - 基础</option>
+                    <option value="4">4级 - 进阶</option>
+                    <option value="5">5级 - 熟练</option>
+                    <option value="6">6级 - 中级</option>
+                    <option value="7">7级 - 高级</option>
+                    <option value="8">8级 - 专家</option>
+                    <option value="9">9级 - 大师</option>
+                    <option value="10">10级 - 传奇</option>
+                    <option value="11">11级 - 超凡</option>
+                    <option value="12">12级 - 神话</option>
+                </select>
+            </div>
+            <div class="setting-item">
+                <label>网格:</label>
+                <span id="gridSizeDisplay" class="setting-text">4×4</span>
+            </div>
+            <div class="setting-item">
+                <label>序列:</label>
+                <span id="sequenceDisplay" class="setting-text">4步</span>
+            </div>
+            <div class="setting-item">
+                <label>速度:</label>
+                <span id="speedDisplay" class="setting-text">正常</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏规则弹窗 -->
+    <div id="rulesModal" class="rules-modal">
+        <div class="rules-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-3xl font-bold text-blue-400">过目不忘</h2>
+                <button id="closeRulesBtn" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div class="space-y-3 text-2xl text-white">
+                <div class="bg-gray-600 p-3 rounded-lg">
+                    <h3 class="font-medium mb-2 text-green-400">🎯 目标</h3>
+                    <p>观察方块亮起的顺序和显示的英文单词，然后凭记忆按相同顺序点击方块。</p>
+                </div>
+                <div class="bg-gray-600 p-3 rounded-lg">
+                    <h3 class="font-medium mb-2 text-yellow-400">📋 游戏流程</h3>
+                    <ul class="space-y-1 text-xl">
+                        <li>• 观察方块按顺序依次亮起，每个显示一个单词</li>
+                        <li>• 记住每个方块亮起的先后顺序</li>
+                        <li>• 完全消失后，按照相同的顺序点击方块</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-4 text-center">
+                <button id="startGameFromRules" class="btn text-2xl bg-green-600 hover:bg-green-700 text-white px-6 py-4">开始训练</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规则查看图标 -->
+    <div id="rulesIcon" class="rules-icon hidden" title="查看规则">
+        ?
+    </div>
+
+    <script>
+        // 全局变量和配置
+        let game_config = '';
+        let highestScore = 0;
+        let gameStarted = false;
+
+        // 更新游戏配置
+        function updateGameConfig(config) {
+            try {
+                if (typeof config === 'string' && config.trim()) {
+                    const newWords = parseWordConfig(config);
+                    if (newWords.length > 0) {
+                        if (window.sequenceGame) {
+                            window.sequenceGame.wordPool = newWords;
+                            console.log(`配置已更新，加载了 ${newWords.length} 个单词`);
+                        }
+                    } else {
+                        console.warn('新配置没有有效单词，保持原配置');
+                    }
+                }
+            } catch (error) {
+                console.warn('解析游戏配置失败，保持原配置:', error);
+            }
+        }
+
+        // 解析单词配置（支持多种格式）
+        function parseWordConfig(config) {
+            const words = [];
+            
+            try {
+                const jsonData = JSON.parse(config);
+                if (Array.isArray(jsonData)) {
+                    return jsonData.filter(item => 
+                        typeof item === 'string' || (item.word && typeof item.word === 'string')
+                    ).map(item => typeof item === 'string' ? item.toUpperCase() : item.word.toUpperCase());
+                }
+            } catch (e) {
+                const lines = config.trim().split('\n');
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    if (line.includes(',')) {
+                        const parts = line.split(',');
+                        if (parts[0] && parts[0].trim()) {
+                            words.push(parts[0].trim().toUpperCase());
+                        }
+                    } else {
+                        words.push(line.toUpperCase());
+                    }
+                }
+            }
+            
+            return words;
+        }
+
+        class SequenceMemoryGame {
+            constructor() {
+                this.gameGrid = document.getElementById('gameGrid');
+                this.startBtn = document.getElementById('startBtn');
+                this.gameStatus = document.getElementById('gameStatus');
+                this.scoreElement = document.getElementById('score');
+                this.mistakesElement = document.getElementById('mistakes');
+                this.currentLevelElement = document.getElementById('currentLevel');
+                this.currentStepElement = document.getElementById('currentStep');
+                this.sequenceDisplay = document.getElementById('sequenceDisplay');
+                this.sequenceLengthElement = document.getElementById('sequenceLength');
+                
+                this.gridSize = 4;
+                this.sequenceLength = 4;
+                this.playSpeed = 1000;
+                this.currentLevel = 1;
+                this.score = 0;
+                this.mistakes = 0;
+                
+                this.gameState = 'idle';
+                this.targetSequence = [];
+                this.sequenceWords = [];
+                this.playerSequence = [];
+                this.currentStep = 0;
+                this.cells = [];
+                this.showingSequence = false;
+                
+                // 初始化定时器管理相关变量
+                this.sequenceTimers = [];
+                this.isShowingSequence = false;
+                
+                // 英文单词池
+                this.wordPool = [
+                    'cat', 'dog', 'sun', 'moon', 'tree', 'book', 'cake', 'ball',
+                    'car', 'bus', 'red', 'blue', 'big', 'small', 'hot', 'cold',
+                    'yes', 'no', 'up', 'down', 'in', 'out', 'on', 'off',
+                    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+                    'nine', 'ten', 'boy', 'girl', 'mom', 'dad', 'happy', 'sad'
+                ];
+
+                // 初始化游戏
+                this.initializeElements();
+                this.initializeRulesModal();
+                this.initializeDifficulty();
+                this.createGrid();
+                this.bindEvents();
+                this.addTouchSupport();
+                this.updateDisplayText();
+
+                window.sequenceGame = this;
+
+                // 游戏开始时显示规则
+                this.showRulesModal();
+            }
+
+            // 新增：初始化DOM元素
+            initializeElements() {
+                // DOM元素已经在构造函数中初始化了，这里可以做一些额外的设置
+                this.rulesModal = document.getElementById('rulesModal');
+                this.rulesIcon = document.getElementById('rulesIcon');
+                this.closeRulesBtn = document.getElementById('closeRulesBtn');
+                this.startGameFromRules = document.getElementById('startGameFromRules');
+                this.difficultySelect = document.getElementById('difficultySelect');
+            }
+
+            // 新增：初始化规则弹窗
+            initializeRulesModal() {
+                // 确保规则图标隐藏
+                if (this.rulesIcon) {
+                    this.rulesIcon.classList.add('hidden');
+                }
+            }
+
+            // 新增：绑定事件
+            bindEvents() {
+                // 开始游戏按钮
+                if (this.startBtn) {
+                    this.startBtn.addEventListener('click', () => {
+                        if (this.gameState === 'idle') {
+                            this.startGame();
+                        } else {
+                            this.resetGame();
+                        }
+                    });
+                }
+
+                // 关闭规则弹窗
+                if (this.closeRulesBtn) {
+                    this.closeRulesBtn.addEventListener('click', () => {
+                        this.hideRulesModal();
+                        if (this.rulesIcon) {
+                            this.rulesIcon.classList.remove('hidden');
+                        }
+                    });
+                }
+
+                // 从规则弹窗开始游戏
+                if (this.startGameFromRules) {
+                    this.startGameFromRules.addEventListener('click', () => {
+                        this.hideRulesModal();
+                        if (this.rulesIcon) {
+                            this.rulesIcon.classList.remove('hidden');
+                        }
+                        this.startGame();
+                    });
+                }
+
+                // 规则图标点击
+                if (this.rulesIcon) {
+                    this.rulesIcon.addEventListener('click', () => {
+                        this.showRulesModal();
+                    });
+                }
+
+                // 难度选择器
+                if (this.difficultySelect) {
+                    this.difficultySelect.addEventListener('change', (e) => {
+                        const selectedDifficulty = parseInt(e.target.value);
+                        this.setDifficulty(selectedDifficulty);
+                    });
+                }
+
+                // 点击规则弹窗遮罩关闭
+                if (this.rulesModal) {
+                    this.rulesModal.addEventListener('click', (e) => {
+                        if (e.target === this.rulesModal) {
+                            this.hideRulesModal();
+                            if (this.rulesIcon) {
+                                this.rulesIcon.classList.remove('hidden');
+                            }
+                        }
+                    });
+                }
+            }
+
+            // 新增：添加触摸支持
+            addTouchSupport() {
+                // 基本的触摸支持已经在 createGrid 方法中实现
+                // 这里可以添加额外的触摸相关设置
+            }
+
+            // 清理所有定时器的方法
+            clearAllTimers() {
+                // 确保 sequenceTimers 数组存在
+                if (this.sequenceTimers && Array.isArray(this.sequenceTimers)) {
+                    this.sequenceTimers.forEach(timer => {
+                        if (timer) {
+                            clearTimeout(timer);
+                        }
+                    });
+                }
+                this.sequenceTimers = [];
+                this.isShowingSequence = false;
+            }
+
+            // 新增：生成序列
+            generateSequence() {
+                this.targetSequence = [];
+                this.sequenceWords = this.getRandomWords(this.sequenceLength);
+                
+                const totalCells = this.gridSize * this.gridSize;
+                const usedIndices = new Set();
+                
+                for (let i = 0; i < this.sequenceLength; i++) {
+                    let randomIndex;
+                    do {
+                        randomIndex = Math.floor(Math.random() * totalCells);
+                    } while (usedIndices.has(randomIndex));
+                    
+                    usedIndices.add(randomIndex);
+                    this.targetSequence.push(randomIndex);
+                }
+            }
+
+            // 新增：显示序列
+            async showSequence() {
+                this.clearAllTimers();
+                this.isShowingSequence = true;
+                
+                let displayedSequence = [];
+                
+                for (let i = 0; i < this.targetSequence.length; i++) {
+                    if (!this.isShowingSequence) {
+                        return;
+                    }
+                    
+                    const cellIndex = this.targetSequence[i];
+                    const word = this.sequenceWords[i];
+                    const cell = this.cells[cellIndex];
+                    
+                    // 显示英文单词
+                    const wordElement = document.createElement('div');
+                    wordElement.className = 'sequence-word';
+                    wordElement.textContent = word;
+                    cell.appendChild(wordElement);
+                    
+                    // 高亮显示当前方块
+                    cell.classList.add('highlighting');
+                    
+                    // 更新序列显示
+                    displayedSequence.push(word);
+                    this.sequenceDisplay.textContent = `序列: ${displayedSequence.join(' → ')}`;
+                    
+                    // 使用受控的定时器等待
+                    await this.sleepWithTimer(this.playSpeed);
+                    
+                    if (!this.isShowingSequence) {
+                        return;
+                    }
+                    
+                    // 移除高亮和单词
+                    cell.classList.remove('highlighting');
+                    wordElement.remove();
+                    
+                    // 短暂停顿
+                    await this.sleepWithTimer(300);
+                }
+                
+                // 只有在没有被中断的情况下才启动玩家回合
+                if (this.isShowingSequence) {
+                    this.startPlayerTurn();
+                }
+            }
+
+            // 受控的延迟函数，可以被中断
+            sleepWithTimer(ms) {
+                return new Promise((resolve) => {
+                    const timer = setTimeout(() => {
+                        // 从定时器数组中移除
+                        const index = this.sequenceTimers.indexOf(timer);
+                        if (index > -1) {
+                            this.sequenceTimers.splice(index, 1);
+                        }
+                        resolve();
+                    }, ms);
+                    
+                    // 添加到定时器数组中
+                    this.sequenceTimers.push(timer);
+                });
+            }
+
+            // 新增：开始玩家回合
+            startPlayerTurn() {
+                this.gameState = 'memorizing';
+                this.showingSequence = false;
+                this.isShowingSequence = false;
+                this.playerSequence = [];
+                this.currentStep = 0;
+                this.currentStepElement.textContent = '0';
+                this.gameStatus.innerHTML = '<span class="text-blue-400">现在按照刚才的顺序点击方块！</span>';
+            }
+
+            // 修改：更新显示文本方法，确保所有UI同步
+            updateDisplayText() {
+                const gridSizeDisplay = document.getElementById('gridSizeDisplay');
+                const sequenceDisplayElement = document.getElementById('sequenceDisplay');
+                const speedDisplay = document.getElementById('speedDisplay');
+        
+                if (gridSizeDisplay) {
+                    gridSizeDisplay.textContent = `${this.gridSize}×${this.gridSize}`;
+                }
+        
+                if (sequenceDisplayElement) {
+                    sequenceDisplayElement.textContent = `${this.sequenceLength}步`;
+                }
+        
+                if (speedDisplay) {
+                    let speedText = '正常';
+                    if (this.playSpeed >= 1300) speedText = '慢速';
+                    else if (this.playSpeed <= 700) speedText = '快速';
+                    else if (this.playSpeed <= 500) speedText = '极快';
+                    speedDisplay.textContent = speedText;
+                }
+        
+                // 更新序列长度显示
+                this.updateSequenceLengthDisplay();
+        
+                // 更新游戏状态显示当前难度信息
+                if (this.gameState === 'idle') {
+                    const config = this.difficultyLevels[this.currentDifficulty - 1];
+                    this.gameStatus.innerHTML = `<span class="text-blue-400">当前难度：${this.currentDifficulty} 级 (${config.name}) - 点击"开始游戏"开始挑战</span>`;
+                }
+            }
+
+            updateSequenceLengthDisplay() {
+                if (this.sequenceLengthElement) {
+                    this.sequenceLengthElement.textContent = this.sequenceLength;
+                }
+            }
+
+            showRulesModal() {
+                if (this.rulesModal) {
+                    this.rulesModal.classList.remove('hidden');
+                    this.rulesModal.style.display = 'flex';
+                }
+            }
+
+            hideRulesModal() {
+                if (this.rulesModal) {
+                    this.rulesModal.classList.add('hidden');
+                    this.rulesModal.style.display = 'none';
+                }
+            }
+            createGrid() {
+                this.gameGrid.innerHTML = '';
+                this.gameGrid.className = `grid-container grid-${this.gridSize}`;
+                this.cells = [];
+                
+                const totalCells = this.gridSize * this.gridSize;
+                for (let i = 0; i < totalCells; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.dataset.index = i;
+                    
+                    let touchHandled = false;
+                    
+                    cell.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        touchHandled = false;
+                    });
+                    
+                    cell.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        if (!touchHandled) {
+                            touchHandled = true;
+                            this.onCellClick(i);
+                        }
+                    });
+                    
+                    cell.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (!touchHandled) {
+                            this.onCellClick(i);
+                        }
+                        setTimeout(() => {
+                            touchHandled = false;
+                        }, 100);
+                    });
+                    
+                    this.gameGrid.appendChild(cell);
+                    this.cells.push(cell);
+                }
+
+                this.updateSequenceLengthDisplay();
+            }
+            
+            getRandomWords(count) {
+                const shuffled = [...this.wordPool].sort(() => 0.5 - Math.random());
+                return shuffled.slice(0, count);
+            }
+            
+            startGame() {
+                this.hideRulesModal();
+                
+                // 清理所有现有定时器
+                this.clearAllTimers();
+                
+                // 确保当前难度设置生效
+                this.applyCurrentDifficulty();
+                
+                if (!gameStarted) {
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
+                    gameStarted = true;
+                }
+
+                this.gameState = 'showing';
+                this.startBtn.disabled = true;
+                this.startBtn.textContent = '进行中...';
+                this.gameStatus.innerHTML = '<span class="text-green-400">仔细观察方块亮起的顺序和单词！</span>';
+                this.showingSequence = true;
+                this.sequenceDisplay.textContent = '';
+                
+                this.resetCells();
+                this.generateSequence();
+                
+                // 确保在清理后再开始显示序列
+                setTimeout(() => {
+                    this.showSequence();
+                }, 100);
+            }
+
+            // 新增：应用当前难度设置
+            applyCurrentDifficulty() {
+                const config = this.difficultyLevels[this.currentDifficulty - 1];
+                
+                // 更新游戏参数
+                this.gridSize = config.gridSize;
+                this.sequenceLength = config.sequenceLength;
+                this.playSpeed = config.playSpeed;
+                
+                // 重新创建网格以应用新的网格大小
+                this.createGrid();
+                
+                // 刷新所有UI显示
+                this.updateDisplayText();
+                
+                console.log(`应用难度设置：${this.currentDifficulty} 级 (${config.name}) - 网格:${this.gridSize}×${this.gridSize}, 序列:${this.sequenceLength}, 速度:${this.playSpeed}ms`);
+            }
+
+            // 修改：设置难度方法，增强UI刷新
+            setDifficulty(difficultyLevel) {
+                // 验证难度等级范围
+                if (difficultyLevel < 1 || difficultyLevel > 12) {
+                    console.warn('难度等级必须在1-12之间');
+                    return false;
+                }
+                
+                const config = this.difficultyLevels[difficultyLevel - 1];
+                
+                // 记录游戏是否正在进行中
+                const wasGameRunning = this.gameState !== 'idle';
+                
+                // 先清理所有定时器
+                this.clearAllTimers();
+                
+                // 更新当前难度
+                this.currentDifficulty = difficultyLevel;
+                
+                // 应用难度设置
+                this.applyCurrentDifficulty();
+                
+                // 更新难度选择器显示
+                this.updateDifficultySelector();
+
+                // 如果游戏正在进行中，自动重新开始当前关卡
+                if (wasGameRunning) {
+                    // 显示难度切换信息
+                    this.gameStatus.innerHTML = `<span class="text-yellow-400">难度已切换为 ${difficultyLevel} 级 (${config.name})，重新开始当前关卡！</span>`;
+                    
+                    // 延迟一下让用户看到提示，然后自动开始游戏
+                    const restartTimer = setTimeout(() => {
+                        this.startGame();
+                    }, 1500);
+                    
+                    this.sequenceTimers.push(restartTimer);
+                } else {
+                    // 游戏未开始时，显示难度信息
+                    this.gameStatus.innerHTML = `<span class="text-blue-400">难度已设置为 ${difficultyLevel} 级 (${config.name}) - 点击"开始游戏"开始挑战</span>`;
+                }
+                
+                console.log(`难度设置为：${difficultyLevel} 级 (${config.name}) - 网格:${config.gridSize}×${config.gridSize}, 序列:${config.sequenceLength}, 速度:${config.playSpeed}ms`);
+                
+                return true;
+            }
+
+            // 修改：重置游戏方法，确保难度重置
+            resetGame() {
+                // 清理所有定时器
+                this.clearAllTimers();
+                
+                this.currentLevel = 1;
+                this.score = 0;
+                this.mistakes = 0;
+                this.gameState = 'idle';
+                
+                // 重置为默认难度
+                this.currentDifficulty = 1;
+                this.applyCurrentDifficulty();
+                
+                this.currentLevelElement.textContent = this.currentLevel;
+                this.scoreElement.textContent = this.score;
+                this.mistakesElement.textContent = this.mistakes;
+                this.currentStepElement.textContent = '0';
+                this.sequenceDisplay.textContent = '';
+                this.startBtn.textContent = '开始游戏';
+                this.startBtn.disabled = false;
+                
+                // 刷新UI显示
+                this.updateDisplayText();
+                
+                gameStarted = false;
+            }
+
+            onCellClick(index) {
+                if (this.gameState !== 'memorizing' || this.showingSequence) return;
+                
+                const cell = this.cells[index];
+                if (!cell) {
+                    console.error(`Cell at index ${index} not found`);
+                    return;
+                }
+                
+                const expectedIndex = this.targetSequence[this.currentStep];
+                
+                if (index === expectedIndex) {
+                    this.playerSequence.push(index);
+                    this.currentStep++;
+                    this.currentStepElement.textContent = this.currentStep;
+                    
+                    cell.classList.add('correct', 'pulse');
+                    
+                    // 显示对应的英文单词
+                    const wordElement = document.createElement('div');
+                    wordElement.className = 'sequence-word';
+                    wordElement.textContent = this.sequenceWords[this.currentStep - 1];
+                    cell.appendChild(wordElement);
+                    
+                    // 检查是否完成整个序列
+                    if (this.currentStep >= this.targetSequence.length) {
+                        this.onLevelComplete();
+                    }
+                } else {
+                    // 错误点击
+                    cell.classList.add('incorrect', 'wrong');
+                    this.mistakes++;
+                    this.mistakesElement.textContent = this.mistakes;
+                    
+                    // 检查是否达到游戏结束条件
+                    if (this.mistakes >= 5 || this.currentLevel >= 20) {
+                        this.gameStatus.innerHTML = '<span class="text-red-400">游戏结束！</span>';
+                        
+                        setTimeout(() => {
+                            this.endGame();
+                        }, 1500);
+                    } else {
+                        this.gameStatus.innerHTML = '<span class="text-red-400">顺序错误！重新开始当前关卡...</span>';
+                        
+                        setTimeout(() => {
+                            this.restartCurrentLevel();
+                        }, 1500);
+                    }
+                }
+            }
+            
+            onLevelComplete() {
+                // 清理所有定时器
+                this.clearAllTimers();
+                
+                this.gameState = 'finished';
+                this.score += this.currentLevel * this.sequenceLength * 10;
+                this.scoreElement.textContent = this.score;
+                
+                if (this.score > highestScore) {
+                    highestScore = this.score;
+                }
+                
+                this.currentLevel++;
+                this.currentLevelElement.textContent = this.currentLevel;
+                
+                // 修复：添加缺失的开括号
+                if (this.currentLevel > 20) {
+                    this.gameStatus.innerHTML = '<span class="text-green-400">恭喜通关！达到最高关卡！</span>';
+                    this.sequenceDisplay.textContent = `完成序列: ${this.sequenceWords.join(' → ')}`;
+                    
+                    setTimeout(() => {
+                        this.endGame();
+                    }, 3000);
+                    return;
+                }
+                
+                this.gameStatus.innerHTML = `<span class="text-green-400">第 ${this.currentLevel - 1} 关完成！准备下一关...</span>`;
+                this.sequenceDisplay.textContent = `完成序列: ${this.sequenceWords.join(' → ')}`;
+                
+                // 使用受控的定时器进入下一关
+                const nextLevelTimer = setTimeout(() => {
+                    this.increaseDifficulty();
+                    this.startNextLevel();
+                }, 3000);
+                
+                this.sequenceTimers.push(nextLevelTimer);
+            }
+
+            // 同时添加缺失的方法
+            // 新增：初始化难度设置方法
+            initializeDifficulty() {
+                // 设置默认难度为1级
+                this.currentDifficulty = 1;
+                
+                // 从难度配置中加载初始参数
+                const defaultConfig = this.difficultyLevels[0]; // 第1级配置
+                this.gridSize = defaultConfig.gridSize;
+                this.sequenceLength = defaultConfig.sequenceLength;
+                this.playSpeed = defaultConfig.playSpeed;
+                
+                // 更新难度选择器的显示
+                this.updateDifficultySelector();
+                
+                console.log(`游戏初始化：难度 ${this.currentDifficulty} 级 (${defaultConfig.name})`);
+            }
+
+            // 新增：更新难度选择器显示
+            updateDifficultySelector() {
+                const difficultySelect = document.getElementById('difficultySelect');
+                if (difficultySelect) {
+                    difficultySelect.value = this.currentDifficulty;
+                }
+            }
+            
+            // 难度配置：12个等级
+            difficultyLevels = [
+                // 初级难度 (1-3级)
+                { level: 1, gridSize: 3, sequenceLength: 3, playSpeed: 1500, name: '入门' },
+                { level: 2, gridSize: 3, sequenceLength: 4, playSpeed: 1300, name: '初学' },
+                { level: 3, gridSize: 4, sequenceLength: 4, playSpeed: 1200, name: '基础' },
+                
+                // 中级难度 (4-6级)
+                { level: 4, gridSize: 4, sequenceLength: 5, playSpeed: 1100, name: '进阶' },
+                { level: 5, gridSize: 4, sequenceLength: 6, playSpeed: 1000, name: '熟练' },
+                { level: 6, gridSize: 5, sequenceLength: 5, playSpeed: 950, name: '中级' },
+                
+                // 高级难度 (7-9级)
+                { level: 7, gridSize: 5, sequenceLength: 6, playSpeed: 900, name: '高级' },
+                { level: 8, gridSize: 5, sequenceLength: 7, playSpeed: 850, name: '专家' },
+                { level: 9, gridSize: 6, sequenceLength: 6, playSpeed: 800, name: '大师' },
+                
+                // 专家难度 (10-12级)
+                { level: 10, gridSize: 6, sequenceLength: 7, playSpeed: 750, name: '传奇' },
+                { level: 11, gridSize: 6, sequenceLength: 8, playSpeed: 700, name: '超凡' },
+                { level: 12, gridSize: 6, sequenceLength: 9, playSpeed: 650, name: '神话' }
+            ];
+            
+            currentDifficulty = 1; // 默认难度等级
+            
+            // 设置难度等级
+            setDifficulty(difficultyLevel) {
+                // 验证难度等级范围
+                if (difficultyLevel < 1 || difficultyLevel > 12) {
+                    console.warn('难度等级必须在1-12之间');
+                    return false;
+                }
+                
+                const config = this.difficultyLevels[difficultyLevel - 1];
+                
+                // 记录游戏是否正在进行中
+                const wasGameRunning = this.gameState !== 'idle';
+                
+                // 先清理所有定时器
+                this.clearAllTimers();
+                
+                // 更新当前难度
+                this.currentDifficulty = difficultyLevel;
+                
+                // 应用难度设置
+                this.applyCurrentDifficulty();
+                
+                // 更新难度选择器显示
+                this.updateDifficultySelector();
+
+                // 如果游戏正在进行中，自动重新开始当前关卡
+                if (wasGameRunning) {
+                    // 显示难度切换信息
+                    this.gameStatus.innerHTML = `<span class="text-yellow-400">难度已切换为 ${difficultyLevel} 级 (${config.name})，重新开始当前关卡！</span>`;
+                    
+                    // 延迟一下让用户看到提示，然后自动开始游戏
+                    const restartTimer = setTimeout(() => {
+                        this.startGame();
+                    }, 1500);
+                    
+                    this.sequenceTimers.push(restartTimer);
+                } else {
+                    // 游戏未开始时，显示难度信息
+                    this.gameStatus.innerHTML = `<span class="text-blue-400">难度已设置为 ${difficultyLevel} 级 (${config.name}) - 点击"开始游戏"开始挑战</span>`;
+                }
+                
+                console.log(`难度设置为：${difficultyLevel} 级 (${config.name}) - 网格:${config.gridSize}×${config.gridSize}, 序列:${config.sequenceLength}, 速度:${config.playSpeed}ms`);
+                
+                return true;
+            }
+            
+            // 获取当前难度信息
+            getDifficultyInfo() {
+                const config = this.difficultyLevels[this.currentDifficulty - 1];
+                return {
+                    level: this.currentDifficulty,
+                    name: config.name,
+                    gridSize: config.gridSize,
+                    sequenceLength: config.sequenceLength,
+                    playSpeed: config.playSpeed
+                };
+            }
+            
+            // 修改原有的increaseDifficulty方法，使其基于难度等级递增
+            increaseDifficulty() {
+                // 每3关增加1个难度等级，但不超过12级
+                if (this.currentLevel % 3 === 1 && this.currentLevel > 1) {
+                    const newDifficulty = Math.min(12, this.currentDifficulty + 1);
+                    if (newDifficulty > this.currentDifficulty) {
+                        this.setDifficulty(newDifficulty);
+                        
+                        // 显示难度提升信息
+                        const config = this.difficultyLevels[newDifficulty - 1];
+                        this.gameStatus.innerHTML = `<span class="text-yellow-400">难度提升至 ${newDifficulty} 级 (${config.name})！</span>`;
+                        
+                        setTimeout(() => {
+                            this.gameStatus.innerHTML = '<span class="text-green-400">仔细观察方块亮起的顺序和单词！</span>';
+                        }, 2000);
+                    }
+                }
+            }
+            
+            resetCells() {
+                this.cells.forEach(cell => {
+                    cell.classList.remove('correct', 'incorrect', 'pulse', 'wrong', 'highlighting');
+                    const wordElement = cell.querySelector('.sequence-word');
+                    if (wordElement) {
+                        wordElement.remove();
+                    }
+                });
+                this.currentStep = 0;
+                this.currentStepElement.textContent = '0';
+            }
+            
+            resetGame() {
+                // 清理所有定时器
+                this.clearAllTimers();
+                
+                this.currentLevel = 1;
+                this.score = 0;
+                this.mistakes = 0;
+                this.gameState = 'idle';
+                
+                // 重置为默认难度
+                this.currentDifficulty = 1;
+                this.applyCurrentDifficulty();
+                
+                this.currentLevelElement.textContent = this.currentLevel;
+                this.scoreElement.textContent = this.score;
+                this.mistakesElement.textContent = this.mistakes;
+                this.currentStepElement.textContent = '0';
+                this.sequenceDisplay.textContent = '';
+                this.startBtn.textContent = '开始游戏';
+                this.startBtn.disabled = false;
+                
+                // 刷新UI显示
+                this.updateDisplayText();
+                
+                gameStarted = false;
+            }
+            
+            endGame() {
+                const maxPossibleScore = this.calculateMaxScore();
+                const percentageScore = Math.min(100, Math.round((this.score / maxPossibleScore) * 100));
+                
+                const difficulty = calculateDifficulty();
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: {
+                        score: percentageScore,
+                        highestScore: Math.min(100, Math.round((highestScore / maxPossibleScore) * 100)),
+                        level: this.currentLevel,
+                        difficulty: Math.min(difficulty, 3),
+                        mistakes: this.mistakes
+                    }
+                }, '*');
+
+                this.gameState = 'idle';
+                this.startBtn.textContent = '重新开始';
+                this.startBtn.disabled = false;
+            }
+
+            calculateMaxScore() {
+                let maxScore = 0;
+                for (let level = 1; level <= 20; level++) {
+                    let sequenceLength = Math.min(4 + Math.floor((level - 1) / 3), 10);
+                    maxScore += level * sequenceLength * 10;
+                }
+                return maxScore;
+            }
+            
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            restartCurrentLevel() {
+                // 清理所有定时器
+                this.clearAllTimers();
+                
+                this.gameState = 'showing';
+                this.gameStatus.innerHTML = '<span class="text-green-400">重新挑战当前关卡！</span>';
+                this.resetCells();
+                this.generateSequence();
+                
+                // 延迟启动确保清理完成
+                setTimeout(() => {
+                    this.showSequence();
+                }, 100);
+            }
+
+            startNextLevel() {
+                // 清理所有定时器
+                this.clearAllTimers();
+                
+                this.gameState = 'showing';
+                this.gameStatus.innerHTML = '<span class="text-green-400">仔细观察方块亮起的顺序和单词！</span>';
+                this.resetCells();
+                this.generateSequence();
+                
+                // 延迟启动确保清理完成
+                setTimeout(() => {
+                    this.showSequence();
+                }, 100);
+            }
+        }
+        
+        // 更新计算难度的函数
+        function calculateDifficulty() {
+            if (!window.sequenceGame) return 1;
+            
+            const game = window.sequenceGame;
+            return game.currentDifficulty;
+        }
+
+        // 初始化游戏
+        const game = new SequenceMemoryGame();
+        
+        // 添加消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data;
+                    updateGameConfig(game_config);
+                    break;
+                case 'getGameStats':
+                    const difficulty = calculateDifficulty();
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: highestScore,
+                            difficulty: Math.min(difficulty, 3)
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+        
+        // 阻止移动端的默认行为
+        document.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.grid-cell')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            if (e.target.closest('.game-board-area')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // 游戏加载完成时发送消息
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+    </script>
+</body>
+</html>

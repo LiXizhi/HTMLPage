@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>脑力双轨战 Dual N-Back</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: fixed;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-size: 18px; /* 增大基础字体 */
+        }
+        
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        .game-header {
+            flex-shrink: 0;
+            padding: 1rem; /* 增大内边距 */
+            background: rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .game-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            position: relative;
+            padding: 1rem; /* 增大内边距 */
+            margin-left: 240px; /* 为左侧控制面板留出空间 */
+        }
+        
+        .game-main {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .game-grid {
+            width: min(75vw, 75vh); /* 稍微增大网格 */
+            height: min(75vw, 75vh);
+            max-width: 450px; /* 增大最大尺寸 */
+            max-height: 450px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.8rem; /* 增大间距 */
+            background: rgba(255,255,255,0.1);
+            border-radius: 16px; /* 增大圆角 */
+            padding: 1.5rem; /* 增大内边距 */
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.2); /* 增粗边框 */
+        }
+        
+        .grid-cell {
+            aspect-ratio: 1;
+            border-radius: 12px; /* 增大圆角 */
+            border: 3px solid rgba(255,255,255,0.3); /* 增粗边框 */
+            background: rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+        }
+        
+        .feedback-area {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+        
+        .feedback-text {
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 1rem 2rem; /* 增大内边距 */
+            border-radius: 25px; /* 增大圆角 */
+            font-weight: bold;
+            font-size: 1.6rem; /* 增大字体 */
+        }
+        
+        .game-controls {
+            flex-shrink: 0;
+            background: rgba(0,0,0,0.2);
+            backdrop-filter: blur(5px);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding: 1rem; /* 增大内边距 */
+        }
+        
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem; /* 增大间距 */
+            max-width: 700px; /* 增大最大宽度 */
+            margin: 0 auto;
+        }
+        
+        .control-btn {
+            padding: 1.5rem; /* 增大按钮内边距 */
+            border-radius: 12px; /* 增大圆角 */
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.1rem; /* 增大字体 */
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.2); /* 增粗边框 */
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80px; /* 增大最小高度 */
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .btn-visual { background: rgba(59, 130, 246, 0.8); }
+        .btn-visual:hover:not(:disabled) { background: rgba(59, 130, 246, 1); }
+        .btn-visual.correct { background: rgba(34, 197, 94, 0.9); }
+        .btn-visual.incorrect { background: rgba(239, 68, 68, 0.9); }
+        
+        .btn-color { background: rgba(34, 197, 94, 0.8); }
+        .btn-color:hover:not(:disabled) { background: rgba(34, 197, 94, 1); }
+        .btn-color.correct { background: rgba(34, 197, 94, 0.9); }
+        .btn-color.incorrect { background: rgba(239, 68, 68, 0.9); }
+        
+        .btn-audio { background: rgba(147, 51, 234, 0.8); }
+        .btn-audio:hover:not(:disabled) { background: rgba(147, 51, 234, 1); }
+        .btn-audio.correct { background: rgba(34, 197, 94, 0.9); }
+        .btn-audio.incorrect { background: rgba(239, 68, 68, 0.9); }
+        
+        /* 规则弹窗样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px; /* 增大圆角 */
+            padding: 2.5rem; /* 增大内边距 */
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 2px solid rgba(255,255,255,0.3); /* 增粗边框 */
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            color: white;
+            font-size: 1.1rem; /* 增大字体 */
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        
+        .modal-content h2 {
+            font-size: 1.8rem; /* 增大标题字体 */
+            margin-bottom: 1.5rem;
+        }
+        
+        .modal-content h3 {
+            font-size: 1.3rem; /* 增大子标题字体 */
+            margin-bottom: 1rem;
+        }
+        
+        .modal-content p, .modal-content li {
+            font-size: 1.1rem; /* 增大正文字体 */
+            line-height: 1.6;
+        }
+        
+        .rules-icon {
+            position: fixed;
+            bottom: 15px; /* 增大位置 */
+            right: 15px;
+            width: 50px; /* 增大尺寸 */
+            height: 50px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.2s;
+            border: 2px solid rgba(255,255,255,0.3); /* 增粗边框 */
+            backdrop-filter: blur(10px);
+        }
+        
+        .rules-icon svg {
+            width: 28px; /* 增大图标 */
+            height: 28px;
+        }
+        
+        .rules-icon:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+        
+        /* 控制面板 */
+        .control-panel {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1rem;
+            border: 2px solid rgba(255,255,255,0.2);
+            display: flex;
+            flex-direction: column; /* 改为垂直布局 */
+            gap: 1rem;
+            align-items: flex-start; /* 左对齐 */
+            z-index: 100;
+            min-width: 200px; /* 设置最小宽度 */
+        }
+        
+        .n-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 0.5rem;
+            width: 100%; /* 占满容器宽度 */
+            justify-content: center;
+        }
+        
+        /* 按钮容器 - 换行显示 */
+        .control-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            flex-direction: row; /* 改为水平排列 */
+            justify-content: space-evenly; /* 均匀分布 */
+            gap: 0.5rem;
+            width: 100%;
+        }
+        
+        /* 统计面板 */
+        .stats-panel {
+            position: fixed;
+            top: 200px; /* 调整位置，因为移除了模式选择器 */
+            left: 15px;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1rem;
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            font-size: 1rem;
+            z-index: 100;
+            min-width: 270px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem; /* 增大间距 */
+            min-width: 160px; /* 增大最小宽度 */
+        }
+        
+        .stat-item {
+            display: flex;
+            justify-content: space-evenly;
+            align-items: center;
+            font-size: 1rem; /* 增大字体 */
+        }
+        
+        /* 游戏按钮样式 */
+        .game-btn {
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .game-btn:hover:not(:disabled) {
+            background: rgba(59, 130, 246, 1);
+            transform: translateY(-1px);
+        }
+
+        .game-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .game-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 按钮颜色变体 */
+        .btn-start {
+            background: rgba(34, 197, 94, 0.8);
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background: rgba(34, 197, 94, 1);
+        }
+
+        .btn-pause {
+            background: rgba(251, 191, 36, 0.8);
+        }
+
+        .btn-pause:hover:not(:disabled) {
+            background: rgba(251, 191, 36, 1);
+        }
+
+        .btn-reset {
+            background: rgba(239, 68, 68, 0.8);
+        }
+
+        .btn-reset:hover:not(:disabled) {
+            background: rgba(239, 68, 68, 1);
+        }
+
+        /* N值控制按钮 */
+        .n-btn {
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+            border: none;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .n-btn:hover {
+            background: rgba(59, 130, 246, 1);
+            transform: scale(1.1);
+        }
+
+        .n-btn:active {
+            transform: scale(0.95);
+        }
+
+        .n-value {
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            min-width: 2rem;
+            text-align: center;
+        }
+
+        #startGameFromRules {
+            font-size: 1.3rem;
+            border-radius: 12px;
+            min-width: 200px;
+            margin: 0 auto;
+        }
+
+
+        /* 确保桌面端隐藏移动端面板 */
+        @media (min-width: 769px) {
+            .mobile-panels {
+                display: none !important;
+            }
+            
+            .desktop-only {
+                display: flex !important;
+            }
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .control-panel {
+                position: static;
+                order: 1;
+                margin-bottom: 1rem;
+                min-width: auto;
+                width: 100%;
+            }
+            
+            .stats-panel {
+                position: static;
+                order: 2;
+                margin-bottom: 1rem;
+                min-width: auto;
+                width: 100%;
+                top: auto;
+            }
+            
+            .game-content {
+                margin-left: 0; /* 移动端取消左边距 */
+                order: 3;
+            }
+            
+            .mobile-panels {
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+                background: rgba(0,0,0,0.2);
+                border-radius: 12px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            }
+        }
+        
+        @media (max-height: 600px) {
+            .game-grid {
+                width: min(55vw, 55vh); /* 矮屏幕调整 */
+                height: min(55vw, 55vh);
+            }
+            
+            .control-btn {
+                min-height: 70px; /* 矮屏幕调整按钮高度 */
+                font-size: 1rem; /* 调整字体 */
+            }
+        }
+        
+        /* 横屏适配 */
+        @media (orientation: landscape) and (max-height: 600px) {
+            .game-content {
+                flex-direction: row;
+                align-items: center;
+            }
+            
+            .game-main {
+                flex: 1;
+            }
+            
+            .game-controls {
+                width: 240px; /* 增大控制面板宽度 */
+                height: 100%;
+                border-top: none;
+                border-left: 1px solid rgba(255,255,255,0.1);
+            }
+            
+            .control-grid {
+                grid-template-columns: 1fr;
+                height: 100%;
+                align-content: center;
+            }
+            
+            .control-btn {
+                min-height: 70px; /* 横屏按钮高度 */
+                font-size: 1rem; /* 横屏字体大小 */
+            }
+        }
+        
+        /* 深色模式优化 */
+        @media (prefers-color-scheme: dark) {
+            .modal-content {
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- 移动端控制面板 -->
+        <div class="mobile-panels hidden">
+            <div class="control-panel">
+                <div class="control-buttons">
+                    <button class="game-btn btn-start" id="startBtnMobile">开始</button>
+                    <button class="game-btn btn-pause" id="pauseBtnMobile" disabled>暂停</button>
+                    <button class="game-btn btn-reset" id="resetBtnMobile">重置</button>
+                </div>
+                <div class="n-control">
+                    <button class="n-btn" id="nDecreaseMobile">-</button>
+                    <span class="n-value" id="nValueMobile">1</span>
+                    <button class="n-btn" id="nIncreaseMobile">+</button>
+                </div>
+            </div>
+
+            <div class="stats-panel">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span>分数:</span>
+                        <span id="mobileScore">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>轮次:</span>
+                        <span id="mobileRound">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>正确率:</span>
+                        <span id="mobileAccuracy">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>连击:</span>
+                        <span id="mobileStreak">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 桌面端控制面板 -->
+        <div class="stats-panel desktop-only">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span>分数:</span>
+                    <span id="totalScore">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>轮次:</span>
+                    <span id="round">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>正确率:</span>
+                    <span id="accuracy">--</span>
+                </div>
+                <div class="stat-item">
+                    <span>连击:</span>
+                    <span id="streak">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-panel desktop-only">
+            <!-- 游戏控制按钮 -->
+            <div class="control-buttons">
+                <button class="game-btn btn-start" id="startBtn">开始</button>
+                <button class="game-btn btn-pause" id="pauseBtn" disabled>暂停</button>
+                <button class="game-btn btn-reset" id="resetBtn">重置</button>
+            </div>
+
+            <div class="n-control">
+                <button class="n-btn" id="nDecrease">-</button>
+                <span class="n-value" id="nValue">1</span>
+                <button class="n-btn" id="nIncrease">+</button>
+            </div>
+        </div>
+        
+       
+        <!-- 游戏主体内容 -->
+        <div class="game-content">
+            <!-- 游戏区域 -->
+            <div class="game-main">
+                <div class="feedback-area" id="feedbackArea">
+                    <div class="feedback-text" id="feedbackText"></div>
+                </div>
+                
+                <div class="game-grid" id="gameGrid">
+                    <!-- 网格由JavaScript生成 -->
+                </div>
+            </div>
+            
+            <!-- 控制按钮 -->
+            <div class="game-controls">
+                <div class="control-grid" id="controlGrid">
+                    <button class="control-btn btn-visual" id="visualMatch" disabled>
+                        <div>位置匹配 (1)</div>
+                        <div style="font-size: 0.6rem; opacity: 0.8;" id="visualMatchCount">正确: 0</div>
+                    </button>
+                    <button class="control-btn btn-color" id="colorMatch" disabled>
+                        <div>颜色匹配 (2)</div>
+                        <div style="font-size: 0.6rem; opacity: 0.8;" id="colorMatchCount">正确: 0</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 规则说明图标 -->
+        <div class="rules-icon" id="rulesIcon" title="查看游戏规则">
+            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+            </svg>
+        </div>
+    </div>
+    
+    <!-- 规则说明弹窗 -->
+    <div class="modal-overlay" id="rulesModal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">脑力双轨战</h2>
+            </div>
+            <div class="space-y-3 text-sm">
+                <div class="bg-black bg-opacity-20 p-3 rounded-lg">
+                    <h3 class="font-bold mb-2">训练目标</h3>
+                    <p>观察方块的位置和颜色，判断当前显示是否与1步之前相同。</p>
+                </div>
+                
+                <div class="bg-black bg-opacity-20 p-3 rounded-lg">
+                    <h3 class="font-bold mb-2">操作方法</h3>
+                    <ul class="space-y-1">
+                        <li>• <strong>位置匹配</strong>：当前位置与1步前相同时，点击"位置匹配"按钮</li>
+                        <li>• <strong>颜色匹配</strong>：当前颜色与1步前相同时，点击"颜色匹配"按钮</li>
+                        <li>• 可以同时匹配位置和颜色</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-6 text-center">
+                <button class="game-btn btn-start" id="startGameFromRules">开始训练</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量和配置
+        let game_config = '';
+        let globalHighestScore = 0;
+        let gameStarted = false;
+
+        // 添加消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data; // markdown或文本字符串
+                    // 更新配置逻辑
+                    updateGameConfig(game_config);
+                    break;
+                case 'getGameStats':
+                    const difficulty = calculateDifficulty();
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: globalHighestScore, // 返回最高分
+                            difficulty: Math.min(difficulty, 3) // 确保难度在1-3范围内
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        // 更新游戏配置
+        function updateGameConfig(config) {
+            try {
+                if (typeof config === 'string' && config.trim()) {
+                    const newConfig = parseGameConfig(config);
+                    if (newConfig && window.game) {
+                        // 更新游戏配置
+                        if (newConfig.n !== undefined) {
+                            window.game.n = Math.max(1, Math.min(5, newConfig.n));
+                            // 同步更新UI显示
+                            document.getElementById('nValue').textContent = window.game.n;
+                        }
+                        if (newConfig.colors && newConfig.colors.length > 0) {
+                            window.game.colors = newConfig.colors;
+                        }
+                        console.log('配置已更新');
+                        window.game.updateDisplay();
+                    }
+                }
+            } catch (error) {
+                console.warn('解析游戏配置失败，保持原配置:', error);
+            }
+        }
+
+        // 解析游戏配置（支持多种格式）
+        function parseGameConfig(config) {
+            const result = {};
+            
+            try {
+                // 尝试解析JSON格式
+                const jsonData = JSON.parse(config);
+                return jsonData;
+            } catch (e) {
+                // 不是JSON格式，尝试其他格式
+                const lines = config.trim().split('\n');
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    // 跳过空行和注释行
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    // 支持 key=value 格式
+                    if (line.includes('=')) {
+                        const [key, value] = line.split('=').map(s => s.trim());
+                        if (key === 'n') {
+                            result.n = parseInt(value);
+                        }
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        // 计算当前难度（基于N值）
+        function calculateDifficulty() {
+            if (!window.game) return 1;
+            
+            const game = window.game;
+            let difficultyScore = 0;
+            
+            // 基于N值
+            if (game.n >= 4) difficultyScore += 2;
+            else if (game.n >= 2) difficultyScore += 1;
+            
+            // 基于回合数
+            if (game.round >= 20) difficultyScore += 1;
+            
+            return Math.min(Math.max(difficultyScore, 1), 3);
+        }
+
+        class DualNBackGame {
+            constructor() {
+                this.n = 1;
+                this.round = 0;
+                this.isPlaying = false;
+                this.gameMode = 'position-color'; // 固定为位置+颜色模式
+                this.currentSequence = [];
+                this.userResponses = [];
+                this.buttonCorrectCounts = {
+                    visual: 0,
+                    color: 0
+                };
+                this.matchCounter = 0;
+                this.streak = 0;
+                this.stats = {
+                    totalScore: 0,
+                    visualCorrect: 0,
+                    colorCorrect: 0,
+                    totalAttempts: 0
+                };
+                
+                // 颜色序列
+                this.colors = [
+                    { name: 'red', class: 'bg-red-500 border-red-600' },
+                    { name: 'blue', class: 'bg-blue-500 border-blue-600' },
+                    { name: 'green', class: 'bg-green-500 border-green-600' },
+                    { name: 'yellow', class: 'bg-yellow-500 border-yellow-600' },
+                    { name: 'purple', class: 'bg-purple-500 border-purple-600' },
+                    { name: 'pink', class: 'bg-pink-500 border-pink-600' },
+                    { name: 'orange', class: 'bg-orange-500 border-orange-600' }
+                ];
+                
+                this.setupEventListeners();
+                this.createGrid();
+                this.updateDisplay();
+                this.showRulesModal();
+                this.setupResponsive();
+                
+                // 防止页面滚动和缩放
+                document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+                document.addEventListener('gesturestart', (e) => e.preventDefault());
+                document.addEventListener('gesturechange', (e) => e.preventDefault());
+                
+                window.game = this;
+            }
+            
+            showRulesModal() {
+                const modal = document.getElementById('rulesModal');
+                modal.classList.add('active');
+            }
+            
+            hideRulesModal() {
+                const modal = document.getElementById('rulesModal');
+                modal.classList.remove('active');
+            }
+            
+            setupResponsive() {
+                const updateLayout = () => {
+                    const isMobile = window.innerWidth <= 768;
+                    const mobileElements = document.querySelectorAll('.mobile-panels');
+                    const desktopElements = document.querySelectorAll('.desktop-only');
+                    
+                    mobileElements.forEach(el => {
+                        if (isMobile) {
+                            el.classList.remove('hidden');
+                        } else {
+                            el.classList.add('hidden');
+                        }
+                    });
+                    
+                    desktopElements.forEach(el => {
+                        if (isMobile) {
+                            el.classList.add('hidden');
+                        } else {
+                            el.classList.remove('hidden');
+                        }
+                    });
+                };
+                
+                updateLayout();
+                window.addEventListener('resize', updateLayout);
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(updateLayout, 100);
+                });
+            }
+
+            shouldForceMatch() {
+                // 每3-4轮有较高概率产生匹配
+                this.matchCounter++;
+                if (this.matchCounter >= 3 && Math.random() < 0.7) {
+                    this.matchCounter = 0;
+                    return true;
+                }
+                return false;
+            }
+
+            generateStimuli() {
+                if (this.round <= this.n) {
+                    // 前N轮随机生成
+                    return {
+                        visualPos: Math.floor(Math.random() * 9),
+                        colorIndex: Math.floor(Math.random() * this.colors.length)
+                    };
+                }
+
+                const compareIndex = this.currentSequence.length - this.n;
+                const compareStimuli = this.currentSequence[compareIndex];
+                
+                let visualPos = Math.floor(Math.random() * 9);
+                let colorIndex = Math.floor(Math.random() * this.colors.length);
+
+                // 强制匹配逻辑
+                if (this.shouldForceMatch()) {
+                    const availableMatches = ['visual', 'color'];
+                    
+                    // 随机选择1-2个维度进行匹配
+                    const matchCount = Math.random() < 0.3 ? 2 : 1; // 30%概率匹配2个维度
+                    const matchTypes = availableMatches.sort(() => 0.5 - Math.random()).slice(0, matchCount);
+                    
+                    matchTypes.forEach(type => {
+                        if (type === 'visual') {
+                            visualPos = compareStimuli.visual;
+                        } else if (type === 'color') {
+                            colorIndex = compareStimuli.color;
+                        }
+                    });
+                }
+
+                return { visualPos, colorIndex };
+            }
+
+            setupEventListeners() {
+                // 规则弹窗事件
+                document.getElementById('rulesIcon').addEventListener('click', () => this.showRulesModal());
+                document.getElementById('startGameFromRules').addEventListener('click', () => {
+                    this.hideRulesModal();
+                    this.startGame();
+                });
+                
+                // 统一处理桌面端和移动端的事件
+                this.bindEventHandlers('');
+                this.bindEventHandlers('Mobile');
+                
+                // 用户输入
+                document.getElementById('visualMatch').addEventListener('click', () => this.handleUserInput('visual'));
+                document.getElementById('colorMatch').addEventListener('click', () => this.handleUserInput('color'));
+
+                // 键盘输入
+                document.addEventListener('keydown', (e) => {
+                    if (!this.isPlaying) return;
+                    if (e.key === '1') this.handleUserInput('visual');
+                    if (e.key === '2') this.handleUserInput('color');
+                });
+                
+                // 模态框点击外部关闭
+                document.getElementById('rulesModal').addEventListener('click', (e) => {
+                    if (e.target.classList.contains('modal-overlay')) {
+                        this.hideRulesModal();
+                    }
+                });
+            }
+            
+            bindEventHandlers(suffix) {
+                // N值调整
+                const nIncrease = document.getElementById('nIncrease' + suffix);
+                const nDecrease = document.getElementById('nDecrease' + suffix);
+                
+                if (nIncrease) {
+                    nIncrease.onclick = () => {
+                        if (!this.isPlaying && this.n < 5) {
+                            this.n++;
+                            this.updateDisplay();
+                        }
+                    };
+                }
+                
+                if (nDecrease) {
+                    nDecrease.onclick = () => {
+                        if (!this.isPlaying && this.n > 1) {
+                            this.n--;
+                            this.updateDisplay();
+                        }
+                    };
+                }
+
+                // 游戏控制
+                const startBtn = document.getElementById('startBtn' + suffix);
+                const pauseBtn = document.getElementById('pauseBtn' + suffix);
+                const resetBtn = document.getElementById('resetBtn' + suffix);
+                
+                if (startBtn) startBtn.onclick = () => this.startGame();
+                if (pauseBtn) pauseBtn.onclick = () => this.pauseGame();
+                if (resetBtn) resetBtn.onclick = () => this.resetGame();
+            }
+            
+            createGrid() {
+                const grid = document.getElementById('gameGrid');
+                grid.innerHTML = '';
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.id = `cell-${i}`;
+                    grid.appendChild(cell);
+                }
+            }
+
+            updateButtonCounts() {
+                // 更新按钮上的累计正确次数
+                document.getElementById('visualMatchCount').textContent = `正确: ${this.buttonCorrectCounts.visual}`;
+                document.getElementById('colorMatchCount').textContent = `正确: ${this.buttonCorrectCounts.color}`;
+            }
+
+            animateButton(buttonId, isCorrect) {
+                const button = document.getElementById(buttonId);
+                const originalClass = button.className;
+                
+                button.classList.add(isCorrect ? 'correct' : 'incorrect');
+                setTimeout(() => {
+                    button.className = originalClass;
+                }, 300);
+            }
+
+            showFeedback(text) {
+                const feedbackArea = document.getElementById('feedbackArea');
+                const feedbackText = document.getElementById('feedbackText');
+                
+                feedbackText.textContent = text;
+                feedbackArea.style.opacity = '1';
+                
+                setTimeout(() => {
+                    feedbackArea.style.opacity = '0';
+                }, 1500);
+            }
+
+            startGame() {
+                if (!gameStarted) {
+                    // 发送游戏开始消息
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
+                    gameStarted = true;
+                }
+                
+                this.isPlaying = true;
+                this.round = 0;
+                this.matchCounter = 0;
+                this.streak = 0;
+                this.currentSequence = [];
+                this.userResponses = [];
+                this.buttonCorrectCounts = { visual: 0, color: 0 };
+                
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('pauseBtn').disabled = false;
+                document.getElementById('visualMatch').disabled = false;
+                document.getElementById('colorMatch').disabled = false;
+                
+                this.updateButtonCounts();
+                this.nextRound();
+            }
+
+            pauseGame() {
+                this.isPlaying = false;
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+            }
+
+            resetGame() {
+                // 直接重置游戏状态，不进行结算
+                this.isPlaying = false;
+                
+                // 重置游戏状态
+                this.round = 0;
+                this.matchCounter = 0;
+                this.streak = 0;
+                this.currentSequence = [];
+                this.userResponses = [];
+                this.buttonCorrectCounts = { visual: 0, color: 0 };
+                this.stats = {
+                    totalScore: 0,
+                    visualCorrect: 0,
+                    colorCorrect: 0,
+                    totalAttempts: 0
+                };
+                
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('visualMatch').disabled = true;
+                document.getElementById('colorMatch').disabled = true;
+                
+                this.clearGrid();
+                this.updateDisplay();
+                this.updateButtonCounts();
+            }
+
+            nextRound() {
+                if (!this.isPlaying) return;
+                
+                this.round++;
+                
+                // 使用新的刺激生成算法
+                const { visualPos, colorIndex } = this.generateStimuli();
+                
+                this.currentSequence.push({
+                    visual: visualPos,
+                    color: colorIndex,
+                    visualMatch: false,
+                    colorMatch: false
+                });
+
+                // 检查是否匹配
+                if (this.round > this.n) {
+                    const compareIndex = this.currentSequence.length - 1 - this.n;
+                    if (compareIndex >= 0) {
+                        const current = this.currentSequence[this.currentSequence.length - 1];
+                        const compare = this.currentSequence[compareIndex];
+                        
+                        current.visualMatch = compare.visual === visualPos;
+                        current.colorMatch = compare.color === colorIndex;
+                    }
+                }
+
+                this.userResponses.push({
+                    visualResponse: false,
+                    colorResponse: false,
+                    responded: false
+                });
+
+                this.displayStimuli(visualPos, colorIndex);
+                this.updateDisplay();
+            }
+
+            displayStimuli(visualPos, colorIndex) {
+                // 清除之前的高亮
+                this.clearGrid();
+                
+                // 高亮当前位置和颜色
+                const cell = document.getElementById(`cell-${visualPos}`);
+                const color = this.colors[colorIndex];
+                cell.className = `grid-cell ${color.class.replace('border-', 'border-2 border-')}`;
+                
+                // 2秒后消失，1秒后显示下一个
+                setTimeout(() => {
+                    this.clearGrid();
+                    setTimeout(() => {
+                        if (this.isPlaying) {
+                            this.evaluateRound();
+                            this.nextRound();
+                        }
+                    }, 1000);
+                }, 2000);
+            }
+
+            clearGrid() {
+                for (let i = 0; i < 9; i++) {
+                    document.getElementById(`cell-${i}`).className = 'grid-cell';
+                }
+            }
+
+            handleUserInput(type) {
+                if (!this.isPlaying || this.round <= this.n) return;
+                
+                const currentStimuli = this.currentSequence[this.currentSequence.length - 1];
+                const currentResponse = this.userResponses[this.userResponses.length - 1];
+                
+                let isCorrect = false;
+                let buttonId = '';
+                
+                if (type === 'visual') {
+                    currentResponse.visualResponse = true;
+                    isCorrect = currentStimuli.visualMatch;
+                    buttonId = 'visualMatch';
+                } else if (type === 'color') {
+                    currentResponse.colorResponse = true;
+                    isCorrect = currentStimuli.colorMatch;
+                    buttonId = 'colorMatch';
+                }
+                
+                currentResponse.responded = true;
+                
+                // 立即给出反馈
+                this.animateButton(buttonId, isCorrect);
+                
+                // 更新连击数和按钮计数
+                if (isCorrect) {
+                    this.streak++;
+                    this.buttonCorrectCounts[type]++;
+                    this.showFeedback(`连击 +${this.streak}`);
+                    this.updateButtonCounts();
+                } else {
+                    this.streak = 0;
+                }
+                
+                // 立即更新连击显示
+                this.updateDisplay();
+            }
+
+            evaluateRound() {
+                if (this.round <= this.n) return; // 前n轮无需判断
+                
+                const currentStimuli = this.currentSequence[this.currentSequence.length - 1];
+                const currentResponse = this.userResponses[this.userResponses.length - 1];
+                
+                let correctCount = 0;
+                
+                // 检查视觉匹配
+                if (currentStimuli.visualMatch === currentResponse.visualResponse) {
+                    this.stats.visualCorrect++;
+                    correctCount++;
+                }
+                
+                // 检查颜色匹配
+                if (currentStimuli.colorMatch === currentResponse.colorResponse) {
+                    this.stats.colorCorrect++;
+                    correctCount++;
+                }
+                
+                // 更新统计
+                this.stats.totalAttempts++;
+                this.stats.totalScore += correctCount;
+    
+                // 检查游戏结束条件
+                this.checkGameEndConditions();
+            }
+
+            checkGameEndConditions() {
+                // 至少玩过10轮才开始检查结束条件
+                if (this.stats.totalAttempts < 10) return;
+                
+                const accuracy = this.calculateAccuracy();
+                
+                // 结束条件1: 准确率持续低于30%且已玩过20轮
+                if (this.stats.totalAttempts >= 20 && accuracy < 30) {
+                    this.endGame('准确率过低');
+                    return;
+                }
+                
+                // 结束条件2: 连续10次没有正确答案
+                if (this.streak === 0 && this.stats.totalAttempts >= 10) {
+                    const recentCorrect = this.checkRecentPerformance(10);
+                    if (recentCorrect === 0) {
+                        this.endGame('连续答错过多');
+                        return;
+                    }
+                }
+                
+                // 结束条件3: 达到高分阈值（根据难度调整）
+                const maxScore = this.getMaxScoreThreshold();
+                if (this.stats.totalScore >= maxScore) {
+                    this.endGame('达到目标分数');
+                    return;
+                }
+                
+                // 结束条件4: 游戏时长过长（50轮）
+                if (this.stats.totalAttempts >= 50) {
+                    this.endGame('完成长时间训练');
+                    return;
+                }
+            }
+
+            checkRecentPerformance(rounds) {
+                // 检查最近几轮的表现
+                if (this.currentSequence.length < rounds + this.n) return 1;
+                
+                let correct = 0;
+                for (let i = Math.max(0, this.currentSequence.length - rounds); i < this.currentSequence.length; i++) {
+                    if (i < this.n) continue;
+                    
+                    const stimuli = this.currentSequence[i];
+                    const response = this.userResponses[i];
+                    
+                    if (stimuli.visualMatch === response.visualResponse) correct++;
+                    if (stimuli.colorMatch === response.colorResponse) correct++;
+                }
+                
+                return correct;
+            }
+
+            getMaxScoreThreshold() {
+                // 根据N值设置最大分数阈值
+                let baseScore = 20;
+                
+                // N值越高，阈值越高
+                baseScore += this.n * 5;
+                
+                // 双维度游戏阈值调整
+                baseScore += 10;
+                
+                return baseScore;
+            }
+
+            convertToPercentageScore() {
+                // 将累积分数转换为百分制
+                const maxPossibleScore = this.stats.totalAttempts * 2; // 位置+颜色两个维度
+                if (maxPossibleScore === 0) return 0;
+                
+                // 基础分数：基于准确率
+                const accuracy = this.calculateAccuracy();
+                let percentageScore = accuracy;
+                
+                // 奖励分数：基于游戏难度和表现
+                const difficultyBonus = this.getDifficultyBonus();
+                const performanceBonus = this.getPerformanceBonus();
+                
+                percentageScore = Math.min(100, percentageScore + difficultyBonus + performanceBonus);
+                
+                return Math.round(percentageScore);
+            }
+
+            getDifficultyBonus() {
+                // 难度奖励：N值越高，奖励越多
+                let bonus = 0;
+                
+                // N值奖励
+                if (this.n >= 3) bonus += 10;
+                else if (this.n >= 2) bonus += 5;
+                
+                // 双维度固定奖励
+                bonus += 10;
+                
+                return bonus;
+            }
+
+            getPerformanceBonus() {
+                // 表现奖励：基于总分和轮次的比例
+                let bonus = 0;
+                
+                // 高分奖励
+                if (this.stats.totalScore >= 30) bonus += 10;
+                else if (this.stats.totalScore >= 20) bonus += 5;
+                
+                // 长时间训练奖励
+                if (this.stats.totalAttempts >= 40) bonus += 5;
+                else if (this.stats.totalAttempts >= 20) bonus += 3;
+                
+                return bonus;
+            }
+
+            endGame(reason) {
+                this.isPlaying = false;
+                
+                // 计算百分制分数
+                const percentageScore = this.convertToPercentageScore();
+                const difficulty = calculateDifficulty();
+                
+                // 更新全局最高分（使用百分制分数）
+                if (percentageScore > globalHighestScore) {
+                    globalHighestScore = percentageScore;
+                }
+                
+                // 发送游戏结束消息
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: {
+                        score: percentageScore, // 百分制分数
+                        highestScore: Math.max(globalHighestScore, percentageScore),
+                        round: this.round,
+                        n: this.n,
+                        gameMode: this.gameMode,
+                        difficulty: Math.min(difficulty, 3),
+                        accuracy: this.calculateAccuracy(),
+                        endReason: reason,
+                        rawScore: this.stats.totalScore // 保留原始分数用于调试
+                    }
+                }, '*');
+                
+                // 重置游戏状态
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('pauseBtn').disabled = true;
+                document.getElementById('visualMatch').disabled = true;
+                document.getElementById('colorMatch').disabled = true;
+                
+                this.clearGrid();
+                this.updateDisplay();
+                this.updateButtonCounts();
+            }
+
+            calculateAccuracy() {
+                let totalPossible = this.stats.totalAttempts * 2; // 位置+颜色两个维度
+                let totalCorrect = this.stats.visualCorrect + this.stats.colorCorrect;
+                
+                return totalPossible > 0 ? Math.round((totalCorrect / totalPossible) * 100) : 0;
+            }
+
+            updateDisplay() {
+                document.getElementById('nValue').textContent = this.n;
+                document.getElementById('round').textContent = this.round;
+                document.getElementById('totalScore').textContent = this.stats.totalScore;
+                document.getElementById('streak').textContent = this.streak;
+                
+                const accuracy = this.calculateAccuracy();
+                document.getElementById('accuracy').textContent = this.stats.totalAttempts > 0 ? accuracy + '%' : '--';
+                
+                // 更新全局最高分
+                if (this.stats.totalScore > globalHighestScore) {
+                    globalHighestScore = this.stats.totalScore;
+                }
+            }
+        }
+
+        // 初始化游戏
+        const game = new DualNBackGame();
+
+        // 游戏加载完成时发送消息
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+    </script>
+</body>
+</html>

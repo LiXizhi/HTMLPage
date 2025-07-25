@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>数独挑战 - 多关卡游戏</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            overflow-x: hidden;
+            height: 100vh;
+            touch-action: manipulation;
+            font-size: 16px; /* Increased base font size */
+        }
+        
+        .game-container {
+            height: 100vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .sudoku-cell {
+            transition: all 0.2s ease;
+        }
+        .sudoku-cell:hover {
+            background-color: #e5e7eb;
+        }
+        .sudoku-cell.selected {
+            background-color: #dbeafe !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+        .sudoku-cell.error {
+            background-color: #fecaca !important;
+            color: #dc2626;
+        }
+        .sudoku-cell.given {
+            background-color: #6b7280;
+            color: #ffffff;
+            font-weight: bold;
+        }
+        .sudoku-cell.given:hover {
+            background-color: #6b7280 !important;
+        }
+        
+        /* Responsive Sudoku grid with larger text */
+        .sudoku-grid {
+            aspect-ratio: 1;
+            max-width: min(90vw, 90vh - 200px);
+            width: 100%;
+        }
+        
+        .sudoku-block {
+            border: 2px solid #1f2937;
+            aspect-ratio: 1;
+        }
+        
+        .sudoku-cell-responsive {
+            aspect-ratio: 1;
+            min-height: 35px; /* Increased from 30px */
+            font-size: clamp(18px, 4vw, 24px); /* Increased from clamp(14px, 3vw, 20px) */
+            font-weight: 600; /* Made text bolder */
+        }
+        
+        .number-pad {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 2px solid #e5e7eb;
+            padding: 0.75rem; /* Increased padding */
+            z-index: 40;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Mobile optimizations with larger text */
+        @media (max-width: 768px) {
+            .game-header {
+                padding: 0.75rem; /* Increased padding */
+            }
+            
+            .number-pad {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: white;
+                border-top: 2px solid #e5e7eb;
+                padding: 0.75rem; /* Increased padding */
+                z-index: 40;
+            }
+            
+            .game-content {
+                padding-bottom: 140px; /* Increased from 120px */
+            }
+            
+            .virtual-btn {
+                min-height: 48px; /* Increased from 44px */
+                font-size: 18px; /* Increased from 16px */
+                font-weight: 600; /* Made text bolder */
+            }
+        }
+        
+        /* Header text sizes */
+        .game-header {
+            font-size: 16px; /* Increased base font size */
+        }
+        
+        .game-header select {
+            font-size: 14px; /* Increased from 12px */
+            padding: 4px 8px; /* Increased padding */
+        }
+        
+        .game-header .text-xs {
+            font-size: 14px !important; /* Override Tailwind xs class */
+        }
+        
+        /* Button text sizes */
+        .btn-text-larger {
+            font-size: 16px !important;
+            padding: 8px 16px !important;
+        }
+        
+        /* Modal text sizes */
+        .modal-text-larger h2 {
+            font-size: 1.75rem !important; /* Increased from 1.5rem */
+        }
+        
+        .modal-text-larger h3 {
+            font-size: 1.25rem !important; /* Increased from 1.125rem */
+        }
+        
+        .modal-text-larger .text-sm {
+            font-size: 16px !important; /* Increased from 14px */
+        }
+        
+        .modal-text-larger button {
+            font-size: 18px !important; /* Increased button text */
+            padding: 12px 20px !important; /* Increased button padding */
+        }
+        
+        @media (max-height: 600px) and (orientation: landscape) {
+            .game-container {
+                display: flex;
+                flex-direction: row;
+            }
+            
+            .game-main {
+                flex: 1;
+                overflow-y: auto;
+            }
+            
+            .number-pad {
+                position: relative;
+                width: 220px; /* Increased from 200px */
+                border-left: 2px solid #e5e7eb;
+                border-top: none;
+            }
+            
+            .game-content {
+                padding-bottom: 0;
+            }
+        }
+        
+        /* Rules modal styles */
+        .rules-modal {
+            backdrop-filter: blur(4px);
+        }
+        
+        .floating-rules-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 50;
+            border-radius: 50%;
+            width: 60px; /* Increased from 56px */
+            height: 60px; /* Increased from 56px */
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-size: 24px; /* Increased icon size */
+        }
+        
+        @media (max-width: 768px) {
+            .floating-rules-btn {
+                bottom: 160px; /* Adjusted for larger number pad */
+            }
+        }
+        
+        @media (max-height: 600px) and (orientation: landscape) {
+            .floating-rules-btn {
+                bottom: 20px;
+                right: 240px; /* Adjusted for larger side panel */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50">
+    <div class="game-container">
+        <!-- 游戏规则弹窗 -->
+        <div id="rulesModal" class="rules-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-xl max-w-2xl max-h-[90vh] overflow-y-auto modal-text-larger">
+                <div class="p-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">🎯 数字战士</h2>
+                    <div class="text-xl">
+                        <div>
+                            <h3 class="text-2xl font-semibold text-gray-700 mb-4">📋 基本规则</h3>
+                            <ul class="space-y-3 text-gray-600">
+                                <li class="flex items-start">
+                                    <span class="text-blue-500 mr-3 text-lg">•</span>
+                                    <span >在9×9的网格中填入数字1-9</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-blue-500 mr-3 text-lg">•</span>
+                                    <span >每一行都必须包含1-9的数字，不能重复</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-blue-500 mr-3 text-lg">•</span>
+                                    <span >每一列都必须包含1-9的数字，不能重复</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <span class="text-blue-500 mr-3 text-lg">•</span>
+                                    <span >每个3×3的小九宫格都必须包含1-9的数字，不能重复</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="mt-8 text-center">
+                        <button id="startGameBtn" class="bg-green-500 text-white px-10 py-4 rounded-lg hover:bg-green-600 transition-colors font-bold text-2xl">
+                            🎮 开始训练
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主游戏界面 -->
+        <div id="gameArea" class="game-main hidden">
+            <!-- 游戏头部 -->
+            <div class="game-header bg-white shadow-sm border-b">
+                <div class="flex justify-between items-center p-2 max-w-4xl mx-auto">
+                    <div class="flex items-center space-x-2">
+                        <select id="levelSelect" class="bg-white border border-gray-300 rounded px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <!-- 选项将通过JavaScript生成 -->
+                        </select>
+                    </div>
+                    <div class="text-center">
+                        <div id="currentLevel" class="text-base font-semibold text-gray-700"></div>
+                        <div id="timer" class="text-base text-gray-500">00:00</div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="hintBtn" class="btn-text-larger bg-yellow-500 text-white px-3 py-2 rounded hover:bg-yellow-600 transition-colors">
+                            提示
+                        </button>
+                        <button id="resetBtn" class="btn-text-larger bg-green-500 text-white px-3 py-2 rounded hover:bg-red-600 transition-colors">
+                            重置
+                        </button>
+                    </div>
+                </div>
+                <div class="text-center pb-2">
+                    <div id="progressInfo" class="text-sm text-gray-600"></div>
+                </div>
+            </div>
+
+            <!-- 游戏内容区域 -->
+            <div class="game-content flex flex-col items-center justify-center p-4">
+                <!-- 数独网格 -->
+                <div class="sudoku-grid bg-white rounded-lg shadow-lg p-4 mb-4">
+                    <div id="sudokuGrid" class="grid grid-cols-3 gap-0 border-2 border-gray-800 rounded">
+                        <!-- 9个3x3块将通过JavaScript生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数字输入面板 -->
+            <div class="number-pad bg-white shadow-lg">
+                <div class="flex justify-center flex-wrap gap-3 p-3">
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="1">1</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="2">2</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="3">3</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="4">4</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="5">5</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="6">6</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="7">7</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="8">8</button>
+                    <button class="number-btn virtual-btn bg-blue-500 text-white w-14 h-14 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg" data-number="9">9</button>
+                    <button id="eraseBtn" class="virtual-btn bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-bold text-lg">
+                        X
+                    </button>
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- 浮动规则按钮 -->
+        <button id="floatingRulesBtn" class="floating-rules-btn hidden bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center justify-center">
+            <span class="text-xl">❔</span>
+        </button>
+
+        <!-- 胜利弹窗 -->
+        <div id="victoryModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-xl p-8 max-w-md mx-4 text-center modal-text-larger">
+                <div class="text-6xl mb-6">🎉</div>
+                <h2 class="text-3xl font-bold text-gray-800 mb-4">恭喜通关！</h2>
+                <div id="victoryStats" class="text-gray-600 mb-8 text-base leading-relaxed"></div>
+                <div class="space-x-4">
+                    <button id="nextLevelBtn" class="bg-green-500 text-white px-8 py-3 rounded-lg hover:bg-green-600 transition-colors font-bold text-lg">
+                        下一关
+                    </button>
+                    <button id="continueBtn" class="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors font-bold text-lg">
+                        继续游戏
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 游戏统计和消息通信
+        let game_config = '';
+        let bestScore = 0;
+        let currentGameScore = 0;
+
+        // 计算分数：基于难度和用时，最高100分
+        function calculateScore(difficulty, timeInSeconds) {
+            const maxScore = 100;
+            let difficultyLevel = 1; // 默认初级
+            
+            if (difficulty === '中级') difficultyLevel = 2;
+            else if (difficulty === '高级') difficultyLevel = 3;
+            else if (difficulty === '专家') difficultyLevel = 3;
+            
+            // 基础分数：难度越高分数越高
+            const baseScore = difficultyLevel * 25; // 初级25分，中级50分，高级75分
+            
+            // 时间奖励：10分钟内完成有时间奖励
+            const timeBonus = Math.max(0, 25 - Math.floor(timeInSeconds / 24)); // 最多25分时间奖励
+            
+            return Math.min(maxScore, baseScore + timeBonus);
+        }
+
+        // 消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data; // this is markdown or text string
+                    // 更新游戏配置逻辑
+                    console.log('Game config updated:', game_config);
+                    break;
+                case 'getGameStats':
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: bestScore, // 永远返回最高分
+                            difficulty: Math.min(3, Math.max(1, Math.ceil(game.currentLevel / 4))) // 1~3
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        class SudokuGame {
+            constructor() {
+                this.currentLevel = 1;
+                this.selectedCell = null;
+                this.gameGrid = Array(9).fill().map(() => Array(9).fill(0));
+                this.solutionGrid = Array(9).fill().map(() => Array(9).fill(0));
+                this.givenCells = Array(9).fill().map(() => Array(9).fill(false));
+                this.timer = 0;
+                this.timerInterval = null;
+                this.completedLevels = JSON.parse(localStorage.getItem('completedLevels') || '[]');
+                this.gameStarted = false;
+                this.init();
+            }
+
+            init() {
+                this.createLevelSelect();
+                this.createSudokuGrid();
+                this.bindEvents();
+                this.setupTouchEvents(); // 添加触控事件
+                // 发送游戏加载完成事件
+                window.parent.postMessage({ type: 'gameLoaded' }, '*');
+                // 不自动开始，等待用户点击开始游戏
+            }
+
+            // 添加触控事件支持
+            setupTouchEvents() {
+                // 防止双击缩放
+                document.addEventListener('touchstart', function(e) {
+                    if (e.touches.length > 1) {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+
+                let lastTouchEnd = 0;
+                document.addEventListener('touchend', function(e) {
+                    let now = (new Date()).getTime();
+                    if (now - lastTouchEnd <= 300) {
+                        e.preventDefault();
+                    }
+                    lastTouchEnd = now;
+                }, false);
+
+                // 处理方向变化
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(() => {
+                        this.handleOrientationChange();
+                    }, 100);
+                });
+            }
+
+            // 处理屏幕方向变化
+            handleOrientationChange() {
+                // 重新计算布局
+                if (window.innerHeight < 600 && window.orientation !== 0) {
+                    document.body.classList.add('landscape-mode');
+                } else {
+                    document.body.classList.remove('landscape-mode');
+                }
+            }
+
+            createLevelSelect() {
+                const select = document.getElementById('levelSelect');
+                select.innerHTML = '';
+
+                for (let i = 1; i <= 12; i++) {
+                    const option = document.createElement('option');
+                    const difficulty = this.getDifficulty(i);
+                    const isCompleted = this.completedLevels.includes(i);
+                    //const isLocked = i > 1 && !this.completedLevels.includes(i - 1);
+                    const isLocked = false;
+                    
+                    option.value = i;
+                    option.textContent = `第${i}关 - ${difficulty.name}${isCompleted ? ' ✅' : ''}${isLocked ? ' 🔒' : ''}`;
+                    option.disabled = isLocked;
+                    
+                    select.appendChild(option);
+                }
+
+                select.addEventListener('change', (e) => {
+                    this.startLevel(parseInt(e.target.value));
+                });
+            }
+
+            getDifficulty(level) {
+                if (level <= 3) return { name: '初级', clues: 45 + Math.floor(Math.random() * 6) };
+                if (level <= 6) return { name: '中级', clues: 35 + Math.floor(Math.random() * 6) };
+                if (level <= 9) return { name: '高级', clues: 25 + Math.floor(Math.random() * 6) };
+                return { name: '专家', clues: 17 + Math.floor(Math.random() * 6) };
+            }
+
+            startLevel(level) {
+                this.currentLevel = level;
+                document.getElementById('levelSelect').value = level;
+                const difficulty = this.getDifficulty(level);
+                document.getElementById('currentLevel').textContent = `第${level}关 - ${difficulty.name}`;
+                document.getElementById('progressInfo').textContent = `已完成: ${this.completedLevels.length}/12 关`;
+                this.generatePuzzle();
+                this.startTimer();
+                
+                // 发送游戏开始事件
+                if (!this.gameStarted) {
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
+                    this.gameStarted = true;
+                }
+            }
+
+            generatePuzzle() {
+                // 生成完整的数独解
+                this.generateSolution();
+                // 根据难度移除数字
+                this.createPuzzle();
+                this.renderGrid();
+            }
+
+            generateSolution() {
+                // 清空网格
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        this.solutionGrid[i][j] = 0;
+                    }
+                }
+                
+                // 使用回溯算法填充网格
+                this.solveSudoku(this.solutionGrid);
+            }
+
+            solveSudoku(grid) {
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (grid[row][col] === 0) {
+                            const numbers = this.shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+                            for (let num of numbers) {
+                                if (this.isValidMove(grid, row, col, num)) {
+                                    grid[row][col] = num;
+                                    if (this.solveSudoku(grid)) {
+                                        return true;
+                                    }
+                                    grid[row][col] = 0;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            createPuzzle() {
+                // 复制解到游戏网格
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        this.gameGrid[i][j] = this.solutionGrid[i][j];
+                        this.givenCells[i][j] = true;
+                    }
+                }
+
+                // 根据难度移除数字
+                const difficulty = this.getDifficulty(this.currentLevel);
+                const toRemove = 81 - difficulty.clues;
+                const cells = [];
+                
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        cells.push([i, j]);
+                    }
+                }
+
+                const shuffledCells = this.shuffleArray(cells);
+                for (let i = 0; i < toRemove; i++) {
+                    const [row, col] = shuffledCells[i];
+                    this.gameGrid[row][col] = 0;
+                    this.givenCells[row][col] = false;
+                }
+            }
+
+            shuffleArray(array) {
+                const shuffled = [...array];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                return shuffled;
+            }
+
+            createSudokuGrid() {
+                const grid = document.getElementById('sudokuGrid');
+                grid.innerHTML = '';
+
+                // 创建9个3x3的块
+                for (let blockRow = 0; blockRow < 3; blockRow++) {
+                    for (let blockCol = 0; blockCol < 3; blockCol++) {
+                        const block = document.createElement('div');
+                        block.className = 'sudoku-block grid grid-cols-3 gap-0';
+                        
+                        // 在每个块中创建9个单元格
+                        for (let cellRow = 0; cellRow < 3; cellRow++) {
+                            for (let cellCol = 0; cellCol < 3; cellCol++) {
+                                const actualRow = blockRow * 3 + cellRow;
+                                const actualCol = blockCol * 3 + cellCol;
+                                
+                                const cell = document.createElement('div');
+                                cell.className = `sudoku-cell sudoku-cell-responsive bg-white border border-gray-300 flex items-center justify-center cursor-pointer font-semibold select-none`;
+                                cell.dataset.row = actualRow;
+                                cell.dataset.col = actualCol;
+
+                                // 使用touchstart以提高移动端响应速度
+                                cell.addEventListener('touchstart', (e) => {
+                                    e.preventDefault();
+                                    this.selectCell(actualRow, actualCol);
+                                });
+                                cell.addEventListener('click', (e) => {
+                                    e.preventDefault();
+                                    this.selectCell(actualRow, actualCol);
+                                });
+                                
+                                block.appendChild(cell);
+                            }
+                        }
+                        
+                        grid.appendChild(block);
+                    }
+                }
+            }
+
+            renderGrid() {
+                const cells = document.querySelectorAll('.sudoku-cell');
+                cells.forEach(cell => {
+                    const row = parseInt(cell.dataset.row);
+                    const col = parseInt(cell.dataset.col);
+                    const value = this.gameGrid[row][col];
+                    
+                    cell.textContent = value === 0 ? '' : value;
+                    cell.classList.remove('given', 'error');
+                    
+                    if (this.givenCells[row][col]) {
+                        cell.classList.add('given');
+                    }
+                });
+            }
+
+            selectCell(row, col) {
+                if (this.givenCells[row][col]) return;
+
+                // 移除之前选中的单元格
+                document.querySelectorAll('.sudoku-cell').forEach(cell => {
+                    cell.classList.remove('selected');
+                });
+
+                // 选中新单元格
+                const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                cell.classList.add('selected');
+                this.selectedCell = { row, col };
+            }
+
+            inputNumber(number) {
+                if (!this.selectedCell) return;
+                
+                const { row, col } = this.selectedCell;
+                if (this.givenCells[row][col]) return;
+
+                this.gameGrid[row][col] = number;
+                this.renderGrid();
+                this.checkErrors();
+                this.checkErrorLimit(); // 添加错误限制检查
+                
+                if (this.isPuzzleComplete()) {
+                    this.onVictory();
+                }
+            }
+
+            eraseCell() {
+                if (!this.selectedCell) return;
+                
+                const { row, col } = this.selectedCell;
+                if (this.givenCells[row][col]) return;
+
+                this.gameGrid[row][col] = 0;
+                this.renderGrid();
+                this.checkErrors();
+            }
+
+            checkErrors() {
+                const cells = document.querySelectorAll('.sudoku-cell');
+                cells.forEach(cell => {
+                    cell.classList.remove('error');
+                });
+
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.gameGrid[i][j] !== 0 && !this.isValidMove(this.gameGrid, i, j, this.gameGrid[i][j], true)) {
+                            const cell = document.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+                            cell.classList.add('error');
+                        }
+                    }
+                }
+            }
+
+            isValidMove(grid, row, col, num, checkExisting = false) {
+                // 如果是检查现有数字，暂时清除该位置的数字
+                const originalValue = grid[row][col];
+                if (checkExisting) {
+                    grid[row][col] = 0;
+                }
+
+                // 检查行
+                for (let j = 0; j < 9; j++) {
+                    if (grid[row][j] === num) {
+                        if (checkExisting) grid[row][col] = originalValue;
+                        return false;
+                    }
+                }
+
+                // 检查列
+                for (let i = 0; i < 9; i++) {
+                    if (grid[i][col] === num) {
+                        if (checkExisting) grid[row][col] = originalValue;
+                        return false;
+                    }
+                }
+
+                // 检查九宫格
+                const startRow = Math.floor(row / 3) * 3;
+                const startCol = Math.floor(col / 3) * 3;
+                for (let i = startRow; i < startRow + 3; i++) {
+                    for (let j = startCol; j < startCol + 3; j++) {
+                        if (grid[i][j] === num) {
+                            if (checkExisting) grid[row][col] = originalValue;
+                            return false;
+                        }
+                    }
+                }
+
+                if (checkExisting) grid[row][col] = originalValue;
+                return true;
+            }
+
+            isPuzzleComplete() {
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.gameGrid[i][j] === 0) return false;
+                    }
+                }
+                return true;
+            }
+
+            onVictory() {
+                this.stopTimer();
+                
+                // 计算当前游戏分数
+                const difficulty = this.getDifficulty(this.currentLevel);
+                currentGameScore = calculateScore(difficulty.name, this.timer);
+                
+                // 更新最高分
+                if (currentGameScore > bestScore) {
+                    bestScore = currentGameScore;
+                    localStorage.setItem('bestScore', bestScore.toString());
+                }
+                
+                // 保存完成的关卡
+                if (!this.completedLevels.includes(this.currentLevel)) {
+                    this.completedLevels.push(this.currentLevel);
+                    localStorage.setItem('completedLevels', JSON.stringify(this.completedLevels));
+                    this.createLevelSelect(); // 更新下拉框
+                }
+
+                // 发送游戏完成事件
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: { 
+                        score: Math.min(100, Math.max(0, currentGameScore)), // 确保分数在0-100范围内
+                        bestScore: bestScore,
+                        difficulty: Math.min(3, Math.max(1, Math.ceil(this.currentLevel / 4))),
+                        level: this.currentLevel,
+                        timeUsed: this.timer,
+                        isSuccess: true
+                    }
+                }, '*');
+
+                // 显示胜利弹窗
+                const minutes = Math.floor(this.timer / 60);
+                const seconds = this.timer % 60;
+                document.getElementById('victoryStats').innerHTML = `
+                    <div>用时: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}</div>
+                    <div>难度: ${this.getDifficulty(this.currentLevel).name}</div>
+                    <div>本次分数: ${currentGameScore}分</div>
+                    <div>最高分数: ${bestScore}分</div>
+                    <div>完成进度: ${this.completedLevels.length}/12</div>
+                `;
+
+                // 控制下一关按钮显示
+                const nextBtn = document.getElementById('nextLevelBtn');
+                if (this.currentLevel < 12) {
+                    nextBtn.classList.remove('hidden');
+                } else {
+                    nextBtn.classList.add('hidden');
+                }
+
+                document.getElementById('victoryModal').classList.remove('hidden');
+            }
+
+            // 添加游戏失败逻辑 - 超时自动结束
+            onGameTimeout() {
+                this.stopTimer();
+                
+                // 计算失败时的分数（较低分数）
+                const timeoutScore = Math.max(5, 25 - Math.floor(this.timer / 120)); // 基于用时给予少量分数
+                currentGameScore = timeoutScore;
+                
+                // 发送游戏完成事件
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: { 
+                        score: Math.min(100, Math.max(0, currentGameScore)), // 确保分数在0-100范围内
+                        bestScore: bestScore,
+                        difficulty: Math.min(3, Math.max(1, Math.ceil(this.currentLevel / 4))),
+                        level: this.currentLevel,
+                        timeUsed: this.timer,
+                        isSuccess: false
+                    }
+                }, '*');
+            }
+
+            giveHint() {
+                const emptyCells = [];
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.gameGrid[i][j] === 0) {
+                            emptyCells.push([i, j]);
+                        }
+                    }
+                }
+
+                if (emptyCells.length === 0) return;
+
+                const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                const [row, col] = randomCell;
+                this.gameGrid[row][col] = this.solutionGrid[row][col];
+                this.renderGrid();
+
+                if (this.isPuzzleComplete()) {
+                    this.onVictory();
+                }
+            }
+
+            resetPuzzle() {
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (!this.givenCells[i][j]) {
+                            this.gameGrid[i][j] = 0;
+                        }
+                    }
+                }
+                this.renderGrid();
+                this.timer = 0;
+                this.startTimer();
+            }
+
+            startTimer() {
+                this.stopTimer();
+                this.timer = 0;
+                this.updateTimerDisplay();
+                this.timerInterval = setInterval(() => {
+                    this.timer++;
+                    this.updateTimerDisplay();
+                    
+                    // 添加超时检查 - 根据难度设置不同的超时时间
+                    const difficulty = this.getDifficulty(this.currentLevel);
+                    let maxTime = 1800; // 30分钟基础时间
+                    
+                    if (difficulty.name === '初级') maxTime = 1200; // 20分钟
+                    else if (difficulty.name === '中级') maxTime = 1500; // 25分钟
+                    else if (difficulty.name === '高级') maxTime = 1800; // 30分钟
+                    else if (difficulty.name === '专家') maxTime = 2100; // 35分钟
+                    
+                    if (this.timer >= maxTime) {
+                        this.onGameTimeout();
+                    }
+                }, 1000);
+            }
+
+            // 添加错误次数检查逻辑
+            checkErrorLimit() {
+                if (!this.errorCount) this.errorCount = 0;
+                
+                let errorCells = 0;
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.gameGrid[i][j] !== 0 && !this.isValidMove(this.gameGrid, i, j, this.gameGrid[i][j], true)) {
+                            errorCells++;
+                        }
+                    }
+                }
+                
+                // 如果错误数量过多（超过10个），自动结束游戏
+                if (errorCells > 10) {
+                    this.onGameTimeout(); // 复用超时逻辑
+                }
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            updateTimerDisplay() {
+                const minutes = Math.floor(this.timer / 60);
+                const seconds = this.timer % 60;
+                document.getElementById('timer').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            bindEvents() {
+                // 数字按钮 - 添加触控支持
+                document.querySelectorAll('.number-btn').forEach(btn => {
+                    btn.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        this.inputNumber(parseInt(btn.dataset.number));
+                    });
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.inputNumber(parseInt(btn.dataset.number));
+                    });
+                });
+
+                // 其他按钮 - 添加触控支持
+                const eraseBtn = document.getElementById('eraseBtn');
+                eraseBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.eraseCell();
+                });
+                eraseBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.eraseCell();
+                });
+
+                document.getElementById('hintBtn').addEventListener('click', () => this.giveHint());
+                document.getElementById('resetBtn').addEventListener('click', () => this.resetPuzzle());
+                
+                // 规则相关按钮
+                document.getElementById('startGameBtn').addEventListener('click', () => {
+                    document.getElementById('rulesModal').classList.add('hidden');
+                    document.getElementById('gameArea').classList.remove('hidden');
+                    document.getElementById('floatingRulesBtn').classList.remove('hidden');
+                    this.startLevel(1);
+                });
+
+                document.getElementById('floatingRulesBtn').addEventListener('click', () => {
+                    document.getElementById('rulesModal').classList.remove('hidden');
+                });
+
+                // 胜利弹窗按钮
+                document.getElementById('nextLevelBtn').addEventListener('click', () => {
+                    document.getElementById('victoryModal').classList.add('hidden');
+                    if (this.currentLevel < 12) {
+                        this.startLevel(this.currentLevel + 1);
+                    }
+                });
+                
+                document.getElementById('continueBtn').addEventListener('click', () => {
+                    document.getElementById('victoryModal').classList.add('hidden');
+                });
+
+                // 键盘输入 - 保持PC端支持
+                document.addEventListener('keydown', (e) => {
+                    if (e.key >= '1' && e.key <= '9') {
+                        this.inputNumber(parseInt(e.key));
+                    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                        this.eraseCell();
+                    }
+                });
+
+                // 防止移动端误触发右键菜单
+                document.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                });
+            }
+        }
+
+        // 从本地存储加载最高分
+        bestScore = parseInt(localStorage.getItem('bestScore') || '0');
+
+        // 启动游戏
+        const game = new SudokuGame();
+    </script>
+</body>
+</html>
+

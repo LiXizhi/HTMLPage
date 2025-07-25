@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>音乐记忆大师</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        /* 全屏基础样式 */
+        * {
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        /* 动画效果 */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes slideDown {
+            from { transform: translateY(0); opacity: 1; }
+            to { transform: translateY(100%); opacity: 0; }
+        }
+        
+        .playing {
+            animation: pulse 0.5s ease-in-out;
+            transform: scale(1.05);
+        }
+        
+        .correct {
+            animation: pulse 0.3s ease-in-out;
+            background-color: #10b981 !important;
+        }
+        
+        .wrong {
+            animation: pulse 0.3s ease-in-out;
+            background-color: #ef4444 !important;
+        }
+
+        /* 规则弹窗样式 */
+        .rules-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        .rules-modal.hide {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .rules-content {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 游戏主容器 */
+        .game-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* 响应式网格 */
+        .sound-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem; /* 从0.75rem增大到1rem */
+            max-width: min(85vw, 450px); /* 从80vw, 400px增大到85vw, 450px */
+            margin: 0 auto;
+        }
+
+        /* 音符按钮 */
+        .sound-btn {
+            aspect-ratio: 1;
+            min-height: 80px; /* 从60px增大到80px */
+            border: none;
+            border-radius: 20px; /* 从16px增大到20px */
+            font-size: clamp(2rem, 5vw, 2.5rem); /* 从1.5rem, 4vw, 2rem增大到2rem, 5vw, 2.5rem */
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); /* 增强阴影 */
+            touch-action: manipulation;
+        }
+
+        .sound-btn:active {
+            transform: scale(0.95);
+        }
+
+        .sound-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* 悬浮规则按钮 */
+        .rules-float-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px; /* 从50px增大到60px */
+            height: 60px; /* 从50px增大到60px */
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            font-size: 1.8rem; /* 从1.5rem增大到1.8rem */
+            z-index: 100;
+            transition: all 0.2s ease;
+        }
+
+        .rules-float-btn:hover {
+            transform: scale(1.1);
+            background: white;
+        }
+
+        .flex-1 {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transform: translateY(-5rem); /* Move entire game area up */
+        }
+
+        /* 移动端优化 */
+        @media (max-width: 768px) {
+            .sound-grid {
+                gap: 0.75rem; /* 从0.5rem增大到0.75rem */
+                max-width: 90vw;
+            }
+            
+            .sound-btn {
+                min-height: 70px; /* 从50px增大到70px */
+                font-size: clamp(1.8rem, 6vw, 2.2rem); /* 从1.2rem, 5vw, 1.8rem增大 */
+            }
+            
+            .rules-content {
+                padding: 2rem; /* 从1.5rem增大到2rem */
+                margin: 1rem;
+            }
+        }
+
+        /* 横屏适配 */
+        @media (orientation: landscape) and (max-height: 600px) {
+            .game-container {
+                padding: 0.5rem;
+            }
+            
+            .sound-grid {
+                max-width: min(60vh, 350px); /* 从50vh, 300px增大 */
+            }
+            
+            .sound-btn {
+                min-height: 55px; /* 从40px增大到55px */
+            }
+        }
+
+        /* 超小屏幕适配 */
+        @media (max-width: 480px) {
+            .sound-btn {
+                min-height: 65px; /* 从45px增大到65px */
+                border-radius: 16px; /* 从12px增大到16px */
+            }
+            
+            .rules-float-btn {
+                width: 55px; /* 从45px增大到55px */
+                height: 55px; /* 从45px增大到55px */
+                bottom: 15px;
+                right: 15px;
+                font-size: 1.6rem; /* 从1.3rem增大到1.6rem */
+            }
+        }
+
+        /* 难度选择按钮样式 */
+        .difficulty-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .difficulty-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .difficulty-btn.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+        }
+
+        .difficulty-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* 移动端难度选择优化 */
+        @media (max-width: 768px) {
+            .difficulty-btn {
+                padding: 10px 12px;
+                min-width: 70px;
+                font-size: 14px;
+            }
+            
+            .difficulty-btn span.block {
+                font-size: 12px;
+            }
+            
+            .difficulty-btn span.text-xs {
+                font-size: 10px;
+            }
+        }
+
+        /* 动态网格布局 */
+        .sound-grid.grid-2x2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .sound-grid.grid-3x2 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .sound-grid.grid-5x2 {
+            grid-template-columns: repeat(5, 1fr);
+        }
+
+        /* 移除原有难度按钮样式，添加下拉菜单样式 */
+        .difficulty-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+            min-width: 120px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .difficulty-select:hover {
+            background-color: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .difficulty-select:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .difficulty-select option {
+            background: white;
+            color: #374151;
+            padding: 0.5rem;
+        }
+
+        /* 移动端优化 */
+        @media (max-width: 768px) {
+            .difficulty-select {
+                min-width: 100px;
+                font-size: 12px;
+                padding: 0.25rem 2rem 0.25rem 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 游戏规则弹窗 -->
+    <div id="rulesModal" class="rules-modal">
+        <div class="rules-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-3xl font-bold text-purple-800">🎵 训练规则</h2> <!-- 从text-2xl增大到text-3xl -->
+                <button id="closeRules" class="text-gray-500 hover:text-gray-700 text-3xl">&times;</button> <!-- 从text-2xl增大到text-3xl -->
+            </div>
+            <div class="space-y-4"> <!-- 从space-y-3增大到space-y-4 -->
+                <div class="flex items-center space-x-4"> <!-- 从space-x-3增大到space-x-4 -->
+                    <span class="text-3xl">👂</span> <!-- 从text-2xl增大到text-3xl -->
+                    <span class="text-gray-700 text-lg">仔细听音乐序列</span> <!-- 增加text-lg -->
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-3xl">🎯</span>
+                    <span class="text-gray-700 text-lg">按照相同顺序点击对应的乐器</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-3xl">⬆️</span>
+                    <span class="text-gray-700 text-lg">每关序列会增加一个音符</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-3xl">💯</span>
+                    <span class="text-gray-700 text-lg">挑战你的最高分！</span>
+                </div>
+            </div>
+            <div class="mt-8 text-center"> <!-- 从mt-6增大到mt-8 -->
+                <button id="startGameFromRules" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-10 py-4 rounded-full text-xl font-bold hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg"> <!-- 从px-8 py-3 text-lg增大到px-10 py-4 text-xl -->
+                    开始训练
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主游戏界面 -->
+    <div class="game-container">
+        <!-- 顶部状态栏 -->
+        <div class="flex-shrink-0 p-4">
+            <h1 class="text-center text-white font-bold text-3xl md:text-4xl mb-4">🎵 音乐记忆大师</h1> <!-- 从text-2xl md:text-3xl增大到text-3xl md:text-4xl -->
+            <div class="flex justify-center gap-3 md:gap-6 text-base md:text-lg"> <!-- 从gap-2 md:gap-4 text-sm md:text-base增大 -->
+                <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg text-white"> <!-- 从px-3 py-1增大到px-4 py-2 -->
+                    <span class="font-semibold">关卡:</span> <span id="level">1</span>
+                </div>
+                <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg text-white">
+                    <span class="font-semibold">得分:</span> <span id="score">0</span>
+                </div>
+                <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg text-white">
+                    <span class="font-semibold">最高:</span> <span id="highScore">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏区域 -->
+        <div class="flex-1 flex flex-col justify-center p-4">
+            <div class="sound-grid mb-6" id="soundGrid">
+                <button class="sound-btn bg-red-400 hover:bg-red-500" data-sound="0">🎹</button>
+                <button class="sound-btn bg-orange-400 hover:bg-orange-500" data-sound="1">🎸</button>
+                <button class="sound-btn bg-yellow-400 hover:bg-yellow-500" data-sound="2">🥁</button>
+                <button class="sound-btn bg-green-400 hover:bg-green-500" data-sound="3">🎺</button>
+                <button class="sound-btn bg-blue-400 hover:bg-blue-500" data-sound="4">🎻</button>
+                <button class="sound-btn bg-purple-400 hover:bg-purple-500" data-sound="5">🎷</button>
+                <button class="sound-btn bg-pink-400 hover:bg-pink-500" data-sound="6" style="display: none;">🪕</button>
+                <button class="sound-btn bg-teal-400 hover:bg-teal-500" data-sound="7" style="display: none;">🎼</button>
+                <button class="sound-btn bg-indigo-400 hover:bg-indigo-500" data-sound="8" style="display: none;">🎤</button>
+                <button class="sound-btn bg-cyan-400 hover:bg-cyan-500" data-sound="9" style="display: none;">🔔</button>
+            </div>
+
+            <!-- 消息和控制区域 -->
+            <div class="text-center">
+                <button id="startBtn" class="bg-gradient-to-r from-green-500 to-blue-500 text-white px-8 py-4 rounded-full text-xl font-bold hover:from-green-600 hover:to-blue-600 transition-all transform hover:scale-105 shadow-lg mb-6">
+                    开始训练
+                </button>
+                <p id="message" class="text-white text-xl font-semibold min-h-[32px]"></p>
+            </div>
+        </div>
+
+        <!-- 简化的难度选择区域 -->
+        <div class="flex-shrink-0 p-4 pb-6">
+            <div class="flex justify-center items-center gap-3">
+                <span class="text-white text-sm opacity-80">难度:</span>
+                <select id="difficultySelect" class="difficulty-select bg-white bg-opacity-20 text-white border border-white border-opacity-30 rounded-lg px-3 py-1 text-sm backdrop-blur-md">
+                    <option value="easy" class="text-gray-800">简单 (4个乐器)</option>
+                    <option value="normal" class="text-gray-800">普通 (6个乐器)</option>
+                    <option value="master" class="text-gray-800">大师 (10个乐器)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- 悬浮规则按钮 -->
+    <button id="rulesFloatBtn" class="rules-float-btn" title="查看游戏规则" style="display: none;">
+        ❓
+    </button>
+
+    <script>
+        // 全局变量和配置
+        let game_config = '';
+        let globalHighestScore = 0;
+        let gameStarted = false;
+        
+        // 音频上下文
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // 音符频率（C大调音阶）
+        let frequencies = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00];
+        
+        // 游戏状态
+        let gameState = {
+            sequence: [],
+            playerSequence: [],
+            level: 1,
+            score: 0,
+            highScore: localStorage.getItem('highScore') || 0,
+            isPlaying: false,
+            isPlayerTurn: false,
+            startTime: null,
+            maxLevels: 15, // 最大关卡数
+            timeLimit: 300000, // 5分钟时间限制（毫秒）
+            errorCount: 0, // 添加错误计数
+            maxErrors: 3 // 最大错误次数
+        };
+
+        // 初始化全局最高分
+        globalHighestScore = Math.max(gameState.highScore, globalHighestScore);
+
+        // 规则弹窗控制
+        const rulesModal = document.getElementById('rulesModal');
+        const closeRulesBtn = document.getElementById('closeRules');
+        const startGameFromRulesBtn = document.getElementById('startGameFromRules');
+        const rulesFloatBtn = document.getElementById('rulesFloatBtn');
+
+        // 显示规则弹窗
+        function showRules() {
+            rulesModal.style.display = 'flex';
+            rulesModal.classList.remove('hide');
+        }
+
+        // 隐藏规则弹窗
+        function hideRules() {
+            rulesModal.classList.add('hide');
+            setTimeout(() => {
+                rulesModal.style.display = 'none';
+                rulesModal.classList.remove('hide');
+            }, 300);
+        }
+
+        // 从规则弹窗开始游戏
+        function startGameFromRules() {
+            hideRules();
+            setTimeout(() => {
+                startGame();
+                rulesFloatBtn.style.display = 'block';
+            }, 300);
+        }
+
+        // 事件监听
+        closeRulesBtn.addEventListener('click', hideRules);
+        startGameFromRulesBtn.addEventListener('click', startGameFromRules);
+        rulesFloatBtn.addEventListener('click', showRules);
+
+        // 触摸事件优化
+        function addTouchSupport() {
+            document.querySelectorAll('.sound-btn').forEach(btn => {
+                // 只需要基本的触摸样式优化
+                btn.addEventListener('mousedown', () => {
+                    btn.style.transform = 'scale(0.95)';
+                });
+                
+                btn.addEventListener('mouseup', () => {
+                    btn.style.transform = '';
+                });
+                
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.transform = '';
+                });
+            });
+        }
+
+        // 屏幕方向变化处理
+        function handleOrientationChange() {
+            // 延迟处理以确保新的尺寸生效
+            setTimeout(() => {
+                // 重新计算布局
+                const gameContainer = document.querySelector('.game-container');
+                const soundGrid = document.querySelector('.sound-grid');
+                
+                if (window.innerHeight < 600 && window.innerWidth > window.innerHeight) {
+                    // 横屏低高度设备
+                    gameContainer.style.padding = '0.5rem';
+                    soundGrid.style.maxWidth = 'min(50vh, 300px)';
+                } else {
+                    // 恢复默认
+                    gameContainer.style.padding = '';
+                    soundGrid.style.maxWidth = '';
+                }
+            }, 100);
+        }
+
+        // 监听屏幕方向变化
+        window.addEventListener('orientationchange', handleOrientationChange);
+        window.addEventListener('resize', handleOrientationChange);
+
+        // 添加消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data;
+                    updateGameConfig(game_config);
+                    break;
+                case 'getGameStats':
+                    const difficulty = calculateDifficulty();
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: globalHighestScore,
+                            difficulty: Math.min(difficulty, 3)
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        // 更新游戏配置
+        function updateGameConfig(config) {
+            try {
+                if (typeof config === 'string' && config.trim()) {
+                    const newConfig = parseGameConfig(config);
+                    if (newConfig.frequencies && newConfig.frequencies.length > 0) {
+                        frequencies = newConfig.frequencies;
+                        console.log(`配置已更新，加载了 ${frequencies.length} 个音符频率`);
+                        
+                        if (gameState.level > 1 || gameState.isPlaying) {
+                            startGame();
+                        }
+                    } else {
+                        console.warn('新配置没有有效音符，保持原配置');
+                    }
+                }
+            } catch (error) {
+                console.warn('解析游戏配置失败，保持原配置:', error);
+            }
+        }
+
+        // 解析游戏配置（支持多种格式）
+        function parseGameConfig(config) {
+            const result = { frequencies: [] };
+            
+            try {
+                const jsonData = JSON.parse(config);
+                if (jsonData.frequencies && Array.isArray(jsonData.frequencies)) {
+                    result.frequencies = jsonData.frequencies.filter(f => typeof f === 'number' && f > 0);
+                } else if (Array.isArray(jsonData)) {
+                    result.frequencies = jsonData.filter(f => typeof f === 'number' && f > 0);
+                }
+            } catch (e) {
+                const lines = config.trim().split('\n');
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    const numbers = line.split(/[,\s]+/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+                    result.frequencies.push(...numbers);
+                }
+            }
+            
+            return result;
+        }
+
+        // 计算当前难度（基于关卡和序列长度）
+        function calculateDifficulty() {
+            const level = gameState.level;
+            const sequenceLength = gameState.sequence.length;
+            
+            if (level >= 10 || sequenceLength >= 8) return 3;
+            if (level >= 5 || sequenceLength >= 5) return 2;
+            return 1;
+        }
+
+        // 播放音符
+        function playSound(index, duration = 500) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequencies[index];
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.8, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration / 1000);
+            
+            const btn = document.querySelector(`[data-sound="${index}"]`);
+            btn.classList.add('playing');
+            setTimeout(() => btn.classList.remove('playing'), duration);
+        }
+
+        // 生成新的序列
+        function generateSequence() {
+            const config = difficultyConfig[currentDifficulty];
+            const newSound = Math.floor(Math.random() * config.instruments);
+            gameState.sequence.push(newSound);
+        }
+
+        // 播放序列
+        async function playSequence() {
+            gameState.isPlaying = true;
+            updateMessage('仔细听... 🎧');
+            disableButtons();
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            for (let i = 0; i < gameState.sequence.length; i++) {
+                playSound(gameState.sequence[i]);
+                await new Promise(resolve => setTimeout(resolve, 600));
+            }
+            
+            gameState.isPlaying = false;
+            gameState.isPlayerTurn = true;
+            enableButtons();
+            updateMessage('轮到你了！请重复刚才的序列 🎹');
+        }
+
+        async function gameWrong() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            updateMessage(`❌ 游戏结束！连续错误${gameState.maxErrors}次，最终得分：${gameState.score} 🎮`);
+            
+            // 更新最高分
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+                document.getElementById('highScore').textContent = gameState.highScore;
+                updateMessage(`❌ 游戏结束！新纪录：${gameState.score} 🏆`);
+            }
+
+            // 更新全局最高分
+            if (gameState.score > globalHighestScore) {
+                globalHighestScore = gameState.score;
+            }
+
+            // 发送游戏结束消息（错误次数过多）
+            const finalScore = convertToPercentage(gameState.score, gameState.level, false);
+            const difficulty = calculateDifficulty();
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: finalScore,
+                    highestScore: globalHighestScore,
+                    level: gameState.level,
+                    difficulty: Math.min(difficulty, 3),
+                    completed: false,
+                    reason: 'tooManyErrors' // 添加结束原因
+                }
+            }, '*');
+            
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // 重新启用难度选择
+            updateDifficultySelect();
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').textContent = '再玩一次';
+        }
+
+        // 检查玩家输入
+        function checkPlayerInput(soundIndex) {
+            if (!gameState.isPlayerTurn || gameState.isPlaying) return;
+            
+            const config = difficultyConfig[currentDifficulty];
+            if (soundIndex >= config.instruments) return; // 防止点击隐藏的按钮
+            
+            playSound(soundIndex, 300);
+            gameState.playerSequence.push(soundIndex);
+            
+            const currentIndex = gameState.playerSequence.length - 1;
+            
+            if (gameState.playerSequence[currentIndex] !== gameState.sequence[currentIndex]) {
+                gameState.errorCount++;
+                
+                if (gameState.errorCount >= gameState.maxErrors) {
+                    // 达到最大错误次数，游戏结束
+                    gameWrong();
+                } else {
+                    // 还有机会，重置当前回合
+                    wrongButRetry();
+                }
+            } else if (gameState.playerSequence.length === gameState.sequence.length) {
+                // 完成当前关卡，重置错误计数
+                gameState.errorCount = 0;
+                levelComplete();
+            }
+        }
+
+        // 添加新函数：错误但可以重试
+        async function wrongButRetry() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            // 短暂显示错误效果
+            document.querySelectorAll('.sound-btn').forEach(btn => {
+                btn.classList.add('wrong');
+            });
+            
+            const remainingChances = gameState.maxErrors - gameState.errorCount;
+            updateMessage(`点错了！还有 ${remainingChances} 次机会 😅`);
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // 移除错误效果
+            document.querySelectorAll('.sound-btn').forEach(btn => {
+                btn.classList.remove('wrong');
+            });
+            
+            // 重置当前回合的玩家序列
+            gameState.playerSequence = [];
+            
+            // 重新播放序列
+            await new Promise(resolve => setTimeout(resolve, 500));
+            updateMessage('再听一遍... 🎧');
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            for (let i = 0; i < gameState.sequence.length; i++) {
+                playSound(gameState.sequence[i]);
+                await new Promise(resolve => setTimeout(resolve, 600));
+            }
+            
+            gameState.isPlayerTurn = true;
+            enableButtons();
+            updateMessage('再试一次！请重复刚才的序列 🎹');
+        }
+
+        // 开始新游戏
+        function startGame() {
+            if (!gameStarted) {
+                // 发送游戏开始消息
+                window.parent.postMessage({ type: 'gameStarted' }, '*');
+                gameStarted = true;
+            }
+
+            const config = difficultyConfig[currentDifficulty];
+            
+            gameState = {
+                sequence: [],
+                playerSequence: [],
+                level: 1,
+                score: 0,
+                highScore: gameState.highScore,
+                isPlaying: false,
+                isPlayerTurn: false,
+                startTime: Date.now(),
+                maxLevels: config.maxLevels,
+                timeLimit: 300000,
+                errorCount: 0,
+                maxErrors: 3
+            };
+            
+            updateDisplay();
+            updateDifficultySelect(); // 禁用难度选择
+            document.getElementById('startBtn').style.display = 'none';
+            
+            generateSequence();
+            playSequence();
+        }
+
+        // 关卡完成
+        async function levelComplete() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            document.querySelectorAll('.sound-btn').forEach(btn => {
+                btn.classList.add('correct');
+            });
+            
+            gameState.score += gameState.level * 10;
+            gameState.level++;
+            gameState.errorCount = 0; // 重置错误计数
+            updateDisplay();
+            updateMessage(`太棒了！得到 ${(gameState.level - 1) * 10} 分！🎉`);
+            
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            document.querySelectorAll('.sound-btn').forEach(btn => {
+                btn.classList.remove('correct');
+            });
+            
+            // 检查是否达到游戏完成条件
+            if (checkGameComplete()) {
+                return;
+            }
+            
+            gameState.playerSequence = [];
+            generateSequence();
+            playSequence();
+        }
+
+        // 添加缺失的游戏完成检查函数
+        function checkGameComplete() {
+            // 检查是否达到最大关卡数
+            if (gameState.level > gameState.maxLevels) {
+                gameComplete();
+                return true;
+            }
+            
+            // 检查是否超过时间限制
+            const timeElapsed = Date.now() - gameState.startTime;
+            if (timeElapsed >= gameState.timeLimit) {
+                gameTimeout();
+                return true;
+            }
+            
+            return false;
+        }
+
+        // 游戏完成（通关）
+        async function gameComplete() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            updateMessage(`🎉 恭喜通关！完成所有${gameState.maxLevels}关！最终得分：${gameState.score} 🏆`);
+            
+            // 更新最高分
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+                document.getElementById('highScore').textContent = gameState.highScore;
+                updateMessage(`🎉 新纪录！通关得分：${gameState.score} 🏆`);
+            }
+
+            // 更新全局最高分
+            if (gameState.score > globalHighestScore) {
+                globalHighestScore = gameState.score;
+            }
+
+            // 发送游戏结束消息（成功完成）
+            const finalScore = convertToPercentage(gameState.score, gameState.level - 1, true);
+            const difficulty = calculateDifficulty();
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: finalScore,
+                    highestScore: globalHighestScore,
+                    level: gameState.level - 1,
+                    difficulty: Math.min(difficulty, 3),
+                    completed: true
+                }
+            }, '*');
+            
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // 重新启用难度选择
+            updateDifficultySelect();
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').textContent = '再玩一次';
+        }
+
+        // 游戏超时
+        async function gameTimeout() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            updateMessage(`⏰ 时间到！游戏结束！最终得分：${gameState.score} 🎮`);
+            
+            // 更新最高分
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+                document.getElementById('highScore').textContent = gameState.highScore;
+                updateMessage(`⏰ 时间到！新纪录：${gameState.score} 🏆`);
+            }
+
+            // 更新全局最高分
+            if (gameState.score > globalHighestScore) {
+                globalHighestScore = gameState.score;
+            }
+
+            // 发送游戏结束消息（超时）
+            const finalScore = convertToPercentage(gameState.score, gameState.level, false);
+            const difficulty = calculateDifficulty();
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: finalScore,
+                    highestScore: globalHighestScore,
+                    level: gameState.level,
+                    difficulty: Math.min(difficulty, 3),
+                    completed: false
+                }
+            }, '*');
+            
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // 重新启用难度选择
+            updateDifficultySelect();
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').textContent = '再玩一次';
+        }
+
+        // 将游戏得分转换为百分制
+        function convertToPercentage(score, level, completed) {
+            // 基础分数计算：每关卡的理论最高分是 level * 10
+            const maxPossibleScore = gameState.maxLevels * (gameState.maxLevels + 1) * 5; // 理论最高总分
+            const timeBonus = completed ? 300 : 0; // 完成奖励
+            const totalScore = score + timeBonus;
+            
+            // 计算百分比
+            let percentage = Math.min(100, Math.max(0, (totalScore / maxPossibleScore) * 100));
+            
+            // 根据完成情况调整
+            if (completed && level >= gameState.maxLevels) {
+                // 完全通关，最低85分
+                percentage = Math.max(85, percentage);
+            } else if (level >= 10) {
+                // 达到较高关卡，给予额外奖励
+                percentage = Math.min(100, percentage * 1.2);
+            } else if (level >= 5) {
+                // 中等关卡，适当奖励
+        percentage = Math.min(100, percentage * 1.1);
+            }
+            
+            // 确保至少有基础分数
+            if (level >= 3) {
+                percentage = Math.max(20, percentage);
+            } else if (level >= 2) {
+                percentage = Math.max(10, percentage);
+            }
+            
+            return Math.round(percentage);
+        }
+
+        // 难度配置
+        const difficultyConfig = {
+            easy: {
+                instruments: 4,
+                frequencies: [261.63, 293.66, 329.63, 349.23],
+                gridClass: 'grid-2x2',
+                maxLevels: 12
+            },
+            normal: {
+                instruments: 6,
+                frequencies: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00],
+                gridClass: 'grid-3x2',
+                maxLevels: 15
+            },
+            master: {
+                instruments: 10,
+                frequencies: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25],
+                gridClass: 'grid-5x2',
+                maxLevels: 20
+            }
+        };
+
+        // 当前难度
+        let currentDifficulty = 'normal';
+
+        // 初始化难度选择
+        function initDifficultySelector() {
+            const difficultySelect = document.getElementById('difficultySelect');
+            
+            difficultySelect.addEventListener('change', (e) => {
+                const difficulty = e.target.value;
+                setDifficulty(difficulty);
+                
+                // 如果游戏正在进行，显示提示并重新开始
+                if (gameState.isPlaying || gameState.isPlayerTurn) {
+                    updateMessage('难度已切换，游戏重新开始！');
+                }
+            });
+        }
+
+        // 设置难度
+        function setDifficulty(difficulty) {
+            if (!difficultyConfig[difficulty]) return;
+            
+            currentDifficulty = difficulty;
+            const config = difficultyConfig[difficulty];
+            
+            // 更新频率数组
+            frequencies = [...config.frequencies];
+            
+            // 更新游戏参数
+            gameState.maxLevels = config.maxLevels;
+            
+            // 无论游戏处于什么状态，都重置游戏
+            gameState = {
+                sequence: [],
+                playerSequence: [],
+                level: 1,
+                score: 0,
+                highScore: gameState.highScore,
+                isPlaying: false,
+                isPlayerTurn: false,
+                startTime: null,
+                maxLevels: config.maxLevels,
+                timeLimit: 300000,
+                errorCount: 0,
+                maxErrors: 3
+            };
+            
+            // 更新显示
+            updateDisplay();
+            
+            // 显示开始按钮
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').textContent = '开始训练';
+            
+            // 清空消息
+            updateMessage('');
+            
+            // 启用按钮4
+            enableButtons();
+            
+            // 更新UI
+            updateDifficultySelect();
+            updateSoundGrid();
+            
+            console.log(`难度已设置为: ${difficulty} (${config.instruments}个乐器)`);
+        }
+
+        // 更新难度选择状态
+        function updateDifficultySelect() {
+            const difficultySelect = document.getElementById('difficultySelect');
+            
+            difficultySelect.value = currentDifficulty;
+            
+            // 始终启用难度选择，允许随时切换
+            difficultySelect.disabled = false;
+        }
+
+        // 更新音符网格
+        function updateSoundGrid() {
+            const config = difficultyConfig[currentDifficulty];
+            const soundGrid = document.getElementById('soundGrid');
+            const allBtns = soundGrid.querySelectorAll('.sound-btn');
+            
+            // 移除所有网格类
+            soundGrid.classList.remove('grid-2x2', 'grid-3x2', 'grid-5x2');
+            // 添加当前难度的网格类
+            soundGrid.classList.add(config.gridClass);
+            
+            // 显示/隐藏按钮
+            allBtns.forEach((btn, index) => {
+                if (index < config.instruments) {
+                    btn.style.display = 'block';
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
+            
+            // 重新应用触摸支持
+            addTouchSupport();
+        }
+
+        // 禁用所有音符按钮
+        function disableButtons() {
+            document.querySelectorAll('.sound-btn').forEach(btn => {
+                btn.disabled = true;
+            });
+        }
+
+        // 启用所有音符按钮
+        function enableButtons() {
+            const config = difficultyConfig[currentDifficulty];
+            document.querySelectorAll('.sound-btn').forEach((btn, index) => {
+                if (index < config.instruments) {
+                    btn.disabled = false;
+                }
+            });
+        }
+
+        // 更新显示信息
+        function updateDisplay() {
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('highScore').textContent = gameState.highScore;
+        }
+
+        // 更新消息显示
+        function updateMessage(text) {
+            document.getElementById('message').textContent = text;
+        }
+
+        // 修改游戏结束相关函数
+        async function gameWrong() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            updateMessage(`❌ 训练结束！连续错误${gameState.maxErrors}次，最终得分：${gameState.score} 🎮`);
+            
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+                document.getElementById('highScore').textContent = gameState.highScore;
+                updateMessage(`❌ 训练结束！新纪录：${gameState.score} 🏆`);
+            }
+
+            if (gameState.score > globalHighestScore) {
+                globalHighestScore = gameState.score;
+            }
+
+            const finalScore = convertToPercentage(gameState.score, gameState.level, false);
+            const difficulty = calculateDifficulty();
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: finalScore,
+                    highestScore: globalHighestScore,
+                    level: gameState.level,
+                    difficulty: Math.min(difficulty, 3),
+                    completed: false,
+                    reason: 'tooManyErrors'
+                }
+            }, '*');
+            
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // 重新启用难度选择
+            updateDifficultySelect();
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').textContent = '再玩一次';
+        }
+
+        async function gameComplete() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            updateMessage(`🎉 恭喜通关！完成所有${gameState.maxLevels}关！最终得分：${gameState.score} 🏆`);
+            
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+                document.getElementById('highScore').textContent = gameState.highScore;
+                updateMessage(`🎉 新纪录！通关得分：${gameState.score} 🏆`);
+            }
+
+            if (gameState.score > globalHighestScore) {
+                globalHighestScore = gameState.score;
+            }
+
+            const finalScore = convertToPercentage(gameState.score, gameState.level - 1, true);
+            const difficulty = calculateDifficulty();
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: finalScore,
+                    highestScore: globalHighestScore,
+                    level: gameState.level - 1,
+                    difficulty: Math.min(difficulty, 3),
+                    completed: true
+                }
+            }, '*');
+            
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // 重新启用难度选择
+            updateDifficultySelect();
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').textContent = '再玩一次';
+        }
+
+        async function gameTimeout() {
+            gameState.isPlayerTurn = false;
+            disableButtons();
+            
+            updateMessage(`⏰ 时间到！游戏结束！最终得分：${gameState.score} 🎮`);
+            
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+                document.getElementById('highScore').textContent = gameState.highScore;
+                updateMessage(`⏰ 时间到！新纪录：${gameState.score} 🏆`);
+            }
+
+            if (gameState.score > globalHighestScore) {
+                globalHighestScore = gameState.score;
+            }
+
+            const finalScore = convertToPercentage(gameState.score, gameState.level, false);
+            const difficulty = calculateDifficulty();
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: finalScore,
+                    highestScore: globalHighestScore,
+                    level: gameState.level,
+                    difficulty: Math.min(difficulty, 3),
+                    completed: false
+                }
+            }, '*');
+            
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // 重新启用难度选择
+            updateDifficultySelect();
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').textContent = '再玩一次';
+        }
+
+        // 修改开始游戏函数
+        function startGame() {
+            if (!gameStarted) {
+                window.parent.postMessage({ type: 'gameStarted' }, '*');
+                gameStarted = true;
+            }
+
+            const config = difficultyConfig[currentDifficulty];
+            
+            gameState = {
+                sequence: [],
+                playerSequence: [],
+                level: 1,
+                score: 0,
+                highScore: gameState.highScore,
+                isPlaying: false,
+                isPlayerTurn: false,
+                startTime: Date.now(),
+                maxLevels: config.maxLevels,
+                timeLimit: 300000,
+                errorCount: 0,
+                maxErrors: 3
+            };
+            
+            updateDisplay();
+            updateDifficultySelect(); // 禁用难度选择
+            document.getElementById('startBtn').style.display = 'none';
+            
+            generateSequence();
+            playSequence();
+        }
+
+        // 初始化
+        document.getElementById('startBtn').addEventListener('click', () => {
+            hideRules();
+            setTimeout(() => {
+                startGame();
+                rulesFloatBtn.style.display = 'block';
+            }, 300);
+        });
+
+        document.querySelectorAll('.sound-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const soundIndex = parseInt(btn.getAttribute('data-sound'));
+                checkPlayerInput(soundIndex);
+            });
+        });
+
+        // 初始化
+        disableButtons();
+        addTouchSupport();
+        initDifficultySelector(); // 初始化难度选择器
+        setDifficulty('normal'); // 设置默认难度
+        
+        document.getElementById('highScore').textContent = gameState.highScore;
+        
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+        showRules();
+    </script>
+</body>
+</html>
+

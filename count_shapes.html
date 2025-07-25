@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>几何图形计数游戏</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        /* 全屏基础样式 */
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            position: fixed;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        .game-container {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow-y: auto;
+            background: linear-gradient(135deg, #dbeafe 0%, #e9d5ff 100%);
+            padding-top: 1rem;
+        }
+
+        /* SVG形状样式 */
+        .svg-shape {
+            position: absolute;
+            transition: all 0.3s ease;
+            user-select: none;
+            cursor: pointer;
+            opacity: 0.9;
+            visibility: visible;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 添加这个新的CSS规则来统一边框粗细 */
+        .svg-shape svg * {
+            vector-effect: non-scaling-stroke !important;
+            stroke-width: 3 !important;
+        }
+
+        .svg-shape:hover {
+            opacity: 1;
+            transform: scale(1.1) !important;
+            z-index: 1000 !important;
+        }
+
+        .svg-shape:active {
+            transform: scale(1.2) !important;
+        }
+
+        .shape-icon {
+            width: 35px;
+            height: 35px;
+            margin-right: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .shape-icon-svg {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .shape-icon-svg svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .canvas-container {
+            position: relative;
+            border: 3px solid #374151;
+            background: white;
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+
+        /* 修改计数网格的滚动条样式，确保container大小不变 */
+        #countingGrid {
+            max-height: 522px;
+            overflow-y: auto;
+            /* 为滚动条预留空间，避免布局变化 */
+            scrollbar-gutter: stable;
+            /* 自定义滚动条样式 */
+            scrollbar-width: thin;
+            scrollbar-color: #d1d5db #f3f4f6;
+        }
+
+        /* Webkit浏览器滚动条样式 */
+        #countingGrid::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #countingGrid::-webkit-scrollbar-track {
+            background: #f3f4f6;
+            border-radius: 4px;
+        }
+
+        #countingGrid::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+
+        #countingGrid::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        /* 修改计数网格的滚动条样式，确保container大小不变 */
+        #countingGrid {
+            max-height: 522px;
+            overflow-y: auto;
+            /* 移除 scrollbar-gutter，改用固定宽度方案 */
+            padding-right: 8px; /* 为滚动条预留固定空间 */
+            margin-right: -8px; /* 抵消padding造成的内容偏移 */
+            box-sizing: content-box; /* 确保padding不影响容器大小 */
+            scrollbar-width: thin;
+            scrollbar-color: #d1d5db #f3f4f6;
+        }
+
+        /* Webkit浏览器滚动条样式 */
+        #countingGrid::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #countingGrid::-webkit-scrollbar-track {
+            background: #f3f4f6;
+            border-radius: 4px;
+        }
+
+        #countingGrid::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+
+        #countingGrid::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        /* 删除重复的 .counting-grid 规则，只保留一个 */
+        .counting-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+            padding: 0.75rem 0.75rem 0.75rem 0.75rem; /* 恢复正常padding */
+            justify-items: center;
+            align-items: start;
+            min-height: 480px; /* 设置一个最小高度，避免内容太少时不需要滚动 */
+        }
+
+        /* 确保游戏容器不会因为滚动条而改变大小 */
+        .game-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            width: 100%; /* 确保宽度固定 */
+        }
+
+        /* 右侧计数区域的flex容器调整 */
+        .game-section.p-3.flex.flex-col {
+            min-width: 0;
+            overflow: hidden;
+            width: 100%; /* 确保宽度固定 */
+        }
+        
+        /* 数量输入控制区域 - 改为固定尺寸卡片布局 */
+        .count-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 1rem;
+            border: 3px solid #e5e7eb;
+            border-radius: 1rem;
+            background: white;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+            width: 160px;
+            height: 150px;
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .count-controls:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .count-card-icon {
+            width: 65px;
+            height: 65px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .count-card-icon svg {
+            width: 60px;
+            height: 60px;
+        }
+
+        .count-input-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .count-btn {
+            width: 2.5rem;
+            height: 2.5rem;
+            border: 2px solid #d1d5db;
+            background: white;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            font-weight: bold;
+            font-size: 1.125rem;
+            color: #374151;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+            flex-shrink: 0;
+        }
+
+        .count-btn:first-child {
+            margin-right: 0.25rem;
+        }
+
+        .count-btn:last-child {
+            margin-left: 0.25rem;
+        }
+
+        .count-btn.plus {
+            background: #3b82f6;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .count-btn.plus:hover {
+            background: #2563eb;
+            border-color: #1d4ed8;
+        }
+
+        .count-btn:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+
+        .count-btn:active {
+            transform: scale(0.95);
+        }
+
+        .count-display {
+            min-width: 2rem;
+            width: 2rem;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.25rem;
+            color: #374151;
+            background: transparent;
+            border: none;
+            outline: none;
+            flex-shrink: 0;
+        }
+
+        /* 移除所有响应式媒体查询 */
+        
+        /* 计时器样式 */
+        .timer-display {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 1.375rem;
+            font-weight: bold;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            text-align: center;
+            margin-left: 10px;
+            min-width: 6rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 3px solid;
+        }
+
+        .timer-normal {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+            border-color: #374151;
+        }
+
+        .timer-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border-color: #b45309;
+            animation: pulse-warning 2s infinite;
+        }
+
+        .timer-urgent {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border-color: #b91c1c;
+            animation: pulse-urgent 1s infinite;
+        }
+
+        /* 游戏按钮 */
+        .game-btn {
+            margin: 0 auto;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 1.125rem;
+            transition: all 0.2s;
+            touch-action: manipulation;
+            user-select: none;
+            min-height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            border: none;
+            cursor: pointer;
+        }
+
+        .game-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .game-btn:active {
+            transform: translateY(0);
+        }
+
+        /* 结果弹窗样式 */
+        .result-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 1rem;
+        }
+
+        .result-modal.hidden {
+            display: none;
+        }
+
+        .result-content {
+            background: white;
+            border-radius: 1rem;
+            padding: 2.5rem;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            font-size: 1.25rem;
+        }
+
+        .result-content h3 {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .result-content .text-sm {
+            font-size: 1.125rem;
+        }
+
+        .result-content .text-xs {
+            font-size: 1rem;
+        }
+
+        /* 帮助按钮 */
+        .help-btn {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            touch-action: manipulation;
+        }
+
+        .help-btn:hover, .help-btn:active {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 1);
+        }
+
+        /* 规则弹窗 */
+        .rules-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 0.5rem;
+        }
+
+        .rules-content {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 600px;
+            width: 100%;
+            max-height: 95vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.5rem;
+            transition: background 0.2s;
+            touch-action: manipulation;
+        }
+
+        .close-btn:hover, .close-btn:active {
+            background: #e5e7eb;
+        }
+
+        .rules-title {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            padding-right: 2.5rem;
+        }
+
+        .rules-title h2 {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .rules-title p {
+            color: #6b7280;
+            font-size: 1.125rem;
+        }
+
+        .rules-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .rules-section h3 {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 0.75rem;
+        }
+
+        .rules-section p {
+            color: #4b5563;
+            font-size: 1.125rem;
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+
+        .rules-section ul {
+            color: #4b5563;
+            font-size: 1.125rem;
+            margin: 0;
+            padding-left: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .rules-section li {
+            margin-bottom: 0.5rem;
+        }
+
+        .rules-start-btn {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        
+
+        /* 标题区域 */
+        .game-title {
+            text-align: center;
+            padding: 1rem 0.5rem 0.5rem;
+        }
+
+        .game-title h1 {
+            font-size: 2.25rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+
+        .result-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            justify-content: center;
+        }
+
+        .result-actions .game-btn {
+            flex: 1;
+            max-width: 200px;
+        }
+        .difficulty-select {
+            background: transparent;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 1rem;
+            color: #6b7280;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .difficulty-select:hover {
+            border-color: #d1d5db;
+            background: #f9fafb;
+        }
+
+        .difficulty-select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 1px #3b82f6;
+        }
+        
+        @media (max-width: 768px) {
+            .game-title h1 {
+                font-size: 2rem;
+            }
+            
+            .counting-item {
+                padding: 0.5rem;
+                min-height: 45px;
+            }
+            
+            .shape-icon {
+                width: 30px;
+                height: 30px;
+                margin-right: 0.5rem;
+            }
+            
+            .shape-label {
+                font-size: 0.875rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .game-title h1 {
+                font-size: 1.75rem;
+            }
+            
+            .rules-content {
+                padding: 1.5rem;
+            }
+            
+            .result-content {
+                padding: 2rem;
+                font-size: 1.125rem;
+            }
+            
+            .game-btn {
+                font-size: 1rem;
+                padding: 0.875rem 1.25rem;
+            }
+        }
+
+        @keyframes pulse-warning {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes pulse-urgent {
+            0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+            50% { transform: scale(1.1); box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- 游戏主体 -->
+        <div class="flex-1 px-2 pb-2">
+            <div class="game-grid grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+                <!-- 游戏画布 -->
+                <div class="game-section p-3">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-xl font-semibold text-gray-800">数一数每种图形的数量</h2>
+                        <div id="gameTimer" class="timer-display timer-normal">05:00</div>
+                        <button id="newGame" class="game-btn bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-md">
+                            🎲 新游戏
+                        </button>
+                    </div>
+                    <div id="canvas" class="canvas-container w-full bg-white" style="height: calc(100% - 120px); min-height: 200px;"></div>
+                    <!-- 难度选择区域 -->
+                    <div class="mt-2 flex justify-start">
+                        <div class="flex items-center gap-2 text-sm text-gray-500">
+                            <span class="text-base">难度:</span>
+                            <select id="difficultySelect" class="difficulty-select">
+                                <option value="1">简单</option>
+                                <option value="2">中等</option>
+                                <option value="3">困难</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 计数区域 -->
+                <div class="game-section p-3 flex flex-col">
+                    <h2 class="text-xl font-semibold mb-3 text-gray-800">输入每个图形的数量</h2>
+                    <div id="countingGrid" class="counting-grid grid gap-2 flex-1 overflow-y-auto pr-1"></div>
+                    <div class="mt-3 flex gap-2 flex-wrap">
+                        <button id="checkAnswers" class="game-btn bg-green-500 hover:bg-green-600 text-white shadow-md flex-1 min-w-0">
+                            ✅ 检查答案
+                        </button>
+                        <button id="clearInputs" class="game-btn bg-gray-500 hover:bg-gray-600 text-white shadow-md flex-1 min-w-0">
+                            🗑️ 清空
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帮助按钮 -->
+    <div class="help-btn" onclick="showRules()">
+        ❓
+    </div>
+
+    <!-- 规则弹窗 -->
+    <div id="rulesModal" class="rules-modal">
+        <div class="rules-content">
+            <div class="close-btn" onclick="hideRules()">✕</div>
+            <div class="rules-title">
+                <h2>🔺 寻宝大师</h2>
+            </div>
+            
+            <div class="rules-sections">
+                <div class="rules-section">
+                    <h3>🎮 游戏玩法</h3>
+                    <p>观察画布中的各种几何图形，数一数每种形状和颜色组合的数量。</p>
+                </div>
+                
+                <div class="rules-section">
+                    <h3>📝 操作方法</h3>
+                    <p>在右侧面板输入每种图形的数量。注意：相同形状但不同颜色的图形需要分别统计。</p>
+                </div>
+            </div>
+            <div class="rules-start-btn">
+                <button onclick="hideRules(); startNewGame();" class="game-btn bg-blue-500 text-white hover:bg-blue-600 transition-colors px-8 py-3 text-lg font-bold">
+                    开始游戏
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 结果弹窗 -->
+    <div id="resultModal" class="result-modal hidden">
+        <div class="result-content">
+            <div id="resultContent"></div>
+            <div class="result-actions">
+                <button id="playAgain" class="game-btn bg-blue-500 hover:bg-blue-600 text-white">
+                    🎲 再次游戏
+                </button>
+                <button id="finishGame" class="game-btn bg-green-500 hover:bg-green-600 text-white">
+                    ✅ 结算
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // SVG形状数据数组
+        const shapes_SVG = [
+            {
+                type: 'rectangle',
+                name: '矩形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 70" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="5" y="5" width="90" height="60" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.43 // width/height
+            },
+            {
+                type: 'square',
+                name: '正方形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="5" y="5" width="90" height="90" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.0
+            },
+            {
+                type: 'circle',
+                name: '圆形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.0
+            },
+            {
+                type: 'equilateral-triangle',
+                name: '等边三角形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 87" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="50,5 95,82 5,82" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.15
+            },
+            {
+                type: 'right-triangle',
+                name: '直角三角形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="5,95 5,5 95,95" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.0
+            },
+            {
+                type: 'triangle-30-60-90',
+                name: '30-60-90度三角形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 87" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="5,82 35,5 95,82" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.15
+            },
+            {
+                type: 'hexagon',
+                name: '六边形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 87" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="25,5 75,5 95,43.5 75,82 25,82 5,43.5" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.15
+            },
+            {
+                type: 'pentagon',
+                name: '五边形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 95" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="50,5 95,35 80,90 20,90 5,35" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.05
+            },
+            {
+                type: 'diamond',
+                name: '菱形',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="50,5 95,50 50,95 5,50" fill="none" stroke="currentColor" stroke-width="3"/>
+                      </svg>`,
+                aspectRatio: 1.0
+            },
+            {
+                type: 'star',
+                name: '五角星',
+                svg: `<svg width="100%" height="100%" viewBox="0 0 100 95" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="50,5 61,35 95,35 68,57 79,90 50,70 21,90 32,57 5,35 39,35" fill="none" stroke="currentColor" stroke-width="2"/>
+                      </svg>`,
+                aspectRatio: 1.05
+            }
+        ];
+
+        // 添加全局变量
+        let game_config = '';
+        let highestScore = 0;
+        let difficulty = 1;
+        let gameInstance = null;
+        let gameTimeLimit = 300;
+        let timeLeft = 0;
+        let gameTimer = null;
+
+        // 显示规则
+        function showRules() {
+            document.getElementById('rulesModal').style.display = 'flex';
+        }
+
+        // 隐藏规则
+        function hideRules() {
+            document.getElementById('rulesModal').style.display = 'none';
+        }
+
+        // 从弹窗开始游戏
+        function startNewGame() {
+            if (gameInstance) {
+                gameInstance.initializeGame();
+            }
+        }
+
+        // 添加消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data
+                    updateGameConfig(game_config);
+                    break;
+                case 'getGameStats':
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: highestScore,
+                            difficulty: difficulty
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        class ShapeCountingGame {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.shapes = shapes_SVG; // 使用SVG数组
+                this.colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#f97316', '#06b6d4', '#84cc16', '#ec4899', '#6366f1'];
+                this.gameShapes = [];
+                this.correctCounts = {};
+                this.shapeColorCombinations = new Map();
+                this.currentScore = 0;
+                this.gameStartTime = null;
+                this.gameInProgress = false;
+                
+                // 重叠控制参数
+                this.overlapPercentage = 0.5;
+                this.overlapIntensity = 0.3;
+                
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('newGame').addEventListener('click', () => this.initializeGame());
+                document.getElementById('checkAnswers').addEventListener('click', () => this.checkAnswers());
+                document.getElementById('clearInputs').addEventListener('click', () => this.clearInputs());
+                
+                // 添加难度选择器事件监听
+                document.getElementById('difficultySelect').addEventListener('change', (e) => {
+                    difficulty = parseInt(e.target.value);
+                    console.log(`难度已切换到: ${difficulty}`);
+                    this.initializeGame(); // 立即重新开始游戏
+                });
+                
+                document.getElementById('playAgain').addEventListener('click', () => this.playAgain());
+                document.getElementById('finishGame').addEventListener('click', () => this.finishGame());
+            }
+
+            initializeGame() {
+                // 同步难度选择器的值
+                document.getElementById('difficultySelect').value = difficulty;
+                
+                this.canvas.innerHTML = '';
+                this.gameShapes = [];
+                this.correctCounts = {};
+                this.shapeColorCombinations.clear();
+                this.gameInProgress = true;
+                this.gameStartTime = Date.now();
+
+                // 根据难度调整游戏参数
+                let shapeTypeCount, colorCount, minCount, maxCount;
+                switch (difficulty) {
+                    case 3: // 困难
+                        shapeTypeCount = 6;
+                        colorCount = 6; 
+                        minCount = 3;
+                        maxCount = 8;
+                        gameTimeLimit = 180;
+                        this.overlapPercentage = 0.7;
+                        this.overlapIntensity = 0.5;
+                        break;
+                    case 2: // 中等
+                        shapeTypeCount = 5;
+                        colorCount = 4;
+                        minCount = 2;
+                        maxCount = 6;
+                        gameTimeLimit = 240;
+                        this.overlapPercentage = 0.5;
+                        this.overlapIntensity = 0.3;
+                        break;
+                    default: // 简单
+                        shapeTypeCount = 4;
+                        colorCount = 3;
+                        minCount = 1;
+                        maxCount = 4;
+                        gameTimeLimit = 300;
+                        this.overlapPercentage = 0.3;
+                        this.overlapIntensity = 0.2;
+                        break;
+                }
+
+                this.startTimer();
+
+                // 选择要使用的图形类型和颜色
+                const selectedShapes = this.shapes.slice(0, shapeTypeCount);
+                const selectedColors = this.colors.slice(0, colorCount);
+                
+                // 为每种形状-颜色组合预定义固定尺寸
+                this.generateShapeColorCombinations(selectedShapes, selectedColors);
+                
+                // 生成每种组合的数量
+                this.generateCombinationCounts(minCount, maxCount);
+                
+                // 创建所有图形
+                this.createAllShapes();
+                this.applyOverlapAlgorithm();
+                this.createCountingGrid();
+
+                window.parent.postMessage({ type: 'gameStarted' }, '*');
+            }
+
+            generateShapeColorCombinations(shapes, colors) {
+                const canvasRect = this.canvas.getBoundingClientRect();
+                const canvasWidth = canvasRect.width;
+                
+                // 计算基础尺寸：canvas宽度的5%-20%
+                const minSize = canvasWidth * 0.05;
+                const maxSize = canvasWidth * 0.3;
+                
+                shapes.forEach(shape => {
+                    colors.forEach(color => {
+                        const key = `${shape.type}-${color}`;
+                        // 为每种形状-颜色组合生成固定尺寸
+                        const size = Math.random() * (maxSize - minSize) + minSize;
+                        this.shapeColorCombinations.set(key, {
+                            shape: shape,
+                            color: color,
+                            size: size
+                        });
+                    });
+                });
+            }
+
+            generateCombinationCounts(minCount, maxCount) {
+                // 随机选择一部分组合来生成
+                const allCombinations = Array.from(this.shapeColorCombinations.keys());
+                const numCombinations = Math.floor(allCombinations.length * (0.4 + Math.random() * 0.4)); // 40%-80%的组合
+                
+                const selectedCombinations = [];
+                while (selectedCombinations.length < numCombinations) {
+                    const randomKey = allCombinations[Math.floor(Math.random() * allCombinations.length)];
+                    if (!selectedCombinations.includes(randomKey)) {
+                        selectedCombinations.push(randomKey);
+                    }
+                }
+                
+                selectedCombinations.forEach(key => {
+                    const count = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
+                    this.correctCounts[key] = count;
+                });
+            }
+
+            createAllShapes() {
+                Object.keys(this.correctCounts).forEach(key => {
+                    const count = this.correctCounts[key];
+                    const combination = this.shapeColorCombinations.get(key);
+                    
+                    for (let i = 0; i < count; i++) {
+                        this.createShapeElement(combination.shape.type, combination.color, combination.size);
+                    }
+                });
+
+                this.arrangeShapesRandomly();
+            }
+
+            createShapeElement(shapeType, color, size) {
+                const shapeData = this.shapes.find(s => s.type === shapeType);
+                if (!shapeData) {
+                    console.error(`Shape type ${shapeType} not found`);
+                    return;
+                }
+
+                const shapeElement = document.createElement('div');
+                shapeElement.className = 'shape svg-shape';
+                
+                // 计算实际尺寸（考虑宽高比）
+                const width = size;
+                const height = size / shapeData.aspectRatio;
+                
+                shapeElement.style.width = width + 'px';
+                shapeElement.style.height = height + 'px';
+                shapeElement.style.color = color;
+                shapeElement.style.position = 'absolute';
+                shapeElement.style.cursor = 'pointer';
+                shapeElement.style.userSelect = 'none';
+                shapeElement.style.transition = 'all 0.3s ease';
+                shapeElement.style.opacity = '0.9';
+                
+                // 插入SVG
+                shapeElement.innerHTML = shapeData.svg;
+
+                const rotation = Math.random() * 360;
+                shapeElement.style.transform = `rotate(${rotation}deg)`;
+                shapeElement.style.zIndex = Math.floor(Math.random() * 100);
+                
+                // 添加交互事件
+                shapeElement.addEventListener('mouseenter', () => {
+                    shapeElement.style.transform = `rotate(${rotation}deg) scale(1.1)`;
+                    shapeElement.style.zIndex = '1000';
+                    shapeElement.style.opacity = '1';
+                });
+                
+                shapeElement.addEventListener('mouseleave', () => {
+                    shapeElement.style.transform = `rotate(${rotation}deg) scale(1)`;
+                    shapeElement.style.zIndex = Math.floor(Math.random() * 100);
+                    shapeElement.style.opacity = '0.9';
+                });
+
+                shapeElement.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    shapeElement.style.transform = `rotate(${rotation}deg) scale(1.2)`;
+                    shapeElement.style.zIndex = '1000';
+                    shapeElement.style.opacity = '1';
+                });
+
+                shapeElement.addEventListener('touchend', () => {
+                    shapeElement.style.transform = `rotate(${rotation}deg) scale(1)`;
+                    shapeElement.style.zIndex = Math.floor(Math.random() * 100);
+                    shapeElement.style.opacity = '0.9';
+                });
+                
+                this.canvas.appendChild(shapeElement);
+                this.gameShapes.push({ 
+                    type: shapeType, 
+                    element: shapeElement, 
+                    color: color,
+                    size: size,
+                    width: width,
+                    height: height,
+                    rotation: rotation,
+                    x: 0, 
+                    y: 0,
+                    shouldOverlap: false
+                });
+            }
+
+            arrangeShapesRandomly() {
+                const canvasRect = this.canvas.getBoundingClientRect();
+                const canvasWidth = canvasRect.width;
+                const canvasHeight = canvasRect.height;
+                
+                this.gameShapes.forEach(item => {
+                    const margin = 20;
+                    const maxX = Math.max(margin, canvasWidth - item.width - margin);
+                    const maxY = Math.max(margin, canvasHeight - item.height - margin);
+                    
+                    item.x = Math.random() * (maxX - margin) + margin;
+                    item.y = Math.random() * (maxY - margin) + margin;
+                    
+                    item.element.style.left = item.x + 'px';
+                    item.element.style.top = item.y + 'px';
+                });
+            }
+
+            applyOverlapAlgorithm() {
+                const canvasRect = this.canvas.getBoundingClientRect();
+                const canvasWidth = canvasRect.width;
+                const canvasHeight = canvasRect.height;
+                
+                const shapesToOverlap = this.selectShapesForOverlap();
+                
+                shapesToOverlap.forEach(targetShape => {
+                    this.createOverlapForShape(targetShape, canvasWidth, canvasHeight);
+                });
+                
+                this.updateZIndexes();
+            }
+
+            selectShapesForOverlap() {
+                const shuffled = [...this.gameShapes].sort(() => Math.random() - 0.5);
+                const overlapCount = Math.floor(this.gameShapes.length * this.overlapPercentage);
+                const selected = shuffled.slice(0, overlapCount);
+                
+                selected.forEach(shape => {
+                    shape.shouldOverlap = true;
+                });
+                
+                return selected;
+            }
+
+            createOverlapForShape(targetShape, canvasWidth, canvasHeight) {
+                const candidateShapes = this.gameShapes.filter(shape => 
+                    shape !== targetShape && this.calculateDistance(targetShape, shape) < 150
+                );
+                
+                if (candidateShapes.length === 0) {
+                    const randomShape = this.gameShapes[Math.floor(Math.random() * this.gameShapes.length)];
+                    if (randomShape !== targetShape) {
+                        candidateShapes.push(randomShape);
+                    }
+                }
+                
+                if (candidateShapes.length > 0) {
+                    const partnerShape = candidateShapes[Math.floor(Math.random() * candidateShapes.length)];
+                    this.moveShapeToOverlap(targetShape, partnerShape, canvasWidth, canvasHeight);
+                }
+            }
+
+            moveShapeToOverlap(shapeA, shapeB, canvasWidth, canvasHeight) {
+                const overlapDistance = (Math.max(shapeA.width, shapeA.height) + Math.max(shapeB.width, shapeB.height)) * this.overlapIntensity * 0.5;
+                
+                const dx = shapeA.x - shapeB.x;
+                const dy = shapeA.y - shapeB.y;
+                const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+                
+                const normalizedDx = dx / distance;
+                const normalizedDy = dy / distance;
+                
+                const newX = shapeB.x + normalizedDx * overlapDistance;
+                const newY = shapeB.y + normalizedDy * overlapDistance;
+                
+                const margin = 20;
+                shapeA.x = Math.max(margin, Math.min(newX, canvasWidth - shapeA.width - margin));
+                shapeA.y = Math.max(margin, Math.min(newY, canvasHeight - shapeA.height - margin));
+                
+                shapeA.element.style.left = shapeA.x + 'px';
+                shapeA.element.style.top = shapeA.y + 'px';
+            }
+
+            calculateDistance(shapeA, shapeB) {
+                const dx = shapeA.x - shapeB.x;
+                const dy = shapeA.y - shapeB.y;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            updateZIndexes() {
+                this.gameShapes.forEach(shape => {
+                    if (shape.shouldOverlap) {
+                        shape.element.style.zIndex = Math.floor(Math.random() * 50) + 50;
+                    } else {
+                        shape.element.style.zIndex = Math.floor(Math.random() * 50);
+                    }
+                });
+            }
+
+            createCountingGrid() {
+                const countingGrid = document.getElementById('countingGrid');
+                countingGrid.innerHTML = '';
+                
+                const usedCombinations = Object.keys(this.correctCounts);
+                
+                usedCombinations.forEach(key => {
+                    const combination = this.shapeColorCombinations.get(key);
+                    const shapeData = this.shapes.find(s => s.type === combination.shape.type);
+                    
+                    const card = document.createElement('div');
+                    card.className = 'count-controls';
+                    
+                    card.innerHTML = `
+                        <div class="count-card-icon" style="color: ${combination.color}">
+                            ${shapeData.svg}
+                        </div>
+                        <div class="count-input-row">
+                            <button class="count-btn" onclick="adjustCount('${key}', -1)">-</button>
+                            <div class="count-display" data-shape="${key}">0</div>
+                            <button class="count-btn plus" onclick="adjustCount('${key}', 1)">+</button>
+                        </div>
+                    `;
+                    
+                    countingGrid.appendChild(card);
+                });
+            }
+
+            startTimer() {
+                if (gameTimer) {
+                    clearInterval(gameTimer);
+                }
+
+                timeLeft = gameTimeLimit;
+                this.updateTimerDisplay();
+
+                gameTimer = setInterval(() => {
+                    timeLeft--;
+                    this.updateTimerDisplay();
+
+                    if (timeLeft <= 0) {
+                        this.timeUp();
+                    }
+                }, 1000);
+            }
+
+            updateTimerDisplay() {
+                const timerElement = document.getElementById('gameTimer');
+                if (!timerElement) return;
+
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                timerElement.textContent = timeString;
+                
+                if (timeLeft <= 30) {
+                    timerElement.className = 'timer-display timer-urgent';
+                } else if (timeLeft <= 60) {
+                    timerElement.className = 'timer-display timer-warning';
+                } else {
+                    timerElement.className = 'timer-display timer-normal';
+                }
+            }
+
+            timeUp() {
+                if (!this.gameInProgress) return;
+                this.checkAnswers(true);
+            }
+
+            updateGameConfig(config) {
+                try {
+                    let configObj;
+                    if (typeof config === 'string') {
+                        configObj = JSON.parse(config);
+                    } else {
+                        configObj = config;
+                    }
+                    
+                    if (configObj.difficulty) {
+                        difficulty = parseInt(configObj.difficulty) || 1;
+                    }
+                    
+                    if (configObj.overlapPercentage !== undefined) {
+                        this.overlapPercentage = Math.max(0, Math.min(1, parseFloat(configObj.overlapPercentage)));
+                    }
+                    
+                    if (configObj.overlapIntensity !== undefined) {
+                        this.overlapIntensity = Math.max(0, Math.min(1, parseFloat(configObj.overlapIntensity)));
+                    }
+                    
+                    console.log(`游戏配置已更新，难度: ${difficulty}, 重叠比例: ${this.overlapPercentage}, 重叠强度: ${this.overlapIntensity}`);
+                    
+                } catch (error) {
+                    console.warn('解析游戏配置失败，使用默认配置:', error);
+                    difficulty = 1;
+                    this.overlapPercentage = 0.3;
+                    this.overlapIntensity = 0.2;
+                }
+            }
+
+            checkAnswers(isAutoSubmit = false) {
+                if (!this.gameInProgress) return;
+                
+                this.gameInProgress = false;
+                clearInterval(gameTimer);
+
+                const timeTaken = Math.floor((Date.now() - this.gameStartTime) / 1000);
+                const displays = document.querySelectorAll('.count-display');
+                let correct = 0;
+                let total = 0;
+                let results = [];
+
+                displays.forEach(display => {
+                    const shapeKey = display.dataset.shape;
+                    const userAnswer = parseInt(display.textContent) || 0;
+                    const correctAnswer = this.correctCounts[shapeKey];
+                    const combination = this.shapeColorCombinations.get(shapeKey);
+                    const shapeName = combination.shape.name;
+                    
+                    total++;
+                    if (userAnswer === correctAnswer) {
+                        correct++;
+                        display.style.backgroundColor = '#dcfce7';
+                        display.style.borderRadius = '0.5rem';
+                        display.style.padding = '0.25rem';
+                    } else {
+                        display.style.backgroundColor = '#fef2f2';
+                        display.style.borderRadius = '0.5rem';
+                        display.style.padding = '0.25rem';
+                        results.push(`${shapeName}: 正确答案是 ${correctAnswer}，您的答案是 ${userAnswer}`);
+                    }
+                });
+
+                this.currentScore = Math.round((correct / total) * 100);
+                
+                if (this.currentScore > highestScore) {
+                    highestScore = this.currentScore;
+                }
+
+                this.showResult(correct, total, results, isAutoSubmit, timeTaken);
+            }
+
+            clearInputs() {
+                const displays = document.querySelectorAll('.count-display');
+                
+                displays.forEach(display => {
+                    display.textContent = '0';
+                    display.style.backgroundColor = '';
+                    display.style.borderRadius = '';
+                    display.style.padding = '';
+                });
+            }
+
+            showResult(correct, total, errors, isAutoSubmit = false, timeTaken = 0) {
+                const percentage = Math.round((correct / total) * 100);
+                
+                let resultHTML = `
+                    <div class="text-center mb-4">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">🎯 游戏结果</h3>
+                `;
+
+                const minutes = Math.floor(timeTaken / 60);
+                const seconds = timeTaken % 60;
+                resultHTML += `<div class="text-sm text-gray-600 mb-2">⏱️ 用时：${minutes}分${seconds}秒</div>`;
+
+                if (isAutoSubmit) {
+                    resultHTML += `<div class="text-red-600 font-bold mb-2">⏰ 时间到！自动提交答案</div>`;
+                }
+
+                if (highestScore > this.currentScore) {
+                    resultHTML += `<div class="text-sm text-gray-600 mb-2">历史最高分: ${highestScore}</div>`;
+                } else if (this.currentScore > 0) {
+                    resultHTML += `<div class="text-sm text-green-600 mb-2">🎉 新纪录！最高分: ${highestScore}</div>`;
+                }
+
+                if (percentage === 100) {
+                    resultHTML += `<div class="text-green-700 font-semibold">🎉 完美！全部答对了！</div>`;
+                } else if (percentage >= 80) {
+                    resultHTML += `<div class="text-blue-700 font-semibold">👍 做得很好！</div>`;
+                } else if (percentage >= 60) {
+                    resultHTML += `<div class="text-yellow-700 font-semibold">💪 继续努力！</div>`;
+                }
+
+                resultHTML += `</div>`;
+
+                if (errors.length > 0) {
+                    resultHTML += `
+                        <div class="text-sm">
+                            <p class="font-semibold mb-2 text-red-600">❌ 需要改正的答案：</p>
+                            <div class="max-h-40 overflow-y-auto bg-gray-50 p-3 rounded-lg">
+                                <ul class="space-y-1">
+                                    ${errors.map(error => `<li class="text-xs text-gray-700">• ${error}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                document.getElementById('resultContent').innerHTML = resultHTML;
+                document.getElementById('resultModal').classList.remove('hidden');
+            }
+
+            playAgain() {
+                document.getElementById('resultModal').classList.add('hidden');
+                this.initializeGame();
+            }
+
+            finishGame() {
+                document.getElementById('resultModal').classList.add('hidden');
+                
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: {
+                        score: this.currentScore,
+                        highestScore: highestScore,
+                        difficulty: difficulty
+                    }
+                }, '*');
+            }
+        }
+
+        // 全局函数
+        function adjustCount(shapeKey, delta) {
+            const display = document.querySelector(`[data-shape="${shapeKey}"]`);
+            if (display) {
+                const currentCount = parseInt(display.textContent) || 0;
+                const newCount = Math.max(0, currentCount + delta);
+                display.textContent = newCount;
+                
+                // 清除之前的背景色
+                display.style.backgroundColor = '';
+                display.style.borderRadius = '';
+                display.style.padding = '';
+            }
+        }
+
+        function updateGameConfig(config) {
+            if (gameInstance) {
+                gameInstance.updateGameConfig(config);
+            }
+        }
+
+        // 显示规则弹窗
+        showRules();
+        
+        // 创建游戏实例
+        gameInstance = new ShapeCountingGame();
+    </script>
+</body>
+</html>
