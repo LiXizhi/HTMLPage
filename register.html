@@ -1,0 +1,348 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户注册</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+</head>
+<body class="bg-black bg-opacity-50 min-h-screen flex items-center justify-center p-4">
+    <!-- 可被第三方调用的对话框容器 -->
+    <div id="enterNameDialog" class="w-full h-full flex items-center justify-center">
+        <!-- 对话框 -->
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-auto p-8 md:p-12 relative">        <!-- 标题 -->
+        <h1 class="text-3xl md:text-2xl font-bold text-gray-800 text-center mb-8">
+            首次使用，请输入唯一的英文名
+        </h1>
+
+        <!-- 输入框 -->
+        <div class="mb-8">            
+            <input 
+                type="text" 
+                id="username" 
+                class="w-full px-6 py-4 text-xl border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                placeholder="请输入英文用户名"
+                maxlength="30"
+            />
+            <div id="error-message" class="text-red-500 text-xl mt-3 hidden"></div>
+        </div>        <!-- 注意事项 -->
+        <div class="space-y-6 mb-8 text-gray-700">
+            <div class="leading-relaxed">
+                <span class="font-semibold text-lg">注意1：</span>
+                <span class="text-gray-500 ">只能包含英文字母和数字，至少5个字母，不可有空格等特殊字符</span>
+                <br>
+                <span class="text-gray-500 font-bold mt-2 block">例如: zhangsan2016 （拼音+年份）</span>
+            </div>
+            
+            <div class="leading-relaxed flex items-center">
+                <span class="font-semibold text-lg">注意2：</span>
+                <span class="ml-2 text-gray-500 ">名字不可更改，将作为个人AI网站的URL地址</span>
+                <button 
+                    id="help-btn" 
+                    class="ml-2 w-8 h-8 bg-gray-500 text-white rounded-full text-xl hover:bg-gray-600 transition-colors"
+                    title="点击查看说明"
+                >?</button>
+            </div>
+        </div>
+
+        <!-- 确定按钮 -->
+        <div class="text-center">            
+            <button 
+                id="submit-btn"
+                class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-12 rounded-lg text-xl transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >确定</button>
+        </div>
+    </div>
+
+    <!-- 帮助说明弹窗 -->    
+     <div id="help-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl p-8 max-w-lg mx-auto">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">说明</h3>
+            <p class="text-xl text-gray-700 leading-relaxed mb-6">
+                每个用户创建的AI智能体，都会有个默认的网址，网址只能是英文的，所以起一个你喜欢的英文名。
+            </p>
+            <p class="text-base text-blue-700 leading-relaxed mb-6">
+                例如： https://domain.com/<b>zhangsan2016</b>/...
+            </p>
+            <div class="text-center">
+                <button 
+                    id="close-help"
+                    class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-lg text-xl transition-colors"
+                >
+                    知道了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成功提示弹窗 -->
+    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl p-8 max-w-lg mx-auto">            <div class="text-center">
+                <div class="text-6xl text-green-500 mb-4">✓</div>
+                <h3 class="text-2xl font-bold mb-4 text-gray-800">注册成功！</h3>
+                <p class="text-xl text-gray-700 mb-6">
+                    您的英文用户名已设置成功
+                </p>
+                <button 
+                    id="close-success"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg text-xl transition-colors"
+                >
+                    继续
+                </button>
+            </div>
+        </div>
+    </div>    
+    <script>
+        /**
+         * 用户名输入对话框类
+         * 提供用户名验证、弹窗管理等功能
+         */
+        class EnterNameDialog {
+            constructor(options = {}) {
+                // 配置选项
+                this.options = {
+                    usedUsernames: ['admin', 'test', 'user', 'zhangsan2016', 'lisi2020', 'wangwu123'],
+                    minLength: 5,
+                    maxLength: 30,
+                    onSuccess: null,
+                    onCancel: null,
+                    ...options
+                };
+
+                // 初始化DOM元素
+                this.initializeElements();
+                
+                // 绑定事件
+                this.bindEvents();
+            }
+
+            /**
+             * 初始化DOM元素
+             */
+            initializeElements() {
+                this.usernameInput = document.getElementById('username');
+                this.submitBtn = document.getElementById('submit-btn');
+                this.errorMessage = document.getElementById('error-message');
+                this.helpBtn = document.getElementById('help-btn');
+                this.helpModal = document.getElementById('help-modal');
+                this.closeHelpBtn = document.getElementById('close-help');
+                this.successModal = document.getElementById('success-modal');
+                this.closeSuccessBtn = document.getElementById('close-success');
+            }
+
+            /**
+             * 验证用户名格式
+             * @param {string} username - 用户名
+             * @returns {string|null} 错误信息或null
+             */
+            validateUsername(username) {
+                const regex = /^[a-zA-Z0-9]+$/;
+                
+                if (username.length < this.options.minLength) {
+                    return `用户名至少需要${this.options.minLength}个字符`;
+                }
+                
+                if (username.length > this.options.maxLength) {
+                    return `用户名最多${this.options.maxLength}个字符`;
+                }
+                
+                if (!regex.test(username)) {
+                    return '只能包含英文字母和数字，不可有空格等特殊字符';
+                }
+                
+                if (this.options.usedUsernames.includes(username.toLowerCase())) {
+                    return '用户名已被使用，请再起一个';
+                }
+                
+                return null;
+            }
+
+            /**
+             * 显示错误信息
+             * @param {string} message - 错误信息
+             */
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.classList.remove('hidden');
+            }
+
+            /**
+             * 隐藏错误信息
+             */
+            hideError() {
+                this.errorMessage.classList.add('hidden');
+            }
+
+            /**
+             * 显示帮助弹窗
+             */
+            showHelpModal() {
+                this.helpModal.classList.remove('hidden');
+                this.helpModal.classList.add('flex');
+            }
+
+            /**
+             * 隐藏帮助弹窗
+             */
+            hideHelpModal() {
+                this.helpModal.classList.add('hidden');
+                this.helpModal.classList.remove('flex');
+            }
+
+            /**
+             * 显示成功弹窗
+             */
+            showSuccessModal() {
+                this.successModal.classList.remove('hidden');
+                this.successModal.classList.add('flex');
+            }
+
+            /**
+             * 隐藏成功弹窗
+             */
+            hideSuccessModal() {
+                this.successModal.classList.add('hidden');
+                this.successModal.classList.remove('flex');
+            }
+
+            /**
+             * 提交处理
+             */
+            handleSubmit() {
+                const username = this.usernameInput.value.trim();
+                
+                if (!username) {
+                    this.showError('请输入用户名');
+                    return;
+                }
+
+                const error = this.validateUsername(username);
+                if (error) {
+                    this.showError(error);
+                    return;
+                }
+
+                // 调用成功回调
+                if (this.options.onSuccess) {
+                    this.options.onSuccess(username);
+                } else {
+                    // 默认显示成功弹窗
+                    this.showSuccessModal();
+                }
+            }
+
+            /**
+             * 实时验证用户名
+             */
+            handleInput() {
+                const username = this.usernameInput.value.trim();
+                
+                if (username) {
+                    const error = this.validateUsername(username);
+                    if (error) {
+                        this.showError(error);
+                        this.submitBtn.disabled = true;
+                    } else {
+                        this.hideError();
+                        this.submitBtn.disabled = false;
+                    }
+                } else {
+                    this.hideError();
+                    this.submitBtn.disabled = false;
+                }
+            }
+
+            /**
+             * 绑定所有事件
+             */
+            bindEvents() {
+                // 实时验证
+                this.usernameInput.addEventListener('input', () => this.handleInput());
+
+                // 提交处理
+                this.submitBtn.addEventListener('click', () => this.handleSubmit());
+
+                // 帮助按钮
+                this.helpBtn.addEventListener('click', () => this.showHelpModal());
+
+                // 关闭帮助弹窗
+                this.closeHelpBtn.addEventListener('click', () => this.hideHelpModal());
+
+                // 关闭成功弹窗
+                this.closeSuccessBtn.addEventListener('click', () => this.hideSuccessModal());
+
+                // 点击弹窗外部关闭
+                this.helpModal.addEventListener('click', (e) => {
+                    if (e.target === this.helpModal) {
+                        this.hideHelpModal();
+                    }
+                });
+
+                this.successModal.addEventListener('click', (e) => {
+                    if (e.target === this.successModal) {
+                        this.hideSuccessModal();
+                    }
+                });
+
+                // 回车键提交
+                this.usernameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !this.submitBtn.disabled) {
+                        this.handleSubmit();
+                    }
+                });
+            }
+
+            /**
+             * 获取当前输入的用户名
+             * @returns {string} 用户名
+             */
+            getUsername() {
+                return this.usernameInput.value.trim();
+            }
+
+            /**
+             * 设置用户名
+             * @param {string} username - 用户名
+             */
+            setUsername(username) {
+                this.usernameInput.value = username;
+                this.handleInput(); // 触发验证
+            }
+
+            /**
+             * 重置对话框
+             */
+            reset() {
+                this.usernameInput.value = '';
+                this.hideError();
+                this.submitBtn.disabled = false;
+                this.hideHelpModal();
+                this.hideSuccessModal();
+            }
+
+            /**
+             * 销毁对话框（移除事件监听器）
+             */
+            destroy() {
+                // 这里可以添加移除事件监听器的代码
+                console.log('EnterNameDialog destroyed');
+            }
+        }
+
+        // 创建对话框实例
+        const enterNameDialog = new EnterNameDialog({
+            onSuccess: (username) => {
+                console.log('用户名设置成功:', username);
+                // 这里可以添加自定义的成功处理逻辑
+                // 比如发送到服务器、保存到本地存储等
+                enterNameDialog.showSuccessModal();
+            }
+        });
+
+        // 将实例挂载到全局对象，方便外部调用
+        window.EnterNameDialog = EnterNameDialog;
+        window.enterNameDialog = enterNameDialog;
+    </script>
+</body>
+</html>

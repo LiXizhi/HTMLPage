@@ -1,0 +1,632 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏排行榜</title>
+    <script src="https://cdn.tailwindcss.com"></script>    <style>
+        html, body { 
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+        }
+        
+        /* Custom scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+          /* Game list scrollable area */
+        .game-list-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #c1c1c1 #f1f1f1;
+        }
+          /* Force scrollbar visibility on game list */
+        .game-list-scroll::-webkit-scrollbar {
+            width: 8px;
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .game-list-scroll::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        .game-list-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+          /* Ensure game list can scroll when content exceeds container */
+        .game-list-scroll {
+            min-height: 200px;
+            overflow-y: scroll !important; /* Force scroll even without content overflow */
+        }
+          /* Leaderboard scrollable area */
+        .leaderboard-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #c1c1c1 #f1f1f1;
+        }
+        
+        /* Force scrollbar visibility on leaderboard */
+        .leaderboard-scroll::-webkit-scrollbar {
+            width: 8px;
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .leaderboard-scroll::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        .leaderboard-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        .game-item:hover { background: rgba(102, 126, 234, 0.1); transform: translateX(4px); }
+        .game-item.active { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .leaderboard-item:nth-child(1) { background: linear-gradient(135deg, #ffd700, #ffed4e); }
+        .leaderboard-item:nth-child(2) { background: linear-gradient(135deg, #c0c0c0, #e5e5e5); }
+        .leaderboard-item:nth-child(3) { background: linear-gradient(135deg, #cd7f32, #daa520); }
+        .tab-active { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .age-button:hover { background: rgba(102, 126, 234, 0.1); }
+        .age-button.active { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .user-highlight { border: 3px solid #10b981; background: rgba(16, 185, 129, 0.1); animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }        
+        .layout-container { display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 320px; flex-shrink: 0; }
+        .main-content { flex: 1; min-width: 0; overflow: hidden; }
+        .dropdown:hover .dropdown-menu { display: block; }
+        .dropdown-menu { display: none; }
+        @media (max-width: 768px) {
+            .layout-container { flex-direction: column; }
+            .sidebar { width: 100%; min-height: auto; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 整体布局容器 -->
+    <div class="layout-container">
+        <!-- 左侧游戏列表 -->
+        <div class="sidebar bg-white shadow-lg flex flex-col">
+            <div class="flex-1 overflow-hidden flex flex-col">
+                <div class="p-4 pb-2">
+                    <h2 class="text-lg font-bold mb-4 text-gray-800">得分排行榜</h2>
+                </div>                
+                <div class="flex-1 overflow-y-auto px-4 pb-2 game-list-scroll">
+                    <div id="gameList" class="space-y-2">
+                        <!-- 游戏项目将通过JavaScript动态生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分数提交区域 -->
+            <div class="p-4 bg-gray-50 border-t">
+                <div class="space-y-3">
+                    <input 
+                        type="number" 
+                        id="userScore" 
+                        placeholder="输入你的分数" 
+                        class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                   
+                    <button 
+                        onclick="submitScore()" 
+                        class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-bold hover:from-purple-700 hover:to-blue-700 transition-all"
+                    >
+                        🚀 提交分数
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2 text-center">提交后将显示在对应年龄组的排行榜中</p>
+            </div>
+        </div>        <!-- 右侧主要内容区域 -->
+        <div class="main-content flex flex-col">
+            <!-- 顶部控制栏 -->
+            <div class="bg-white shadow-sm p-4 border-b">
+                <div class="flex items-center justify-between">
+                    
+                    <div class="flex items-center space-x-6">
+                        <!-- 周榜/月榜切换 -->
+                        <div class="flex space-x-3">
+                            <button id="weeklyTab" class="tab-active px-6 py-2 rounded-lg font-bold transition-all" onclick="switchTab('weekly')">
+                                📅 周榜
+                            </button>
+                            <button id="monthlyTab" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold transition-all hover:bg-gray-300" onclick="switchTab('monthly')">
+                                📊 月榜
+                            </button>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                            在线用户: <span class="font-bold text-green-600">1,234</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 排行榜内容 -->
+            <div class="flex-1 p-6">
+                <div class="bg-white rounded-xl shadow-sm h-full flex flex-col">
+                    <div class="p-6 border-b">
+                        <div class="flex items-center justify-between">
+                            <!-- 动态标题和下拉菜单 -->
+                            <div class="dropdown relative">
+                                <button class="flex items-center text-xl font-bold text-gray-800 hover:text-blue-600 transition-colors cursor-pointer">
+                                    <span>🏅 </span>
+                                    <span id="rankingTitle">混龄总榜周榜</span>
+                                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>                                <!-- 下拉菜单 -->
+                                <div class="dropdown-menu absolute top-full left-0 mt-2 w-48 bg-white border rounded-lg shadow-lg z-10">
+                                    <div class="py-2">
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="selectLeaderboard('all')">🏆 混龄总榜</a>
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="selectLeaderboard('5-6')">👶 5-6岁</a>
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="selectLeaderboard('7-8')">🧒 7-8岁</a>
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="selectLeaderboard('9-10')">👦 9-10岁</a>
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="selectLeaderboard('11-12')">👧 11-12岁</a>
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="selectLeaderboard('13+')">🧑 13岁以上</a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-600">
+                                总计: <span id="totalPlayers" class="font-bold text-blue-600">100</span> 人
+                            </div>
+                        </div>
+                    </div>
+                      <div class="flex-1 overflow-hidden">
+                        <div id="leaderboardList" class="h-full overflow-y-auto leaderboard-scroll">
+                            <!-- 排行榜项目将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成功提示模态框 -->
+    <div id="successModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 m-4 max-w-md shadow-2xl">
+            <div class="text-center">
+                <div class="text-6xl mb-4">🎉</div>
+                <h3 class="text-2xl font-bold mb-3 text-gray-800">分数提交成功！</h3>
+                <p class="text-gray-600 mb-2">你的分数已加入排行榜</p>
+                <p id="rankInfo" class="text-lg font-bold text-blue-600 mb-6"></p>
+                <button onclick="closeModal()" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:from-purple-700 hover:to-blue-700 transition-all">
+                    太棒了！
+                </button>
+            </div>
+        </div>
+    </div>    <script>
+        // 游戏配置
+        let gameConfig = '';
+        let games = {};        // 默认游戏数据（作为后备）
+        const defaultGames = {
+            puzzle: { name: '益智解谜', icon: '🧩', desc: '挑战你的智力' },
+            racing: { name: '极速赛车', icon: '🏎️', desc: '速度与激情' },
+            shooting: { name: '射击大师', icon: '🎯', desc: '考验你的准度' },
+            platform: { name: '跳跃冒险', icon: '🦘', desc: '平台跳跃游戏' },
+            music: { name: '音乐节拍', icon: '🎵', desc: '节奏感挑战' },
+            card: { name: '记忆卡牌', icon: '🃏', desc: '记忆力训练' },
+            sudoku: { name: '数独游戏', icon: '🔢', desc: '逻辑推理数字游戏' },
+            memory: { name: '记忆大师', icon: '🧠', desc: '训练记忆力' },
+            math: { name: '数学挑战', icon: '➕', desc: '数学运算能力' },
+            word: { name: '单词游戏', icon: '📝', desc: '英语单词挑战' },
+            color: { name: '颜色记忆', icon: '🎨', desc: '颜色位置记忆' },
+            cube: { name: '立方体', icon: '📦', desc: '3D空间思维' },
+            chess: { name: '五子棋', icon: '⚫', desc: '策略对战游戏' },
+            water: { name: '倒水游戏', icon: '🧪', desc: '逻辑推理倒水' },
+            shape: { name: '图形计数', icon: '🔺', desc: '视觉计数训练' }
+        };
+
+        // 解析游戏配置
+        function parseGameConfig(configText) {
+            const parsedGames = {};
+            
+            if (!configText || typeof configText !== 'string') {
+                return defaultGames;
+            }
+
+            try {
+                // 按行分割配置文本
+                const lines = configText.split('\n');
+                let currentCategory = '';
+                
+                for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    
+                    // 跳过空行和注释
+                    if (!trimmedLine || trimmedLine.startsWith('#')) {
+                        continue;
+                    }
+                    
+                    // 检查是否是分类标题
+                    if (trimmedLine.startsWith('## ')) {
+                        currentCategory = trimmedLine.substring(3).trim();
+                        continue;
+                    }
+                    
+                    // 检查是否是游戏项目
+                    if (trimmedLine.startsWith('### ')) {
+                        const gameTitle = trimmedLine.substring(4).trim();
+                        const parts = gameTitle.split(' ');
+                        
+                        if (parts.length >= 2) {
+                            const icon = parts[0];
+                            const name = parts.slice(1).join(' ');
+                            
+                            // 生成游戏ID（使用名称的拼音或简化版本）
+                            const gameId = name.toLowerCase()
+                                .replace(/[^\w\s]/g, '')
+                                .replace(/\s+/g, '_')
+                                .substring(0, 20);
+                            
+                            parsedGames[gameId] = {
+                                name: name,
+                                icon: icon,
+                                desc: '', // 描述将在下一行解析
+                                category: currentCategory
+                            };
+                        }
+                    }
+                    
+                    // 检查是否是描述行
+                    if (trimmedLine.startsWith('- desc: ')) {
+                        const desc = trimmedLine.substring(8).trim();
+                        // 找到最后添加的游戏并设置描述
+                        const gameIds = Object.keys(parsedGames);
+                        if (gameIds.length > 0) {
+                            const lastGameId = gameIds[gameIds.length - 1];
+                            parsedGames[lastGameId].desc = desc;
+                        }
+                    }
+                }
+                
+                // 如果解析到了游戏，返回解析结果，否则返回默认游戏
+                return Object.keys(parsedGames).length > 0 ? parsedGames : defaultGames;
+                
+            } catch (error) {
+                console.error('Error parsing game config:', error);
+                return defaultGames;
+            }
+        }        // 动态生成游戏列表
+        function generateGameList() {
+            const gameListContainer = document.getElementById('gameList');
+            gameListContainer.innerHTML = '';
+            
+            const gameKeys = Object.keys(games);
+            if (gameKeys.length === 0) {
+                gameListContainer.innerHTML = '<p class="text-gray-500 text-center py-4">暂无游戏数据</p>';
+                return;
+            }
+            
+            gameKeys.forEach((gameId, index) => {
+                const game = games[gameId];
+                const isFirst = index === 0;
+                
+                const gameItem = document.createElement('div');
+                gameItem.className = `game-item ${isFirst ? 'active' : ''} cursor-pointer p-4 rounded-lg transition-all duration-200`;
+                gameItem.setAttribute('data-game-id', gameId);
+                gameItem.addEventListener('click', () => selectGame(gameId));
+                
+                gameItem.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-3xl mr-3">${game.icon}</span>
+                        <div>
+                            <h3 class="font-bold">${game.name}</h3>
+                            <p class="text-sm opacity-80">${game.desc || '暂无描述'}</p>
+                        </div>
+                    </div>
+                `;
+                
+                gameListContainer.appendChild(gameItem);
+            });
+            
+            // 设置第一个游戏为当前游戏并更新界面
+            if (gameKeys.length > 0) {
+                currentGame = gameKeys[0];
+                const firstGame = games[currentGame];
+            }
+        }
+
+        // 消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    gameConfig = e.data.data;
+                    games = parseGameConfig(gameConfig);
+                    generateGameList();
+                    initializeData();
+                    updateTitle();
+                    updateLeaderboard();
+                    console.log('Game config updated:', games);
+                    break;
+                case 'getGameStats':
+                    // 发送游戏统计数据
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            currentGame: currentGame,
+                            games: Object.keys(games),
+                            leaderboardData: leaderboardData
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        // 年龄组配置
+        const ageGroups = {
+            'all': { name: '混龄总榜', emoji: '🏆', filter: () => true },
+            '5-6': { name: '5-6岁', emoji: '👶', filter: (age) => age >= 5 && age <= 6 },
+            '7-8': { name: '7-8岁', emoji: '🧒', filter: (age) => age >= 7 && age <= 8 },
+            '9-10': { name: '9-10岁', emoji: '👦', filter: (age) => age >= 9 && age <= 10 },
+            '11-12': { name: '11-12岁', emoji: '👧', filter: (age) => age >= 11 && age <= 12 },
+            '13+': { name: '13岁以上', emoji: '🧑', filter: (age) => age >= 13 }
+        };
+
+        let currentGame = 'puzzle';
+        let currentTab = 'weekly';
+        let currentAgeGroup = 'all';
+        let leaderboardData = {};
+
+        // 初始化模拟数据
+        function initializeData() {
+            Object.keys(games).forEach(gameId => {
+                leaderboardData[gameId] = {
+                    weekly: generateMockData(),
+                    monthly: generateMockData()
+                };
+            });
+        }
+
+        // 生成模拟排行榜数据
+        function generateMockData() {
+            const names = ['小明', '小红', '小刚', '小丽', '小华', '小王', '小李', '小张', '小陈', '小赵', '小周', '小吴', '小郑', '小冯', '小孙'];
+            const data = [];
+            for (let i = 0; i < 120; i++) {
+                data.push({
+                    rank: i + 1,
+                    name: names[Math.floor(Math.random() * names.length)] + (i + 1),
+                    score: 100000 - i * 800 + Math.floor(Math.random() * 600),
+                    age: Math.floor(Math.random() * 14) + 5 // 5-18岁
+                });
+            }
+            return data.sort((a, b) => b.score - a.score);
+        }
+
+        // 更新标题
+        function updateTitle() {
+            const tabName = currentTab === 'weekly' ? '周榜' : '月榜';
+            const ageName = ageGroups[currentAgeGroup].name;
+            document.getElementById('rankingTitle').textContent = `${ageName}${tabName}`;
+        }        // 从下拉菜单选择排行榜
+        function selectLeaderboard(ageGroup) {
+            event.preventDefault();
+            currentAgeGroup = ageGroup;
+            
+            // 更新按钮状态
+            updateAgeButtons();
+            updateTitle();
+            updateLeaderboard();
+        }
+
+        // 更新榜单类型按钮状态
+        function updateTabButtons() {
+            document.querySelectorAll('[id$="Tab"]').forEach(btn => {
+                btn.className = 'bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-bold transition-all hover:bg-gray-300';
+            });
+            document.getElementById(currentTab + 'Tab').className = 'tab-active px-6 py-2 rounded-lg font-bold transition-all';
+        }
+
+        // 更新年龄组按钮状态
+        function updateAgeButtons() {
+            document.querySelectorAll('.age-button').forEach((btn, index) => {
+                btn.classList.remove('active');
+                const groups = ['all', '5-6', '7-8', '9-10', '11-12', '13+'];
+                if (groups[index] === currentAgeGroup) {
+                    btn.classList.add('active');
+                }
+            });
+        }        // 选择游戏
+        function selectGame(gameId) {
+            currentGame = gameId;
+            
+            // 更新游戏选择样式
+            document.querySelectorAll('.game-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('data-game-id') === gameId) {
+                    item.classList.add('active');
+                }
+            });
+            
+            updateLeaderboard();
+        }
+
+        // 切换榜单类型
+        function switchTab(tab) {
+            currentTab = tab;
+            updateTabButtons();
+            updateTitle();
+            updateLeaderboard();
+        }
+
+        // 选择年龄组
+        function selectAge(ageGroup) {
+            currentAgeGroup = ageGroup;
+            updateAgeButtons();
+            updateTitle();
+            updateLeaderboard();
+        }
+
+        // 更新排行榜
+        function updateLeaderboard() {
+            if (!currentGame) return;
+
+            let data = [...leaderboardData[currentGame][currentTab]];
+
+            // 应用年龄组筛选
+            if (currentAgeGroup !== 'all') {
+                data = data.filter(item => ageGroups[currentAgeGroup].filter(item.age));
+            }
+
+            document.getElementById('totalPlayers').textContent = data.length;
+
+            const listContainer = document.getElementById('leaderboardList');
+            listContainer.innerHTML = '';
+
+            if (data.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <div class="text-6xl mb-4">🎯</div>
+                            <p class="text-xl">暂无${ageGroups[currentAgeGroup].name}的玩家记录</p>
+                            <p class="text-sm mt-2">快来成为第一个上榜的玩家吧！</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            data.slice(0, 100).forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = `leaderboard-item flex items-center justify-between p-4 border-b hover:bg-gray-50 transition-all ${index < 3 ? 'text-white font-bold' : ''} ${item.name === '我' ? 'user-highlight' : ''}`;
+                
+                let rankDisplay = index + 1;
+                let rankIcon = '';
+                if (index === 0) rankIcon = '🥇';
+                else if (index === 1) rankIcon = '🥈';
+                else if (index === 2) rankIcon = '🥉';
+
+                div.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="text-3xl font-bold mr-4 min-w-[60px] text-center ${index < 3 ? '' : 'text-gray-600'}">
+                            ${rankIcon || rankDisplay}
+                        </div>
+                        <div class="flex items-center">
+                            <div class="mr-4">
+                                <div class="text-lg font-bold">${item.name}</div>
+                                <div class="text-sm ${index < 3 ? 'text-white opacity-80' : 'text-gray-500'}">${item.age}岁 ${item.name === '我' ? '(你)' : ''}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-bold">${item.score.toLocaleString()}</div>
+                        <div class="text-sm ${index < 3 ? 'text-white opacity-80' : 'text-gray-500'}">分数</div>
+                    </div>
+                `;
+                
+                listContainer.appendChild(div);
+            });
+        }
+
+        // 根据年龄确定年龄组
+        function getAgeGroup(age) {
+            if (age >= 5 && age <= 6) return '5-6';
+            if (age >= 7 && age <= 8) return '7-8';
+            if (age >= 9 && age <= 10) return '9-10';
+            if (age >= 11 && age <= 12) return '11-12';
+            if (age >= 13) return '13+';
+            return 'all';
+        }
+
+        // 提交分数
+        function submitScore() {
+            const score = parseInt(document.getElementById('userScore').value);
+            const age = parseInt(document.getElementById('userAge').value);
+
+            if (!score || !age) {
+                alert('请输入分数和选择年龄');
+                return;
+            }
+
+            if (score <= 0) {
+                alert('请输入有效的分数');
+                return;
+            }
+
+            // 移除之前的用户记录
+            ['weekly', 'monthly'].forEach(tab => {
+                leaderboardData[currentGame][tab] = leaderboardData[currentGame][tab].filter(item => item.name !== '我');
+            });
+
+            // 添加到排行榜数据
+            const userEntry = {
+                rank: 0,
+                name: '我',
+                score: score,
+                age: age
+            };
+
+            // 添加到所有相关榜单
+            ['weekly', 'monthly'].forEach(tab => {
+                leaderboardData[currentGame][tab].push(userEntry);
+                leaderboardData[currentGame][tab].sort((a, b) => b.score - a.score);
+                // 重新计算排名
+                leaderboardData[currentGame][tab].forEach((item, index) => {
+                    item.rank = index + 1;
+                });
+            });
+
+            // 自动切换到对应年龄组
+            const targetAgeGroup = getAgeGroup(age);
+            currentAgeGroup = targetAgeGroup;
+            updateAgeButtons();
+            updateTitle();
+
+            // 获取用户排名信息
+            const userRank = leaderboardData[currentGame][currentTab].findIndex(item => item.name === '我') + 1;
+            document.getElementById('rankInfo').textContent = `你在${games[currentGame].name}中排名第 ${userRank} 位！`;
+
+            // 清空输入框
+            document.getElementById('userScore').value = '';
+            document.getElementById('userAge').value = '';
+
+            // 显示成功提示
+            document.getElementById('successModal').classList.remove('hidden');
+
+            // 更新排行榜
+            updateLeaderboard();
+
+            // 滚动到用户位置
+            setTimeout(() => {
+                const userItem = document.querySelector('.user-highlight');
+                if (userItem) {
+                    userItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('successModal').classList.add('hidden');
+        }        // 页面初始化
+        window.addEventListener('load', () => {
+            // 初始化为默认游戏
+            games = defaultGames;
+            generateGameList();
+            initializeData();
+            updateTitle();
+            updateLeaderboard();
+            
+            // 通知父窗口游戏已加载完成
+            window.parent.postMessage({ type: 'gameLoaded' }, '*');
+        });
+    </script>
+</body>
+</html>
