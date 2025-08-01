@@ -1547,67 +1547,97 @@ print("Hello, AI!")
             
             blocksInitialized = true;
             console.log('AI自定义块定义完成（使用现代化方法）');
-        }        // 定义代码生成器 - 修复版本
+        }        // 定义代码生成器 - 兼容多版本Blockly
         function defineAIGenerators() {
-            // 检查JavaScript生成器是否可用
-            if (!Blockly.JavaScript) {
-                console.error('Blockly.JavaScript生成器不可用');
-                return false;
+            console.log('开始定义AI代码生成器...');
+            
+            // 获取JavaScript生成器的引用（兼容不同版本）
+            let generator = null;
+            
+            if (typeof Blockly.JavaScript !== 'undefined') {
+                generator = Blockly.JavaScript;
+            } else if (typeof Blockly.javascriptGenerator !== 'undefined') {
+                generator = Blockly.javascriptGenerator;
+            } else if (typeof javascriptGenerator !== 'undefined') {
+                generator = javascriptGenerator;
             }
             
-            console.log('开始定义AI代码生成器...');
+            if (!generator) {
+                console.error('JavaScript生成器不可用');
+                // 尝试创建一个基本的生成器
+                try {
+                    if (typeof Blockly.Generator !== 'undefined') {
+                        generator = new Blockly.Generator('JavaScript');
+                        generator.ORDER_ATOMIC = 0;
+                        generator.ORDER_FUNCTION_CALL = 1;
+                        Blockly.JavaScript = generator;
+                    }
+                } catch (e) {
+                    console.error('无法创建JavaScript生成器:', e);
+                    return false;
+                }
+            }
             
             try {
                 // 清除现有的生成器以避免冲突
                 const generatorNames = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
                 generatorNames.forEach(name => {
-                    if (Blockly.JavaScript[name]) {
-                        delete Blockly.JavaScript[name];
+                    if (generator[name]) {
+                        delete generator[name];
                     }
                 });
                 
-                // 定义代码生成器
-                Blockly.JavaScript['ai_load_data'] = function(block) {
+                // 确保ORDER常量存在
+                if (!generator.ORDER_ATOMIC) generator.ORDER_ATOMIC = 0;
+                if (!generator.ORDER_FUNCTION_CALL) generator.ORDER_FUNCTION_CALL = 1;
+                
+                // 定义代码生成器函数
+                generator['ai_load_data'] = function(block) {
                     var dataset = block.getFieldValue('DATASET');
                     var code = `loadDataset('${dataset}')`;
-                    return [code, Blockly.JavaScript.ORDER_FUNCTION_CALL];
+                    return [code, generator.ORDER_FUNCTION_CALL];
                 };
 
-                Blockly.JavaScript['ai_create_model'] = function(block) {
+                generator['ai_create_model'] = function(block) {
                     var modelType = block.getFieldValue('MODEL_TYPE');
                     var code = `createModel('${modelType}')`;
-                    return [code, Blockly.JavaScript.ORDER_FUNCTION_CALL];
+                    return [code, generator.ORDER_FUNCTION_CALL];
                 };
 
-                Blockly.JavaScript['ai_train_model'] = function(block) {
-                    var model = Blockly.JavaScript.valueToCode(block, 'MODEL', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
-                    var data = Blockly.JavaScript.valueToCode(block, 'DATA', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
+                generator['ai_train_model'] = function(block) {
+                    var model = generator.valueToCode(block, 'MODEL', generator.ORDER_ATOMIC) || 'null';
+                    var data = generator.valueToCode(block, 'DATA', generator.ORDER_ATOMIC) || 'null';
                     var epochs = block.getFieldValue('EPOCHS') || '10';
                     
                     var code = `trainModel(${model}, ${data}, ${epochs});\n`;
                     return code;
                 };
 
-                Blockly.JavaScript['ai_predict'] = function(block) {
-                    var model = Blockly.JavaScript.valueToCode(block, 'MODEL', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
+                generator['ai_predict'] = function(block) {
+                    var model = generator.valueToCode(block, 'MODEL', generator.ORDER_ATOMIC) || 'null';
                     var image = block.getFieldValue('IMAGE');
                     
                     var code = `predict(${model}, '${image}')`;
-                    return [code, Blockly.JavaScript.ORDER_FUNCTION_CALL];
+                    return [code, generator.ORDER_FUNCTION_CALL];
                 };
 
-                Blockly.JavaScript['ai_show_result'] = function(block) {
-                    var result = Blockly.JavaScript.valueToCode(block, 'RESULT', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
+                generator['ai_show_result'] = function(block) {
+                    var result = generator.valueToCode(block, 'RESULT', generator.ORDER_ATOMIC) || 'null';
                     
                     var code = `showResult(${result});\n`;
                     return code;
                 };
                 
-                console.log('AI代码生成器定义完成（修复版）');
+                console.log('AI代码生成器定义完成（兼容版）');
                 
                 // 验证所有生成器是否成功定义
-                const successfullyDefined = generatorNames.filter(name => !!Blockly.JavaScript[name]);
+                const successfullyDefined = generatorNames.filter(name => !!generator[name]);
                 console.log(`成功定义的生成器: ${successfullyDefined.join(', ')}`);
+                
+                // 确保Blockly.JavaScript引用正确
+                if (!Blockly.JavaScript && generator) {
+                    Blockly.JavaScript = generator;
+                }
                 
                 return successfullyDefined.length === generatorNames.length;
                 
@@ -1620,10 +1650,25 @@ print("Hello, AI!")
             const requiredGenerators = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
             const missingGenerators = [];
             
-            // 检查标准方式定义的生成器
-            for (let generator of requiredGenerators) {
-                if (!Blockly.JavaScript[generator]) {
-                    missingGenerators.push(generator);
+            // 获取正确的生成器引用
+            let generator = null;
+            if (typeof Blockly.JavaScript !== 'undefined') {
+                generator = Blockly.JavaScript;
+            } else if (typeof Blockly.javascriptGenerator !== 'undefined') {
+                generator = Blockly.javascriptGenerator;
+            } else if (typeof javascriptGenerator !== 'undefined') {
+                generator = javascriptGenerator;
+            }
+            
+            if (!generator) {
+                console.warn('无法找到JavaScript生成器');
+                return false;
+            }
+            
+            // 检查生成器是否定义
+            for (let generatorName of requiredGenerators) {
+                if (!generator[generatorName]) {
+                    missingGenerators.push(generatorName);
                 }
             }
             
@@ -1632,39 +1677,104 @@ print("Hello, AI!")
                 return false;
             }
               console.log('所有AI代码生成器验证通过');
-            return true;        }        // 调试函数：检查代码生成器状态
+            return true;}        // 调试函数：检查代码生成器状态 - 增强版
         function debugGeneratorStatus() {
             console.log('=== 代码生成器状态调试 ===');
             console.log('Blockly.JavaScript 是否存在:', !!Blockly.JavaScript);
             
-            if (Blockly.JavaScript) {
+            // 检查不同版本的生成器
+            console.log('Blockly.javascriptGenerator 是否存在:', !!Blockly.javascriptGenerator);
+            console.log('全局 javascriptGenerator 是否存在:', typeof javascriptGenerator !== 'undefined');
+            
+            // 选择可用的生成器
+            let generator = null;
+            if (typeof Blockly.JavaScript !== 'undefined') {
+                generator = Blockly.JavaScript;
+                console.log('使用 Blockly.JavaScript');
+            } else if (typeof Blockly.javascriptGenerator !== 'undefined') {
+                generator = Blockly.javascriptGenerator;
+                console.log('使用 Blockly.javascriptGenerator');
+            } else if (typeof javascriptGenerator !== 'undefined') {
+                generator = javascriptGenerator;
+                console.log('使用全局 javascriptGenerator');
+            }
+            
+            if (generator) {
                 const requiredGenerators = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
                 requiredGenerators.forEach(name => {
-                    const exists = !!Blockly.JavaScript[name];
-                    const type = typeof Blockly.JavaScript[name];
+                    const exists = !!generator[name];
+                    const type = typeof generator[name];
                     console.log(`${name}: 存在=${exists}, 类型=${type}`);
                 });
                 
                 // 检查其他可能存在的生成器
-                const allGenerators = Object.keys(Blockly.JavaScript).filter(key => 
-                    typeof Blockly.JavaScript[key] === 'function' && key.startsWith('ai_')
+                const allGenerators = Object.keys(generator).filter(key => 
+                    typeof generator[key] === 'function' && key.startsWith('ai_')
                 );
                 console.log('所有AI相关生成器:', allGenerators);
+                
+                // 检查生成器的workspaceToCode方法
+                console.log('workspaceToCode方法存在:', !!generator.workspaceToCode);
+            } else {
+                console.error('未找到可用的JavaScript生成器');
             }
             
             console.log('工作区状态:', !!workspace);
             console.log('块初始化状态:', blocksInitialized);
             console.log('=========================');
+            
+            // 更新显示区域
+            const codeElement = document.getElementById('generatedCode');
+            if (codeElement) {
+                let debugInfo = '=== 调试信息 ===\n';
+                debugInfo += `Blockly版本检测:\n`;
+                debugInfo += `- Blockly.JavaScript: ${!!Blockly.JavaScript}\n`;
+                debugInfo += `- Blockly.javascriptGenerator: ${!!Blockly.javascriptGenerator}\n`;
+                debugInfo += `- 全局 javascriptGenerator: ${typeof javascriptGenerator !== 'undefined'}\n\n`;
+                
+                if (generator) {
+                    debugInfo += `当前使用的生成器: ${generator === Blockly.JavaScript ? 'Blockly.JavaScript' : generator === Blockly.javascriptGenerator ? 'Blockly.javascriptGenerator' : '全局生成器'}\n\n`;
+                    
+                    const requiredGenerators = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
+                    debugInfo += 'AI生成器状态:\n';
+                    requiredGenerators.forEach(name => {
+                        const exists = !!generator[name];
+                        debugInfo += `- ${name}: ${exists ? '✅' : '❌'}\n`;
+                    });
+                } else {
+                    debugInfo += '❌ 未找到可用的JavaScript生成器\n';
+                }
+                
+                debugInfo += `\n工作区: ${workspace ? '✅ 已初始化' : '❌ 未初始化'}`;
+                debugInfo += `\n块定义: ${blocksInitialized ? '✅ 已完成' : '❌ 未完成'}`;
+                
+                codeElement.textContent = debugInfo;
+            }
         }// 强制重新初始化AI代码生成器
         function forceReinitAIGenerators() {
             console.log('强制重新初始化AI代码生成器...');
             
             try {
+                // 获取正确的生成器引用
+                let generator = null;
+                if (typeof Blockly.JavaScript !== 'undefined') {
+                    generator = Blockly.JavaScript;
+                } else if (typeof Blockly.javascriptGenerator !== 'undefined') {
+                    generator = Blockly.javascriptGenerator;
+                } else if (typeof javascriptGenerator !== 'undefined') {
+                    generator = javascriptGenerator;
+                }
+                
+                if (!generator) {
+                    console.error('未找到可用的JavaScript生成器');
+                    return false;
+                }
+                
                 // 清除现有的生成器
                 const generatorNames = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
                 generatorNames.forEach(name => {
-                    if (Blockly.JavaScript[name]) {
-                        delete Blockly.JavaScript[name];
+                    if (generator[name]) {
+                        delete generator[name];
                     }
                 });
                 
@@ -1867,13 +1977,28 @@ print("Hello, AI!")
             }
             
             try {
+                // 获取正确的生成器引用（兼容不同版本）
+                let generator = null;
                 
-                var code = Blockly.JavaScript.workspaceToCode(workspace);
+                if (typeof Blockly.JavaScript !== 'undefined' && Blockly.JavaScript.workspaceToCode) {
+                    generator = Blockly.JavaScript;
+                } else if (typeof Blockly.javascriptGenerator !== 'undefined' && Blockly.javascriptGenerator.workspaceToCode) {
+                    generator = Blockly.javascriptGenerator;
+                } else if (typeof javascriptGenerator !== 'undefined' && javascriptGenerator.workspaceToCode) {
+                    generator = javascriptGenerator;
+                }
+                
+                if (!generator) {
+                    codeElement.textContent = '// JavaScript代码生成器未找到\n// 请检查Blockly版本兼容性';
+                    return;
+                }
+                
+                var code = generator.workspaceToCode(workspace);
                 codeElement.textContent = code || '// 请拖拽代码块来构建AI程序';
                 
             } catch (error) {
                 console.error('代码生成错误:', error);
-                codeElement.textContent = error;
+                codeElement.textContent = '// 代码生成失败: ' + error.message + '\n// 请尝试重新初始化或检查块连接';
             }
         }// 运行Blockly代码
         function runBlocklyCode() {
@@ -1889,7 +2014,23 @@ print("Hello, AI!")
             }
 
             try {
-                var code = Blockly.JavaScript.workspaceToCode(workspace);
+                // 获取正确的生成器引用（兼容不同版本）
+                let generator = null;
+                
+                if (typeof Blockly.JavaScript !== 'undefined' && Blockly.JavaScript.workspaceToCode) {
+                    generator = Blockly.JavaScript;
+                } else if (typeof Blockly.javascriptGenerator !== 'undefined' && Blockly.javascriptGenerator.workspaceToCode) {
+                    generator = Blockly.javascriptGenerator;
+                } else if (typeof javascriptGenerator !== 'undefined' && javascriptGenerator.workspaceToCode) {
+                    generator = javascriptGenerator;
+                }
+                
+                if (!generator) {
+                    resultElement.textContent = '❌ JavaScript代码生成器未找到';
+                    return;
+                }
+                
+                var code = generator.workspaceToCode(workspace);
                 if (!code.trim()) {
                     resultElement.textContent = '❌ 请先构建程序再运行';
                     return;
