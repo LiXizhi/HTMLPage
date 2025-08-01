@@ -1,0 +1,1296 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>神经网络原理与构建初探</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>    <style>
+        .section { display: none; }
+        .section.active { display: block; }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .card-hover { transition: transform 0.3s ease; }
+        .card-hover:hover { transform: translateY(-5px); }
+        .nav-arrow { 
+            position: fixed; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            z-index: 40; 
+            background: rgba(59, 130, 246, 0.9); 
+            color: white; 
+            border: none; 
+            border-radius: 50%; 
+            width: 50px; 
+            height: 50px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            transition: all 0.3s ease; 
+        }
+        .nav-arrow:hover { 
+            background: rgba(59, 130, 246, 1); 
+            transform: translateY(-50%) scale(1.1); 
+        }
+        .nav-arrow:disabled { 
+            background: rgba(156, 163, 175, 0.5); 
+            cursor: not-allowed; 
+        }
+        .nav-arrow.left { left: 20px; }
+        .nav-arrow.right { right: 20px; }
+        .neuron {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        .signal-flow {
+            animation: flow 3s infinite;
+        }
+        @keyframes flow {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(300%); }
+        }
+        .interactive-btn {
+            transition: all 0.3s;
+        }
+        .interactive-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        /* 神经网络可视化样式 */
+        .neural-node {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #3b82f6;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .neural-node:hover {
+            background: #3b82f6;
+            color: white;
+            transform: scale(1.1);
+        }
+        .neural-node.active {
+            background: #ef4444;
+            border-color: #ef4444;
+            color: white;
+            animation: neuronPulse 1s ease-in-out;
+        }
+        @keyframes neuronPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        .neural-connection {
+            stroke: #6b7280;
+            stroke-width: 2;
+            transition: all 0.3s;
+        }
+        .neural-connection.active {
+            stroke: #ef4444;
+            stroke-width: 4;
+            animation: connectionPulse 1s ease-in-out;
+        }
+        @keyframes connectionPulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        .dataset-point {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .dataset-point:hover {
+            transform: scale(1.5);
+        }
+        .class-0 { background: #3b82f6; }
+        .class-1 { background: #ef4444; }
+        .slider-container {
+            margin: 10px 0;
+        }
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e5e7eb;
+            outline: none;
+            transition: background 0.3s;
+        }
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-md p-4 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-gray-800">神经网络原理与构建初探</h1>
+            <div class="flex space-x-2 overflow-x-auto">
+                <button onclick="showSection('cover')" class="nav-btn px-3 py-1 rounded-full text-sm bg-blue-500 text-white">封面</button>
+                <button onclick="showSection('objectives')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">目标</button>
+                <button onclick="showSection('scenario')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">导入</button>
+                <button onclick="showSection('concepts')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">探秘</button>
+                <button onclick="showSection('practice')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">工坊</button>
+                <button onclick="showSection('debate')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">思辨</button>
+                <button onclick="showSection('summary')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">总结</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 左右导航按钮 -->
+    <button id="prevBtn" class="nav-arrow left" onclick="previousSection()" title="上一页">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        </svg>
+    </button>
+    <button id="nextBtn" class="nav-arrow right" onclick="nextSection()" title="下一页">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+    </button>    <!-- 封面 -->
+    <section id="cover" class="section active fade-in">
+        <div class="max-w-4xl mx-auto p-6 text-center">
+            <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-12 rounded-2xl shadow-2xl mb-8">
+                <h1 class="text-4xl font-bold mb-4">🧠 神经网络原理与构建初探</h1>
+                <p class="text-xl mb-6">第3课 - 九年级（上）人工智能课程</p>
+                <p class="text-lg opacity-90">探索人工智能的神经网络奥秘</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                    <div class="neuron bg-blue-100 p-6 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">⚪</span>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">神经元</h3>
+                    <p class="text-gray-600">网络的基本处理单元</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                    <div class="neuron bg-green-100 p-6 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4" style="animation-delay: 0.5s">
+                        <span class="text-2xl">📚</span>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">层结构</h3>
+                    <p class="text-gray-600">输入层、隐藏层、输出层</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                    <div class="neuron bg-purple-100 p-6 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4" style="animation-delay: 1s">
+                        <span class="text-2xl">🔗</span>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">连接权重</h3>
+                    <p class="text-gray-600">决定信号传递的强度</p>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 课程目标 -->
+    <section id="objectives" class="section fade-in">
+        <div class="max-w-4xl mx-auto p-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">📚 课程目标</h2>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="bg-blue-50 p-6 rounded-xl">
+                        <h3 class="text-2xl font-semibold text-blue-800 mb-4">🎯 知识目标</h3>
+                        <ul class="space-y-3 text-gray-700">
+                            <li>• 理解人工神经网络的基本结构</li>
+                            <li>• 掌握神经元、层、连接的概念</li>
+                            <li>• 了解前向传播和激活函数</li>
+                            <li>• 初步理解反向传播概念</li>
+                        </ul>
+                    </div>
+                    <div class="bg-green-50 p-6 rounded-xl">
+                        <h3 class="text-2xl font-semibold text-green-800 mb-4">🛠️ 能力目标</h3>
+                        <ul class="space-y-3 text-gray-700">
+                            <li>• 能够识别神经网络的基本组成</li>
+                            <li>• 理解信息在网络中的传递过程</li>
+                            <li>• 学会使用工具搭建简单网络</li>
+                            <li>• 体验网络训练的基本流程</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-8 bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl">
+                    <h3 class="text-2xl font-semibold text-yellow-800 mb-4">🤔 重点难点</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-semibold text-yellow-700 mb-2">重点：</h4>
+                            <p class="text-gray-700">理解神经网络的基本构成和信息传递过程</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-yellow-700 mb-2">难点：</h4>
+                            <p class="text-gray-700">理解反向传播等训练机制的原理；利用工具搭建和训练简单网络</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 情景导入 -->
+    <section id="scenario" class="section fade-in">
+        <div class="max-w-4xl mx-auto p-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">🌟 情景导入</h2>
+                <div class="bg-gray-50 p-6 rounded-xl mb-6">
+                    <h3 class="text-xl font-bold mb-4 text-center">🧠 大脑的奥秘</h3>
+                    <div class="flex flex-col lg:flex-row items-center gap-8">
+                        <div class="lg:w-1/2">
+                            <div class="bg-gradient-to-r from-purple-100 to-pink-100 p-8 rounded-2xl">
+                                <p class="text-gray-700 text-lg leading-relaxed mb-6">
+                                    人类大脑拥有约1000亿个神经元，它们通过复杂的连接网络，让我们能够思考、学习、记忆...
+                                    那么，计算机能否模拟这种神奇的结构呢？
+                                </p>
+                                <div class="bg-white p-4 rounded-lg shadow-sm">
+                                    <p class="text-sm text-gray-600 italic">
+                                        "人工神经网络正是受到生物神经网络启发而诞生的计算模型"
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="lg:w-1/2">
+                            <div class="relative">
+                                <div class="grid grid-cols-4 gap-4">
+                                    <div class="neuron bg-blue-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl">🔵</div>
+                                    <div class="neuron bg-green-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="animation-delay: 0.3s">🟢</div>
+                                    <div class="neuron bg-red-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="animation-delay: 0.6s">🔴</div>
+                                    <div class="neuron bg-yellow-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="animation-delay: 0.9s">🟡</div>
+                                    <div class="neuron bg-purple-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="animation-delay: 1.2s">🟣</div>
+                                    <div class="neuron bg-orange-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="animation-delay: 1.5s">🟠</div>
+                                    <div class="neuron bg-pink-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="animation-delay: 1.8s">🩷</div>
+                                    <div class="neuron bg-cyan-200 w-16 h-16 rounded-full flex items-center justify-center text-2xl" style="animation-delay: 2.1s">🔵</div>
+                                </div>
+                                <div class="mt-4 text-center">
+                                    <p class="text-gray-600">模拟的神经网络节点</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl">
+                    <h4 class="font-bold text-lg mb-3">💡 思考问题</h4>
+                    <p class="text-gray-700">如果让你设计一个能够识别手写数字的系统，你会怎么做？</p>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 概念探秘 -->
+    <section id="concepts" class="section fade-in">
+        <div class="max-w-4xl mx-auto p-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">🔍 概念探秘</h2>
+                
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6 text-center">神经网络的基本组成</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- 神经元 -->
+                        <div class="bg-blue-50 p-6 rounded-xl card-hover">
+                            <h3 class="text-2xl font-semibold text-blue-800 mb-4">⚪ 神经元</h3>
+                            <div class="mb-4">
+                                <div class="w-20 h-20 bg-blue-200 rounded-full mx-auto flex items-center justify-center text-3xl neuron">🧠</div>
+                            </div>
+                            <ul class="space-y-2 text-gray-700">
+                                <li>• 网络的基本处理单元</li>
+                                <li>• 接收输入信号</li>
+                                <li>• 进行数学运算</li>
+                                <li>• 输出计算结果</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- 层 -->
+                        <div class="bg-green-50 p-6 rounded-xl card-hover">
+                            <h3 class="text-2xl font-semibold text-green-800 mb-4">📚 层结构</h3>
+                            <div class="mb-4 space-y-2">
+                                <div class="flex justify-center space-x-2">
+                                    <div class="w-8 h-8 bg-green-200 rounded-full"></div>
+                                    <div class="w-8 h-8 bg-green-200 rounded-full"></div>
+                                    <div class="w-8 h-8 bg-green-200 rounded-full"></div>
+                                </div>
+                                <div class="text-center text-sm text-gray-600">输入层</div>
+                            </div>
+                            <ul class="space-y-2 text-gray-700">
+                                <li>• 输入层：接收数据</li>
+                                <li>• 隐藏层：特征提取</li>
+                                <li>• 输出层：产生结果</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- 连接 -->
+                        <div class="bg-purple-50 p-6 rounded-xl card-hover">
+                            <h3 class="text-2xl font-semibold text-purple-800 mb-4">🔗 连接权重</h3>
+                            <div class="mb-4">
+                                <div class="flex items-center justify-center">
+                                    <div class="w-8 h-8 bg-purple-200 rounded-full"></div>
+                                    <div class="w-16 h-1 bg-purple-300 mx-2 relative">
+                                        <div class="signal-flow w-2 h-2 bg-purple-500 rounded-full absolute top-0"></div>
+                                    </div>
+                                    <div class="w-8 h-8 bg-purple-200 rounded-full"></div>
+                                </div>
+                            </div>
+                            <ul class="space-y-2 text-gray-700">
+                                <li>• 神经元间的连接</li>
+                                <li>• 权重决定信号强度</li>
+                                <li>• 学习过程调整权重</li>
+                                <li>• 影响最终输出</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 前向传播过程 -->
+                <div class="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl">
+                    <h3 class="text-2xl font-semibold text-gray-800 mb-4 text-center">🔄 前向传播过程</h3>
+                    <div class="flex items-center justify-center space-x-8 flex-wrap">
+                        <div class="text-center mb-4">
+                            <div class="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-2xl mb-2">📥</div>
+                            <p class="text-sm">输入数据</p>
+                        </div>
+                        <div class="text-2xl">→</div>
+                        <div class="text-center mb-4">
+                            <div class="w-16 h-16 bg-green-200 rounded-full flex items-center justify-center text-2xl mb-2">⚙️</div>
+                            <p class="text-sm">加权求和</p>
+                        </div>
+                        <div class="text-2xl">→</div>
+                        <div class="text-center mb-4">
+                            <div class="w-16 h-16 bg-yellow-200 rounded-full flex items-center justify-center text-2xl mb-2">✨</div>
+                            <p class="text-sm">激活函数</p>
+                        </div>
+                        <div class="text-2xl">→</div>
+                        <div class="text-center mb-4">
+                            <div class="w-16 h-16 bg-red-200 rounded-full flex items-center justify-center text-2xl mb-2">📤</div>
+                            <p class="text-sm">输出结果</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 实践工坊 -->
+    <section id="practice" class="section fade-in">
+        <div class="max-w-6xl mx-auto p-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">🛠️ 实践工坊</h2>
+                
+                <!-- 实践任务概述 -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl mb-8">
+                    <h3 class="text-2xl font-semibold text-indigo-800 mb-4">🎯 实践目标</h3>
+                    <p class="text-gray-700 text-lg">通过在线可视化工具和互动体验，深入理解神经网络的工作原理，并亲手构建和训练一个简单的神经网络。</p>
+                </div>
+
+                <!-- 实践活动 -->
+                <div class="space-y-8">
+                    <!-- 活动1：神经网络结构可视化 -->
+                    <div class="bg-white border-2 border-blue-200 rounded-xl p-6">
+                        <h4 class="text-xl font-semibold text-blue-800 mb-4">🔍 活动1：神经网络结构可视化</h4>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h5 class="font-semibold text-gray-700 mb-2">🎛️ 控制面板：</h5>
+                                <div class="space-y-3">
+                                    <div class="slider-container">
+                                        <label class="text-sm text-gray-600">隐藏层神经元数量: <span id="hiddenCount">3</span></label>
+                                        <input type="range" id="hiddenSlider" class="slider" min="1" max="6" value="3" oninput="updateNetwork()">
+                                    </div>
+                                    <div class="slider-container">
+                                        <label class="text-sm text-gray-600">学习率: <span id="learningRate">0.1</span></label>
+                                        <input type="range" id="learningSlider" class="slider" min="0.01" max="0.5" step="0.01" value="0.1" oninput="updateLearningRate()">
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button onclick="startTraining()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors">
+                                            开始训练
+                                        </button>
+                                        <button onclick="resetNetwork()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors">
+                                            重置网络
+                                        </button>
+                                        <button onclick="stepForward()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                                            单步演示
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="font-semibold text-gray-700 mb-2">📊 训练状态：</h5>
+                                <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                    <div class="text-sm">训练轮次: <span id="epochCount">0</span></div>
+                                    <div class="text-sm">损失值: <span id="lossValue">--</span></div>
+                                    <div class="text-sm">准确率: <span id="accuracyValue">--</span></div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div id="progressBar" class="bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 神经网络可视化区域 -->
+                        <div class="mt-6 bg-gray-50 p-6 rounded-lg">
+                            <h5 class="font-semibold text-gray-700 mb-4 text-center">神经网络结构图</h5>
+                            <div id="networkVisualization" class="flex justify-center items-center min-h-[300px]">
+                                <svg id="networkSvg" width="600" height="300" class="border rounded">
+                                    <!-- 网络结构将在这里动态生成 -->
+                                </svg>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h5 class="font-semibold text-gray-700 mb-2">🤔 观察思考：</h5>
+                            <ul class="space-y-1 text-sm text-gray-600">
+                                <li>• 调整隐藏层神经元数量，观察网络复杂度变化</li>
+                                <li>• 观察训练过程中权重连接的颜色变化</li>
+                                <li>• 不同学习率对训练速度的影响</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- 活动2：手工计算体验 -->
+                    <div class="bg-white border-2 border-green-200 rounded-xl p-6">
+                        <h4 class="text-xl font-semibold text-green-800 mb-4">✏️ 活动2：神经元计算体验</h4>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h5 class="font-semibold text-gray-700 mb-2">🧮 计算练习：</h5>
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <p class="text-sm mb-3">调整输入值，观察神经元输出变化：</p>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="text-sm text-gray-600">输入1 (x₁): <span id="input1Value">0.5</span></label>
+                                            <input type="range" id="input1Slider" class="slider" min="0" max="1" step="0.1" value="0.5" oninput="updateCalculation()">
+                                        </div>
+                                        <div>
+                                            <label class="text-sm text-gray-600">输入2 (x₂): <span id="input2Value">0.3</span></label>
+                                            <input type="range" id="input2Slider" class="slider" min="0" max="1" step="0.1" value="0.3" oninput="updateCalculation()">
+                                        </div>
+                                        <div>
+                                            <label class="text-sm text-gray-600">权重1 (w₁): <span id="weight1Value">0.8</span></label>
+                                            <input type="range" id="weight1Slider" class="slider" min="-1" max="1" step="0.1" value="0.8" oninput="updateCalculation()">
+                                        </div>
+                                        <div>
+                                            <label class="text-sm text-gray-600">权重2 (w₂): <span id="weight2Value">0.6</span></label>
+                                            <input type="range" id="weight2Slider" class="slider" min="-1" max="1" step="0.1" value="0.6" oninput="updateCalculation()">
+                                        </div>
+                                        <div>
+                                            <label class="text-sm text-gray-600">偏置 (b): <span id="biasValue">0.1</span></label>
+                                            <input type="range" id="biasSlider" class="slider" min="-1" max="1" step="0.1" value="0.1" oninput="updateCalculation()">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="font-semibold text-gray-700 mb-2">📊 计算结果：</h5>
+                                <div class="bg-white border-2 border-gray-200 p-4 rounded-lg">
+                                    <div id="calculationSteps" class="text-sm space-y-2">
+                                        <!-- 计算步骤将在这里显示 -->
+                                    </div>
+                                    <div class="mt-4 p-3 bg-blue-50 rounded">
+                                        <strong class="text-blue-800">最终输出: <span id="finalOutput">--</span></strong>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <h5 class="font-semibold text-gray-700 mb-2">🎯 激活函数选择：</h5>
+                                    <select id="activationFunction" onchange="updateCalculation()" class="w-full p-2 border rounded">
+                                        <option value="sigmoid">Sigmoid (1/(1+e^(-x)))</option>
+                                        <option value="tanh">Tanh (双曲正切)</option>
+                                        <option value="relu">ReLU (max(0,x))</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h5 class="font-semibold text-gray-700 mb-2">💡 学习要点：</h5>
+                            <ul class="space-y-1 text-sm text-gray-600">
+                                <li>• 理解加权求和的过程：输出 = Σ(输入 × 权重) + 偏置</li>
+                                <li>• 激活函数的作用：引入非线性，决定神经元是否被激活</li>
+                                <li>• 权重和偏置如何影响神经元的输出</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 活动3：分类演示 -->
+                    <div class="bg-white border-2 border-purple-200 rounded-xl p-6">
+                        <h4 class="text-xl font-semibold text-purple-800 mb-4">🎯 活动3：二分类问题演示</h4>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h5 class="font-semibold text-gray-700 mb-2">📊 数据集可视化：</h5>
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <canvas id="datasetCanvas" width="300" height="300" class="border rounded cursor-crosshair"></canvas>
+                                    <div class="mt-2 flex justify-between text-xs text-gray-600">
+                                        <span>点击画布添加数据点</span>
+                                        <div>
+                                            <span class="inline-block w-3 h-3 bg-blue-500 rounded mr-1"></span>类别0
+                                            <span class="inline-block w-3 h-3 bg-red-500 rounded ml-2 mr-1"></span>类别1
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 flex space-x-2">
+                                    <button onclick="generateDataset()" class="bg-purple-500 text-white px-3 py-1 text-sm rounded hover:bg-purple-600 transition-colors">
+                                        生成随机数据
+                                    </button>
+                                    <button onclick="clearDataset()" class="bg-gray-500 text-white px-3 py-1 text-sm rounded hover:bg-gray-600 transition-colors">
+                                        清空数据
+                                    </button>
+                                    <button onclick="trainClassifier()" class="bg-green-500 text-white px-3 py-1 text-sm rounded hover:bg-green-600 transition-colors">
+                                        训练分类器
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="font-semibold text-gray-700 mb-2">🔧 分类器设置：</h5>
+                                <div class="bg-gray-50 p-4 rounded-lg space-y-3">
+                                    <div>
+                                        <label class="text-sm text-gray-600">训练轮数: <span id="classifierEpochs">100</span></label>
+                                        <input type="range" id="epochsSlider" class="slider" min="10" max="500" step="10" value="100" oninput="updateEpochs()">
+                                    </div>
+                                    <div class="text-sm space-y-1">
+                                        <div>训练进度: <span id="classifierProgress">未开始</span></div>
+                                        <div>当前损失: <span id="classifierLoss">--</span></div>
+                                        <div>分类准确率: <span id="classifierAccuracy">--</span></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <h5 class="font-semibold text-gray-700 mb-2">📈 学习曲线：</h5>
+                                    <canvas id="lossChart" width="300" height="150" class="border rounded bg-white"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h5 class="font-semibold text-gray-700 mb-2">🎓 实验指导：</h5>
+                            <ol class="space-y-1 text-sm text-gray-600 list-decimal list-inside">
+                                <li>在左侧画布上点击添加不同类别的数据点（按住Shift键添加红色点）</li>
+                                <li>调整训练轮数，观察对训练效果的影响</li>
+                                <li>点击"训练分类器"按钮开始训练</li>
+                                <li>观察学习曲线的变化，理解损失函数下降过程</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mt-8">
+                    <button class="bg-blue-500 text-white px-8 py-3 rounded-full font-bold hover:bg-blue-600 transition-colors shadow-lg" onclick="showPracticeResult()">
+                        完成实践任务
+                    </button>
+                </div>
+                
+                <div id="practice-result" class="hidden mt-6 p-6 bg-green-50 rounded-xl border-l-4 border-green-500">
+                    <h4 class="font-bold text-lg mb-3">🎉 恭喜完成实践任务！</h4>
+                    <p class="text-gray-700 mb-4">你已经成功体验了神经网络的基本工作原理。通过实践，你了解了：</p>
+                    <div class="grid md:grid-cols-2 gap-4 mb-4">
+                        <div class="bg-white p-3 rounded">• 神经元的计算过程</div>
+                        <div class="bg-white p-3 rounded">• 权重和偏置的作用</div>
+                        <div class="bg-white p-3 rounded">• 激活函数的重要性</div>
+                        <div class="bg-white p-3 rounded">• 网络训练的基本流程</div>
+                    </div>
+                    <p class="text-gray-700">接下来让我们进入思辨环节，深入讨论神经网络的应用和发展。</p>
+                </div>
+            </div>
+        </div>
+    </section><!-- 思辨广场 -->
+    <section id="debate" class="section fade-in">
+        <div class="max-w-4xl mx-auto p-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">💭 思辨广场</h2>
+                
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6 text-center">🔥 深度思考</h3>
+                    <div class="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl mb-6">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <!-- 讨论话题 -->
+                            <div class="space-y-6">
+                                <div class="bg-white p-4 rounded-lg border-l-4 border-blue-400">
+                                    <h4 class="font-semibold text-gray-800 mb-2">问题1：仿生学启发</h4>
+                                    <p class="text-sm text-gray-600">为什么科学家要模仿大脑的结构来设计计算机系统？人工神经网络和生物神经网络有什么本质区别？</p>
+                                </div>
+                                
+                                <div class="bg-white p-4 rounded-lg border-l-4 border-green-400">
+                                    <h4 class="font-semibold text-gray-800 mb-2">问题2：学习机制</h4>
+                                    <p class="text-sm text-gray-600">神经网络是如何"学习"的？这种学习方式和人类的学习有什么相似和不同之处？</p>
+                                </div>
+                                
+                                <div class="bg-white p-4 rounded-lg border-l-4 border-purple-400">
+                                    <h4 class="font-semibold text-gray-800 mb-2">问题3：应用前景</h4>
+                                    <p class="text-sm text-gray-600">神经网络在哪些领域有广阔的应用前景？可能带来哪些机遇和挑战？</p>
+                                </div>
+                            </div>
+                            
+                            <!-- 观点分享 -->
+                            <div class="space-y-6">
+                                <div class="bg-white p-4 rounded-lg border-l-4 border-green-400">
+                                    <h4 class="font-semibold text-gray-800 mb-2">正面观点</h4>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• 强大的模式识别能力</li>
+                                        <li>• 能够处理复杂非线性问题</li>
+                                        <li>• 自适应学习能力</li>
+                                        <li>• 在多个领域取得突破</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="bg-white p-4 rounded-lg border-l-4 border-yellow-400">
+                                    <h4 class="font-semibold text-gray-800 mb-2">需要思考</h4>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• 黑盒问题：难以解释决策过程</li>
+                                        <li>• 需要大量数据和计算资源</li>
+                                        <li>• 可能存在偏见和公平性问题</li>
+                                        <li>• 对抗样本的脆弱性</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6">🗣️ 观点交流</h3>
+                    <div class="bg-purple-50 p-6 rounded-xl">
+                        <h3 class="text-xl font-semibold text-purple-800 mb-4">🌟 未来展望</h3>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div class="bg-white p-3 rounded-lg text-center">
+                                <div class="text-2xl mb-2">🏥</div>
+                                <p class="font-semibold">医疗诊断</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg text-center">
+                                <div class="text-2xl mb-2">🚗</div>
+                                <p class="font-semibold">自动驾驶</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg text-center">
+                                <div class="text-2xl mb-2">🎨</div>
+                                <p class="font-semibold">创意设计</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-lg text-center">
+                                <div class="text-2xl mb-2">🌍</div>
+                                <p class="font-semibold">环境保护</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl">
+                    <h4 class="font-bold text-lg mb-3">💬 讨论区</h4>
+                    <div class="mb-4">
+                        <textarea id="comment-input" placeholder="分享你对神经网络的看法..." class="w-full p-3 border rounded-lg resize-none h-20"></textarea>
+                    </div>
+                    <button onclick="addComment()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                        发表观点
+                    </button>
+                    <div id="comments-section" class="mt-4 space-y-2">
+                        <!-- 评论将在这里显示 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 课程总结 -->
+    <section id="summary" class="section fade-in">
+        <div class="max-w-4xl mx-auto p-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">📚 课程总结</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- 知识回顾 -->
+                    <div class="bg-blue-50 p-6 rounded-xl">
+                        <h3 class="text-2xl font-semibold text-blue-800 mb-4">📚 知识回顾</h3>
+                        <div class="space-y-4">
+                            <div class="bg-white p-4 rounded-lg">
+                                <h4 class="font-semibold text-gray-800 mb-2">🧠 神经网络基础</h4>
+                                <ul class="text-sm text-gray-600 space-y-1">
+                                    <li>✓ 神经元是网络的基本单元</li>
+                                    <li>✓ 层结构包括输入层、隐藏层、输出层</li>
+                                    <li>✓ 连接权重决定信号传递强度</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-white p-4 rounded-lg">
+                                <h4 class="font-semibold text-gray-800 mb-2">🔄 工作原理</h4>
+                                <ul class="text-sm text-gray-600 space-y-1">
+                                    <li>✓ 前向传播：数据从输入到输出</li>
+                                    <li>✓ 激活函数：引入非线性</li>
+                                    <li>✓ 反向传播：调整权重学习</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 技能收获 -->
+                    <div class="bg-green-50 p-6 rounded-xl">
+                        <h3 class="text-2xl font-semibold text-green-800 mb-4">🛠️ 技能收获</h3>
+                        <div class="space-y-4">
+                            <div class="bg-white p-4 rounded-lg">
+                                <h4 class="font-semibold text-gray-800 mb-2">🔍 观察分析</h4>
+                                <ul class="text-sm text-gray-600 space-y-1">
+                                    <li>✓ 能够识别神经网络结构</li>
+                                    <li>✓ 理解信息传递过程</li>
+                                    <li>✓ 分析网络参数影响</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-white p-4 rounded-lg">
+                                <h4 class="font-semibold text-gray-800 mb-2">🎮 实践操作</h4>
+                                <ul class="text-sm text-gray-600 space-y-1">
+                                    <li>✓ 使用可视化工具</li>
+                                    <li>✓ 体验网络训练过程</li>
+                                    <li>✓ 调整网络参数</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+                <!-- 课后作业 -->
+                <div class="bg-yellow-50 p-6 rounded-xl mb-8">
+                    <h3 class="text-2xl font-semibold text-yellow-800 mb-4">📝 课后作业</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-semibold text-gray-800 mb-2">📋 必做作业：</h4>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>1. 完成TensorFlow Playground的三个实验</li>
+                                <li>2. 绘制一个简单的神经网络结构图</li>
+                                <li>3. 思考日常生活中的神经网络应用</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-800 mb-2">⭐ 选做作业：</h4>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>1. 研究一个感兴趣的AI应用案例</li>
+                                <li>2. 制作神经网络工作原理的小视频</li>
+                                <li>3. 设计一个创新的神经网络应用想法</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center bg-gradient-to-r from-blue-500 to-purple-500 text-white p-8 rounded-xl">
+                    <h3 class="text-2xl font-bold mb-4">🎓 课程完成</h3>
+                    <p class="text-lg mb-4">恭喜你完成了神经网络原理与构建初探的学习！</p>
+                    <p>你已经踏出了人工智能学习的重要一步，继续探索这个神奇的领域吧！</p>
+                </div>
+            </div>
+        </div>
+    </section>    <script>
+        let currentSection = 'cover';
+        const sections = ['cover', 'objectives', 'scenario', 'concepts', 'practice', 'debate', 'summary'];
+        let currentSectionIndex = 0;
+
+        // 简单的神经网络类
+        class SimpleNeuralNetwork {
+            constructor(inputSize, hiddenSize, outputSize) {
+                this.inputSize = inputSize;
+                this.hiddenSize = hiddenSize;
+                this.outputSize = outputSize;
+                
+                // 初始化权重和偏置
+                this.weightsIH = this.randomMatrix(this.hiddenSize, this.inputSize);
+                this.weightsHO = this.randomMatrix(this.outputSize, this.hiddenSize);
+                this.biasH = this.randomMatrix(this.hiddenSize, 1);
+                this.biasO = this.randomMatrix(this.outputSize, 1);
+                
+                this.learningRate = 0.1;
+            }
+            
+            randomMatrix(rows, cols) {
+                const matrix = [];
+                for (let i = 0; i < rows; i++) {
+                    matrix[i] = [];
+                    for (let j = 0; j < cols; j++) {
+                        matrix[i][j] = Math.random() * 2 - 1; // -1 到 1 之间的随机数
+                    }
+                }
+                return matrix;
+            }
+            
+            sigmoid(x) {
+                return 1 / (1 + Math.exp(-x));
+            }
+            
+            predict(input) {
+                // 前向传播
+                const hidden = this.matrixMultiply(this.weightsIH, [[input[0]], [input[1]]]);
+                for (let i = 0; i < hidden.length; i++) {
+                    hidden[i][0] += this.biasH[i][0];
+                    hidden[i][0] = this.sigmoid(hidden[i][0]);
+                }
+                
+                const output = this.matrixMultiply(this.weightsHO, hidden);
+                for (let i = 0; i < output.length; i++) {
+                    output[i][0] += this.biasO[i][0];
+                    output[i][0] = this.sigmoid(output[i][0]);
+                }
+                
+                return output[0][0];
+            }
+            
+            matrixMultiply(a, b) {
+                const result = [];
+                for (let i = 0; i < a.length; i++) {
+                    result[i] = [];
+                    for (let j = 0; j < b[0].length; j++) {
+                        result[i][j] = 0;
+                        for (let k = 0; k < a[0].length; k++) {
+                            result[i][j] += a[i][k] * b[k][j];
+                        }
+                    }
+                }
+                return result;
+            }
+        }
+
+        // 全局变量
+        let network = new SimpleNeuralNetwork(2, 3, 1);
+        let trainingData = [];
+        let isTraining = false;
+        let epoch = 0;
+        let lossHistory = [];
+
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            
+            prevBtn.disabled = currentSectionIndex === 0;
+            nextBtn.disabled = currentSectionIndex === sections.length - 1;
+            
+            if (prevBtn.disabled) {
+                prevBtn.style.opacity = '0.3';
+            } else {
+                prevBtn.style.opacity = '1';
+            }
+            
+            if (nextBtn.disabled) {
+                nextBtn.style.opacity = '0.3';
+            } else {
+                nextBtn.style.opacity = '1';
+            }
+        }
+
+        function showSection(sectionId) {
+            // 隐藏所有section
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // 显示目标section
+            document.getElementById(sectionId).classList.add('active');
+            
+            // 更新导航按钮状态
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            
+            // 找到对应的导航按钮并更新状态
+            const navBtn = Array.from(document.querySelectorAll('.nav-btn')).find(btn => 
+                btn.getAttribute('onclick').includes(sectionId)
+            );
+            if (navBtn) {
+                navBtn.classList.remove('bg-gray-200', 'text-gray-700');
+                navBtn.classList.add('bg-blue-500', 'text-white');
+            }
+            
+            currentSection = sectionId;
+            currentSectionIndex = sections.indexOf(sectionId);
+            updateNavigationButtons();
+            
+            // 如果切换到实践页面，初始化交互式组件
+            if (sectionId === 'practice') {
+                initializePracticeComponents();
+            }
+        }
+
+        function nextSection() {
+            if (currentSectionIndex < sections.length - 1) {
+                showSection(sections[currentSectionIndex + 1]);
+            }
+        }
+
+        function previousSection() {
+            if (currentSectionIndex > 0) {
+                showSection(sections[currentSectionIndex - 1]);
+            }
+        }
+
+        // 键盘导航支持
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft') {
+                previousSection();
+            } else if (e.key === 'ArrowRight') {
+                nextSection();
+            }
+        });
+
+        // 初始化实践组件
+        function initializePracticeComponents() {
+            drawNetwork();
+            updateCalculation();
+            setupDatasetCanvas();
+            setupLossChart();
+        }
+
+        // 绘制神经网络结构
+        function drawNetwork() {
+            const svg = document.getElementById('networkSvg');
+            svg.innerHTML = '';
+            
+            const inputNodes = 2;
+            const hiddenNodes = parseInt(document.getElementById('hiddenSlider').value);
+            const outputNodes = 1;
+            
+            const layerSpacing = 150;
+            const nodeSpacing = 50;
+            
+            // 绘制连接线
+            for (let i = 0; i < inputNodes; i++) {
+                for (let j = 0; j < hiddenNodes; j++) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', 100);
+                    line.setAttribute('y1', 75 + i * nodeSpacing);
+                    line.setAttribute('x2', 250);
+                    line.setAttribute('y2', 75 + j * nodeSpacing);
+                    line.setAttribute('class', 'neural-connection');
+                    svg.appendChild(line);
+                }
+            }
+            
+            for (let i = 0; i < hiddenNodes; i++) {
+                for (let j = 0; j < outputNodes; j++) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', 250);
+                    line.setAttribute('y1', 75 + i * nodeSpacing);
+                    line.setAttribute('x2', 400);
+                    line.setAttribute('y2', 150);
+                    line.setAttribute('class', 'neural-connection');
+                    svg.appendChild(line);
+                }
+            }
+            
+            // 绘制节点
+            // 输入层
+            for (let i = 0; i < inputNodes; i++) {
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', 100);
+                circle.setAttribute('cy', 75 + i * nodeSpacing);
+                circle.setAttribute('r', 20);
+                circle.setAttribute('class', 'neural-node');
+                circle.innerHTML = `x${i + 1}`;
+                svg.appendChild(circle);
+            }
+            
+            // 隐藏层
+            for (let i = 0; i < hiddenNodes; i++) {
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', 250);
+                circle.setAttribute('cy', 75 + i * nodeSpacing);
+                circle.setAttribute('r', 20);
+                circle.setAttribute('class', 'neural-node');
+                circle.innerHTML = `h${i + 1}`;
+                svg.appendChild(circle);
+            }
+            
+            // 输出层
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', 400);
+            circle.setAttribute('cy', 150);
+            circle.setAttribute('r', 20);
+            circle.setAttribute('class', 'neural-node');
+            circle.innerHTML = 'y';
+            svg.appendChild(circle);
+        }
+
+        // 更新网络结构
+        function updateNetwork() {
+            const hiddenCount = document.getElementById('hiddenSlider').value;
+            document.getElementById('hiddenCount').textContent = hiddenCount;
+            network = new SimpleNeuralNetwork(2, parseInt(hiddenCount), 1);
+            drawNetwork();
+        }
+
+        // 更新学习率
+        function updateLearningRate() {
+            const learningRate = document.getElementById('learningSlider').value;
+            document.getElementById('learningRate').textContent = learningRate;
+            network.learningRate = parseFloat(learningRate);
+        }
+
+        // 开始训练
+        function startTraining() {
+            if (isTraining) return;
+            
+            isTraining = true;
+            epoch = 0;
+            lossHistory = [];
+            
+            const trainingInterval = setInterval(() => {
+                epoch++;
+                
+                // 模拟训练过程
+                const loss = Math.max(0.1, 1.0 - epoch * 0.01 + Math.random() * 0.1);
+                const accuracy = Math.min(0.95, epoch * 0.01 + Math.random() * 0.05);
+                
+                lossHistory.push(loss);
+                
+                document.getElementById('epochCount').textContent = epoch;
+                document.getElementById('lossValue').textContent = loss.toFixed(3);
+                document.getElementById('accuracyValue').textContent = (accuracy * 100).toFixed(1) + '%';
+                document.getElementById('progressBar').style.width = Math.min(100, epoch) + '%';
+                
+                // 动画效果
+                const nodes = document.querySelectorAll('.neural-node');
+                nodes.forEach(node => {
+                    node.classList.add('active');
+                    setTimeout(() => node.classList.remove('active'), 300);
+                });
+                
+                if (epoch >= 100) {
+                    clearInterval(trainingInterval);
+                    isTraining = false;
+                }
+            }, 100);
+        }
+
+        // 重置网络
+        function resetNetwork() {
+            isTraining = false;
+            epoch = 0;
+            lossHistory = [];
+            document.getElementById('epochCount').textContent = '0';
+            document.getElementById('lossValue').textContent = '--';
+            document.getElementById('accuracyValue').textContent = '--';
+            document.getElementById('progressBar').style.width = '0%';
+            
+            const hiddenCount = parseInt(document.getElementById('hiddenSlider').value);
+            network = new SimpleNeuralNetwork(2, hiddenCount, 1);
+        }
+
+        // 单步演示
+        function stepForward() {
+            const nodes = document.querySelectorAll('.neural-node');
+            const connections = document.querySelectorAll('.neural-connection');
+            
+            nodes.forEach((node, index) => {
+                setTimeout(() => {
+                    node.classList.add('active');
+                    setTimeout(() => node.classList.remove('active'), 500);
+                }, index * 200);
+            });
+            
+            connections.forEach((conn, index) => {
+                setTimeout(() => {
+                    conn.classList.add('active');
+                    setTimeout(() => conn.classList.remove('active'), 500);
+                }, index * 100);
+            });
+        }
+
+        // 更新计算
+        function updateCalculation() {
+            const x1 = parseFloat(document.getElementById('input1Slider').value);
+            const x2 = parseFloat(document.getElementById('input2Slider').value);
+            const w1 = parseFloat(document.getElementById('weight1Slider').value);
+            const w2 = parseFloat(document.getElementById('weight2Slider').value);
+            const b = parseFloat(document.getElementById('biasSlider').value);
+            const activationFunc = document.getElementById('activationFunction').value;
+            
+            document.getElementById('input1Value').textContent = x1;
+            document.getElementById('input2Value').textContent = x2;
+            document.getElementById('weight1Value').textContent = w1;
+            document.getElementById('weight2Value').textContent = w2;
+            document.getElementById('biasValue').textContent = b;
+            
+            // 计算加权求和
+            const sum = x1 * w1 + x2 * w2 + b;
+            
+            // 应用激活函数
+            let output;
+            let funcDesc;
+            switch (activationFunc) {
+                case 'sigmoid':
+                    output = 1 / (1 + Math.exp(-sum));
+                    funcDesc = `1/(1+e^(-${sum.toFixed(3)}))`;
+                    break;
+                case 'tanh':
+                    output = Math.tanh(sum);
+                    funcDesc = `tanh(${sum.toFixed(3)})`;
+                    break;
+                case 'relu':
+                    output = Math.max(0, sum);
+                    funcDesc = `max(0, ${sum.toFixed(3)})`;
+                    break;
+            }
+            
+            // 显示计算步骤
+            document.getElementById('calculationSteps').innerHTML = `
+                <div><strong>步骤1：</strong> 加权求和</div>
+                <div>z = x₁×w₁ + x₂×w₂ + b</div>
+                <div>z = ${x1}×${w1} + ${x2}×${w2} + ${b} = ${sum.toFixed(3)}</div>
+                <div class="mt-2"><strong>步骤2：</strong> 激活函数</div>
+                <div>output = ${funcDesc} = ${output.toFixed(3)}</div>
+            `;
+            
+            document.getElementById('finalOutput').textContent = output.toFixed(3);
+        }
+
+        // 设置数据集画布
+        function setupDatasetCanvas() {
+            const canvas = document.getElementById('datasetCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            trainingData = [];
+            
+            canvas.addEventListener('click', function(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / canvas.width;
+                const y = (e.clientY - rect.top) / canvas.height;
+                const label = e.shiftKey ? 1 : 0;
+                
+                trainingData.push({x, y, label});
+                drawDataset();
+            });
+            
+            drawDataset();
+        }
+
+        // 绘制数据集
+        function drawDataset() {
+            const canvas = document.getElementById('datasetCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            trainingData.forEach(point => {
+                ctx.fillStyle = point.label === 0 ? '#3b82f6' : '#ef4444';
+                ctx.beginPath();
+                ctx.arc(point.x * canvas.width, point.y * canvas.height, 4, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        // 生成随机数据集
+        function generateDataset() {
+            trainingData = [];
+            for (let i = 0; i < 20; i++) {
+                const x = Math.random();
+                const y = Math.random();
+                const label = (x + y > 1) ? 1 : 0;
+                trainingData.push({x, y, label});
+            }
+            drawDataset();
+        }
+
+        // 清空数据集
+        function clearDataset() {
+            trainingData = [];
+            drawDataset();
+        }
+
+        // 训练分类器
+        function trainClassifier() {
+            if (trainingData.length === 0) {
+                alert('请先添加一些训练数据！');
+                return;
+            }
+            
+            const epochs = parseInt(document.getElementById('epochsSlider').value);
+            let currentEpoch = 0;
+            
+            const trainInterval = setInterval(() => {
+                currentEpoch++;
+                
+                // 模拟训练过程
+                const loss = Math.max(0.05, 1.0 - currentEpoch / epochs + Math.random() * 0.1);
+                const accuracy = Math.min(0.98, currentEpoch / epochs * 0.9 + Math.random() * 0.08);
+                
+                document.getElementById('classifierProgress').textContent = `${currentEpoch}/${epochs}`;
+                document.getElementById('classifierLoss').textContent = loss.toFixed(3);
+                document.getElementById('classifierAccuracy').textContent = (accuracy * 100).toFixed(1) + '%';
+                
+                updateLossChart(currentEpoch, loss);
+                
+                if (currentEpoch >= epochs) {
+                    clearInterval(trainInterval);
+                    document.getElementById('classifierProgress').textContent = '训练完成';
+                }
+            }, 50);
+        }
+
+        // 设置损失图表
+        function setupLossChart() {
+            const canvas = document.getElementById('lossChart');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制坐标轴
+            ctx.strokeStyle = '#6b7280';
+            ctx.beginPath();
+            ctx.moveTo(30, 10);
+            ctx.lineTo(30, 130);
+            ctx.lineTo(290, 130);
+            ctx.stroke();
+            
+            // 添加标签
+            ctx.fillStyle = '#374151';
+            ctx.font = '12px Arial';
+            ctx.fillText('损失', 5, 15);
+            ctx.fillText('轮次', 250, 145);
+        }
+
+        // 更新损失图表
+        function updateLossChart(epoch, loss) {
+            const canvas = document.getElementById('lossChart');
+            const ctx = canvas.getContext('2d');
+            
+            const x = 30 + (epoch / 500) * 260;
+            const y = 130 - loss * 100;
+            
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(x, y, 2, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        // 更新训练轮数
+        function updateEpochs() {
+            const epochs = document.getElementById('epochsSlider').value;
+            document.getElementById('classifierEpochs').textContent = epochs;
+        }
+
+        function showPracticeResult() {
+            document.getElementById('practice-result').classList.remove('hidden');
+        }
+
+        function addComment() {
+            const input = document.getElementById('comment-input');
+            const comment = input.value.trim();
+            
+            if (comment) {
+                const commentsSection = document.getElementById('comments-section');
+                const newComment = document.createElement('div');
+                newComment.className = 'bg-white p-4 rounded-lg shadow-sm';
+                newComment.innerHTML = `
+                    <p class="text-gray-700">${comment}</p>
+                    <div class="text-xs text-gray-500 mt-2">刚刚发布</div>
+                `;
+                
+                commentsSection.insertBefore(newComment, commentsSection.firstChild);
+                input.value = '';
+            }
+        }
+
+        // 初始化
+        showSection('cover');
+    </script>
+</body>
+</html>

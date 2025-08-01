@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockly H5 Demo with Custom Functions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Blockly core -->
+    <script src="https://unpkg.com/blockly/blockly_compressed.js"></script>
+    <!-- Load the default blocks -->
+    <script src="https://unpkg.com/blockly/blocks_compressed.js"></script>
+    <!-- Load a generator -->
+    <script src="https://unpkg.com/blockly/javascript_compressed.js"></script>
+    <!-- Load a message file -->
+    <script src="https://unpkg.com/blockly/msg/en.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold text-center mb-6 text-blue-600">Blockly Visual Programming Demo</h1>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Blockly Workspace -->
+            <div class="bg-white rounded-lg shadow-lg p-4">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Visual Programming Workspace</h2>
+                <div id="blocklyDiv" style="height: 500px; width: 100%;"></div>
+            </div>
+            
+            <!-- Code Output and Controls -->
+            <div class="space-y-4">
+                <!-- Control Buttons -->
+                <div class="bg-white rounded-lg shadow-lg p-4">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Controls</h2>
+                    <div class="space-x-2 space-y-2">
+                        <button id="generateBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors">
+                            Generate Code
+                        </button>
+                        <button id="runBtn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition-colors">
+                            Run Code
+                        </button>
+                        <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition-colors">
+                            Clear Output
+                        </button>
+                        <button id="loadSampleBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded transition-colors">
+                            Load Sample
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Generated Code -->
+                <div class="bg-white rounded-lg shadow-lg p-4">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Generated JavaScript Code</h2>
+                    <pre id="codeOutput" class="bg-gray-100 p-3 rounded text-sm overflow-auto max-h-40 border"></pre>
+                </div>
+                
+                <!-- Program Output -->
+                <div class="bg-white rounded-lg shadow-lg p-4">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Program Output</h2>
+                    <div id="programOutput" class="bg-gray-100 p-3 rounded min-h-32 border"></div>
+                </div>
+                
+                <!-- Instructions -->
+                <div class="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
+                    <h3 class="font-semibold text-blue-800 mb-2">Instructions:</h3>
+                    <ul class="text-blue-700 text-sm space-y-1">
+                        <li>• Drag blocks from the toolbox to create your program</li>
+                        <li>• Try the custom "Display Message" and "Calculate Sum" blocks</li>
+                        <li>• Use variables, loops, and logic blocks to build complex programs</li>
+                        <li>• Generate code to see the JavaScript, then run it to see results</li>
+                        <li>• Click "Load Sample" to see a demo program</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Custom JavaScript functions that can be called from Blockly
+        function displayMessage(message, color = 'black') {
+            const output = document.getElementById('programOutput');
+            const messageDiv = document.createElement('div');
+            messageDiv.style.color = color;
+            messageDiv.style.margin = '5px 0';
+            messageDiv.style.padding = '5px';
+            messageDiv.style.backgroundColor = '#f9f9f9';
+            messageDiv.style.borderRadius = '3px';
+            messageDiv.textContent = `📢 ${message}`;
+            output.appendChild(messageDiv);
+        }
+
+        function calculateSum(a, b) {
+            const result = a + b;
+            const output = document.getElementById('programOutput');
+            const resultDiv = document.createElement('div');
+            resultDiv.style.color = 'green';
+            resultDiv.style.margin = '5px 0';
+            resultDiv.style.padding = '5px';
+            resultDiv.style.backgroundColor = '#f0f9ff';
+            resultDiv.style.borderRadius = '3px';
+            resultDiv.textContent = `🔢 ${a} + ${b} = ${result}`;
+            output.appendChild(resultDiv);
+            return result;
+        }
+
+        function drawShape(shape, size) {
+            const output = document.getElementById('programOutput');
+            const canvas = document.createElement('canvas');
+            canvas.width = size + 20;
+            canvas.height = size + 20;
+            canvas.style.border = '1px solid #ccc';
+            canvas.style.margin = '5px';
+            
+            const ctx = canvas.getContext('2d');
+            ctx.strokeStyle = '#4F46E5';
+            ctx.lineWidth = 2;
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            if (shape === 'circle') {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, size / 2, 0, 2 * Math.PI);
+                ctx.stroke();
+            } else if (shape === 'square') {
+                ctx.strokeRect(centerX - size/2, centerY - size/2, size, size);
+            } else if (shape === 'triangle') {
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY - size/2);
+                ctx.lineTo(centerX - size/2, centerY + size/2);
+                ctx.lineTo(centerX + size/2, centerY + size/2);
+                ctx.closePath();
+                ctx.stroke();
+            }
+            
+            output.appendChild(canvas);
+        }
+
+        // Wait for Blockly to load completely before defining custom blocks
+        window.addEventListener('load', function() {
+            // Get the JavaScript generator instance
+            const javascriptGenerator = Blockly.JavaScript;
+            
+            // Define custom blocks using modern syntax
+            Blockly.common.defineBlocksWithJsonArray([
+                {
+                    "type": "display_message",
+                    "message0": "display message %1 in color %2",
+                    "args0": [
+                        {
+                            "type": "input_value",
+                            "name": "MESSAGE",
+                            "check": "String"
+                        },
+                        {
+                            "type": "input_value",
+                            "name": "COLOR",
+                            "check": "String"
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 160,
+                    "tooltip": "Display a custom message with color",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "calculate_sum",
+                    "message0": "calculate sum of %1 and %2",
+                    "args0": [
+                        {
+                            "type": "input_value",
+                            "name": "A",
+                            "check": "Number"
+                        },
+                        {
+                            "type": "input_value",
+                            "name": "B",
+                            "check": "Number"
+                        }
+                    ],
+                    "output": "Number",
+                    "colour": 230,
+                    "tooltip": "Calculate the sum of two numbers",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "draw_shape",
+                    "message0": "draw %1 with size %2",
+                    "args0": [
+                        {
+                            "type": "field_dropdown",
+                            "name": "SHAPE",
+                            "options": [
+                                ["circle", "circle"],
+                                ["square", "square"], 
+                                ["triangle", "triangle"]
+                            ]
+                        },
+                        {
+                            "type": "input_value",
+                            "name": "SIZE",
+                            "check": "Number"
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 290,
+                    "tooltip": "Draw a shape on canvas",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "simple_print",
+                    "message0": "print %1",
+                    "args0": [
+                        {
+                            "type": "input_value",
+                            "name": "TEXT",
+                            "check": "String"
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 120,
+                    "tooltip": "Print text to output",
+                    "helpUrl": ""
+                }
+            ]);
+
+            // Define generators using modern syntax
+            javascriptGenerator.forBlock['display_message'] = function(block, generator) {
+                var message = generator.valueToCode(block, 'MESSAGE', javascriptGenerator.ORDER_ATOMIC) || '""';
+                var color = generator.valueToCode(block, 'COLOR', javascriptGenerator.ORDER_ATOMIC) || '"black"';
+                var code = `displayMessage(${message}, ${color});\n`;
+                return code;
+            };
+
+            javascriptGenerator.forBlock['calculate_sum'] = function(block, generator) {
+                var a = generator.valueToCode(block, 'A', javascriptGenerator.ORDER_ATOMIC) || '0';
+                var b = generator.valueToCode(block, 'B', javascriptGenerator.ORDER_ATOMIC) || '0';
+                var code = `calculateSum(${a}, ${b})`;
+                return [code, javascriptGenerator.ORDER_FUNCTION_CALL];
+            };
+
+            javascriptGenerator.forBlock['draw_shape'] = function(block, generator) {
+                var shape = block.getFieldValue('SHAPE');
+                var size = generator.valueToCode(block, 'SIZE', javascriptGenerator.ORDER_ATOMIC) || '50';
+                var code = `drawShape('${shape}', ${size});\n`;
+                return code;
+            };
+
+            javascriptGenerator.forBlock['simple_print'] = function(block, generator) {
+                var text = generator.valueToCode(block, 'TEXT', javascriptGenerator.ORDER_ATOMIC) || '""';
+                var code = `displayMessage(${text}, 'black');\n`;
+                return code;
+            };
+
+            // Initialize Blockly workspace AFTER custom blocks are defined
+            const workspace = Blockly.inject('blocklyDiv', {
+                toolbox: {
+                    "kind": "categoryToolbox",
+                    "contents": [
+                        {
+                            "kind": "category",
+                            "name": "Custom Functions",
+                            "colour": "#5C81A6",
+                            "contents": [
+                                {"kind": "block", "type": "simple_print"},
+                                {"kind": "block", "type": "display_message"},
+                                {"kind": "block", "type": "calculate_sum"},
+                                {"kind": "block", "type": "draw_shape"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "Logic",
+                            "colour": "#5C81A6",
+                            "contents": [
+                                {"kind": "block", "type": "controls_if"},
+                                {"kind": "block", "type": "logic_compare"},
+                                {"kind": "block", "type": "logic_operation"},
+                                {"kind": "block", "type": "logic_negate"},
+                                {"kind": "block", "type": "logic_boolean"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "Loops",
+                            "colour": "#5CA65C",
+                            "contents": [
+                                {"kind": "block", "type": "controls_repeat_ext"},
+                                {"kind": "block", "type": "controls_whileUntil"},
+                                {"kind": "block", "type": "controls_for"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "Math",
+                            "colour": "#5C68A6",
+                            "contents": [
+                                {"kind": "block", "type": "math_number"},
+                                {"kind": "block", "type": "math_arithmetic"},
+                                {"kind": "block", "type": "math_single"},
+                                {"kind": "block", "type": "math_trig"},
+                                {"kind": "block", "type": "math_constant"},
+                                {"kind": "block", "type": "math_number_property"},
+                                {"kind": "block", "type": "math_random_int"},
+                                {"kind": "block", "type": "math_random_float"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "Text",
+                            "colour": "#5CA68D",
+                            "contents": [
+                                {"kind": "block", "type": "text"},
+                                {"kind": "block", "type": "text_join"},
+                                {"kind": "block", "type": "text_append"},
+                                {"kind": "block", "type": "text_length"},
+                                {"kind": "block", "type": "text_isEmpty"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "Variables",
+                            "colour": "#A65C81",
+                            "custom": "VARIABLE"
+                        }
+                    ]
+                },
+                grid: {
+                    spacing: 20,
+                    length: 3,
+                    colour: '#ccc',
+                    snap: true
+                },
+                zoom: {
+                    controls: true,
+                    wheel: true,
+                    startScale: 1.0,
+                    maxScale: 3,
+                    minScale: 0.3,
+                    scaleSpeed: 1.2
+                }
+            });
+
+            // Event handlers
+            document.getElementById('generateBtn').addEventListener('click', function() {
+                const code = javascriptGenerator.workspaceToCode(workspace);
+                document.getElementById('codeOutput').textContent = code || '// No blocks to generate code from';
+            });
+
+            document.getElementById('runBtn').addEventListener('click', function() {
+                const code = javascriptGenerator.workspaceToCode(workspace);
+                if (code) {
+                    try {
+                        eval(code);
+                    } catch (error) {
+                        const output = document.getElementById('programOutput');
+                        const errorDiv = document.createElement('div');
+                        errorDiv.style.color = 'red';
+                        errorDiv.style.margin = '5px 0';
+                        errorDiv.style.padding = '5px';
+                        errorDiv.style.backgroundColor = '#fee';
+                        errorDiv.style.borderRadius = '3px';
+                        errorDiv.textContent = `❌ Error: ${error.message}`;
+                        output.appendChild(errorDiv);
+                    }
+                } else {
+                    alert('No code to run! Drag some blocks first.');
+                }
+            });
+
+            document.getElementById('clearBtn').addEventListener('click', function() {
+                document.getElementById('programOutput').innerHTML = '';
+                document.getElementById('codeOutput').textContent = '';
+            });
+
+            // Load sample program
+            document.getElementById('loadSampleBtn').addEventListener('click', function() {
+                const sampleXml = `<xml xmlns="https://developers.google.com/blockly/xml">
+                    <block type="simple_print" id="start_block" x="50" y="50">
+                        <value name="TEXT">
+                            <block type="text" id="text1">
+                                <field name="TEXT">Welcome to Blockly!</field>
+                            </block>
+                        </value>
+                        <next>
+                            <block type="display_message" id="display_block">
+                                <value name="MESSAGE">
+                                    <block type="text" id="text2">
+                                        <field name="TEXT">This is colored text</field>
+                                    </block>
+                                </value>
+                                <value name="COLOR">
+                                    <block type="text" id="text3">
+                                        <field name="TEXT">blue</field>
+                                    </block>
+                                </value>
+                                <next>
+                                    <block type="draw_shape" id="shape_block">
+                                        <field name="SHAPE">circle</field>
+                                        <value name="SIZE">
+                                            <block type="math_number" id="size_num">
+                                                <field name="NUM">60</field>
+                                            </block>
+                                        </value>
+                                    </block>
+                                </next>
+                            </block>
+                        </next>
+                    </block>
+                </xml>`;
+
+                try {
+                    workspace.clear();
+                    const xml = Blockly.Xml.textToDom(sampleXml);
+                    Blockly.Xml.domToWorkspace(xml, workspace);
+                } catch (error) {
+                    console.error('Error loading sample:', error);
+                    displayMessage('Error loading sample program. Try dragging blocks manually.', 'red');
+                }
+            });
+
+            // Initialize with a welcome message
+            setTimeout(() => {
+                displayMessage('Blockly demo loaded successfully! Try the sample program.', 'green');
+            }, 500);
+        });
+    </script>
+</body>
+</html>

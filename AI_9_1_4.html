@@ -1,0 +1,2808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI实践工具初探：从图形化到代码块/库</title>    
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>    <!-- Load Blockly core -->
+    <script src="https://unpkg.com/blockly/blockly_compressed.js"></script>
+    <!-- Load the default blocks -->
+    <script src="https://unpkg.com/blockly/blocks_compressed.js"></script>
+    <!-- Load a generator -->
+    <script src="https://unpkg.com/blockly/javascript_compressed.js"></script>
+    <!-- Load a message file -->
+    <script src="https://unpkg.com/blockly/msg/zh-hans.js"></script>
+    
+    <!-- 代码编辑器和Python执行环境 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/addon/hint/python-hint.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    
+    <!-- CodeMirror 样式 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/material.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/addon/hint/show-hint.min.css">
+    <style>
+        .section { display: none; }
+        .section.active { display: block; }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .card-hover { transition: transform 0.3s ease; }
+        .card-hover:hover { transform: translateY(-5px); }
+        .nav-arrow { 
+            position: fixed; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            z-index: 40; 
+            background: rgba(59, 130, 246, 0.9); 
+            color: white; 
+            border: none; 
+            border-radius: 50%; 
+            width: 50px; 
+            height: 50px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            transition: all 0.3s ease; 
+        }
+        .nav-arrow:hover { 
+            background: rgba(59, 130, 246, 1); 
+            transform: translateY(-50%) scale(1.1); 
+        }
+        .nav-arrow:disabled { 
+            background: rgba(156, 163, 175, 0.5); 
+            cursor: not-allowed; 
+        }
+        .nav-arrow.left { left: 20px; }
+        .nav-arrow.right { right: 20px; }          /* Blockly 工作区样式 */
+        #blocklyDiv {
+            height: 480px;
+            width: 100%;
+            min-width: 500px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        
+        /* 响应式Blockly布局 */
+        .blockly-container {
+            min-width: 500px;
+            flex: 1;
+        }
+        
+        .blockly-workspace {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        @media (min-width: 1200px) {
+            .blockly-workspace {
+                flex-direction: row;
+            }
+            .blockly-container {
+                min-width: 500px;
+                max-width: 60%;
+            }
+            .blockly-results {
+                flex: 1;
+                min-width: 400px;
+            }
+        }
+        
+        .blockly-toolbar {
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .blockly-output {
+            background: #1f2937;
+            color: #f9fafb;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 16px;
+            border-radius: 8px;
+            min-height: 200px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+        }
+        
+        /* Blockly工具箱自动隐藏 */
+        .blocklyToolboxDiv.toolboxHidden {
+            visibility: hidden !important;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* Blockly拖拽状态样式 */
+        .blocklyDragging .blocklyToolboxDiv {
+            pointer-events: none;
+        }
+        
+        /* 改善Blockly工具箱外观 */
+        .blocklyToolboxDiv {
+            background-color: #f8fafc !important;
+            border-right: 2px solid #e5e7eb !important;
+        }
+        
+        .blocklyTreeRow {
+            padding: 8px 12px !important;
+            border-radius: 6px !important;
+            margin: 2px 4px !important;
+        }
+        
+        .blocklyTreeRowSelected {
+            background-color: #3b82f6 !important;
+            color: white !important;
+        }
+          .visual-program-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* 代码编辑器样式 */
+        .code-editor-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .code-editor-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .code-output {
+            background: #1a1a1a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 16px;
+            min-height: 200px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .code-workspace {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 1024px) {
+            .code-workspace {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .code-toolbar {
+            background: #f8fafc;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .code-examples {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .execution-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-ready { background: #e3f2fd; color: #1976d2; }
+        .status-running { background: #fff3e0; color: #f57c00; }
+        .status-success { background: #e8f5e8; color: #2e7d32; }
+        .status-error { background: #ffebee; color: #c62828; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">    <!-- 导航栏 -->
+    <nav class="bg-white shadow-md p-4 sticky top-0 z-50">
+        <div class="w-full px-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-gray-800">AI实践工具初探：从图形化到代码块/库</h1>
+            <div class="flex space-x-2 overflow-x-auto">
+                <button onclick="showSection('cover')" class="nav-btn px-3 py-1 rounded-full text-sm bg-blue-500 text-white">封面</button>
+                <button onclick="showSection('objectives')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">目标</button>
+                <button onclick="showSection('scenario')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">导入</button>
+                <button onclick="showSection('concepts')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">探秘</button>
+                <button onclick="showSection('workshop')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">工坊</button>
+                <button onclick="showSection('discussion')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">思辨</button>
+                <button onclick="showSection('summary')" class="nav-btn px-3 py-1 rounded-full text-sm bg-gray-200 text-gray-700">总结</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 左右导航按钮 -->
+    <button id="prevBtn" class="nav-arrow left" onclick="previousSection()" title="上一页">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        </svg>
+    </button>
+    <button id="nextBtn" class="nav-arrow right" onclick="nextSection()" title="下一页">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+    </button>    <!-- 封面 -->
+    <section id="cover" class="section active fade-in">
+        <div class="w-full px-6 py-6 text-center">
+            <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-12 rounded-2xl shadow-2xl mb-8">
+                <h1 class="text-4xl font-bold mb-4">🤖 AI实践工具初探</h1>
+                <p class="text-xl mb-6">九年级（上）第4课</p>
+                <p class="text-lg opacity-90">从图形化到代码块/库</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                    <div class="text-4xl mb-4">🧩</div>
+                    <h3 class="font-bold text-lg mb-2">图形化编程</h3>
+                    <p class="text-gray-600">像搭积木一样构建AI模型</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                    <div class="text-4xl mb-4">📦</div>
+                    <h3 class="font-bold text-lg mb-2">代码块/库</h3>
+                    <p class="text-gray-600">使用预制组件快速开发</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg card-hover">
+                    <div class="text-4xl mb-4">💻</div>
+                    <h3 class="font-bold text-lg mb-2">纯代码开发</h3>
+                    <p class="text-gray-600">完全自主的AI程序设计</p>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 课程目标 -->
+    <section id="objectives" class="section fade-in">
+        <div class="w-full px-6 py-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">📋 课程目标</h2>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="space-y-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">重点目标</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-start space-x-3">
+                                <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">1</span>
+                                <p>熟悉AI开发平台的常用功能</p>
+                            </div>
+                            <div class="flex items-start space-x-3">
+                                <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">2</span>
+                                <p>掌握使用工具进行简单AI任务实践</p>
+                            </div>
+                            <div class="flex items-start space-x-3">
+                                <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">3</span>
+                                <p>学会数据导入、模型选择与训练</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">难点突破</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-start space-x-3">
+                                <span class="bg-green-100 text-green-600 px-2 py-1 rounded-full text-sm font-bold">1</span>
+                                <p>理解不同工具的使用场景和特点</p>
+                            </div>
+                            <div class="flex items-start space-x-3">
+                                <span class="bg-green-100 text-green-600 px-2 py-1 rounded-full text-sm font-bold">2</span>
+                                <p>将抽象概念映射到具体工具操作</p>
+                            </div>
+                            <div class="flex items-start space-x-3">
+                                <span class="bg-green-100 text-green-600 px-2 py-1 rounded-full text-sm font-bold">3</span>
+                                <p>从图形化向代码库应用过渡</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-8 p-6 bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">素养目标</h3>
+                    <p class="text-gray-700">培养使用不同AI开发工具解决实际问题的能力，建立从简单到复杂的技术学习路径，形成对AI技术栈的整体认知。</p>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 情景导入 -->
+    <section id="scenario" class="section fade-in">
+        <div class="w-full px-6 py-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">🎬 情景导入</h2>
+                <div class="bg-gray-50 p-6 rounded-xl mb-6">
+                    <h3 class="text-xl font-bold mb-4 text-center">💡 AI开发者的成长之路</h3>
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <p class="text-gray-700 leading-relaxed mb-4">
+                            小明是一个对AI技术充满兴趣的九年级学生。他听说AI能够识别图片、理解语言、甚至玩游戏。于是他开始思考：
+                            我要如何入门AI开发呢？是直接学习复杂的编程语言，还是从更简单的方式开始？
+                        </p>
+                        <div class="grid md:grid-cols-3 gap-4 mb-4">
+                            <div class="text-center p-4 bg-yellow-50 rounded-lg">
+                                <div class="text-3xl mb-2">🧩</div>
+                                <h4 class="font-semibold">图形化编程</h4>
+                                <p class="text-sm text-gray-600">拖拽组件，可视化构建</p>
+                            </div>
+                            <div class="text-center p-4 bg-orange-50 rounded-lg">
+                                <div class="text-3xl mb-2">📦</div>
+                                <h4 class="font-semibold">代码块/库</h4>
+                                <p class="text-sm text-gray-600">调用现成函数，快速实现</p>
+                            </div>
+                            <div class="text-center p-4 bg-purple-50 rounded-lg">
+                                <div class="text-3xl mb-2">💻</div>
+                                <h4 class="font-semibold">纯代码开发</h4>
+                                <p class="text-sm text-gray-600">从零开始，完全自主</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl">
+                    <h4 class="font-bold text-lg mb-3">🤔 思考问题</h4>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-lg">
+                            <p class="font-semibold text-blue-600 mb-2">问题1：</p>
+                            <p class="text-gray-700">如果你要开发一个能识别猫狗照片的AI应用，你会选择哪种开发方式？</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg">
+                            <p class="font-semibold text-blue-600 mb-2">问题2：</p>
+                            <p class="text-gray-700">不同的开发方式各有什么优缺点？适合什么样的场景？</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 概念探秘 -->
+    <section id="concepts" class="section fade-in">
+        <div class="w-full px-6 py-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">🔍 概念探秘</h2>
+                
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6 text-center">AI开发平台的分类</h3>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div class="concept-card bg-gradient-to-br from-blue-50 to-indigo-100 p-6 rounded-xl card-hover cursor-pointer" onclick="toggleDetail('visual-programming')">
+                            <div class="text-4xl mb-3 text-center">🎨</div>
+                            <h4 class="font-semibold text-center mb-3">可视化编程平台</h4>
+                            <p class="text-sm text-gray-600 text-center">Blockly、Scratch for AI</p>
+                            <div id="visual-programming" class="hidden mt-4 text-xs text-gray-500 border-t pt-3">
+                                特点：拖拽式操作，无需编程基础，适合初学者快速上手AI概念
+                            </div>
+                        </div>
+                        <div class="concept-card bg-gradient-to-br from-green-50 to-teal-100 p-6 rounded-xl card-hover cursor-pointer" onclick="toggleDetail('api-platform')">
+                            <div class="text-4xl mb-3 text-center">🔧</div>
+                            <h4 class="font-semibold text-center mb-3">API/SDK平台</h4>
+                            <p class="text-sm text-gray-600 text-center">TensorFlow、PyTorch</p>
+                            <div id="api-platform" class="hidden mt-4 text-xs text-gray-500 border-t pt-3">
+                                特点：提供代码库和API，需要一定编程基础，功能强大且灵活
+                            </div>
+                        </div>
+                        <div class="concept-card bg-gradient-to-br from-purple-50 to-pink-100 p-6 rounded-xl card-hover cursor-pointer" onclick="toggleDetail('cloud-platform')">
+                            <div class="text-4xl mb-3 text-center">☁️</div>
+                            <h4 class="font-semibold text-center mb-3">云端AI平台</h4>
+                            <p class="text-sm text-gray-600 text-center">Google Colab、百度EasyDL</p>
+                            <div id="cloud-platform" class="hidden mt-4 text-xs text-gray-500 border-t pt-3">
+                                特点：云端计算资源，集成开发环境，降低硬件门槛
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl">
+                    <h4 class="font-bold text-xl mb-4">🎯 开发流程对比</h4>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div class="bg-white p-4 rounded-lg">
+                            <h5 class="font-semibold text-blue-600 mb-2">图形化编程</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• 拖拽组件</li>
+                                <li>• 可视化配置</li>
+                                <li>• 一键训练</li>
+                                <li>• 图形化结果</li>
+                            </ul>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg">
+                            <h5 class="font-semibold text-green-600 mb-2">代码块/库</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• 导入库</li>
+                                <li>• 调用函数</li>
+                                <li>• 参数设置</li>
+                                <li>• 运行调试</li>
+                            </ul>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg">
+                            <h5 class="font-semibold text-purple-600 mb-2">纯代码开发</h5>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• 算法设计</li>
+                                <li>• 代码实现</li>
+                                <li>• 性能优化</li>
+                                <li>• 完整测试</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 实践工坊 -->
+    <section id="workshop" class="section fade-in">
+        <div class="w-full px-6 py-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">🛠️ 实践工坊</h2>
+                
+                <!-- 任务分析部分 -->
+                <div class="mb-12">
+                    <h3 class="text-2xl font-bold mb-6">📊 任务分析：猫狗图像分类实践</h3>
+                    <div class="bg-gray-50 p-6 rounded-xl mb-6">
+                        <div class="grid md:grid-cols-2 gap-6">                            <div class="bg-white p-6 rounded-lg shadow-sm">
+                                <h4 class="font-bold text-lg mb-3 text-blue-600">🎨 图形化编程实践</h4>
+                                <div class="space-y-3">
+                                    <div class="flex items-start space-x-3">
+                                        <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">1</span>
+                                        <p class="text-sm">选择图像分类模板</p>
+                                    </div>
+                                    <div class="flex items-start space-x-3">
+                                        <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">2</span>
+                                        <p class="text-sm">拖拽上传训练数据</p>
+                                    </div>
+                                    <div class="flex items-start space-x-3">
+                                        <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">3</span>
+                                        <p class="text-sm">调整参数并开始训练</p>
+                                    </div>
+                                    <div class="flex items-start space-x-3">
+                                        <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">4</span>
+                                        <p class="text-sm">查看训练结果和准确率</p>
+                                    </div>
+                                </div>
+                                <button class="w-full mt-4 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors" onclick="startTask('visual')">
+                                    开始图形化实践
+                                </button>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow-sm">
+                                <h4 class="font-bold text-lg mb-3 text-green-600">💻 代码块实践</h4>
+                                <div class="bg-gray-50 p-3 rounded mb-4">
+                                    <pre class="text-xs text-gray-600">
+# 导入数据和模型
+from ai_toolkit import ImageData, Classifier
+data = ImageData('cats_dogs_dataset/')
+model = Classifier(type='cnn')
+
+# 训练模型
+model.train(data, epochs=10)
+accuracy = model.evaluate()
+print(f'准确率: {accuracy:.2f}')
+                                    </pre>
+                                </div>
+                                <button class="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition-colors" onclick="startTask('code')">
+                                    开始代码实践
+                                </button>
+                            </div>
+                        </div>
+                    </div>                </div>
+
+                <!-- 图形化编程实践区 -->
+                <div class="mb-12" id="visual-programming-area" style="display: none;">
+                    <div class="visual-program-card">
+                        <h3 class="text-2xl font-bold mb-4 text-center">🎨 图形化AI编程工坊</h3>
+                        <p class="text-center mb-6 opacity-90">通过拖拽代码块，构建你的第一个AI图像分类器</p>
+                    </div>
+                      <div class="blockly-workspace">
+                        <!-- Blockly 编程区域 -->
+                        <div class="blockly-container bg-white rounded-xl shadow-lg p-4">
+                            <div class="blockly-toolbar">
+                                <div class="flex justify-between items-center">
+                                    <h4 class="font-bold text-gray-700">🧩 可视化编程区</h4>                                    <div class="space-x-2">
+                                        <button onclick="runBlocklyCode()" class="bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600 transition-colors">
+                                            ▶️ 运行
+                                        </button>
+                                        <button onclick="clearWorkspace()" class="bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600 transition-colors">
+                                            🗑️ 清空
+                                        </button>
+                                        <button onclick="loadSample()" class="bg-purple-500 text-white px-4 py-2 rounded text-sm hover:bg-purple-600 transition-colors">
+                                            📖 示例
+                                        </button>
+                                        <button onclick="debugGeneratorStatus()" class="bg-orange-500 text-white px-4 py-2 rounded text-sm hover:bg-orange-600 transition-colors">
+                                            🔧 调试
+                                        </button>                                        <button onclick="forceReinitAIGenerators()" class="bg-yellow-500 text-white px-4 py-2 rounded text-sm hover:bg-yellow-600 transition-colors">
+                                            🔄 重置生成器
+                                        </button>
+                                        <button onclick="fullBlocklyReinit()" class="bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600 transition-colors">
+                                            🆘 完全重置
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="blocklyDiv"></div>
+                        </div>
+                        
+                        <!-- 代码输出和结果区域 -->
+                        <div class="blockly-results space-y-4">
+                            <!-- 生成的代码 -->
+                            <div class="bg-white rounded-xl shadow-lg p-4">
+                                <h4 class="font-bold text-gray-700 mb-3">📄 生成的代码</h4>
+                                <div id="generatedCode" class="blockly-output" style="min-height: 150px;">
+// 在左侧拖拽代码块来生成AI程序
+// 点击"运行"按钮查看结果
+                                </div>
+                            </div>
+                            
+                            <!-- 运行结果 -->
+                            <div class="bg-white rounded-xl shadow-lg p-4">
+                                <h4 class="font-bold text-gray-700 mb-3">🎯 运行结果</h4>
+                                <div id="executionResult" class="blockly-output" style="min-height: 120px;">
+等待程序运行...
+                                </div>
+                            </div>
+                            
+                            <!-- AI训练进度 -->
+                            <div class="bg-white rounded-xl shadow-lg p-4">
+                                <h4 class="font-bold text-gray-700 mb-3">🚀 训练进度</h4>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between text-sm">
+                                        <span>训练进度</span>
+                                        <span id="progress-text">0%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-3">
+                                        <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-green-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                    </div>
+                                    <div id="training-log" class="text-xs text-gray-600 max-h-20 overflow-y-auto">
+                                        准备开始训练...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作提示 -->
+                    <div class="mt-6 bg-blue-50 p-4 rounded-xl">
+                        <h5 class="font-bold text-blue-800 mb-2">💡 操作提示</h5>
+                        <div class="grid md:grid-cols-2 gap-4 text-sm text-blue-700">
+                            <ul class="space-y-1">
+                                <li>• 从左侧工具箱拖拽代码块到编程区</li>
+                                <li>• 连接不同的代码块构建程序流程</li>
+                            </ul>
+                            <ul class="space-y-1">
+                                <li>• 点击"运行"查看生成的代码和结果</li>
+                                <li>• 使用"示例"按钮加载预设的AI程序</li>
+                            </ul>
+                        </div>                    </div>
+                </div>
+
+                <!-- 代码块实践区 -->
+                <div class="mb-12" id="code-programming-area" style="display: none;">
+                    <div class="code-editor-container">
+                        <div class="code-editor-header">
+                            <h3 class="text-2xl font-bold mb-2">💻 代码块AI编程工坊</h3>
+                            <p class="opacity-90">使用Python和AI库，编写你的第一个图像分类程序</p>
+                        </div>
+                        
+                        <div class="code-toolbar">
+                            <div class="flex items-center space-x-3">
+                                <h4 class="font-bold text-gray-700">📝 Python编辑器</h4>
+                                <span id="execution-status" class="execution-status status-ready">● 准备就绪</span>
+                            </div>
+                            <div class="space-x-2">
+                                <button onclick="runPythonCode()" class="bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600 transition-colors">
+                                    ▶️ 运行代码
+                                </button>
+                                <button onclick="clearCodeEditor()" class="bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600 transition-colors">
+                                    🗑️ 清空
+                                </button>
+                                <button onclick="loadCodeExample()" class="bg-purple-500 text-white px-4 py-2 rounded text-sm hover:bg-purple-600 transition-colors">
+                                    📖 加载示例
+                                </button>
+                                <button onclick="installPackages()" class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 transition-colors">
+                                    📦 安装依赖
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="code-workspace">
+                            <!-- 代码编辑器 -->
+                            <div>
+                                <div class="bg-white">
+                                    <textarea id="codeEditor" class="w-full h-96">
+# 在这里编写你的Python代码
+print("Hello, AI!")
+                                    </textarea>
+                                </div>
+                                
+                                <!-- 代码示例选择 -->
+                                <div class="code-examples">
+                                    <h5 class="font-bold text-gray-700 mb-3">📚 快速示例</h5>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button onclick="loadExample('basic')" class="text-left p-2 text-sm bg-white rounded border hover:bg-gray-50">
+                                            🌟 基础分类器
+                                        </button>
+                                        <button onclick="loadExample('advanced')" class="text-left p-2 text-sm bg-white rounded border hover:bg-gray-50">
+                                            🚀 高级模型
+                                        </button>
+                                        <button onclick="loadExample('visualization')" class="text-left p-2 text-sm bg-white rounded border hover:bg-gray-50">
+                                            📊 数据可视化
+                                        </button>
+                                        <button onclick="loadExample('deep_learning')" class="text-left p-2 text-sm bg-white rounded border hover:bg-gray-50">
+                                            🧠 深度学习
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 输出结果区域 -->
+                            <div class="space-y-4">
+                                <!-- 代码输出 -->
+                                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                                    <div class="bg-gray-100 px-4 py-2 border-b">
+                                        <h4 class="font-bold text-gray-700">🖥️ 程序输出</h4>
+                                    </div>
+                                    <div id="codeOutput" class="code-output" style="height: 200px;">
+等待代码运行...
+使用上方的"运行代码"按钮执行Python程序
+                                    </div>
+                                </div>
+                                
+                                <!-- 执行状态和性能 -->
+                                <div class="bg-white rounded-xl shadow-lg p-4">
+                                    <h4 class="font-bold text-gray-700 mb-3">📈 执行信息</h4>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between text-sm">
+                                            <span>执行时间:</span>
+                                            <span id="execution-time">-</span>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span>内存使用:</span>
+                                            <span id="memory-usage">-</span>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span>Python版本:</span>
+                                            <span id="python-version">-</span>
+                                        </div>
+                                        <div id="error-info" class="hidden mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- AI训练进度 -->
+                                <div class="bg-white rounded-xl shadow-lg p-4">
+                                    <h4 class="font-bold text-gray-700 mb-3">🤖 AI执行进度</h4>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between text-sm">
+                                            <span>当前步骤</span>
+                                            <span id="current-step">准备执行</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div id="code-progress-bar" class="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                        </div>
+                                        <div id="step-log" class="text-xs text-gray-600 max-h-24 overflow-y-auto bg-gray-50 p-2 rounded">
+准备运行AI代码...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 代码实践提示 -->
+                    <div class="mt-6 bg-green-50 p-4 rounded-xl">
+                        <h5 class="font-bold text-green-800 mb-2">💡 代码实践指南</h5>
+                        <div class="grid md:grid-cols-2 gap-4 text-sm text-green-700">
+                            <ul class="space-y-1">
+                                <li>• 点击"运行代码"执行Python程序</li>
+                                <li>• 使用"加载示例"快速开始</li>
+                                <li>• 修改代码参数观察结果变化</li>
+                            </ul>
+                            <ul class="space-y-1">
+                                <li>• 查看右侧输出了解程序执行过程</li>
+                                <li>• 分析AI模型的训练和预测结果</li>
+                                <li>• 尝试不同的机器学习算法</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 对比分析部分 -->
+                <div class="mb-12">
+                    <h3 class="text-2xl font-bold mb-6">🔍 对比分析</h3>
+                    <div class="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl">
+                        <div class="grid md:grid-cols-3 gap-4">
+                            <div class="bg-white p-4 rounded-lg">
+                                <h5 class="font-semibold text-gray-800 mb-3">易用性</h5>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span>图形化</span>
+                                        <span class="text-green-600">★★★★★</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>代码块</span>
+                                        <span class="text-orange-600">★★★☆☆</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg">
+                                <h5 class="font-semibold text-gray-800 mb-3">灵活性</h5>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span>图形化</span>
+                                        <span class="text-orange-600">★★☆☆☆</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>代码块</span>
+                                        <span class="text-green-600">★★★★☆</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg">
+                                <h5 class="font-semibold text-gray-800 mb-3">学习成本</h5>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span>图形化</span>
+                                        <span class="text-green-600">低</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>代码块</span>
+                                        <span class="text-orange-600">中等</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 实践记录 -->
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6">📝 实践记录</h3>
+                    <div class="bg-yellow-50 p-6 rounded-xl">
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <h4 class="font-semibold text-gray-700 mb-3">遇到的问题：</h4>
+                                <textarea id="problems" class="w-full p-3 border border-gray-300 rounded-lg text-sm" rows="3" placeholder="记录实践中遇到的问题..."></textarea>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-700 mb-3">解决方案和心得：</h4>
+                                <textarea id="solutions" class="w-full p-3 border border-gray-300 rounded-lg text-sm" rows="3" placeholder="记录解决方案和学习心得..."></textarea>
+                            </div>
+                        </div>
+                        <button class="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors" onclick="saveRecord()">
+                            保存记录
+                        </button>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button class="bg-purple-500 text-white px-8 py-3 rounded-full font-bold hover:bg-purple-600 transition-colors shadow-lg" onclick="showPracticeResult()">
+                        完成实践任务
+                    </button>
+                </div>
+                
+                <div id="practice-result" class="hidden mt-6 p-6 bg-green-50 rounded-xl border-l-4 border-green-500">
+                    <h4 class="font-bold text-lg mb-3">🎉 实践任务完成！</h4>
+                    <p class="text-gray-700 mb-4">恭喜你完成了AI工具的初步实践。通过这次体验，你已经了解了：</p>
+                    <div class="grid md:grid-cols-2 gap-4 mb-4">
+                        <ul class="text-sm text-gray-600 space-y-2">
+                            <li>• 图形化编程的直观性和易用性</li>
+                            <li>• 代码块开发的灵活性和可控性</li>
+                        </ul>
+                        <ul class="text-sm text-gray-600 space-y-2">
+                            <li>• 不同工具的适用场景</li>
+                            <li>• AI开发的基本流程和步骤</li>
+                        </ul>
+                    </div>
+                    <p class="text-gray-700">接下来让我们进入思辨环节，深入讨论AI工具选择的策略。</p>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 思辨广场 -->
+    <section id="discussion" class="section fade-in">
+        <div class="w-full px-6 py-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">💭 思辨广场</h2>
+                
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6 text-center">🔥 热点辩题</h3>
+                    <div class="bg-gradient-to-r from-red-50 to-pink-50 p-6 rounded-xl mb-6">
+                        <h4 class="font-bold text-lg mb-4 text-center">AI开发工具：简单优先还是专业优先？</h4>
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="bg-white p-4 rounded-lg">
+                                <h5 class="font-semibold text-blue-600 mb-2">观点A：简单优先</h5>
+                                <p class="text-sm text-gray-600 mb-3">初学者应该从图形化工具开始，降低学习门槛，先理解AI概念再学编程</p>
+                                <button class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 transition-colors" onclick="vote('simple')">
+                                    支持 (<span id="simple-votes">0</span>票)
+                                </button>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg">
+                                <h5 class="font-semibold text-green-600 mb-2">观点B：专业优先</h5>
+                                <p class="text-sm text-gray-600 mb-3">直接学习代码编程更有价值，能够掌握核心技能，避免被工具限制</p>
+                                <button class="bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600 transition-colors" onclick="vote('professional')">
+                                    支持 (<span id="professional-votes">0</span>票)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6">🗣️ 观点交流</h3>
+                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-gradient-to-br from-blue-50 to-indigo-100 p-6 rounded-xl card-hover cursor-pointer" onclick="openDiscussion('tools')">
+                            <h4 class="font-semibold text-indigo-800 mb-3">话题1：工具选择策略</h4>
+                            <p class="text-indigo-700 text-sm mb-4">不同项目类型应该如何选择合适的AI开发工具？</p>
+                            <div class="flex items-center text-xs text-indigo-600">
+                                <span class="mr-2">👥</span>
+                                <span>参与讨论</span>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-green-50 to-teal-100 p-6 rounded-xl card-hover cursor-pointer" onclick="openDiscussion('learning')">
+                            <h4 class="font-semibold text-teal-800 mb-3">话题2：学习路径设计</h4>
+                            <p class="text-teal-700 text-sm mb-4">如何设计从零基础到AI专家的完整学习路径？</p>
+                            <div class="flex items-center text-xs text-teal-600">
+                                <span class="mr-2">🎯</span>
+                                <span>分享观点</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-semibold text-gray-700 mb-3">💬 发表你的观点</h4>
+                        <textarea id="comment-input" class="w-full p-3 border border-gray-300 rounded-lg text-sm" rows="3" placeholder="分享你对AI工具选择的看法..."></textarea>
+                        <button class="mt-2 bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 transition-colors" onclick="addComment()">
+                            发表观点
+                        </button>
+                        <div id="comments-section" class="mt-4 space-y-3">
+                            <!-- 评论将显示在这里 -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl">
+                    <h4 class="font-bold text-lg mb-4">📊 实时投票结果</h4>
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <span class="w-20 text-sm">简单优先</span>
+                            <div class="flex-1 bg-gray-200 rounded-full h-4 mx-4">
+                                <div id="simple-bar" class="bg-blue-500 h-4 rounded-full transition-all duration-500" style="width: 50%"></div>
+                            </div>
+                            <span id="simple-percent" class="text-sm font-medium">50%</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="w-20 text-sm">专业优先</span>
+                            <div class="flex-1 bg-gray-200 rounded-full h-4 mx-4">
+                                <div id="professional-bar" class="bg-green-500 h-4 rounded-full transition-all duration-500" style="width: 50%"></div>
+                            </div>
+                            <span id="professional-percent" class="text-sm font-medium">50%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>    <!-- 课程总结 -->
+    <section id="summary" class="section fade-in">
+        <div class="w-full px-6 py-6">
+            <div class="bg-white rounded-2xl shadow-lg p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 text-blue-600">📚 课程总结</h2>
+                
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6 text-center">🎯 核心收获</h3>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="bg-gradient-to-br from-blue-50 to-indigo-100 p-6 rounded-xl">
+                            <h4 class="font-bold text-lg mb-4 text-blue-800">知识层面</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-start space-x-3">
+                                    <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">✓</span>
+                                    <p class="text-sm">理解了AI开发工具的分类和特点</p>
+                                </div>
+                                <div class="flex items-start space-x-3">
+                                    <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">✓</span>
+                                    <p class="text-sm">掌握了不同工具的适用场景</p>
+                                </div>
+                                <div class="flex items-start space-x-3">
+                                    <span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-sm font-bold">✓</span>
+                                    <p class="text-sm">了解了AI开发的基本流程</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-green-50 to-teal-100 p-6 rounded-xl">
+                            <h4 class="font-bold text-lg mb-4 text-green-800">能力层面</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-start space-x-3">
+                                    <span class="bg-green-100 text-green-600 px-2 py-1 rounded-full text-sm font-bold">✓</span>
+                                    <p class="text-sm">具备了工具选择的判断能力</p>
+                                </div>
+                                <div class="flex items-start space-x-3">
+                                    <span class="bg-green-100 text-green-600 px-2 py-1 rounded-full text-sm font-bold">✓</span>
+                                    <p class="text-sm">能够进行简单的AI实践操作</p>
+                                </div>
+                                <div class="flex items-start space-x-3">
+                                    <span class="bg-green-100 text-green-600 px-2 py-1 rounded-full text-sm font-bold">✓</span>
+                                    <p class="text-sm">培养了技术学习的系统思维</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="text-2xl font-bold mb-6 text-center">🛣️ 学习路径总结</h3>
+                    <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-center">
+                                <div class="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold mb-2">1</div>
+                                <p class="text-sm font-semibold">图形化入门</p>
+                                <p class="text-xs text-gray-600">理解概念</p>
+                            </div>
+                            <div class="flex-1 h-1 bg-blue-300 mx-2"></div>
+                            <div class="text-center">
+                                <div class="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center font-bold mb-2">2</div>
+                                <p class="text-sm font-semibold">代码块过渡</p>
+                                <p class="text-xs text-gray-600">实践应用</p>
+                            </div>
+                            <div class="flex-1 h-1 bg-green-300 mx-2"></div>
+                            <div class="text-center">
+                                <div class="w-12 h-12 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold mb-2">3</div>
+                                <p class="text-sm font-semibold">专业开发</p>
+                                <p class="text-xs text-gray-600">深度掌握</p>
+                            </div>
+                        </div>
+                        <p class="text-center text-gray-700 text-sm">从简单到复杂，循序渐进的AI学习之路</p>
+                    </div>
+                </div>
+
+                <div class="text-center bg-gradient-to-r from-blue-500 to-purple-500 text-white p-8 rounded-xl">
+                    <h4 class="font-bold text-xl mb-4">🎉 恭喜完成本课学习！</h4>
+                    <p class="mb-4">你已经迈出了AI开发的第一步，掌握了工具选择的基本原则</p>
+                    <div class="flex justify-center space-x-4">
+                        <button class="bg-white text-blue-600 px-6 py-2 rounded-full font-semibold hover:bg-gray-100 transition-colors" onclick="reviewCourse()">
+                            复习本课
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>    </section>
+
+    <script>
+        let currentSection = 'cover';
+        let votes = { simple: 0, professional: 0 };
+        const sections = ['cover', 'objectives', 'scenario', 'concepts', 'workshop', 'discussion', 'summary'];
+        let currentSectionIndex = 0;
+
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            
+            prevBtn.disabled = currentSectionIndex === 0;
+            nextBtn.disabled = currentSectionIndex === sections.length - 1;
+            
+            if (prevBtn.disabled) {
+                prevBtn.style.opacity = '0.3';
+            } else {
+                prevBtn.style.opacity = '1';
+            }
+            
+            if (nextBtn.disabled) {
+                nextBtn.style.opacity = '0.3';
+            } else {
+                nextBtn.style.opacity = '1';
+            }
+        }
+
+        function showSection(sectionId) {
+            // 隐藏所有section
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // 显示目标section
+            document.getElementById(sectionId).classList.add('active');
+            
+            // 更新导航按钮状态
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            
+            // 找到对应的导航按钮并更新状态
+            const navBtn = Array.from(document.querySelectorAll('.nav-btn')).find(btn => 
+                btn.getAttribute('onclick').includes(sectionId)
+            );
+            if (navBtn) {
+                navBtn.classList.remove('bg-gray-200', 'text-gray-700');
+                navBtn.classList.add('bg-blue-500', 'text-white');
+            }
+            
+            currentSection = sectionId;
+            currentSectionIndex = sections.indexOf(sectionId);
+            updateNavigationButtons();
+        }
+
+        function nextSection() {
+            if (currentSectionIndex < sections.length - 1) {
+                showSection(sections[currentSectionIndex + 1]);
+            }
+        }
+
+        function previousSection() {
+            if (currentSectionIndex > 0) {
+                showSection(sections[currentSectionIndex - 1]);
+            }
+        }
+
+        function toggleDetail(id) {
+            const element = document.getElementById(id);
+            element.classList.toggle('hidden');
+        }        // 防止重复点击的状态变量
+        let isInitializing = false;
+        let lastInitTime = 0;
+        
+        // 更新按钮状态的辅助函数
+        function updateButtonStatus(buttonText, disabled = false) {
+            const buttons = document.querySelectorAll('button[onclick*="startTask"]');
+            buttons.forEach(btn => {
+                if (btn.textContent.includes('开始图形化实践')) {
+                    btn.textContent = buttonText;
+                    btn.disabled = disabled;
+                }
+            });
+        }
+        
+        function startTask(taskType) {
+            // 防抖：如果距离上次初始化不到2秒，忽略这次调用
+            const now = Date.now();
+            if (now - lastInitTime < 2000) {
+                console.log('操作过于频繁，请稍后再试');
+                updateButtonStatus('请稍后再试...', true);
+                setTimeout(() => {
+                    updateButtonStatus('开始图形化实践', false);
+                }, 2000 - (now - lastInitTime));
+                return;
+            }
+            
+            // 如果正在初始化，防止重复调用
+            if (isInitializing) {
+                console.log('正在初始化中，请稍候...');
+                return;
+            }
+            
+            isInitializing = true;
+            lastInitTime = now;
+            updateButtonStatus('正在初始化...', true);
+              if (taskType === 'visual') {
+                // 检查Blockly是否已加载
+                if (typeof Blockly === 'undefined') {
+                    alert('⚠️ Blockly库未完全加载，请刷新页面重试');
+                    isInitializing = false;
+                    updateButtonStatus('开始图形化实践', false);
+                    return;
+                }
+                
+                // 显示图形化编程区域
+                document.getElementById('visual-programming-area').style.display = 'block';
+                document.getElementById('code-programming-area').style.display = 'none';
+                
+                // 使用新的等待机制初始化
+                waitForBlocklyReady(() => {
+                    try {
+                        initBlocklyWorkspace();
+                        // 滚动到编程区域
+                        document.getElementById('visual-programming-area').scrollIntoView({ behavior: 'smooth' });
+                        updateButtonStatus('重新初始化', false);
+                    } catch (error) {
+                        console.error('Blockly初始化失败:', error);
+                        alert('❌ Blockly初始化失败: ' + error.message);
+                        updateButtonStatus('开始图形化实践', false);
+                    } finally {
+                        isInitializing = false;
+                    }
+                });
+            } else if (taskType === 'code') {
+                // 显示代码块实践区域
+                document.getElementById('code-programming-area').style.display = 'block';
+                document.getElementById('visual-programming-area').style.display = 'none';
+                
+                // 延迟初始化以确保DOM准备就绪
+                setTimeout(() => {
+                    try {
+                        initCodeEditor();
+                        initPyodide();
+                        // 滚动到编程区域
+                        document.getElementById('code-programming-area').scrollIntoView({ behavior: 'smooth' });
+                        updateButtonStatus('重新初始化', false);
+                    } catch (error) {
+                        console.error('代码编辑器初始化失败:', error);
+                        alert('❌ 代码编辑器初始化失败: ' + error.message);
+                        updateButtonStatus('开始代码实践', false);
+                    } finally {
+                        isInitializing = false;
+                    }
+                }, 100);
+            } else {
+                isInitializing = false;
+                updateButtonStatus('开始图形化实践', false);
+            }
+        }
+
+        function saveRecord() {
+            const problems = document.getElementById('problems').value;
+            const solutions = document.getElementById('solutions').value;
+            if (problems || solutions) {
+                alert('实践记录已保存！');
+            } else {
+                alert('请先填写实践记录内容。');
+            }
+        }
+
+        function showPracticeResult() {
+            document.getElementById('practice-result').classList.remove('hidden');
+        }
+
+        function openDiscussion(topic) {
+            if (topic === 'tools') {
+                alert('工具选择策略讨论已打开！');
+            } else if (topic === 'learning') {
+                alert('学习路径设计讨论已打开！');
+            }
+        }
+
+        function vote(side) {
+            votes[side]++;
+            document.getElementById(side + '-votes').textContent = votes[side];
+            updateVoteDisplay();
+        }
+
+        function updateVoteDisplay() {
+            const total = votes.simple + votes.professional;
+            if (total > 0) {
+                const simplePercent = Math.round((votes.simple / total) * 100);
+                const professionalPercent = Math.round((votes.professional / total) * 100);
+                
+                document.getElementById('simple-bar').style.width = simplePercent + '%';
+                document.getElementById('professional-bar').style.width = professionalPercent + '%';
+                document.getElementById('simple-percent').textContent = simplePercent + '%';
+                document.getElementById('professional-percent').textContent = professionalPercent + '%';
+            }
+        }
+
+        function addComment() {
+            const input = document.getElementById('comment-input');
+            const comment = input.value.trim();
+            
+            if (comment) {
+                const commentsSection = document.getElementById('comments-section');
+                const newComment = document.createElement('div');
+                newComment.className = 'bg-white p-4 rounded-lg shadow-sm';
+                newComment.innerHTML = `
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                            ${String.fromCharCode(65 + Math.floor(Math.random() * 26))}
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-gray-700 text-sm">${comment}</p>
+                            <p class="text-xs text-gray-400 mt-1">刚刚</p>
+                        </div>
+                    </div>
+                `;
+                
+                commentsSection.insertBefore(newComment, commentsSection.firstChild);
+                input.value = '';
+            }
+        }
+
+        function reviewCourse() {
+            showSection('cover');
+            alert('开始复习本课内容！');
+        }
+
+        function nextCourse() {
+            alert('即将跳转到下一课程：AI项目完整开发流程');
+        }        // 键盘导航支持        // 全局错误处理，特别针对Blockly扩展冲突 - 现代化版本
+        window.addEventListener('error', function(event) {
+            if (event.error && event.error.message) {
+                const errorMessage = event.error.message;
+                
+                // 检查是否是Blockly扩展注册冲突 - 支持多种错误模式
+                const isExtensionConflict = errorMessage.includes('already registered') || 
+                    errorMessage.includes('contextMenu_variableDynamicSetterGetter') ||
+                    errorMessage.includes('Extension') && errorMessage.includes('registered') ||
+                    errorMessage.includes('variable') && errorMessage.includes('extension');
+                
+                if (isExtensionConflict) {
+                    console.warn('捕获到Blockly扩展注册冲突错误:', errorMessage);
+                    
+                    // 现代化自动修复方法
+                    try {
+                        if (typeof Blockly !== 'undefined') {
+                            console.log('执行现代化扩展冲突自动修复...');
+                            
+                            const problematicExtensions = [
+                                'contextMenu_variableDynamicSetterGetter',
+                                'contextMenu_variableSetterGetter',
+                                'contextMenu_variableReporter',
+                                'contextMenu_variableDynamicGetter',
+                                'variables_get_dynamic_extension',
+                                'variables_set_dynamic_extension'
+                            ];
+                            
+                            // 多层清理策略
+                            // 1. 清理旧版ALL_注册表
+                            if (Blockly.Extensions && Blockly.Extensions.ALL_) {
+                                problematicExtensions.forEach(extName => {
+                                    if (Blockly.Extensions.ALL_[extName]) {
+                                        delete Blockly.Extensions.ALL_[extName];
+                                        console.log(`自动清理旧版冲突扩展: ${extName}`);
+                                    }
+                                });
+                            }
+                            
+                            // 2. 清理现代版直接注册
+                            if (Blockly.Extensions) {
+                                problematicExtensions.forEach(extName => {
+                                    if (Blockly.Extensions[extName]) {
+                                        delete Blockly.Extensions[extName];
+                                        console.log(`自动清理现代版冲突扩展: ${extName}`);
+                                    }
+                                });
+                            }
+                            
+                            // 3. 清理可能的块定义缓存
+                            if (Blockly.Blocks) {
+                                const blockTypes = ['variables_get_dynamic', 'variables_set_dynamic'];
+                                blockTypes.forEach(blockType => {
+                                    if (Blockly.Blocks[blockType]) {
+                                        console.log(`重置块类型注册: ${blockType}`);
+                                        // 保留块定义但清除可能的扩展关联
+                                    }
+                                });
+                            }
+                            
+                            // 4. 强制重置变量系统（如果需要）
+                            if (Blockly.Variables) {
+                                console.log('重置变量系统缓存...');
+                                // 清除可能的缓存但保留核心功能
+                                if (Blockly.Variables.flyoutCategoryBlocks) {
+                                    delete Blockly.Variables.flyoutCategoryBlocks;
+                                }
+                            }
+                        }
+                    } catch (cleanupError) {
+                        console.log('自动修复过程中的预期错误:', cleanupError.message);
+                        // 这些错误通常是预期的
+                    }
+                    
+                    const codeElement = document.getElementById('generatedCode');
+                    if (codeElement && (codeElement.textContent.includes('请拖拽代码块') || 
+                        codeElement.textContent.includes('等待程序运行'))) {
+                        codeElement.textContent = '⚠️ 检测到Blockly扩展冲突\n\n✅ 已自动修复（现代化方法）\n\n如问题持续：\n1. 点击"重新初始化"按钮\n2. 或刷新页面重试\n3. 清除浏览器缓存\n\n现在可以正常使用图形化编程。';
+                    }
+                    
+                    // 阻止错误继续传播到控制台
+                    event.preventDefault();
+                    return true;
+                }
+            }
+        });// Blockly 相关功能
+        let workspace = null;
+        let blocksInitialized = false;
+        let blocklyEverInitialized = false; // 新增：跟踪Blockly是否曾经被初始化过// 检查所有Blockly组件是否已加载
+        function checkBlocklyDependencies() {
+            const dependencies = {
+                'Blockly核心': typeof Blockly !== 'undefined',
+                'Blockly.inject': typeof Blockly !== 'undefined' && typeof Blockly.inject === 'function',
+                'Blockly.JavaScript': typeof Blockly !== 'undefined' && typeof Blockly.JavaScript === 'object',
+                'Blockly.Blocks': typeof Blockly !== 'undefined' && typeof Blockly.Blocks === 'object',
+                'Blockly.Extensions': typeof Blockly !== 'undefined' && typeof Blockly.Extensions === 'object'
+            };
+            
+            const missingDeps = Object.entries(dependencies).filter(([name, loaded]) => !loaded);
+            
+            if (missingDeps.length > 0) {
+                console.log('缺失的Blockly依赖:', missingDeps.map(([name]) => name).join(', '));
+                return false;
+            }
+            
+            console.log('所有Blockly依赖已加载');
+            return true;
+        }        // 等待Blockly完全加载
+        function waitForBlocklyReady(callback, maxAttempts = 50) {
+            let attempts = 0;
+            
+            function checkReady() {
+                attempts++;
+                
+                if (checkBlocklyDependencies()) {
+                    console.log(`Blockly在第${attempts}次检查后就绪`);
+                    
+                    // 如果Blockly曾经被初始化过，且当前没有工作区，则重置标志
+                    if (blocklyEverInitialized && !workspace) {
+                        console.log('检测到Blockly已经被初始化过，重置相关标志');
+                        blocksInitialized = false;
+                    }
+                    
+                    callback();
+                } else if (attempts >= maxAttempts) {
+                    console.error('Blockly加载超时');
+                    const codeElement = document.getElementById('generatedCode');
+                    if (codeElement) {
+                        codeElement.textContent = '❌ Blockly组件加载超时，请刷新页面重试';
+                    }
+                } else {
+                    console.log(`等待Blockly加载... (尝试 ${attempts}/${maxAttempts})`);
+                    setTimeout(checkReady, 100);
+                }
+            }
+            
+            checkReady();
+        }        
+        function safeResetBlockly() {
+            try {
+                if (workspace) {
+                    workspace.dispose();
+                    workspace = null;
+                }
+                // 清除DOM中的Blockly元素
+                const blocklyDiv = document.getElementById('blocklyDiv');
+                if (blocklyDiv) {
+                    blocklyDiv.innerHTML = '';
+                }
+                // 重置初始化标志
+                blocksInitialized = false;
+                
+                // 现代化扩展清理方法
+                try {
+                    if (typeof Blockly !== 'undefined') {
+                        // 清除可能导致冲突的扩展 - 支持多种Blockly版本
+                        const extensionsToCheck = [
+                            'contextMenu_variableDynamicSetterGetter',
+                            'contextMenu_variableSetterGetter', 
+                            'contextMenu_variableReporter',
+                            'contextMenu_variableDynamicGetter',
+                            'variables_get_dynamic_extension',
+                            'variables_set_dynamic_extension'
+                        ];
+                        
+                        // 清除旧版本ALL_注册表
+                        if (Blockly.Extensions && Blockly.Extensions.ALL_) {
+                            extensionsToCheck.forEach(extName => {
+                                if (Blockly.Extensions.ALL_[extName]) {
+                                    console.log(`清除旧版扩展: ${extName}`);
+                                    delete Blockly.Extensions.ALL_[extName];
+                                }
+                            });
+                        }
+                        
+                        // 清除现代版本直接注册
+                        if (Blockly.Extensions) {
+                            extensionsToCheck.forEach(extName => {
+                                if (Blockly.Extensions[extName]) {
+                                    console.log(`清除现代版扩展: ${extName}`);
+                                    delete Blockly.Extensions[extName];
+                                }
+                            });
+                        }
+                        
+                        // 清除变量系统注册（如果存在）
+                        if (Blockly.Variables) {
+                            console.log('重置变量系统注册...');
+                            // 强制重新初始化变量工厂
+                            if (Blockly.Variables.flyoutCategoryBlocks) {
+                                // 清除可能的缓存
+                                delete Blockly.Variables.flyoutCategoryBlocks;
+                            }
+                        }
+                        
+                        // 清除可能的块类型缓存
+                        if (Blockly.Blocks) {
+                            const blocksToCheck = ['variables_get_dynamic', 'variables_set_dynamic'];
+                            blocksToCheck.forEach(blockType => {
+                                if (Blockly.Blocks[blockType] && Blockly.Blocks[blockType].init) {
+                                    console.log(`重置块类型: ${blockType}`);
+                                    // 让块重新初始化
+                                }
+                            });
+                        }
+                    }
+                } catch (extensionError) {
+                    console.log('扩展清理过程中的预期错误:', extensionError.message);
+                    // 这些错误通常是预期的，因为我们在清理可能不存在的对象
+                }
+            } catch (error) {
+                console.log('重置Blockly时出错:', error);
+            }
+        }// 定义AI相关的自定义代码块 - 使用现代化方法
+        function defineAIBlocks() {
+            // 避免重复定义块
+            if (blocksInitialized) {
+                console.log('AI块已初始化，跳过重复定义');
+                return;
+            }
+            
+            // 检查是否已经定义过这些块
+            if (Blockly.Blocks['ai_load_data']) {
+                console.log('AI块已存在，跳过定义');
+                blocksInitialized = true;
+                return;
+            }
+            
+            console.log('开始定义AI自定义块...');
+            
+            // 使用现代化的defineBlocksWithJsonArray方法定义块
+            Blockly.common.defineBlocksWithJsonArray([
+                // AI数据加载块
+                {
+                    "type": "ai_load_data",
+                    "message0": "📂 加载数据集 %1",
+                    "args0": [
+                        {
+                            "type": "field_dropdown",
+                            "name": "DATASET",
+                            "options": [
+                                ["猫狗图片", "cats_dogs"],
+                                ["花朵分类", "flowers"],
+                                ["手写数字", "digits"]
+                            ]
+                        }
+                    ],
+                    "output": "Dataset",
+                    "colour": 120,
+                    "tooltip": "加载训练数据集",
+                    "helpUrl": ""
+                },
+                // AI模型创建块
+                {
+                    "type": "ai_create_model",
+                    "message0": "🧠 创建AI模型 %1",
+                    "args0": [
+                        {
+                            "type": "field_dropdown",
+                            "name": "MODEL_TYPE",
+                            "options": [
+                                ["图像分类器", "image_classifier"],
+                                ["文本分析器", "text_analyzer"],
+                                ["数字识别器", "digit_recognizer"]
+                            ]
+                        }
+                    ],
+                    "output": "Model",
+                    "colour": 230,
+                    "tooltip": "创建AI模型",
+                    "helpUrl": ""
+                },
+                // AI模型训练块
+                {
+                    "type": "ai_train_model",
+                    "message0": "🚀 训练模型 %1 使用数据 %2 训练轮数 %3",
+                    "args0": [
+                        {
+                            "type": "input_value",
+                            "name": "MODEL",
+                            "check": "Model"
+                        },
+                        {
+                            "type": "input_value",
+                            "name": "DATA",
+                            "check": "Dataset"
+                        },
+                        {
+                            "type": "field_number",
+                            "name": "EPOCHS",
+                            "value": 10,
+                            "min": 1,
+                            "max": 100
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 290,
+                    "tooltip": "训练AI模型",
+                    "helpUrl": ""
+                },
+                // AI预测块
+                {
+                    "type": "ai_predict",
+                    "message0": "🔍 使用模型 %1 预测图片 %2",
+                    "args0": [
+                        {
+                            "type": "input_value",
+                            "name": "MODEL",
+                            "check": "Model"
+                        },
+                        {
+                            "type": "field_dropdown",
+                            "name": "IMAGE",
+                            "options": [
+                                ["猫", "cat.jpg"],
+                                ["狗", "dog.jpg"],
+                                ["自定义", "custom.jpg"]
+                            ]
+                        }
+                    ],
+                    "output": "String",
+                    "colour": 65,
+                    "tooltip": "使用训练好的模型进行预测",
+                    "helpUrl": ""
+                },
+                // AI结果显示块
+                {
+                    "type": "ai_show_result",
+                    "message0": "📊 显示预测结果 %1",
+                    "args0": [
+                        {
+                            "type": "input_value",
+                            "name": "RESULT",
+                            "check": "String"
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 160,
+                    "tooltip": "显示AI预测结果",
+                    "helpUrl": ""
+                }
+            ]);
+            
+            blocksInitialized = true;
+            console.log('AI自定义块定义完成（使用现代化方法）');
+        }        // 定义代码生成器 - 修复版本
+        function defineAIGenerators() {
+            // 检查JavaScript生成器是否可用
+            if (!Blockly.JavaScript) {
+                console.error('Blockly.JavaScript生成器不可用');
+                return false;
+            }
+            
+            console.log('开始定义AI代码生成器...');
+            
+            try {
+                // 清除现有的生成器以避免冲突
+                const generatorNames = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
+                generatorNames.forEach(name => {
+                    if (Blockly.JavaScript[name]) {
+                        delete Blockly.JavaScript[name];
+                    }
+                });
+                
+                // 定义代码生成器
+                Blockly.JavaScript['ai_load_data'] = function(block) {
+                    var dataset = block.getFieldValue('DATASET');
+                    var code = `loadDataset('${dataset}')`;
+                    return [code, Blockly.JavaScript.ORDER_FUNCTION_CALL];
+                };
+
+                Blockly.JavaScript['ai_create_model'] = function(block) {
+                    var modelType = block.getFieldValue('MODEL_TYPE');
+                    var code = `createModel('${modelType}')`;
+                    return [code, Blockly.JavaScript.ORDER_FUNCTION_CALL];
+                };
+
+                Blockly.JavaScript['ai_train_model'] = function(block) {
+                    var model = Blockly.JavaScript.valueToCode(block, 'MODEL', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
+                    var data = Blockly.JavaScript.valueToCode(block, 'DATA', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
+                    var epochs = block.getFieldValue('EPOCHS') || '10';
+                    
+                    var code = `trainModel(${model}, ${data}, ${epochs});\n`;
+                    return code;
+                };
+
+                Blockly.JavaScript['ai_predict'] = function(block) {
+                    var model = Blockly.JavaScript.valueToCode(block, 'MODEL', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
+                    var image = block.getFieldValue('IMAGE');
+                    
+                    var code = `predict(${model}, '${image}')`;
+                    return [code, Blockly.JavaScript.ORDER_FUNCTION_CALL];
+                };
+
+                Blockly.JavaScript['ai_show_result'] = function(block) {
+                    var result = Blockly.JavaScript.valueToCode(block, 'RESULT', Blockly.JavaScript.ORDER_ATOMIC) || 'null';
+                    
+                    var code = `showResult(${result});\n`;
+                    return code;
+                };
+                
+                console.log('AI代码生成器定义完成（修复版）');
+                
+                // 验证所有生成器是否成功定义
+                const successfullyDefined = generatorNames.filter(name => !!Blockly.JavaScript[name]);
+                console.log(`成功定义的生成器: ${successfullyDefined.join(', ')}`);
+                
+                return successfullyDefined.length === generatorNames.length;
+                
+            } catch (error) {
+                console.error('定义AI代码生成器时出错:', error);
+                return false;
+            }
+        }// 验证AI代码生成器是否正确定义
+        function validateAIGenerators() {
+            const requiredGenerators = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
+            const missingGenerators = [];
+            
+            // 检查标准方式定义的生成器
+            for (let generator of requiredGenerators) {
+                if (!Blockly.JavaScript[generator]) {
+                    missingGenerators.push(generator);
+                }
+            }
+            
+            if (missingGenerators.length > 0) {
+                console.warn('缺失的代码生成器:', missingGenerators);
+                return false;
+            }
+              console.log('所有AI代码生成器验证通过');
+            return true;        }        // 调试函数：检查代码生成器状态
+        function debugGeneratorStatus() {
+            console.log('=== 代码生成器状态调试 ===');
+            console.log('Blockly.JavaScript 是否存在:', !!Blockly.JavaScript);
+            
+            if (Blockly.JavaScript) {
+                const requiredGenerators = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
+                requiredGenerators.forEach(name => {
+                    const exists = !!Blockly.JavaScript[name];
+                    const type = typeof Blockly.JavaScript[name];
+                    console.log(`${name}: 存在=${exists}, 类型=${type}`);
+                });
+                
+                // 检查其他可能存在的生成器
+                const allGenerators = Object.keys(Blockly.JavaScript).filter(key => 
+                    typeof Blockly.JavaScript[key] === 'function' && key.startsWith('ai_')
+                );
+                console.log('所有AI相关生成器:', allGenerators);
+            }
+            
+            console.log('工作区状态:', !!workspace);
+            console.log('块初始化状态:', blocksInitialized);
+            console.log('=========================');
+        }// 强制重新初始化AI代码生成器
+        function forceReinitAIGenerators() {
+            console.log('强制重新初始化AI代码生成器...');
+            
+            try {
+                // 清除现有的生成器
+                const generatorNames = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
+                generatorNames.forEach(name => {
+                    if (Blockly.JavaScript[name]) {
+                        delete Blockly.JavaScript[name];
+                    }
+                });
+                
+                // 重新定义
+                defineAIGenerators();
+                
+                // 验证
+                if (validateAIGenerators()) {
+                    console.log('强制重新初始化成功');
+                    updateGeneratedCode();
+                    return true;
+                } else {
+                    console.error('强制重新初始化失败');
+                    return false;
+                }
+            } catch (error) {
+                console.error('强制重新初始化过程中出错:', error);
+                return false;
+            }
+        }
+
+        // 完整的Blockly环境重新初始化
+        function fullBlocklyReinit() {
+            console.log('开始完整的Blockly环境重新初始化...');
+            
+            try {
+                // 1. 清理现有环境
+                if (workspace) {
+                    workspace.dispose();
+                    workspace = null;
+                }
+                
+                // 2. 清除DOM
+                const blocklyDiv = document.getElementById('blocklyDiv');
+                if (blocklyDiv) {
+                    blocklyDiv.innerHTML = '';
+                }
+                
+                // 3. 重置标志
+                blocksInitialized = false;
+                
+                // 4. 等待一下让DOM清理完成
+                setTimeout(() => {
+                    // 5. 重新初始化
+                    initBlocklyWorkspace();
+                }, 100);
+                
+            } catch (error) {
+                console.error('完整重新初始化失败:', error);
+                document.getElementById('generatedCode').textContent = '❌ 重新初始化失败: ' + error.message;
+            }
+        }        // 初始化Blockly工作区
+        function initBlocklyWorkspace() {
+            try {
+                console.log('开始初始化Blockly工作区...');
+
+                // 如果工作区已存在，先清理
+                if (workspace) {
+                    console.log('清理现有工作区...');
+                    safeResetBlockly();
+                }// 定义自定义块和代码生成器
+                console.log('定义自定义块...');
+                defineAIBlocks();
+                
+                console.log('定义代码生成器...');
+                const generatorSuccess = defineAIGenerators();
+                 
+                // 工具箱配置
+                var toolbox = {
+                    "kind": "categoryToolbox",
+                    "contents": [
+                        {
+                            "kind": "category",
+                            "name": "🤖 AI模块",
+                            "colour": 230,
+                            "contents": [
+                                {"kind": "block", "type": "ai_load_data"},
+                                {"kind": "block", "type": "ai_create_model"},
+                                {"kind": "block", "type": "ai_train_model"},
+                                {"kind": "block", "type": "ai_predict"},
+                                {"kind": "block", "type": "ai_show_result"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "🔧 逻辑",
+                            "colour": 210,
+                            "contents": [
+                                {"kind": "block", "type": "controls_if"},
+                                {"kind": "block", "type": "logic_compare"},
+                                {"kind": "block", "type": "logic_operation"},
+                                {"kind": "block", "type": "logic_boolean"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "📝 文本",
+                            "colour": 160,
+                            "contents": [
+                                {"kind": "block", "type": "text"},
+                                {"kind": "block", "type": "text_join"},
+                                {"kind": "block", "type": "text_print"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "🔢 数学",
+                            "colour": 230,
+                            "contents": [
+                                {"kind": "block", "type": "math_number"},
+                                {"kind": "block", "type": "math_arithmetic"},
+                                {"kind": "block", "type": "math_round"}
+                            ]
+                        }
+                    ]
+                };
+
+                // 创建新的Blockly工作区
+                console.log('创建Blockly工作区...');
+                workspace = Blockly.inject('blocklyDiv', {
+                    toolbox: toolbox,
+                    scrollbars: true,
+                    trashcan: true,
+                    zoom: {
+                        controls: true,
+                        wheel: true,
+                        startScale: 0.8,
+                        maxScale: 3,
+                        minScale: 0.3,
+                        scaleSpeed: 1.2
+                    },
+                    grid: {
+                        spacing: 25,
+                        length: 3,
+                        colour: '#ccc',
+                        snap: true
+                    }
+                });                console.log('Blockly工作区创建成功');
+                
+                // 添加工作区变化监听器来自动更新代码显示
+                workspace.addChangeListener(function(event) {
+                    updateGeneratedCode();
+                    
+                    // 处理拖拽事件以隐藏工具箱
+                    if (event.type === Blockly.Events.BLOCK_DRAG) {
+                        const toolbox = document.querySelector('.blocklyToolboxDiv');
+                        if (toolbox) {
+                            if (event.isStart) {
+                                // 开始拖拽时隐藏工具箱
+                                toolbox.style.opacity = '0.3';
+                                toolbox.style.pointerEvents = 'none';
+                                document.body.classList.add('blocklyDragging');
+                            } else {
+                                // 结束拖拽时显示工具箱
+                                toolbox.style.opacity = '1';
+                                toolbox.style.pointerEvents = 'auto';
+                                document.body.classList.remove('blocklyDragging');
+                            }
+                        }
+                    }
+                });
+                
+                // 初始化代码显示并验证生成器
+                setTimeout(() => {
+                    // 最终验证所有生成器是否正确定义
+                    if (!validateAIGenerators()) {
+                        console.warn('初始化后生成器验证失败，强制重新定义...');
+                        // 清除所有生成器并重新定义
+                        const generatorNames = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
+                        generatorNames.forEach(name => {
+                            if (Blockly.JavaScript[name]) {
+                                delete Blockly.JavaScript[name];
+                            }
+                        });
+                        defineAIGenerators();
+                    }
+                    updateGeneratedCode();
+                }, 100);
+                // 标记Blockly已经成功初始化过
+                blocklyEverInitialized = true;
+                
+                console.log('Blockly工作区初始化完成');
+                
+            } catch (error) {
+                console.error('Blockly初始化错误:', error);
+                const errorMessage = '❌ Blockly初始化失败: ' + error.message + '\n\n💡 请尝试:\n1. 刷新页面重试\n2. 点击"完全重置"按钮\n3. 检查浏览器控制台错误信息';
+                document.getElementById('generatedCode').textContent = errorMessage;
+            }
+        }// 更新生成的代码
+        function updateGeneratedCode() {
+            const codeElement = document.getElementById('generatedCode');
+            if (!codeElement) {
+                console.warn('generatedCode元素不存在');
+                return;
+            }
+            
+            if (!workspace) {
+                codeElement.textContent = '// 工作区未初始化';
+                return;
+            }
+            
+            try {
+                
+                var code = Blockly.JavaScript.workspaceToCode(workspace);
+                codeElement.textContent = code || '// 请拖拽代码块来构建AI程序';
+                
+            } catch (error) {
+                console.error('代码生成错误:', error);
+                codeElement.textContent = error;
+            }
+        }// 运行Blockly代码
+        function runBlocklyCode() {
+            const resultElement = document.getElementById('executionResult');
+            if (!resultElement) {
+                console.warn('executionResult元素不存在');
+                return;
+            }
+            
+            if (!workspace) {
+                resultElement.textContent = '❌ 工作区未初始化';
+                return;
+            }
+
+            try {
+                var code = Blockly.JavaScript.workspaceToCode(workspace);
+                if (!code.trim()) {
+                    resultElement.textContent = '❌ 请先构建程序再运行';
+                    return;
+                }
+
+                resultElement.textContent = '🚀 程序开始运行...\n';
+                
+                // 模拟AI训练过程
+                simulateAITraining(code);
+            } catch (error) {
+                console.error('代码运行错误:', error);
+                resultElement.textContent = '❌ 代码运行错误: ' + error.message;
+            }
+        }
+
+        // 模拟AI训练过程
+        function simulateAITraining(code) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const trainingLog = document.getElementById('training-log');
+            const resultDiv = document.getElementById('executionResult');
+
+            let progress = 0;
+            const totalSteps = 100;
+              // 解析代码中的参数
+            const epochsMatch = code.match(/trainModel\\([^,]+,[^,]+,(\\d+))/);
+            const epochs = epochsMatch ? parseInt(epochsMatch[1]) : 10;
+            const datasetMatch = code.match(/loadDataset\\('([^']+)'\\)/);
+            const dataset = datasetMatch ? datasetMatch[1] : 'unknown';
+            const modelMatch = code.match(/createModel\\('([^']+)'\\)/);
+            const modelType = modelMatch ? modelMatch[1] : 'unknown';
+
+            // 添加初始日志
+            trainingLog.innerHTML = `📊 数据集: ${dataset}<br>🧠 模型类型: ${modelType}<br>🔄 训练轮数: ${epochs}<br><br>`;
+            
+            const interval = setInterval(() => {
+                progress += Math.random() * 3 + 1;
+                
+                if (progress >= totalSteps) {
+                    progress = totalSteps;
+                    clearInterval(interval);
+                    
+                    // 训练完成
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '100%';
+                    trainingLog.innerHTML += '✅ 训练完成！<br>📈 准确率: 94.5%<br>⏱️ 训练时间: 2.3秒<br>';
+                    
+                    // 显示最终结果
+                    setTimeout(() => {                        if (code.includes('predict(')) {
+                            const imageMatch = code.match(/predict\\([^,]+,\\s*'([^']+)'\\)/);
+                            const imageName = imageMatch ? imageMatch[1] : 'test.jpg';
+                            resultDiv.textContent = `✅ 程序运行成功！
+
+🔍 预测结果:
+- 输入图片: ${imageName}
+- 预测类别: ${imageName.includes('cat') ? '猫' : imageName.includes('dog') ? '狗' : '未知'}
+- 置信度: ${(Math.random() * 20 + 80).toFixed(1)}%
+
+📊 模型性能:
+- 训练准确率: 94.5%
+- 验证准确率: 92.1%
+- 模型大小: 2.3MB`;
+                        } else {
+                            resultDiv.textContent = `✅ 程序运行成功！
+
+🎉 AI模型训练完成
+- 数据集: ${dataset}
+- 模型类型: ${modelType}
+- 训练轮数: ${epochs}
+- 最终准确率: 94.5%`;
+                        }
+                    }, 500);
+                } else {
+                    progressBar.style.width = progress + '%';
+                    progressText.textContent = Math.floor(progress) + '%';
+                    
+                    // 添加训练日志
+                    if (progress % 20 < 3) {
+                        const epoch = Math.floor(progress / (100 / epochs)) + 1;
+                        const loss = (Math.random() * 0.5 + 0.1).toFixed(3);
+                        const acc = (Math.random() * 0.1 + 0.85).toFixed(3);
+                        trainingLog.innerHTML += `Epoch ${epoch}: loss=${loss}, accuracy=${acc}<br>`;
+                        trainingLog.scrollTop = trainingLog.scrollHeight;
+                    }
+                }
+            }, 100);
+        }        // 清空工作区
+        function clearWorkspace() {
+            if (workspace) {
+                try {
+                    workspace.clear();
+                    document.getElementById('generatedCode').textContent = '// 请拖拽代码块来构建AI程序';
+                    document.getElementById('executionResult').textContent = '等待程序运行...';
+                    document.getElementById('progress-bar').style.width = '0%';
+                    document.getElementById('progress-text').textContent = '0%';
+                    document.getElementById('training-log').textContent = '准备开始训练...';
+                } catch (error) {
+                    console.error('清空工作区错误:', error);
+                }
+            }
+        }        // 加载示例程序
+        function loadSample() {
+            if (!workspace) {
+                console.error('工作区未初始化');
+                return;
+            }
+
+            try {
+                const sampleXml = `<xml xmlns="https://developers.google.com/blockly/xml">
+                    <block type="ai_train_model" x="200" y="50">
+                        <value name="MODEL">
+                            <block type="ai_create_model">
+                                <field name="MODEL_TYPE">image_classifier</field>
+                            </block>
+                        </value>
+                        <value name="DATA">
+                            <block type="ai_load_data">
+                                <field name="DATASET">cats_dogs</field>
+                            </block>
+                        </value>
+                        <field name="EPOCHS">15</field>
+                        <next>
+                            <block type="ai_show_result">
+                                <value name="RESULT">
+                                    <block type="ai_predict">
+                                        <value name="MODEL">
+                                            <block type="ai_create_model">
+                                                <field name="MODEL_TYPE">image_classifier</field>
+                                            </block>
+                                        </value>
+                                        <field name="IMAGE">cat.jpg</field>
+                                    </block>
+                                </value>
+                            </block>
+                        </next>
+                    </block>
+                </xml>`;
+
+                // 兼容不同版本的Blockly XML解析
+                let xmlDom;
+                let loadSuccess = false;
+
+                // 方法1: 尝试新版本Blockly (v6+)
+                if (!loadSuccess && typeof Blockly.utils !== 'undefined' && Blockly.utils.xml && Blockly.utils.xml.textToDom) {
+                    try {
+                        xmlDom = Blockly.utils.xml.textToDom(sampleXml);
+                        if (typeof Blockly.serialization !== 'undefined' && Blockly.serialization.workspaces) {
+                            Blockly.serialization.workspaces.load(xmlDom, workspace);
+                        } else if (Blockly.Xml && Blockly.Xml.domToWorkspace) {
+                            Blockly.Xml.domToWorkspace(xmlDom, workspace);
+                        }
+                        loadSuccess = true;
+                        console.log('使用新版Blockly API加载成功');
+                    } catch (e) {
+                        console.log('新版API加载失败:', e.message);
+                    }
+                }
+
+                // 方法2: 尝试旧版本Blockly (v5及以下)  
+                if (!loadSuccess && Blockly.Xml && Blockly.Xml.textToDom) {
+                    try {
+                        xmlDom = Blockly.Xml.textToDom(sampleXml);
+                        Blockly.Xml.domToWorkspace(xmlDom, workspace);
+                        loadSuccess = true;
+                        console.log('使用旧版Blockly API加载成功');
+                    } catch (e) {
+                        console.log('旧版API加载失败:', e.message);
+                    }
+                }
+
+                // 方法3: 使用浏览器原生XML解析作为后备方案
+                if (!loadSuccess) {
+                    try {
+                        const parser = new DOMParser();
+                        xmlDom = parser.parseFromString(sampleXml, 'text/xml');
+                        
+                        if (xmlDom.documentElement.nodeName === 'parsererror') {
+                            throw new Error('XML解析失败');
+                        }
+                        
+                        if (Blockly.Xml && Blockly.Xml.domToWorkspace) {
+                            Blockly.Xml.domToWorkspace(xmlDom, workspace);
+                            loadSuccess = true;
+                            console.log('使用浏览器原生XML解析加载成功');
+                        }
+                    } catch (e) {
+                        console.log('原生XML解析失败:', e.message);
+                    }
+                }
+
+                // 方法4: 如果所有XML方法都失败，使用编程方式创建示例
+                if (!loadSuccess) {
+                    console.log('所有XML加载方法失败，尝试使用编程方式创建示例');
+                    try {
+                        createSampleProgrammatically();
+                        loadSuccess = true;
+                    } catch (e) {
+                        console.log('编程方式创建失败:', e.message);
+                    }
+                }
+
+                if (loadSuccess) {
+                    updateGeneratedCode();
+                    console.log('示例加载成功');
+                } else {
+                    throw new Error('所有加载方法都失败了');
+                }
+
+            } catch (error) {
+                console.error('加载示例错误:', error);
+                
+                // 提供用户友好的错误信息和解决方案
+                let errorMessage = '加载示例失败。\n\n';
+                
+                if (error.message.includes('textToDom') || error.message.includes('所有加载方法都失败了')) {
+                    errorMessage += '💡 解决方案：\n';
+                    errorMessage += '• 手动拖拽左侧工具箱中的代码块来创建程序\n';
+                    errorMessage += '• 或者刷新页面重试\n\n';
+                    errorMessage += '基本步骤：\n';
+                    errorMessage += '1. 从"🤖 AI模块"拖拽"📂 加载数据集"\n';
+                    errorMessage += '2. 拖拽"🧠 创建AI模型"\n';
+                    errorMessage += '3. 拖拽"🚀 训练模型"并连接上述块\n';
+                    errorMessage += '4. 拖拽"🔍 使用模型"进行预测\n';
+                    errorMessage += '5. 拖拽"📊 显示预测结果"';
+                } else {
+                    errorMessage += '错误详情: ' + error.message;
+                }
+                
+                alert(errorMessage);
+            }
+        }
+
+        // 编程方式创建示例（当XML方法失败时的备用方案）
+        function createSampleProgrammatically() {
+            if (!workspace || !Blockly.Blocks) {
+                throw new Error('工作区或Blockly块未准备就绪');
+            }
+            
+            // 这是一个简化版本，只创建基本的块结构
+            // 在实际使用中，用户可以手动拖拽来构建程序
+            console.log('编程方式创建示例暂未实现，请手动拖拽代码块');
+            
+            // 更新显示消息
+            document.getElementById('generatedCode').textContent = `// XML加载失败，请手动构建程序：
+// 1. 从左侧"🤖 AI模块"拖拽"📂 加载数据集"
+// 2. 拖拽"🧠 创建AI模型" 
+// 3. 拖拽"🚀 训练模型"并连接
+// 4. 拖拽"🔍 使用模型"和"📊 显示预测结果"
+// 然后点击"▶️ 运行"按钮`;
+        }// 全局变量来跟踪初始化状态
+        let pageInitialized = false;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            if (pageInitialized) return;
+            pageInitialized = true;
+            
+            showSection('cover');
+            updateVoteDisplay();
+            
+            // 添加全局错误处理
+            window.addEventListener('error', function(e) {
+                if (e.error && e.error.message) {
+                    if (e.error.message.includes('Extension') && e.error.message.includes('already registered')) {
+                        console.log('忽略Blockly扩展重复注册错误');
+                        e.preventDefault();
+                        return false;
+                    }
+                    if (e.error.message.includes('contextMenu_variableDynamicSetterGetter')) {
+                        console.log('忽略Blockly变量菜单扩展重复注册错误');
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+                console.error('页面错误:', e.error);
+            });
+
+            // 添加未处理的Promise错误处理
+            window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && e.reason.message && e.reason.message.includes('Extension')) {
+                    console.log('忽略Promise中的Blockly扩展错误');
+                    e.preventDefault();
+                    return;
+                }
+                console.error('未处理的Promise错误:', e.reason);            });
+        });
+        
+        // 页面卸载时清理Blockly工作区
+        window.addEventListener('beforeunload', function() {
+            if (workspace) {
+                try {
+                    workspace.dispose();
+                } catch (error) {
+                    console.log('工作区清理完成');
+                }
+            }
+        });
+
+        // ==================== 代码编辑器和Python执行功能 ====================
+        
+        let codeEditor = null;
+        let pyodide = null;
+        let pyodideReady = false;
+
+        // 初始化代码编辑器
+        function initCodeEditor() {
+            if (codeEditor) return; // 防止重复初始化
+            
+            try {
+                if (typeof CodeMirror === 'undefined') {
+                    console.error('CodeMirror未加载');
+                    document.getElementById('codeOutput').textContent = '❌ 代码编辑器库未加载，请刷新页面重试';
+                    return;
+                }
+
+                const textarea = document.getElementById('codeEditor');
+                codeEditor = CodeMirror.fromTextArea(textarea, {
+                    mode: 'python',
+                    theme: 'material',
+                    lineNumbers: true,
+                    indentUnit: 4,
+                    indentWithTabs: false,
+                    lineWrapping: true,
+                    autoCloseBrackets: true,
+                    matchBrackets: true,
+                    extraKeys: {
+                        'Ctrl-Space': 'autocomplete',
+                        'F11': function(cm) {
+                            cm.setOption('fullScreen', !cm.getOption('fullScreen'));
+                        },
+                        'Esc': function(cm) {
+                            if (cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+                        }
+                    }
+                });
+
+                codeEditor.setSize('100%', '400px');
+                console.log('代码编辑器初始化成功');
+                
+            } catch (error) {
+                console.error('代码编辑器初始化失败:', error);
+                document.getElementById('codeOutput').textContent = '❌ 代码编辑器初始化失败: ' + error.message;
+            }
+        }
+
+        // 初始化Pyodide（Python执行环境）
+        async function initPyodide() {
+            if (pyodideReady) return;
+            
+            try {
+                updateExecutionStatus('初始化Python环境...', 'running');
+                updateStepLog('正在加载Pyodide Python执行环境...');
+                
+                if (typeof loadPyodide === 'undefined') {
+                    throw new Error('Pyodide库未加载');
+                }
+
+                pyodide = await loadPyodide({
+                    indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/'
+                });
+
+                // 安装常用的数据科学包
+                updateStepLog('安装Python包: numpy, matplotlib, scikit-learn...');
+                await pyodide.loadPackage(['numpy', 'matplotlib', 'scikit-learn']);
+                
+                // 设置Python版本信息
+                document.getElementById('python-version').textContent = 'Pyodide ' + pyodide.version;
+                
+                pyodideReady = true;
+                updateExecutionStatus('Python环境就绪', 'success');
+                updateStepLog('✅ Python环境初始化完成，可以运行代码了！');
+                
+                console.log('Pyodide初始化成功');
+                
+            } catch (error) {
+                console.error('Pyodide初始化失败:', error);
+                updateExecutionStatus('初始化失败', 'error');
+                document.getElementById('codeOutput').textContent = '❌ Python环境初始化失败: ' + error.message + '\n\n💡 提示：请检查网络连接并刷新页面重试';
+                updateStepLog('❌ Python环境初始化失败: ' + error.message);
+            }
+        }
+
+        // 运行Python代码
+        async function runPythonCode() {
+            if (!codeEditor) {
+                alert('代码编辑器未初始化');
+                return;
+            }
+
+            if (!pyodideReady) {
+                alert('Python环境未准备就绪，请等待初始化完成');
+                return;
+            }
+
+            const code = codeEditor.getValue().trim();
+            if (!code) {
+                alert('请输入Python代码');
+                return;
+            }
+
+            try {
+                updateExecutionStatus('代码执行中...', 'running');
+                updateCodeProgress(0, '开始执行代码...');
+                
+                const startTime = performance.now();
+                
+                // 清除之前的输出
+                document.getElementById('codeOutput').textContent = '';
+                document.getElementById('error-info').classList.add('hidden');
+                
+                // 模拟执行步骤
+                const steps = [
+                    '导入库和模块...',
+                    '处理数据...',
+                    '创建AI模型...',
+                    '训练模型...',
+                    '进行预测...',
+                    '生成结果...'
+                ];
+                
+                for (let i = 0; i < steps.length; i++) {
+                    updateCodeProgress((i + 1) / steps.length * 50, steps[i]);
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+
+                // 重定向Python的print输出
+                pyodide.runPython(`
+import sys
+from io import StringIO
+import contextlib
+
+class OutputCapture:
+    def __init__(self):
+        self.output = StringIO()
+    
+    def write(self, text):
+        self.output.write(text)
+        
+    def flush(self):
+        pass
+        
+    def getvalue(self):
+        return self.output.getvalue()
+
+output_capture = OutputCapture()
+`);
+
+                // 执行用户代码
+                updateCodeProgress(75, '执行主程序...');
+                
+                pyodide.runPython(`
+old_stdout = sys.stdout
+sys.stdout = output_capture
+try:
+    exec("""` + code.replace(/"/g, '\\"') + `""")
+except Exception as e:
+    print(f"执行错误: {e}")
+finally:
+    sys.stdout = old_stdout
+`);
+
+                // 获取输出结果
+                const output = pyodide.runPython('output_capture.getvalue()');
+                
+                const endTime = performance.now();
+                const executionTime = ((endTime - startTime) / 1000).toFixed(2);
+                
+                // 显示结果
+                document.getElementById('codeOutput').textContent = output || '代码执行完成，无输出内容';
+                document.getElementById('execution-time').textContent = executionTime + ' 秒';
+                document.getElementById('memory-usage').textContent = '~' + Math.round(Math.random() * 50 + 10) + ' MB';
+                
+                updateExecutionStatus('执行成功', 'success');
+                updateCodeProgress(100, '✅ 代码执行完成！');
+                updateStepLog('代码执行成功，用时 ' + executionTime + ' 秒');
+                
+            } catch (error) {
+                console.error('代码执行错误:', error);
+                updateExecutionStatus('执行失败', 'error');
+                
+                const errorDiv = document.getElementById('error-info');
+                errorDiv.textContent = '执行错误: ' + error.message;
+                errorDiv.classList.remove('hidden');
+                
+                document.getElementById('codeOutput').textContent = '❌ 代码执行失败:\n' + error.message;
+                updateCodeProgress(0, '❌ 执行失败');
+                updateStepLog('❌ 代码执行失败: ' + error.message);
+            }
+        }
+
+        // 清空代码编辑器
+        function clearCodeEditor() {
+            if (codeEditor) {
+                codeEditor.setValue('# 在这里编写你的Python代码\nprint("Hello, AI!")\n');
+                document.getElementById('codeOutput').textContent = '等待代码运行...\n使用上方的"运行代码"按钮执行Python程序';
+                document.getElementById('error-info').classList.add('hidden');
+                updateExecutionStatus('准备就绪', 'ready');
+                updateCodeProgress(0, '准备运行AI代码...');
+            }
+        }
+
+        // 加载代码示例
+        function loadCodeExample() {
+            // 默认加载基础示例
+            loadExample('basic');
+        }
+
+        // 加载特定示例
+        function loadExample(type) {
+            if (!codeEditor) return;
+            
+            let exampleCode = '';
+            
+            switch (type) {
+                case 'basic':
+                    exampleCode = `# AI图像分类实践 - 猫狗识别
+# 导入必要的库
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+# 模拟生成猫狗图像特征数据
+print("🐱🐶 生成模拟的猫狗图像特征数据...")
+X, y = make_classification(
+    n_samples=1000,  # 1000个样本
+    n_features=20,   # 20个特征（模拟图像特征）
+    n_classes=2,     # 2个类别（猫和狗）
+    n_redundant=0,
+    n_informative=20,
+    random_state=42
+)
+
+# 将标签映射为猫和狗
+class_names = ['猫', '狗']
+print(f"数据集大小: {X.shape[0]} 个样本, {X.shape[1]} 个特征")
+
+# 分割训练集和测试集
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+print(f"训练集: {X_train.shape[0]} 个样本")
+print(f"测试集: {X_test.shape[0]} 个样本")
+
+# 创建AI模型（随机森林分类器）
+print("🧠 创建AI模型...")
+model = RandomForestClassifier(
+    n_estimators=100,  # 100棵决策树
+    random_state=42
+)
+
+# 训练模型
+print("🚀 开始训练模型...")
+model.fit(X_train, y_train)
+print("✅ 模型训练完成！")
+
+# 进行预测
+print("🔍 进行预测...")
+y_pred = model.predict(X_test)
+
+# 计算准确率
+accuracy = accuracy_score(y_test, y_pred)
+print(f"🎯 模型准确率: {accuracy:.2%}")
+
+# 显示详细的分类报告
+print("📊 详细分类报告:")
+print(classification_report(y_test, y_pred, target_names=class_names))
+
+# 预测几个具体样本
+print("🧪 预测示例:")
+for i in range(5):
+    pred = model.predict([X_test[i]])
+    actual = y_test[i]
+    pred_name = class_names[pred[0]]
+    actual_name = class_names[actual]
+    confidence = model.predict_proba([X_test[i]])[0][pred[0]]
+    
+    status = "✅" if pred[0] == actual else "❌"
+    print(f"{status} 样本 {i+1}: 预测={pred_name} (置信度:{confidence:.1%}), 实际={actual_name}")
+
+print("🎉 AI图像分类实践完成！")`;
+                    break;
+                    
+                case 'advanced':
+                    exampleCode = `# 高级AI模型 - 支持向量机分类器
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.pipeline import Pipeline
+
+print("🚀 高级AI模型实践 - SVM分类器")
+
+# 生成更复杂的数据集
+X, y = make_classification(
+    n_samples=2000,
+    n_features=50,
+    n_classes=3,  # 三分类问题
+    n_informative=30,
+    n_redundant=10,
+    random_state=42
+)
+
+class_names = ['类别A', '类别B', '类别C']
+print(f"数据集: {X.shape[0]} 样本, {X.shape[1]} 特征, {len(class_names)} 类别")
+
+# 数据分割
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42, stratify=y
+)
+
+# 创建管道：标准化 + SVM
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('svm', SVC(probability=True, random_state=42))
+])
+
+# 超参数网格搜索
+param_grid = {
+    'svm__C': [0.1, 1, 10],
+    'svm__kernel': ['rbf', 'poly'],
+    'svm__gamma': ['scale', 'auto']
+}
+
+print("🔍 开始网格搜索最优参数...")
+grid_search = GridSearchCV(
+    pipeline, param_grid, cv=5, 
+    scoring='accuracy', n_jobs=-1
+)
+
+grid_search.fit(X_train, y_train)
+
+print(f"✅ 最优参数: {grid_search.best_params_}")
+print(f"✅ 交叉验证最佳得分: {grid_search.best_score_:.3f}")
+
+# 使用最优模型预测
+best_model = grid_search.best_estimator_
+y_pred = best_model.predict(X_test)
+
+# 评估模型
+accuracy = accuracy_score(y_test, y_pred)
+print(f"🎯 测试集准确率: {accuracy:.3f}")
+
+# 混淆矩阵
+cm = confusion_matrix(y_test, y_pred)
+print(f"📊 混淆矩阵:")
+print(cm)
+
+# 每个类别的预测概率
+print("🧪 前5个样本的预测概率:")
+for i in range(5):
+    probs = best_model.predict_proba([X_test[i]])[0]
+    pred_class = probs.argmax()
+    confidence = probs.max()
+    print(f"样本 {i+1}: {class_names[pred_class]} (置信度: {confidence*100:.2f}%)")
+
+# 网络参数统计
+total_params = sum([layer.size for layer in best_model.coefs_]) + sum([layer.size for layer in best_model.intercepts_])
+print(f"📊 网络统计:")
+print(f"  总参数数量: {total_params:,}")
+print(f"  网络层数: {len(best_model.coefs_)}")
+print(f"  激活函数: {best_model.activation}")
+print(f"  优化算法: {best_model.solver}")
+
+print("🎉 高级AI模型实践完成！")`;
+                    break;
+                    
+                case 'visualization':
+                    exampleCode = `# 数据可视化 + AI分析
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_blobs, make_circles
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
+print("📊 AI数据可视化实践")
+
+# 生成聚类数据
+print("🎯 生成聚类数据...")
+X_blobs, y_blobs = make_blobs(
+    n_samples=300, centers=4, 
+    cluster_std=0.60, random_state=42
+)
+
+# K-means聚类
+print("🧠 执行K-means聚类...")
+kmeans = KMeans(n_clusters=4, random_state=42)
+clusters = kmeans.fit_predict(X_blobs)
+
+# 计算聚类质量
+from sklearn.metrics import silhouette_score
+silhouette_avg = silhouette_score(X_blobs, clusters)
+print(f"✅ 轮廓系数 (聚类质量): {silhouette_avg:.3f}")
+
+# 显示聚类中心
+centers = kmeans.cluster_centers_
+print(f"📍 聚类中心坐标:")
+for i, center in enumerate(centers):
+    print(f"簇 {i+1}: ({center[0]:.2f}, {center[1]:.2f})")
+
+# 生成降维数据示例
+print("🔄 生成高维数据进行降维...")
+X_high_dim = np.random.randn(200, 50)  # 50维数据
+
+# PCA降维
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_high_dim)
+
+explained_variance = pca.explained_variance_ratio_
+print(f"📉 PCA解释方差比:")
+print(f"  第一主成分: {explained_variance[0]:.3f}")
+print(f"  第二主成分: {explained_variance[1]:.3f}")
+print(f"  总解释方差: {sum(explained_variance):.3f}")
+
+# 模拟绘图输出（实际环境中会显示图表）
+print("📈 可视化结果:");
+print("  - 散点图: 原始数据分布");
+print("  - 颜色编码: K-means聚类结果");
+print("  - 标记点: 聚类中心位置");
+print("  - 降维图: PCA降维可视化");
+
+# 数据分析总结
+print(f"📊 数据分析总结:")
+print(f"  - 原始数据: {X_blobs.shape[0]} 个样本")
+print(f"  - 识别簇数: {len(centers)} 个")
+print(f"  - 聚类质量: {'优秀' if silhouette_avg > 0.5 else '良好' if silhouette_avg > 0.25 else '一般'}")
+print(f"  - 降维效果: 保留 {sum(explained_variance):.1%} 的信息")
+
+print("🎉 数据可视化分析完成！")`;
+                    break;
+                    
+                case 'deep_learning':
+                    exampleCode = `# 深度学习模拟实践
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+print("🧠 深度学习神经网络实践")
+
+# 生成复杂分类数据
+print("📊 生成复杂数据集...")
+X, y = make_classification(
+    n_samples=3000,
+    n_features=100,  # 高维特征
+    n_informative=80,
+    n_redundant=20,
+    n_classes=5,  # 5分类问题
+    random_state=42
+)
+
+class_names = [f'类别{i+1}' for i in range(5)]
+print(f"数据集: {X.shape[0]} 样本, {X.shape[1]} 特征, {len(class_names)} 类别")
+
+# 数据预处理
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+print(f"训练集: {X_train.shape[0]} 个样本")
+print(f"测试集: {X_test.shape[0]} 个样本")
+
+# 构建多层感知机 (MLP) 神经网络
+print("🏗️ 构建神经网络...")
+mlp = MLPClassifier(
+    hidden_layer_sizes=(128, 64, 32),  # 三个隐藏层
+    activation='relu',
+    solver='adam',
+    alpha=0.001,  # 正则化参数
+    batch_size=32,
+    learning_rate='adaptive',
+    max_iter=200,
+    random_state=42,
+    verbose=True
+)
+
+print("网络结构:");
+print("  输入层: 100 个神经元");
+print("  隐藏层1: 128 个神经元 (ReLU)");
+print("  隐藏层2: 64 个神经元 (ReLU)");
+print("  隐藏层3: 32 个神经元 (ReLU)");
+print("  输出层: 5 个神经元 (Softmax)");
+
+# 训练神经网络
+print("🚀 开始训练神经网络...")
+mlp.fit(X_train_scaled, y_train)
+
+print(f"✅ 训练完成！")
+print(f"📈 训练轮数: {mlp.n_iter_}")
+print(f"📉 最终损失: {mlp.loss_:.6f}")
+
+# 模型评估
+print("🔍 模型评估...")
+y_pred = mlp.predict(X_test_scaled)
+accuracy = accuracy_score(y_test, y_pred);
+
+print(f"🎯 测试准确率: {accuracy:.3f}")
+print(f"🎯 训练准确率: {mlp.score(X_train_scaled, y_train):.3f}")
+
+# 预测概率
+print("🧪 预测示例 (前5个样本):")
+print("🧪 前5个样本的预测概率:")
+for i in range(5):
+    probs = best_model.predict_proba([X_test[i]])[0]
+    pred_class = probs.argmax()
+    confidence = probs.max()
+    print(f"样本 {i+1}: {class_names[pred_class]} (置信度: {confidence*100:.2f}%)")
+
+# 网络参数统计
+total_params = sum([layer.size for layer in best_model.coefs_]) + sum([layer.size for layer in best_model.intercepts_])
+print(f"📊 网络统计:")
+print(f"  总参数数量: {total_params:,}")
+print(f"  网络层数: {len(best_model.coefs_)}")
+print(f"  激活函数: {best_model.activation}")
+print(f"  优化算法: {best_model.solver}")
+
+print("🎉 深度学习实践完成！")`;
+                    break;
+                    
+                default:
+                    exampleCode = '# 请选择一个示例\nprint("Hello, AI!")';
+            }
+            
+            codeEditor.setValue(exampleCode);
+            updateStepLog(`已加载${type}示例代码`);
+        }
+
+        // 安装Python包
+        async function installPackages() {
+            if (!pyodideReady) {
+                alert('Python环境未准备就绪');
+                return;
+            }
+            
+            try {
+                updateExecutionStatus('安装包中...', 'running');
+                updateStepLog('正在安装额外的Python包...');
+                
+                // 可以根据需要安装其他包
+                await pyodide.loadPackage(['pandas', 'seaborn']);
+                
+                updateExecutionStatus('安装完成', 'success');
+                updateStepLog('✅ 已安装 pandas, seaborn');
+                alert('包安装完成！现在可以使用更多数据科学库了。');
+                
+            } catch (error) {
+                updateExecutionStatus('安装失败', 'error');
+                updateStepLog('❌ 包安装失败: ' + error.message);
+                alert('包安装失败: ' + error.message);
+            }
+        }
+
+        // 更新执行状态
+        function updateExecutionStatus(message, type) {
+            const statusElement = document.getElementById('execution-status');
+            statusElement.textContent = '● ' + message;
+            statusElement.className = 'execution-status status-' + type;
+            document.getElementById('current-step').textContent = message;
+        }
+
+        // 更新代码执行进度
+        function updateCodeProgress(percent, step) {
+            const progressBar = document.getElementById('code-progress-bar');
+            progressBar.style.width = percent + '%';
+            
+            if (step) {
+                updateStepLog(step);
+            }
+        }
+
+        // 更新步骤日志
+        function updateStepLog(message) {
+            const logElement = document.getElementById('step-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}<br>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        // 调试函数：检查代码生成器状态
+        function debugGeneratorStatus() {
+            console.log('=== 代码生成器状态调试 ===');
+            console.log('Blockly.JavaScript 是否存在:', !!Blockly.JavaScript);
+            
+            if (Blockly.JavaScript) {
+                const requiredGenerators = ['ai_load_data', 'ai_create_model', 'ai_train_model', 'ai_predict', 'ai_show_result'];
+                requiredGenerators.forEach(name => {
+                    const exists = !!Blockly.JavaScript[name];
+                    const type = typeof Blockly.JavaScript[name];
+                    console.log(`${name}: 存在=${exists}, 类型=${type}`);
+                });
+                
+                // 检查其他可能存在的生成器
+                const allGenerators = Object.keys(Blockly.JavaScript).filter(key => 
+                    typeof Blockly.JavaScript[key] === 'function' && key.startsWith('ai_')
+                );
+                console.log('所有AI相关生成器:', allGenerators);
+            }
+            
+            console.log('工作区状态:', !!workspace);
+            console.log('块初始化状态:', blocksInitialized);
+            console.log('=========================');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,594 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>猫狗图像分类实践 - Blockly</title>    <!-- Load Blockly core -->
+    <script src="https://unpkg.com/blockly/blockly_compressed.js"></script>
+    <!-- Load the default blocks -->
+    <script src="https://unpkg.com/blockly/blocks_compressed.js"></script>
+    <!-- Load a generator -->
+    <script src="https://unpkg.com/blockly/javascript_compressed.js"></script>
+    <!-- Load a message file -->
+    <script src="https://unpkg.com/blockly/msg/zh-hans.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        
+        .left-panel {
+            flex: 2;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .right-panel {
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .control-section {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 5px;
+        }
+        
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #4CAF50;
+            border-radius: 5px;
+            background: #f9f9f9;
+            cursor: pointer;
+        }
+        
+        button {
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin: 5px 0;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        #preview-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            border: 3px solid #4CAF50;
+            display: none;
+        }
+        
+        #result {
+            padding: 15px;
+            background: #f0f8ff;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .probability-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 20px;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+        
+        .probability-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s ease-in-out;
+        }
+        
+        .cat-prob { background: linear-gradient(90deg, #ff6b6b, #ee5a5a); }
+        .dog-prob { background: linear-gradient(90deg, #4ecdc4, #44b3ac); }
+        
+        #blocklyDiv {
+            height: calc(100vh - 140px);
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .emoji {
+            font-size: 24px;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left-panel">
+            <div class="header">
+                🐱 猫狗图像分类实践 - Blockly 🐶
+            </div>
+            <div id="blocklyDiv"></div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="control-section">
+                <div class="section-title">📁 图像上传</div>
+                <input type="file" id="imageInput" accept="image/*">
+                <img id="preview-image" alt="预览图像">
+            </div>
+            
+            <div class="control-section">
+                <div class="section-title">🚀 控制面板</div>
+                <button onclick="runCode()">运行分类程序</button>
+                <button onclick="clearResult()">清空结果</button>
+            </div>
+            
+            <div class="control-section" id="result-section">
+                <div class="section-title">📊 分类结果</div>
+                <div id="result">等待上传图像和运行程序...</div>
+                <div style="margin-top: 10px;">
+                    <div>🐱 猫咪概率:</div>
+                    <div class="probability-bar">
+                        <div class="probability-fill cat-prob" id="cat-prob" style="width: 0%"></div>
+                    </div>
+                    <div>🐶 小狗概率:</div>
+                    <div class="probability-bar">
+                        <div class="probability-fill dog-prob" id="dog-prob" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>    <script>
+        // Global variables
+        let model;
+        let currentImage;
+        let lastPrediction = null;
+        let workspace;
+        
+        // 加载预训练模型
+        async function loadModel() {
+            try {
+                // 使用MobileNet模型进行演示
+                model = await tf.loadLayersModel('https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json');
+                console.log('模型加载成功!');
+            } catch (error) {
+                console.log('使用本地模拟模型');
+                // 创建一个简单的模拟模型用于演示
+                model = tf.sequential({
+                    layers: [
+                        tf.layers.flatten({inputShape: [224, 224, 3]}),
+                        tf.layers.dense({units: 2, activation: 'softmax'})
+                    ]
+                });
+            }
+        }
+
+        // 图像上传处理
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('imageInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.getElementById('preview-image');
+                        img.src = e.target.result;
+                        img.style.display = 'block';
+                        currentImage = img;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        });
+
+        // 实现功能函数
+        function uploadImage() {
+            if (!currentImage) {
+                document.getElementById('result').innerHTML = '⚠️ 请先上传一张图像！';
+                return false;
+            }
+            document.getElementById('result').innerHTML = '✅ 图像上传成功！';
+            return true;
+        }
+        
+        function preprocessImage() {
+            document.getElementById('result').innerHTML = '🔧 正在预处理图像...';
+            // 模拟预处理延迟
+            setTimeout(() => {
+                document.getElementById('result').innerHTML = '✅ 图像预处理完成！';
+            }, 500);
+        }
+        
+        async function classifyImage() {
+            if (!currentImage) {
+                document.getElementById('result').innerHTML = '❌ 没有找到图像！';
+                return;
+            }
+            
+            document.getElementById('result').innerHTML = '🤖 AI正在分析图像...';
+            
+            // 模拟AI分类（随机结果用于演示）
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            const catProb = Math.random();
+            const dogProb = 1 - catProb;
+            
+            lastPrediction = {
+                class: catProb > dogProb ? 'cat' : 'dog',
+                catProbability: catProb,
+                dogProbability: dogProb
+            };
+            
+            document.getElementById('result').innerHTML = '✅ 分类完成！';
+        }
+        
+        function showResult() {
+            if (!lastPrediction) {
+                document.getElementById('result').innerHTML = '❌ 没有分类结果！';
+                return;
+            }
+            
+            const result = lastPrediction.class === 'cat' ? '🐱 这是一只可爱的猫咪！' : '🐶 这是一只可爱的小狗！';
+            const confidence = Math.max(lastPrediction.catProbability, lastPrediction.dogProbability);
+            
+            document.getElementById('result').innerHTML = 
+                `${result}<br>置信度: ${(confidence * 100).toFixed(1)}%`;
+                
+            // 更新概率条
+            document.getElementById('cat-prob').style.width = (lastPrediction.catProbability * 100) + '%';
+            document.getElementById('dog-prob').style.width = (lastPrediction.dogProbability * 100) + '%';
+        }
+        
+        function playSound(soundType) {
+            const message = soundType === 'meow' ? '🐱 喵喵～' : '🐶 汪汪！';
+            document.getElementById('result').innerHTML += `<br>🔊 ${message}`;
+            
+            // 使用Web Audio API播放简单音调（模拟动物叫声）
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                if (soundType === 'meow') {
+                    oscillator.frequency.value = 800;
+                    oscillator.type = 'sine';
+                } else {
+                    oscillator.frequency.value = 200;
+                    oscillator.type = 'sawtooth';
+                }
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (error) {
+                console.log('音频播放不支持');
+            }
+        }
+
+        // Wait for Blockly to load completely before defining custom blocks
+        window.addEventListener('load', function() {
+            // Get the JavaScript generator instance
+            const javascriptGenerator = Blockly.JavaScript;
+            
+            // Define custom blocks using modern syntax
+            Blockly.common.defineBlocksWithJsonArray([
+                {
+                    "type": "image_upload",
+                    "message0": "📁 上传图像",
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 160,
+                    "tooltip": "从本地上传一张图像",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "image_preprocess",
+                    "message0": "🔧 图像预处理 %1",
+                    "args0": [
+                        {
+                            "type": "input_statement",
+                            "name": "NAME"
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 230,
+                    "tooltip": "对图像进行预处理，调整大小和归一化",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "classify_image",
+                    "message0": "🤖 开始分类",
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 120,
+                    "tooltip": "使用AI模型对图像进行猫狗分类",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "show_result",
+                    "message0": "📊 显示结果",
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 300,
+                    "tooltip": "显示分类结果和概率",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "if_cat",
+                    "message0": "🐱 如果是猫咪 %1",
+                    "args0": [
+                        {
+                            "type": "input_statement",
+                            "name": "DO"
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 65,
+                    "tooltip": "当分类结果为猫时执行的操作",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "if_dog",
+                    "message0": "🐶 如果是小狗 %1",
+                    "args0": [
+                        {
+                            "type": "input_statement",
+                            "name": "DO"
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 200,
+                    "tooltip": "当分类结果为狗时执行的操作",
+                    "helpUrl": ""
+                },
+                {
+                    "type": "play_sound",
+                    "message0": "🔊 播放声音 %1",
+                    "args0": [
+                        {
+                            "type": "field_dropdown",
+                            "name": "SOUND",
+                            "options": [
+                                ["猫叫", "meow"],
+                                ["狗叫", "woof"]
+                            ]
+                        }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": 290,
+                    "tooltip": "播放相应的动物叫声",
+                    "helpUrl": ""
+                }
+            ]);
+
+            // Define generators using modern syntax
+            javascriptGenerator.forBlock['image_upload'] = function(block, generator) {
+                return 'uploadImage();\n';
+            };
+            
+            javascriptGenerator.forBlock['image_preprocess'] = function(block, generator) {
+                var statements = generator.statementToCode(block, 'NAME');
+                return 'preprocessImage();\n' + statements;
+            };
+            
+            javascriptGenerator.forBlock['classify_image'] = function(block, generator) {
+                return 'await classifyImage();\n';
+            };
+            
+            javascriptGenerator.forBlock['show_result'] = function(block, generator) {
+                return 'showResult();\n';
+            };
+            
+            javascriptGenerator.forBlock['if_cat'] = function(block, generator) {
+                var statements = generator.statementToCode(block, 'DO');
+                return 'if(lastPrediction && lastPrediction.class === "cat") {\n' + statements + '}\n';
+            };
+            
+            javascriptGenerator.forBlock['if_dog'] = function(block, generator) {
+                var statements = generator.statementToCode(block, 'DO');
+                return 'if(lastPrediction && lastPrediction.class === "dog") {\n' + statements + '}\n';
+            };
+            
+            javascriptGenerator.forBlock['play_sound'] = function(block, generator) {
+                var sound = block.getFieldValue('SOUND');
+                return 'playSound("' + sound + '");\n';
+            };
+
+            // Initialize Blockly workspace AFTER custom blocks are defined
+            workspace = Blockly.inject('blocklyDiv', {
+                toolbox: {
+                    "kind": "categoryToolbox",
+                    "contents": [
+                        {
+                            "kind": "category",
+                            "name": "🖼️ 图像处理",
+                            "colour": 160,
+                            "contents": [
+                                {"kind": "block", "type": "image_upload"},
+                                {"kind": "block", "type": "image_preprocess"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "🤖 AI分类",
+                            "colour": 120,
+                            "contents": [
+                                {"kind": "block", "type": "classify_image"},
+                                {"kind": "block", "type": "show_result"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "🔀 条件判断",
+                            "colour": 210,
+                            "contents": [
+                                {"kind": "block", "type": "if_cat"},
+                                {"kind": "block", "type": "if_dog"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "🎵 多媒体",
+                            "colour": 290,
+                            "contents": [
+                                {"kind": "block", "type": "play_sound"}
+                            ]
+                        },
+                        {
+                            "kind": "category",
+                            "name": "➰ 逻辑",
+                            "colour": 210,
+                            "contents": [
+                                {"kind": "block", "type": "controls_if"},
+                                {"kind": "block", "type": "controls_repeat_ext"},
+                                {"kind": "block", "type": "logic_compare"}
+                            ]
+                        }
+                    ]
+                },
+                grid: {spacing: 20, length: 3, colour: '#ccc', snap: true},
+                trashcan: true,
+                zoom: {controls: true, wheel: true, startScale: 1.0, maxScale: 3, minScale: 0.3, scaleSpeed: 1.2}
+            });
+
+            // Load default blocks
+            const defaultXml = `
+            <xml>
+                <block type="image_upload" x="50" y="50">
+                    <next>
+                        <block type="image_preprocess">
+                            <next>
+                                <block type="classify_image">
+                                    <next>
+                                        <block type="show_result">
+                                            <next>
+                                                <block type="if_cat">
+                                                    <statement name="DO">
+                                                        <block type="play_sound">
+                                                            <field name="SOUND">meow</field>
+                                                        </block>
+                                                    </statement>
+                                                    <next>
+                                                        <block type="if_dog">
+                                                            <statement name="DO">
+                                                                <block type="play_sound">
+                                                                    <field name="SOUND">woof</field>
+                                                                </block>
+                                                            </statement>
+                                                        </block>
+                                                    </next>
+                                                </block>
+                                            </next>
+                                        </block>
+                                    </next>
+                                </block>
+                            </next>
+                        </block>
+                    </next>
+                </block>
+            </xml>`;
+
+            try {
+                workspace.clear();
+                const xml = Blockly.Xml.textToDom(defaultXml);
+                Blockly.Xml.domToWorkspace(xml, workspace);
+                console.log('Default blocks loaded successfully');
+            } catch (error) {
+                console.error('Error loading default blocks:', error);
+                console.log('Continuing without default blocks - you can drag blocks manually');
+            }
+
+            console.log('Blockly workspace initialized successfully');
+        });
+
+        // 运行生成的代码
+        async function runCode() {
+            try {
+                // 使用 Blockly.JavaScript 直接生成代码
+                const code = Blockly.JavaScript.workspaceToCode(workspace);
+                console.log('生成的代码:', code);
+                
+                if (!code.trim()) {
+                    document.getElementById('result').innerHTML = '❌ 没有可执行的代码块！请从左侧拖拽代码块到工作区。';
+                    return;
+                }
+                
+                // 使用异步函数包装器来支持await
+                const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+                const asyncCode = new AsyncFunction(code);
+                await asyncCode();
+            } catch (error) {
+                console.error('代码执行错误:', error);
+                document.getElementById('result').innerHTML = '❌ 程序执行出错: ' + error.message;
+            }
+        }
+        
+        function clearResult() {
+            document.getElementById('result').innerHTML = '等待上传图像和运行程序...';
+            document.getElementById('cat-prob').style.width = '0%';
+            document.getElementById('dog-prob').style.width = '0%';
+            lastPrediction = null;
+        }
+        
+        // 初始化
+        loadModel();
+    </script>
+</body>
+</html>
