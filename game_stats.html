@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>训练统计</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/chart.js"></script>
+    <style>
+        /* Custom styles that can't be easily replicated with Tailwind */
+        .filter-btn.active {
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+        }
+        
+        .filter-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .game-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .game-icon {
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+        }
+        
+        .stat-item {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .detail-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .modal {
+            backdrop-filter: blur(5px);
+        }
+        
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .detail-item {
+            color: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+        
+        .detail-label {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            margin-bottom: 0.25rem;
+        }
+        
+        .detail-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+        
+        .difficulty-section {
+            margin-top: 2rem;
+        }
+        
+        .difficulty-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #374151;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .difficulty-card {
+            background: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+        
+        .difficulty-header {
+            font-size: 1.125rem;
+            font-weight: bold;
+            color: #f59e0b;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .difficulty-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+        
+        .difficulty-stat {
+            text-align: center;
+            padding: 0.75rem;
+            background: #f3f4f6;
+            border-radius: 0.5rem;
+        }
+        
+        .difficulty-stat-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+        
+        .difficulty-stat-value {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #374151;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-500 to-purple-600 min-h-screen p-5 text-gray-800" style="font-family: 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;">
+    <div class="container max-w-6xl mx-auto bg-white bg-opacity-95 rounded-2xl shadow-2xl overflow-hidden">
+        
+        <div class="time-filter bg-gray-50 p-5 border-b border-gray-200">
+            <div class="filter-buttons flex justify-center gap-4 flex-wrap">
+                <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium" data-period="today">今日</button>
+                <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium" data-period="week">最近7天</button>
+                <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium active" data-period="month">最近30天</button>
+                <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium" data-period="all">全部历史</button>
+            </div>
+        </div>
+        
+        <div class="stats-container p-8 md:p-5">
+            <div id="summary-section"></div>
+            <div id="chart-section"></div>
+            <div id="games-section"></div>
+        </div>
+    </div>
+
+    <!-- 模态框 -->
+    <div id="gameModal" class="modal hidden fixed z-50 left-0 top-0 w-full h-full bg-black bg-opacity-50">
+        <div class="modal-content bg-white my-8 mx-auto p-8 rounded-2xl w-11/12 max-w-4xl max-h-screen overflow-y-auto shadow-2xl">
+            <div class="modal-header flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-100">
+                <div class="modal-title text-2xl font-bold text-gray-700 flex items-center gap-3">
+                    <div class="game-icon w-8 h-8 rounded-full flex items-center justify-center text-white font-bold" id="modalGameIcon">G</div>
+                    <span id="modalGameName">训练详情</span>
+                </div>
+                <span class="close text-gray-400 text-3xl font-bold cursor-pointer transition-colors duration-300 hover:text-gray-700">&times;</span>
+            </div>
+            <div id="modalContent">
+                <!-- 详情内容将在这里动态加载 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 示例训练配置数据
+        const game_config = {
+            "数字记忆": {
+                duration: [82, 80, 20, 95, 76, 88, 92, 85, 90, 78, 83, 87, 91, 79, 86],
+                difficulty: [3, 3, 1, 4, 2, 3, 4, 3, 4, 2, 3, 3, 4, 2, 3],
+                levels: [5, 10, 5, 12, 8, 9, 11, 8, 10, 7, 8, 9, 11, 6, 9],
+                points: [80, 75, 100, 120, 65, 85, 110, 88, 95, 70, 82, 90, 105, 68, 87],
+                totalPoints: 1320,
+                accuracy: [100, 80, 100, 90, 85, 95, 88, 92, 89, 87, 91, 93, 86, 85, 90],
+                time: [250806, 250806, 250801, 250805, 250804, 250803, 250802, 250800, 250799, 250798, 250795, 250790, 250785, 250780, 250777]
+            },
+            "色彩位置记忆": {
+                duration: [45, 38, 52, 41, 49, 44, 50, 46, 43, 48],
+                difficulty: [2, 2, 3, 2, 3, 2, 3, 2, 2, 3],
+                levels: [6, 8, 7, 9, 8, 7, 9, 6, 7, 8],
+                points: [70, 85, 95, 75, 90, 72, 88, 74, 80, 92],
+                totalPoints: 821,
+                accuracy: [95, 88, 92, 85, 94, 89, 91, 87, 93, 96],
+                time: [250806, 250805, 250804, 250803, 250802, 250800, 250798, 250795, 250790, 250785]
+            },
+            "听觉记忆": {
+                duration: [60, 55, 48, 62, 58, 53, 56, 59, 51, 57, 54, 61],
+                difficulty: [1, 2, 1, 2, 2, 1, 2, 2, 1, 2, 1, 2],
+                levels: [4, 7, 5, 8, 6, 5, 7, 8, 4, 7, 5, 8],
+                points: [60, 80, 55, 85, 70, 65, 78, 82, 58, 76, 62, 84],
+                totalPoints: 855,
+                accuracy: [90, 85, 92, 88, 86, 91, 89, 87, 93, 85, 88, 86],
+                time: [250806, 250805, 250804, 250803, 250802, 250801, 250799, 250798, 250795, 250790, 250785, 250780]
+            },
+            "翻牌记忆": {
+                duration: [35, 42, 38, 40, 36, 41, 39, 37],
+                difficulty: [1, 1, 2, 2, 1, 2, 1, 2],
+                levels: [3, 4, 5, 6, 4, 5, 3, 5],
+                points: [45, 55, 70, 80, 50, 68, 48, 72],
+                totalPoints: 488,
+                accuracy: [100, 95, 88, 85, 98, 90, 96, 87],
+                time: [250806, 250805, 250804, 250803, 250800, 250798, 250795, 250790]
+            }
+        };
+
+        let currentPeriod = 'month';
+        let gameChart = null;
+
+        function formatDate(dateNum) {
+            const dateStr = dateNum.toString();
+            if (dateStr.length === 6) {
+                const year = '20' + dateStr.substring(0, 2);
+                const month = dateStr.substring(2, 4);
+                const day = dateStr.substring(4, 6);
+                return `${year}-${month}-${day}`;
+            }
+            return dateStr;
+        }
+
+        function formatDuration(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return minutes > 0 ? `${minutes}分${secs}秒` : `${secs}秒`;
+        }
+
+        function filterDataByPeriod(gameData, period) {
+            const today = 250806; // 当前日期
+            const weekAgo = 250801; // 7天前
+            const monthAgo = 250777; // 30天前
+            
+            const filteredData = {};
+            
+            for (const [gameName, data] of Object.entries(gameData)) {
+                const indices = [];
+                
+                data.time.forEach((time, index) => {
+                    if (period === 'today' && time === today) {
+                        indices.push(index);
+                    } else if (period === 'week' && time >= weekAgo) {
+                        indices.push(index);
+                    } else if (period === 'month' && time >= monthAgo) {
+                        indices.push(index);
+                    } else if (period === 'all') {
+                        indices.push(index);
+                    }
+                });
+                
+                if (indices.length > 0) {
+                    filteredData[gameName] = {
+                        duration: indices.map(i => data.duration[i]),
+                        difficulty: indices.map(i => data.difficulty[i]),
+                        levels: indices.map(i => data.levels[i]),
+                        points: indices.map(i => data.points[i]),
+                        accuracy: indices.map(i => data.accuracy[i]),
+                        time: indices.map(i => data.time[i]),
+                        totalPoints: indices.reduce((sum, i) => sum + data.points[i], 0)
+                    };
+                }
+            }
+            
+            return filteredData;
+        }
+
+        function calculateSummary(filteredData) {
+            let totalGames = 0;
+            let totalPoints = 0;
+            let totalDuration = 0;
+            let accuracySum = 0;
+            let accuracyCount = 0;
+
+            for (const data of Object.values(filteredData)) {
+                totalGames += data.points.length;
+                totalPoints += data.totalPoints;
+                totalDuration += data.duration.reduce((sum, d) => sum + d, 0);
+                accuracySum += data.accuracy.reduce((sum, a) => sum + a, 0);
+                accuracyCount += data.accuracy.length;
+            }
+
+            return {
+                totalGames,
+                totalPoints,
+                avgAccuracy: accuracyCount > 0 ? Math.round(accuracySum / accuracyCount) : 0,
+                totalDuration: Math.round(totalDuration / 60) // 转换为分钟
+            };
+        }
+
+        function renderSummary(summary) {
+            const summarySection = document.getElementById('summary-section');
+            
+            summarySection.innerHTML = `
+                <div class="summary-card text-white rounded-xl p-6 mb-8 text-center">
+                    <div class="text-xl mb-4 font-medium">📊 ${getPeriodText(currentPeriod)}统计概览</div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+                        <div class="text-center">
+                            <div class="text-3xl font-bold mb-1">${summary.totalGames}</div>
+                            <div class="text-sm opacity-90">训练场次</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold mb-1">${summary.totalPoints}</div>
+                            <div class="text-sm opacity-90">总积分</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold mb-1">${summary.avgAccuracy}%</div>
+                            <div class="text-sm opacity-90">平均准确率</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold mb-1">${summary.totalDuration}</div>
+                            <div class="text-sm opacity-90">总训练时间(分钟)</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderChart(filteredData) {
+            const chartSection = document.getElementById('chart-section');
+            
+            if (Object.keys(filteredData).length === 0) {
+                chartSection.innerHTML = '';
+                return;
+            }
+
+            // 计算每个训练的累计时长（分钟）
+            const gameStats = [];
+            for (const [gameName, data] of Object.entries(filteredData)) {
+                const totalDuration = data.duration.reduce((sum, d) => sum + d, 0);
+                gameStats.push({
+                    name: gameName,
+                    duration: Math.round(totalDuration / 60), // 转换为分钟
+                    rawData: data
+                });
+            }
+
+            // 按时长从高到低排序
+            gameStats.sort((a, b) => b.duration - a.duration);
+
+            chartSection.innerHTML = `
+                <div class="bg-white rounded-xl p-6 mb-8 shadow-sm overflow-x-auto">
+                    <div class="text-xl font-bold text-gray-700 mb-5 text-center">📊 训练累计时长统计</div>
+                    <div class="relative h-96 min-w-full" style="min-width: 600px;">
+                        <canvas id="gameChart"></canvas>
+                    </div>
+                </div>
+            `;
+
+            const ctx = document.getElementById('gameChart').getContext('2d');
+            
+            // 销毁之前的图表
+            if (gameChart) {
+                gameChart.destroy();
+            }
+
+            gameChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: gameStats.map(stat => stat.name),
+                    datasets: [{
+                        label: '累计时长 (分钟)',
+                        data: gameStats.map(stat => stat.duration),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)', 
+                            'rgba(255, 205, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)',
+                            'rgba(255, 159, 64, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 205, 86, 1)', 
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 5,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `累计时长: ${context.parsed.y} 分钟`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '累计时长 (分钟)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '训练名称',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const gameName = gameStats[index].name;
+                            const gameData = gameStats[index].rawData;
+                            showGameModal(gameName, gameData);
+                        }
+                    },
+                    onHover: (event, elements) => {
+                        event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+                    }
+                }
+            });
+        }
+
+        function showGameModal(gameName, gameData) {
+            const modal = document.getElementById('gameModal');
+            const modalGameName = document.getElementById('modalGameName');
+            const modalGameIcon = document.getElementById('modalGameIcon');
+            const modalContent = document.getElementById('modalContent');
+
+            modalGameName.textContent = gameName;
+            modalGameIcon.textContent = gameName.charAt(0);
+
+            // 计算总体统计
+            const totalGames = gameData.points.length;
+            const totalPoints = gameData.totalPoints || gameData.points.reduce((sum, p) => sum + p, 0);
+            const totalDuration = gameData.duration.reduce((sum, d) => sum + d, 0);
+            const avgAccuracy = Math.round(gameData.accuracy.reduce((sum, a) => sum + a, 0) / gameData.accuracy.length);
+            const maxLevel = Math.max(...gameData.levels);
+
+            // 按难度分组统计
+            const difficultyStats = {};
+            gameData.difficulty.forEach((diff, index) => {
+                if (!difficultyStats[diff]) {
+                    difficultyStats[diff] = {
+                        duration: [],
+                        levels: [],
+                        accuracy: [],
+                        points: []
+                    };
+                }
+                difficultyStats[diff].duration.push(gameData.duration[index]);
+                difficultyStats[diff].levels.push(gameData.levels[index]);
+                difficultyStats[diff].accuracy.push(gameData.accuracy[index]);
+                difficultyStats[diff].points.push(gameData.points[index]);
+            });
+
+            let difficultyHtml = '';
+            Object.entries(difficultyStats).sort(([a], [b]) => a - b).forEach(([difficulty, stats]) => {
+                const diffTotalDuration = stats.duration.reduce((sum, d) => sum + d, 0);
+                const diffAvgAccuracy = Math.round(stats.accuracy.reduce((sum, a) => sum + a, 0) / stats.accuracy.length);
+                const diffMaxLevel = Math.max(...stats.levels);
+                const diffTotalPoints = stats.points.reduce((sum, p) => sum + p, 0);
+                const diffGameCount = stats.duration.length;
+
+                difficultyHtml += `
+                    <div class="difficulty-card">
+                        <div class="difficulty-header">
+                            ${'★'.repeat(parseInt(difficulty))} 难度等级 ${difficulty}
+                        </div>
+                        <div class="difficulty-stats">
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">训练次数</div>
+                                <div class="difficulty-stat-value">${diffGameCount} 次</div>
+                            </div>
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">训练时长</div>
+                                <div class="difficulty-stat-value">${formatDuration(diffTotalDuration)}</div>
+                            </div>
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">最高关卡</div>
+                                <div class="difficulty-stat-value">第${diffMaxLevel}关</div>
+                            </div>
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">平均准确率</div>
+                                <div class="difficulty-stat-value">${diffAvgAccuracy}%</div>
+                            </div>
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">获得积分</div>
+                                <div class="difficulty-stat-value">${diffTotalPoints}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            modalContent.innerHTML = `
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="detail-label">总训练次数</div>
+                        <div class="detail-value">${totalGames}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">总积分</div>
+                        <div class="detail-value">${totalPoints}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">总时长</div>
+                        <div class="detail-value">${formatDuration(totalDuration)}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">平均准确率</div>
+                        <div class="detail-value">${avgAccuracy}%</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">最高关卡</div>
+                        <div class="detail-value">第${maxLevel}关</div>
+                    </div>
+                </div>
+
+                <div class="difficulty-section">
+                    <div class="difficulty-title">📈 不同难度下的详细统计</div>
+                    ${difficultyHtml}
+                </div>
+            `;
+
+            modal.style.display = 'block';
+            modal.classList.remove('hidden');
+        }
+
+        function renderGames(filteredData) {
+            const gamesSection = document.getElementById('games-section');
+            
+            if (Object.keys(filteredData).length === 0) {
+                gamesSection.innerHTML = '<div class="text-center py-12 text-gray-500 text-lg">📭 该时间段内暂无训练数据</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            for (const [gameName, data] of Object.entries(filteredData)) {
+                const avgAccuracy = Math.round(data.accuracy.reduce((sum, a) => sum + a, 0) / data.accuracy.length);
+                const avgDuration = Math.round(data.duration.reduce((sum, d) => sum + d, 0) / data.duration.length);
+                const maxLevel = Math.max(...data.levels);
+                const gameCount = data.points.length;
+                
+                html += `
+                    <div class="game-card bg-white rounded-xl p-6 mb-5 shadow-sm transition-transform duration-300 hover:shadow-lg">
+                        <div class="text-2xl font-bold text-gray-700 mb-5 flex items-center gap-3">
+                            <div class="game-icon w-8 h-8 rounded-full flex items-center justify-center text-white font-bold">${gameName.charAt(0)}</div>
+                            ${gameName}
+                        </div>
+                        
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-5">
+                            <div class="stat-item text-white p-4 rounded-lg text-center">
+                                <div class="text-xs opacity-90 mb-1">训练次数</div>
+                                <div class="text-lg font-bold">${gameCount} 次</div>
+                            </div>
+                            <div class="stat-item text-white p-4 rounded-lg text-center">
+                                <div class="text-xs opacity-90 mb-1">总积分</div>
+                                <div class="text-lg font-bold">${data.totalPoints}</div>
+                            </div>
+                            <div class="stat-item text-white p-4 rounded-lg text-center">
+                                <div class="text-xs opacity-90 mb-1">平均准确率</div>
+                                <div class="text-lg font-bold">${avgAccuracy}%</div>
+                            </div>
+                            <div class="stat-item text-white p-4 rounded-lg text-center">
+                                <div class="text-xs opacity-90 mb-1">平均时长</div>
+                                <div class="text-lg font-bold">${formatDuration(avgDuration)}</div>
+                            </div>
+                            <div class="stat-item text-white p-4 rounded-lg text-center">
+                                <div class="text-xs opacity-90 mb-1">最高关卡</div>
+                                <div class="text-lg font-bold">第${maxLevel}关</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h4 class="mb-3 text-gray-700 font-medium">🎯 训练记录详情</h4>
+                            ${data.points.map((point, index) => `
+                                <div class="bg-gray-50 p-3 rounded-lg mb-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
+                                    <div class="flex flex-col">
+                                        <div class="text-gray-500 text-xs mb-1">日期</div>
+                                        <div class="font-medium text-gray-700">${formatDate(data.time[index])}</div>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="text-gray-500 text-xs mb-1">时长</div>
+                                        <div class="font-medium text-gray-700">${formatDuration(data.duration[index])}</div>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="text-gray-500 text-xs mb-1">难度</div>
+                                        <div class="font-medium text-gray-700">★ ${data.difficulty[index]}</div>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="text-gray-500 text-xs mb-1">关卡</div>
+                                        <div class="font-medium text-gray-700">第${data.levels[index]}关</div>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="text-gray-500 text-xs mb-1">积分</div>
+                                        <div class="font-medium text-gray-700">${point}</div>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="text-gray-500 text-xs mb-1">准确率</div>
+                                        <div class="font-medium text-gray-700">${data.accuracy[index]}%</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            gamesSection.innerHTML = html;
+        }
+
+        function getPeriodText(period) {
+            switch(period) {
+                case 'today': return '今日';
+                case 'week': return '最近7天';
+                case 'month': return '最近30天';
+                case 'all': return '全部历史';
+                default: return '';
+            }
+        }
+
+        function updateDisplay() {
+            const filteredData = filterDataByPeriod(game_config, currentPeriod);
+            const summary = calculateSummary(filteredData);
+            
+            renderSummary(summary);
+            renderChart(filteredData);
+            renderGames(filteredData);
+        }
+
+        function initPage() {
+            // 初始化显示
+            updateDisplay();
+            
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentPeriod = this.dataset.period;
+                    updateDisplay();
+                });
+            });
+
+            // 模态框事件
+            const modal = document.getElementById('gameModal');
+            const closeBtn = modal.querySelector('.close');
+
+            closeBtn.addEventListener('click', function() {
+                modal.style.display = 'none';
+                modal.classList.add('hidden');
+            });
+
+            window.addEventListener('click', function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                    modal.classList.add('hidden');
+                }
+            });
+
+            // ESC键关闭模态框
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+                    modal.style.display = 'none';
+                    modal.classList.add('hidden');
+                }
+            });
+        }
+        initPage();
+    </script>
+</body>
+</html>
