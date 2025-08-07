@@ -1,0 +1,264 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wiki Articles Viewer</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'wiki-blue': '#0645ad',
+                        'wiki-gray': '#f6f6f6'
+                    }
+                }
+            }
+        }
+    </script>    <style>
+        /* 中文百度百科iframe隐藏顶部320像素 */
+        .iframe-zh-hidden-top {
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* 使用transform和margin来隐藏顶部内容，不占用空间 */
+        .iframe-zh-hidden-top iframe {
+            width: 100%;
+            height: calc(100% + 220px);
+            margin-top: -220px;
+            border: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-80 bg-white border-r border-gray-300 flex flex-col">
+            <!-- Header -->
+            <div class="bg-wiki-blue text-white p-4">
+                <h1 class="text-xl font-bold mb-3" id="pageTitle">Wikipedia Articles</h1>
+                
+                <!-- Language Selector -->
+                <div class="flex space-x-2">
+                    <button onclick="setLanguage('en')" 
+                            class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                            id="enBtn">English</button>
+                    <button onclick="setLanguage('zh')" 
+                            class="px-3 py-1 bg-gray-400 text-white rounded text-sm hover:bg-gray-500 transition-colors"
+                            id="zhBtn">中文</button>
+                </div>
+            </div>
+
+            <!-- Articles List -->
+            <div class="flex-1 overflow-y-auto p-4">
+                <h2 class="text-lg font-semibold mb-3 text-gray-800" id="articlesTitle">Featured Articles</h2>
+                <ul class="space-y-2" id="articlesList">
+                    <!-- Articles will be populated by JavaScript -->
+                </ul>
+            </div>
+
+            <!-- Footer Info -->
+            <div class="p-4 bg-gray-50 border-t text-xs text-gray-600">
+                <p id="footerText">Click on any article to view it in the main panel</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col">
+            <!-- Top Bar -->
+            <div class="bg-white border-b border-gray-300 p-4">
+                <h2 class="text-lg font-semibold text-gray-800" id="currentArticle">Select an article to get started</h2>
+                <div class="flex items-center mt-2 space-x-4">
+                    <button onclick="refreshIframe()" 
+                            class="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors">
+                        <span id="refreshBtn">Refresh</span>
+                    </button>
+                    <button onclick="openInNewTab()" 
+                            class="px-3 py-1 bg-wiki-blue text-white rounded text-sm hover:bg-blue-700 transition-colors">
+                        <span id="openNewBtn">Open in New Tab</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 relative">
+                <div id="welcomeMessage" class="flex items-center justify-center h-full bg-wiki-gray">
+                    <div class="text-center">
+                        <div class="text-6xl mb-4">📚</div>
+                        <h3 class="text-2xl font-semibold text-gray-700 mb-2" id="welcomeTitle">Welcome to Wiki Viewer</h3>
+                        <p class="text-gray-600" id="welcomeDesc">Select an article from the sidebar to start reading</p>
+                    </div>
+                </div>
+                <div id="iframeWrapper" class="w-full h-full relative">
+                    <iframe id="wikiFrame" 
+                            class="w-full h-full border-0 hidden"
+                            sandbox="allow-scripts allow-same-origin allow-popups allow-forms">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentLanguage = 'en';
+        let currentUrl = '';
+
+        const translations = {
+            en: {
+                pageTitle: 'Wikipedia Articles',
+                articlesTitle: 'Featured Articles',
+                footerText: 'Click on any article to view it in the main panel',
+                currentArticle: 'Select an article to get started',
+                refreshBtn: 'Refresh',
+                openNewBtn: 'Open in New Tab',
+                welcomeTitle: 'Welcome to Wiki Viewer',
+                welcomeDesc: 'Select an article from the sidebar to start reading'
+            },            zh: {
+                pageTitle: '百度百科文章',
+                articlesTitle: '精选文章',
+                footerText: '点击任意文章在主面板中查看',
+                currentArticle: '选择一篇文章开始阅读',
+                refreshBtn: '刷新',
+                openNewBtn: '新标签页打开',
+                welcomeTitle: '欢迎使用百科浏览器',
+                welcomeDesc: '从侧边栏选择文章开始阅读'
+            }
+        };        
+        const articles = {
+            en: [
+                { title: 'Artificial Intelligence', keyword: 'Artificial_intelligence' },
+                { title: 'Climate Change', keyword: 'Climate_change' },
+                { title: 'Quantum Computing', keyword: 'Quantum_computing' },
+                { title: 'Renewable Energy', keyword: 'Renewable_energy' },
+                { title: 'Space Exploration', keyword: 'Space_exploration' },
+                { title: 'Biodiversity', keyword: 'Biodiversity' },
+                { title: 'Internet', keyword: 'Internet' },
+                { title: 'Human Rights', keyword: 'Human_rights' },
+                { title: 'Philosophy', keyword: 'Philosophy' },
+                { title: 'World War II', keyword: 'World_War_II' }
+            ],            zh: [
+                { title: '人工智能', keyword: '人工智能' },
+                { title: '气候变化', keyword: '气候变化' },
+                { title: '量子计算', keyword: '量子计算' },
+                { title: '可再生能源', keyword: '可再生能源' },
+                { title: '太空探索', keyword: '太空探索' },
+                { title: '生物多样性', keyword: '生物多样性' },
+                { title: '互联网', keyword: '互联网' },
+                { title: '人权', keyword: '人权' },
+                { title: '哲学', keyword: '哲学' },
+                { title: '第二次世界大战', keyword: '第二次世界大战' },
+                { title: '中华人民共和国', keyword: '中华人民共和国' },
+                { title: '计算机科学', keyword: '计算机科学' }
+            ]
+        };
+
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            
+            // Update button styles
+            document.getElementById('enBtn').className = lang === 'en' ? 
+                'px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors' :
+                'px-3 py-1 bg-gray-400 text-white rounded text-sm hover:bg-gray-500 transition-colors';
+            
+            document.getElementById('zhBtn').className = lang === 'zh' ? 
+                'px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors' :
+                'px-3 py-1 bg-gray-400 text-white rounded text-sm hover:bg-gray-500 transition-colors';
+
+            // Update text content
+            const t = translations[lang];
+            document.getElementById('pageTitle').textContent = t.pageTitle;
+            document.getElementById('articlesTitle').textContent = t.articlesTitle;
+            document.getElementById('footerText').textContent = t.footerText;
+            document.getElementById('refreshBtn').textContent = t.refreshBtn;
+            document.getElementById('openNewBtn').textContent = t.openNewBtn;
+            document.getElementById('welcomeTitle').textContent = t.welcomeTitle;
+            document.getElementById('welcomeDesc').textContent = t.welcomeDesc;
+            
+            if (!currentUrl) {
+                document.getElementById('currentArticle').textContent = t.currentArticle;
+            }            // Update articles list
+            updateArticlesList();
+            
+            // 如果当前有打开的iframe，根据语言调整样式
+            const iframe = document.getElementById('wikiFrame');
+            const iframeWrapper = document.getElementById('iframeWrapper');
+            if (currentUrl && !iframe.classList.contains('hidden')) {
+                if (lang === 'zh' && currentUrl.includes('baike.baidu.com')) {
+                    iframeWrapper.classList.add('iframe-zh-hidden-top');
+                } else {
+                    iframeWrapper.classList.remove('iframe-zh-hidden-top');
+                }
+            }
+        }        
+        function updateArticlesList() {
+            const articlesList = document.getElementById('articlesList');
+            articlesList.innerHTML = '';
+            
+            const sourceLabel = currentLanguage === 'zh' ? '百度百科' : 'Wikipedia Article';
+            const baseUrl = currentLanguage === 'zh' ? 'https://baike.baidu.com/item/' : 'https://en.wikipedia.org/wiki/';
+            
+            articles[currentLanguage].forEach(article => {
+                const li = document.createElement('li');
+                const fullUrl = baseUrl + article.keyword;
+                li.innerHTML = `
+                    <button onclick="loadArticle('${fullUrl}', '${article.title}')" 
+                            class="w-full text-left p-3 rounded hover:bg-blue-50 hover:text-wiki-blue transition-colors border border-transparent hover:border-blue-200">
+                        <div class="font-medium text-gray-800">${article.title}</div>
+                        <div class="text-xs text-gray-500 mt-1">${sourceLabel}</div>
+                    </button>
+                `;
+                articlesList.appendChild(li);
+            });
+        }        
+        function loadArticle(url, title) {
+            currentUrl = url;
+            document.getElementById('currentArticle').textContent = title;
+            document.getElementById('welcomeMessage').classList.add('hidden');
+            
+            const iframe = document.getElementById('wikiFrame');
+            const iframeWrapper = document.getElementById('iframeWrapper');
+            iframe.classList.remove('hidden');
+            
+            // 如果是中文百度百科，添加隐藏顶部的样式
+            if (currentLanguage === 'zh' && url.includes('baike.baidu.com')) {
+                iframeWrapper.classList.add('iframe-zh-hidden-top');
+            } else {
+                iframeWrapper.classList.remove('iframe-zh-hidden-top');
+            }
+            
+            iframe.src = url;
+        }
+        function refreshIframe() {
+            if (currentUrl) {
+                const iframe = document.getElementById('wikiFrame');
+                const iframeWrapper = document.getElementById('iframeWrapper');
+                
+                // 刷新时也要保持样式
+                if (currentLanguage === 'zh' && currentUrl.includes('baike.baidu.com')) {
+                    iframeWrapper.classList.add('iframe-zh-hidden-top');
+                } else {
+                    iframeWrapper.classList.remove('iframe-zh-hidden-top');
+                }
+                
+                iframe.src = currentUrl;
+            }
+        }
+
+        function openInNewTab() {
+            if (currentUrl) {
+                window.open(currentUrl, '_blank');
+            }
+        }
+
+        // Initialize the page
+        setLanguage('en');
+
+        // Handle iframe load errors
+        document.getElementById('wikiFrame').onerror = function() {
+            this.src = 'about:blank';
+            alert('Unable to load the Wikipedia page. This might be due to X-Frame-Options restrictions. Try opening in a new tab instead.');
+        };
+    </script>
+</body>
+</html>

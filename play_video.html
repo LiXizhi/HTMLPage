@@ -1,0 +1,965 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>视频播放</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        
+        .video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 1;
+        }
+        
+        .video-player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+        
+        /* 隐藏视频播放器的默认控制条 */
+        .video-player::-webkit-media-controls {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-panel {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-play-button {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-start-playback-button {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-timeline {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-current-time-display {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-time-remaining-display {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-mute-button {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-volume-slider {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-fullscreen-button {
+            display: none !important;
+        }
+        
+        .video-player::-webkit-media-controls-overlay-play-button {
+            display: none !important;
+        }
+        
+        .loading-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b6b;
+            font-size: 18px;
+            text-align: center;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .video-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        
+        .control-btn {
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            font-size: 24px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+        
+        .fullscreen-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            font-size: 20px;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            opacity: 0.8;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .fullscreen-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+        
+        /* 移动端优化 */
+        @media (max-width: 768px) {
+            .control-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 20px;
+            }
+            
+            .fullscreen-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+        }
+        
+        /* 触控优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .control-btn:hover,
+            .fullscreen-btn:hover {
+                transform: none;
+                background: rgba(0, 0, 0, 0.6);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="video-container">
+        <div id="loadingMessage" class="loading-message">
+            视频加载中...
+        </div>
+        
+        <div id="errorMessage" class="error-message" style="display: none;">
+            视频加载失败，请重试
+        </div>
+        
+        <video id="videoPlayer" class="video-player" style="display: none;" 
+               preload="metadata" 
+               playsinline 
+               webkit-playsinline 
+               controls="false" 
+               disablePictureInPicture
+               controlslist="nodownload nofullscreen noremoteplayback">
+            您的浏览器不支持视频播放。
+        </video>
+        
+        <!-- 控制按钮 -->
+        <!-- <div class="video-controls" id="videoControls" style="display: none;">
+            <button class="control-btn" id="playPauseBtn" title="播放/暂停">
+                ▶
+            </button>
+            <button class="control-btn" id="muteBtn" title="静音/取消静音">
+                🔊
+            </button>
+        </div> -->
+        
+        <!-- 全屏按钮 -->
+        <!-- <button class="fullscreen-btn" id="fullscreenBtn" style="display: none;" title="全屏">
+            ⛶
+        </button> -->
+    </div>
+
+    <script>
+        let videoPlayer = null;
+        let loadingMessage = null;
+        let errorMessage = null;
+        let videoControls = null;
+        let playPauseBtn = null;
+        let muteBtn = null;
+        let fullscreenBtn = null;
+        let controlsTimeout = null;
+        let gameLoaded = false;
+        
+        // 固定视频URL
+        const videoUrl = 'https://api.keepwork.com/ts-storage/siteFiles/46434/raw#dragon_change.mp4';
+        
+        // 游戏配置
+        let game_config = {
+            id: 'video_player',
+            videoUrl: videoUrl
+        };
+        
+        // 初始化游戏
+        function initializeGame() {
+            // 获取DOM元素
+            videoPlayer = document.getElementById('videoPlayer');
+            loadingMessage = document.getElementById('loadingMessage');
+            errorMessage = document.getElementById('errorMessage');
+            videoControls = document.getElementById('videoControls');
+            playPauseBtn = document.getElementById('playPauseBtn');
+            muteBtn = document.getElementById('muteBtn');
+            fullscreenBtn = document.getElementById('fullscreenBtn');
+            
+            // 绑定事件
+            if (playPauseBtn) {
+                playPauseBtn.addEventListener('click', togglePlayPause);
+                playPauseBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    togglePlayPause();
+                });
+            }
+            
+            if (muteBtn) {
+                muteBtn.addEventListener('click', toggleMute);
+                muteBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    toggleMute();
+                });
+            }
+            
+            if (fullscreenBtn) {
+                fullscreenBtn.addEventListener('click', toggleFullscreen);
+                fullscreenBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    toggleFullscreen();
+                });
+            }
+            
+            // 全屏状态变化监听
+            document.addEventListener('fullscreenchange', updateFullscreenButton);
+            document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+            
+            // 防止页面缩放
+            document.addEventListener('gesturestart', function(e) {
+                e.preventDefault();
+            });
+            
+            document.addEventListener('gesturechange', function(e) {
+                e.preventDefault();
+            });
+            
+            document.addEventListener('gestureend', function(e) {
+                e.preventDefault();
+            });
+            
+            // 防止移动端的默认手势
+            document.addEventListener('touchstart', function(e) {
+                if (e.touches.length > 1) {
+                    e.preventDefault();
+                }
+            });
+            
+            document.addEventListener('touchmove', function(e) {
+                if (e.touches.length > 1) {
+                    e.preventDefault();
+                }
+            });
+            
+            // 自动加载视频
+            loadVideo(videoUrl);
+        }
+        
+        // 显示控制按钮（临时）
+        function showControlsTemporarily() {
+            if (videoControls && fullscreenBtn) {
+                videoControls.style.opacity = '0.8';
+                fullscreenBtn.style.opacity = '0.8';
+                
+                // 清除之前的定时器
+                if (controlsTimeout) {
+                    clearTimeout(controlsTimeout);
+                }
+                
+                // 3秒后隐藏控制按钮
+                controlsTimeout = setTimeout(() => {
+                    if (videoControls && fullscreenBtn) {
+                        videoControls.style.opacity = '0.3';
+                        fullscreenBtn.style.opacity = '0.3';
+                    }
+                }, 3000);
+            }
+        }
+        
+        // 切换播放/暂停
+        function togglePlayPause() {
+            if (videoPlayer) {
+                if (videoPlayer.paused) {
+                    videoPlayer.play();
+                } else {
+                    videoPlayer.pause();
+                }
+            }
+        }
+        
+        // 切换静音
+        function toggleMute() {
+            if (videoPlayer) {
+                videoPlayer.muted = !videoPlayer.muted;
+            }
+        }
+        
+        // 切换全屏
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                // 进入全屏
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                }
+            } else {
+                // 退出全屏
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+        
+        // 更新播放/暂停按钮
+        function updatePlayPauseButton() {
+            if (playPauseBtn && videoPlayer) {
+                playPauseBtn.textContent = videoPlayer.paused ? '▶' : '⏸';
+            }
+        }
+        
+        // 更新静音按钮
+        function updateMuteButton() {
+            if (muteBtn && videoPlayer) {
+                muteBtn.textContent = videoPlayer.muted ? '🔇' : '🔊';
+            }
+        }
+        
+        // 更新全屏按钮
+        function updateFullscreenButton() {
+            if (fullscreenBtn) {
+                const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+                fullscreenBtn.textContent = isFullscreen ? '⛶' : '⛶';
+            }
+        }
+        
+        // 显示加载消息
+        function showLoading() {
+            if (loadingMessage) loadingMessage.style.display = 'block';
+            if (errorMessage) errorMessage.style.display = 'none';
+            if (videoPlayer) videoPlayer.style.display = 'none';
+            if (videoControls) videoControls.style.display = 'none';
+            if (fullscreenBtn) fullscreenBtn.style.display = 'none';
+        }
+        
+        // 显示视频
+        function showVideo() {
+            if (loadingMessage) loadingMessage.style.display = 'none';
+            if (errorMessage) errorMessage.style.display = 'none';
+            if (videoPlayer) videoPlayer.style.display = 'block';
+            if (videoControls) videoControls.style.display = 'flex';
+            if (fullscreenBtn) fullscreenBtn.style.display = 'flex';
+            
+            // 初始化按钮状态
+            updatePlayPauseButton();
+            updateMuteButton();
+            updateFullscreenButton();
+            
+            // 显示控制按钮
+            showControlsTemporarily();
+        }
+        
+        // 显示错误消息
+        function showError() {
+            if (loadingMessage) loadingMessage.style.display = 'none';
+            if (errorMessage) errorMessage.style.display = 'block';
+            if (videoPlayer) videoPlayer.style.display = 'none';
+            if (videoControls) videoControls.style.display = 'none';
+            if (fullscreenBtn) fullscreenBtn.style.display = 'none';
+        }
+        
+        // 尝试自动播放 - 针对网页环境优化
+        function tryAutoPlay() {
+            if (videoPlayer) {
+                // 设置静音以提高自动播放成功率
+                videoPlayer.muted = true;
+                
+                // 多次尝试播放，提高成功率
+                let playAttempts = 0;
+                const maxAttempts = 5; // 增加尝试次数
+                
+                function attemptPlay() {
+                    playAttempts++;
+                    console.log(`尝试自动播放 (第${playAttempts}次)`);
+                    
+                    const playPromise = videoPlayer.play();
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            console.log('自动播放成功');
+                            // 自动播放成功后可以尝试取消静音
+                            setTimeout(() => {
+                                if (videoPlayer && !videoPlayer.paused) {
+                                    videoPlayer.muted = false;
+                                }
+                            }, 1000);
+                        }).catch(error => {
+                            console.log(`自动播放失败 (第${playAttempts}次):`, error);
+                            
+                            // 如果还有尝试次数，延迟后再试
+                            if (playAttempts < maxAttempts) {
+                                setTimeout(attemptPlay, 300 + playAttempts * 200); // 递增延迟
+                            } else {
+                                // 所有尝试都失败，显示提示信息
+                                updatePlayPauseButton();
+                                if (loadingMessage) {
+                                    loadingMessage.innerHTML = '点击任意位置开始播放视频';
+                                    loadingMessage.style.display = 'block';
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                // 立即尝试第一次
+                attemptPlay();
+                
+                // 设置多个延迟尝试，针对网页环境
+                const delays = [500, 1000, 2000, 3000];
+                delays.forEach((delay, index) => {
+                    setTimeout(() => {
+                        if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                            console.log(`延迟尝试自动播放 (${delay}ms)`);
+                            videoPlayer.play().catch(error => {
+                                console.log(`延迟自动播放失败 (${delay}ms):`, error);
+                            });
+                        }
+                    }, delay);
+                });
+            }
+        }
+        
+        // 加载并播放视频
+        function loadVideo(url) {
+            if (!url) {
+                showError();
+                return;
+            }
+            
+            if (!videoPlayer) {
+                showError();
+                return;
+            }
+            
+            // 设置视频源
+            videoPlayer.src = url;
+            
+            // 监听视频加载事件
+            videoPlayer.addEventListener('loadstart', function() {
+                showLoading();
+            });
+            
+            videoPlayer.addEventListener('canplay', function() {
+                showVideo();
+                // 自动播放
+                tryAutoPlay();
+                
+                // 网页环境额外尝试
+                setTimeout(() => {
+                    if (videoPlayer && videoPlayer.paused) {
+                        console.log('canplay事件延迟尝试播放');
+                        tryAutoPlay();
+                    }
+                }, 100);
+            });
+            
+            // 添加更多触发自动播放的事件
+            videoPlayer.addEventListener('loadeddata', function() {
+                console.log('视频数据加载完成，尝试播放');
+                if (videoPlayer.paused) {
+                    tryAutoPlay();
+                }
+            });
+            
+            videoPlayer.addEventListener('canplaythrough', function() {
+                console.log('视频可以流畅播放，尝试播放');
+                if (videoPlayer.paused) {
+                    tryAutoPlay();
+                }
+            });
+            
+            videoPlayer.addEventListener('error', function() {
+                showError();
+            });
+            
+            // 监听视频播放结束事件
+            videoPlayer.addEventListener('ended', function() {
+                updatePlayPauseButton();
+                // 发送视频播放结束事件给父窗口
+                window.parent.postMessage({
+                    type: 'videoEnded',
+                    data: {
+                        closeWindow: true,
+                        id: game_config.id
+                    }
+                }, '*');
+            });
+            
+            videoPlayer.addEventListener('play', function() {
+                updatePlayPauseButton();
+            });
+            
+            videoPlayer.addEventListener('pause', function(e) {
+                updatePlayPauseButton();
+                
+                // 检查是否是意外暂停（非用户主动暂停）
+                // 如果视频不是因为结束而暂停，且不是用户点击暂停，则尝试恢复播放
+                setTimeout(() => {
+                    if (videoPlayer && videoPlayer.paused && !videoPlayer.ended && videoPlayer.readyState >= 2) {
+                        console.log('检测到视频意外暂停，尝试恢复播放');
+                        videoPlayer.play().catch(error => {
+                            console.log('自动恢复播放失败:', error);
+                        });
+                    }
+                }, 500); // 延迟500ms检查，避免与正常暂停操作冲突
+            });
+            
+            videoPlayer.addEventListener('volumechange', function() {
+                updateMuteButton();
+            });
+            
+            // 点击视频时只在暂停状态下播放，避免意外暂停
+            videoPlayer.addEventListener('click', function(e) {
+                e.stopPropagation(); // 阻止事件冒泡
+                if (videoPlayer.paused) {
+                    videoPlayer.play().then(() => {
+                        if (loadingMessage) {
+                            loadingMessage.style.display = 'none';
+                        }
+                    }).catch(error => {
+                        console.log('播放失败:', error);
+                    });
+                }
+                showControlsTemporarily();
+            });
+            
+            // 触摸事件 - 只在暂停状态下播放
+            videoPlayer.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                e.stopPropagation(); // 阻止事件冒泡
+                if (videoPlayer.paused) {
+                    videoPlayer.play().then(() => {
+                        if (loadingMessage) {
+                            loadingMessage.style.display = 'none';
+                        }
+                    }).catch(error => {
+                        console.log('播放失败:', error);
+                    });
+                }
+                showControlsTemporarily();
+            });
+            
+            // 点击页面任意位置播放视频（用于解决自动播放限制）
+            document.addEventListener('click', function(e) {
+                if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                    videoPlayer.play().then(() => {
+                        // 播放成功后隐藏加载提示
+                        if (loadingMessage) {
+                            loadingMessage.style.display = 'none';
+                        }
+                    }).catch(error => {
+                        console.log('播放失败:', error);
+                    });
+                }
+            });
+            
+            // 触摸页面任意位置播放视频
+            document.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1 && videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                    videoPlayer.play().then(() => {
+                        // 播放成功后隐藏加载提示
+                        if (loadingMessage) {
+                            loadingMessage.style.display = 'none';
+                        }
+                    }).catch(error => {
+                        console.log('播放失败:', error);
+                    });
+                }
+            });
+            
+            // 防止视频意外暂停的事件监听
+            
+            // 监听页面可见性变化，防止切换标签页时暂停
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                    // 页面重新可见时，如果视频被暂停且已加载，尝试继续播放
+                    setTimeout(() => {
+                        if (videoPlayer && videoPlayer.paused) {
+                            videoPlayer.play().catch(error => {
+                                console.log('恢复播放失败:', error);
+                            });
+                        }
+                    }, 100);
+                }
+            });
+            
+            // 防止空格键等键盘事件暂停视频
+            document.addEventListener('keydown', function(e) {
+                // 阻止空格键、回车键等可能暂停视频的按键
+                if (e.code === 'Space' || e.code === 'Enter' || e.code === 'MediaPlayPause') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // 如果视频暂停，则播放
+                    if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                        videoPlayer.play().catch(error => {
+                            console.log('键盘播放失败:', error);
+                        });
+                    }
+                }
+            });
+            
+            // 尝试加载视频
+            videoPlayer.load();
+        }
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', function(e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    try {
+                        // 如果是字符串，先解析JSON
+                        game_config = typeof e.data.data === 'string' ? JSON.parse(e.data.data) : e.data.data;
+                        
+                        // 获取视频URL（如果有的话，否则使用默认URL）
+                        const newVideoUrl = game_config.videoUrl || videoUrl;
+                        if (newVideoUrl !== videoPlayer.src) {
+                            loadVideo(newVideoUrl);
+                        }
+                    } catch (error) {
+                        console.error('解析游戏配置失败:', error);
+                        // 使用默认视频URL
+                        loadVideo(videoUrl);
+                    }
+                    break;
+            }
+        });
+        
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeGame();
+            
+            // 网页环境特殊处理：尝试创建用户交互上下文
+            setTimeout(() => {
+                // 创建一个不可见的按钮来模拟用户交互
+                const hiddenButton = document.createElement('button');
+                hiddenButton.style.position = 'absolute';
+                hiddenButton.style.left = '-9999px';
+                hiddenButton.style.opacity = '0';
+                hiddenButton.style.pointerEvents = 'none';
+                document.body.appendChild(hiddenButton);
+                
+                // 尝试触发一个合成的点击事件
+                try {
+                    const clickEvent = new MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    });
+                    hiddenButton.dispatchEvent(clickEvent);
+                    console.log('尝试创建用户交互上下文');
+                } catch (e) {
+                    console.log('无法创建合成交互事件:', e);
+                }
+                
+                // 清理
+                setTimeout(() => {
+                    if (hiddenButton.parentNode) {
+                        hiddenButton.parentNode.removeChild(hiddenButton);
+                    }
+                }, 1000);
+            }, 200);
+        });
+        
+        // 检测是否在iframe中
+        function isInIframe() {
+            try {
+                return window.self !== window.top;
+            } catch (e) {
+                return true;
+            }
+        }
+        
+        // 用户交互检测 - 增强版
+        let userInteracted = false;
+        const interactionEvents = ['click', 'touchstart', 'keydown', 'mousedown', 'pointerdown', 'touchmove'];
+        
+        // 网页环境的积极播放策略
+        function aggressivePlayAttempt() {
+            if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                console.log('执行积极播放尝试');
+                
+                // 确保视频元素可见且有尺寸
+                if (videoPlayer.offsetWidth === 0 || videoPlayer.offsetHeight === 0) {
+                    videoPlayer.style.width = '100%';
+                    videoPlayer.style.height = '100%';
+                }
+                
+                // 设置多个播放属性
+                videoPlayer.muted = true;
+                videoPlayer.autoplay = true;
+                videoPlayer.playsInline = true;
+                
+                // 尝试播放
+                const playPromise = videoPlayer.play();
+                if (playPromise) {
+                    playPromise.then(() => {
+                        console.log('积极播放成功');
+                        setTimeout(() => {
+                            if (videoPlayer && !videoPlayer.paused) {
+                                videoPlayer.muted = false;
+                            }
+                        }, 1000);
+                    }).catch(error => {
+                        console.log('积极播放失败:', error);
+                        
+                        // 如果播放失败，尝试重新加载视频
+                        setTimeout(() => {
+                            if (videoPlayer && videoPlayer.paused) {
+                                console.log('尝试重新加载视频');
+                                const currentSrc = videoPlayer.src;
+                                videoPlayer.load();
+                                setTimeout(() => {
+                                    videoPlayer.play().catch(e => {
+                                        console.log('重新加载后播放失败:', e);
+                                    });
+                                }, 500);
+                            }
+                        }, 1000);
+                    });
+                }
+            }
+        }
+        
+        function markUserInteraction() {
+            if (!userInteracted) {
+                userInteracted = true;
+                console.log('检测到用户交互，尝试播放视频');
+                
+                // 用户交互后立即尝试播放
+                if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                    // 先尝试常规播放
+                    videoPlayer.play().then(() => {
+                        console.log('用户交互后播放成功');
+                        if (loadingMessage) {
+                            loadingMessage.style.display = 'none';
+                        }
+                    }).catch(error => {
+                        console.log('用户交互后播放失败:', error);
+                        // 如果常规播放失败，使用积极播放策略
+                        aggressivePlayAttempt();
+                    });
+                } else {
+                    // 如果视频还没准备好，也尝试积极播放
+                    aggressivePlayAttempt();
+                }
+                
+                // 移除事件监听器
+                interactionEvents.forEach(event => {
+                    document.removeEventListener(event, markUserInteraction);
+                });
+            }
+        }
+        
+        // 添加用户交互监听
+        interactionEvents.forEach(event => {
+            document.addEventListener(event, markUserInteraction, { once: true });
+        });
+        
+        // 网页环境额外的播放触发机制
+        // 监听鼠标移动（轻量级交互检测）
+         let mouseMoveCount = 0;
+         document.addEventListener('mousemove', function() {
+             mouseMoveCount++;
+             if (mouseMoveCount === 3 && videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                 console.log('检测到鼠标活动，尝试播放');
+                 videoPlayer.play().catch(error => {
+                     console.log('鼠标活动播放失败:', error);
+                     // 如果失败，使用积极播放策略
+                     aggressivePlayAttempt();
+                 });
+             }
+         }, { once: true });
+         
+         // 添加更多轻量级交互检测
+         document.addEventListener('mouseenter', function() {
+             if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                 console.log('检测到鼠标进入，尝试播放');
+                 setTimeout(() => {
+                     aggressivePlayAttempt();
+                 }, 100);
+             }
+         }, { once: true });
+        
+        // 监听滚动事件
+         document.addEventListener('scroll', function() {
+             if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                 console.log('检测到滚动事件，尝试播放');
+                 videoPlayer.play().catch(error => {
+                     console.log('滚动事件播放失败:', error);
+                     // 如果失败，使用积极播放策略
+                     aggressivePlayAttempt();
+                 });
+             }
+         }, { once: true });
+         
+         // 网页环境的定时积极尝试
+         let aggressiveAttempts = 0;
+         const maxAggressiveAttempts = 5;
+         const aggressiveInterval = setInterval(() => {
+             aggressiveAttempts++;
+             if (videoPlayer && videoPlayer.paused && aggressiveAttempts <= maxAggressiveAttempts) {
+                 console.log(`定时积极播放尝试 (第${aggressiveAttempts}次)`);
+                 aggressivePlayAttempt();
+             }
+             
+             if (aggressiveAttempts >= maxAggressiveAttempts || (videoPlayer && !videoPlayer.paused)) {
+                 clearInterval(aggressiveInterval);
+             }
+         }, 3000); // 每3秒尝试一次
+        
+        // 如果在iframe中，添加额外的播放尝试
+        if (isInIframe()) {
+            console.log('检测到iframe环境，启用增强播放策略');
+            
+            // 监听父窗口的消息
+            window.addEventListener('message', function(e) {
+                if (e.data.type === 'tryPlay' || e.data.type === 'userInteraction') {
+                    console.log('收到父窗口播放指令');
+                    if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                        videoPlayer.play().catch(error => {
+                            console.log('父窗口指令播放失败:', error);
+                        });
+                    }
+                }
+            });
+            
+            // 定期检查并尝试播放（仅在iframe中）- 增加频率
+            let checkCount = 0;
+            const maxChecks = 15; // 增加检查次数
+            const checkInterval = setInterval(() => {
+                checkCount++;
+                if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2 && checkCount <= maxChecks) {
+                    console.log(`iframe环境定期检查播放 (第${checkCount}次)`);
+                    videoPlayer.play().catch(error => {
+                        console.log('定期检查播放失败:', error);
+                    });
+                }
+                
+                if (checkCount >= maxChecks || (videoPlayer && !videoPlayer.paused)) {
+                    clearInterval(checkInterval);
+                }
+            }, 1000); // 减少间隔时间
+            
+            
+            // 监听页面可见性变化
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                    console.log('页面变为可见，尝试播放');
+                    setTimeout(() => {
+                        videoPlayer.play().catch(error => {
+                            console.log('可见性变化播放失败:', error);
+                        });
+                    }, 200);
+                }
+            });
+        } else {
+            console.log('非iframe环境，使用标准播放策略');
+        }
+        
+        // 通知父窗口游戏已加载
+        setTimeout(() => {
+            gameLoaded = true;
+            window.parent.postMessage({
+                type: 'gameLoaded',
+            }, '*');
+            
+            // 游戏加载完成后再次尝试播放（针对网页环境）
+             if (videoPlayer && videoPlayer.paused && videoPlayer.readyState >= 2) {
+                 console.log('游戏加载完成，最后尝试自动播放');
+                 setTimeout(() => {
+                     tryAutoPlay();
+                 }, 500);
+                 
+                 // 如果常规尝试失败，使用积极播放策略
+                 setTimeout(() => {
+                     if (videoPlayer && videoPlayer.paused) {
+                         console.log('常规播放失败，使用积极播放策略');
+                         aggressivePlayAttempt();
+                     }
+                 }, 2000);
+             }
+        }, 100);
+    </script>
+</body>
+</html>
