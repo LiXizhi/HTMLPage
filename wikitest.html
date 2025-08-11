@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wiki Articles Viewer</title>
-    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>    <script>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>    
+    <script>
         tailwind.config = {
             theme: {
                 extend: {
@@ -16,7 +17,8 @@
                 }
             }
         }
-    </script>    <style>
+    </script>    
+    <style>
         /* 中文百度百科iframe隐藏顶部320像素 */
         .iframe-zh-hidden-top {
             overflow: hidden;
@@ -99,9 +101,7 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <script>
+    </div>    <script>
         let currentLanguage = 'zh';
         let currentUrl = '';
         let currentArticleTitle = '';
@@ -110,10 +110,37 @@
         const wikiConfig = {
             baseUrls: {
                 en: 'https://en.wikipedia.org/wiki/',
-                zh: 'https://baike.baidu.com/item/'
+                zh: 'https://baike.baidu.com/item/',
                 //zh: 'https://www.baike.com/wiki/'
+            },
+            // proxyUrl: 'http://localhost:3000/api/fetchPage?url='
+        };        
+        
+        async function fetchHtmlContent(url) {
+            try {
+                // Only use proxy if proxyUrl is configured and not empty
+                if (wikiConfig.proxyUrl && wikiConfig.proxyUrl.trim() !== '') {
+                    const proxyUrl = wikiConfig.proxyUrl + encodeURIComponent(url);
+                    const response = await fetch(proxyUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const htmlContent = await response.text();
+                    return htmlContent;
+                } else {
+                    // Direct load without proxy
+                    throw new Error('No proxy configured, loading directly');
+                }
+            } catch (error) {
+                console.error('Error fetching HTML content:', error);
+                throw error;
             }
-        };
+        }
+        function convertRelativeToAbsolute(htmlContent, baseUrl) {
+            return htmlContent;
+        }
 
         const translations = {
             en: {
@@ -151,6 +178,7 @@
                 { title_en: 'World War II', title: 'World War II', keyword: 'World_War_II' }
             ],            
             zh: [
+                {title_en: 'school', title: 'school', keyword: 'school', url:'https://metaso.cn/s/CRsoPis'},
                 { title_en: 'Artificial Intelligence', title: '人工智能', keyword: '人工智能' },
                 { title_en: 'Climate Change', title: '气候变化', keyword: '气候变化' },
                 { title_en: 'Quantum Computing', title: '量子计算', keyword: '量子计算' },
@@ -219,9 +247,7 @@
         function getDomain() {
             const url = wikiConfig.baseUrls[currentLanguage];
             return new URL(url).hostname;
-        }
-        
-        function updateArticlesList() {
+        }          function updateArticlesList() {
             const articlesList = document.getElementById('articlesList');
             articlesList.innerHTML = '';
             
@@ -231,7 +257,8 @@
 
             articles[currentLanguage].forEach(article => {
                 const li = document.createElement('li');
-                const fullUrl = baseUrl + article.keyword;
+                // Use direct URL if provided, otherwise construct from baseUrl + keyword
+                const fullUrl = article.url || (baseUrl + article.keyword);
                 li.innerHTML = `
                     <button onclick="loadArticle('${fullUrl}', '${article.title}')" 
                             class="w-full text-left p-3 rounded hover:bg-blue-50 hover:text-wiki-blue transition-colors border border-transparent hover:border-blue-200">
@@ -241,8 +268,8 @@
                 `;
                 articlesList.appendChild(li);
             });
-        }        
-        function loadArticle(url, title) {
+        }
+        async function loadArticle(url, title) {
             currentUrl = url;
             currentArticleTitle = title;
             
@@ -260,18 +287,35 @@
             const iframe = document.getElementById('wikiFrame');
             const iframeWrapper = document.getElementById('iframeWrapper');
             iframe.classList.remove('hidden');
-            
-            // 如果是中文百度百科，添加隐藏顶部的样式
-            if (currentLanguage === 'zh' && url.includes(getDomain())) {
-                iframeWrapper.classList.add('iframe-zh-hidden-top');
-            } else {
-                iframeWrapper.classList.remove('iframe-zh-hidden-top');
+              try {
+                // Only try to fetch through proxy if proxy is configured
+                if (wikiConfig.proxyUrl && wikiConfig.proxyUrl.trim() !== '') {
+                    // Fetch HTML content through proxy
+                    const htmlContent = await fetchHtmlContent(url);
+                    
+                    // Convert relative URLs to absolute URLs
+                    const processedHtml = convertRelativeToAbsolute(htmlContent, url);
+                    
+                    // Set the processed HTML as srcdoc
+                    iframe.srcdoc = processedHtml;
+                } else {
+                    // Load directly in iframe
+                    iframe.src = url;
+                }
+                
+                // Apply Chinese Baidu styling if needed
+                if (currentLanguage === 'zh' && url.includes(getDomain())) {
+                    iframeWrapper.classList.add('iframe-zh-hidden-top');
+                } else {
+                    iframeWrapper.classList.remove('iframe-zh-hidden-top');
+                }
             }
-            
-            iframe.src = url;
+            catch (error) {
+                console.error('Error loading article:', error);
+                
+            }
         }
-        
-        function restoreCurrentArticle() {
+          function restoreCurrentArticle() {
             if (!currentArticleTitle) return;
             
             // Find matching article in current language by title_en
@@ -281,26 +325,29 @@
             );
             
             if (matchedArticle) {
-                const baseUrl = getBaseUrl();
-                const newUrl = baseUrl + matchedArticle.keyword;
+                // Use direct URL if provided, otherwise construct from baseUrl + keyword
+                const newUrl = matchedArticle.url || (getBaseUrl() + matchedArticle.keyword);
                 loadArticle(newUrl, matchedArticle.title);
             }
         }
-        
         function refreshIframe() {
-            if (currentUrl) {
-                const iframe = document.getElementById('wikiFrame');
-                const iframeWrapper = document.getElementById('iframeWrapper');
+            if (currentUrl && currentArticleTitle) {
+                // Find the current article title to reload
+                const currentArticles = articles[currentLanguage];
+                const currentArticle = currentArticles.find(article => 
+                    article.title_en === currentArticleTitle || article.title === currentArticleTitle
+                );
                 
-                // 刷新时也要保持样式
-                if (currentLanguage === 'zh' && currentUrl.includes(getDomain())) {
-                    iframeWrapper.classList.add('iframe-zh-hidden-top');
-                } else {
-                    iframeWrapper.classList.remove('iframe-zh-hidden-top');
+                if (currentArticle) {
+                    loadArticle(currentUrl, currentArticle.title);
                 }
-                
-                iframe.src = currentUrl;
             }
+        }        // 获取URL参数中的语言设置
+        function getLanguageFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const lang = urlParams.get('lang');
+            // 默认中文，只有明确指定lang=en时才使用英文
+            return lang === 'en' ? 'en' : 'zh';
         }
 
         function openInNewTab() {
@@ -309,8 +356,9 @@
             }
         }
 
-        // Initialize the page
-        setLanguage('zh');
+        // Initialize the page - 根据URL参数决定初始语言，默认中文
+        const initialLanguage = getLanguageFromUrl();
+        setLanguage(initialLanguage);
 
         // Handle iframe load errors
         document.getElementById('wikiFrame').onerror = function() {
