@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麦思星球 - 让每个孩子在自己的世界里自由发光</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 75%, #c850c0 100%);
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .star-animation {
+            animation: twinkle 2s infinite;
+        }
+
+        .planet-name {
+            color: #40ce74;
+            /* 绿色 */
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        @keyframes twinkle {
+
+            0%,
+            100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .floating {
+            animation: floating 3s ease-in-out infinite;
+        }
+
+        @keyframes floating {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        /* 文字高亮样式 */
+        .text-highlight {
+            color: #fbbf24;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 消息提示 */
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 1000;
+            font-size: 14px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 下载APP容器 */
+        .download-app-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: none;
+            /* 默认隐藏 */
+            flex-direction: column;
+            align-items: center;
+            z-index: 100;
+            cursor: pointer;
+        }
+
+        /* 开发模式下显示 */
+        .download-app-container.dev-mode {
+            display: flex;
+        }
+
+        /* 下载APP图标 */
+        .download-app-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            object-fit: cover;
+        }
+
+        .download-app-container:hover .download-app-icon {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(102, 126, 234, 0.6);
+        }
+
+        /* 下载APP文字 */
+        .download-app-text {
+            margin-top: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 6px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1.2;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 120px;
+        }
+
+        .download-app-text .support-text {
+            font-size: 8px;
+            opacity: 0.9;
+            margin-top: 2px;
+        }
+
+        /* 抽屉式弹窗 */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .drawer-content {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 90vh;
+            background: white;
+            border-radius: 20px 20px 0 0;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .drawer-overlay.open .drawer-content {
+            transform: translateY(0);
+        }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            flex-shrink: 0;
+        }
+
+        .drawer-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .drawer-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #666;
+            transition: background 0.2s ease;
+        }
+
+        .drawer-close:hover {
+            background: #e0e0e0;
+        }
+
+        .drawer-iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+        }
+
+        /* 视频容器样式 */
+        .video-container {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .video-container:hover {
+            transform: scale(1.02);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-container.playing #videoOverlay {
+            opacity: 0;
+            visibility: hidden;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 text-white">
+
+    <!-- 固定顶部下载按钮 -->
+    <div class="fixed top-0 left-0 right-0 z-50 bg-white/10 backdrop-blur-md border-b border-white/20">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div
+                    class="w-8 h-8 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+                    <span class="text-white font-bold text-sm">M</span>
+                </div> <span class="planet-name font-semibold">麦思星球</span>
+                <span class="text-gray-200">
+                    让每个孩子在自己的世界里<span class="text-highlight">自由发光</span>
+                </span>
+            </div>
+            <button
+                class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-2 rounded-full font-bold font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-200">
+                📱立即下载
+            </button>
+        </div>
+    </div>
+
+    <!-- 主要内容区域 -->
+    <div class="pt-16">
+
+        <!-- 英雄区域 -->
+        <section class="relative overflow-hidden">
+            <!-- 背景星星 -->
+            <div class="absolute inset-0">
+                <div class="star-animation absolute top-20 left-10 w-2 h-2 bg-yellow-300 rounded-full"></div>
+                <div class="star-animation absolute top-40 right-20 w-1 h-1 bg-blue-300 rounded-full"
+                    style="animation-delay: 1s;"></div>
+                <div class="star-animation absolute top-60 left-1/4 w-1.5 h-1.5 bg-purple-300 rounded-full"
+                    style="animation-delay: 0.5s;"></div>
+                <div class="star-animation absolute top-32 right-1/3 w-1 h-1 bg-pink-300 rounded-full"
+                    style="animation-delay: 1.5s;"></div>
+            </div>
+            <div class="container mx-auto px-4 py-8 text-center">
+                <h1 class="planet-name text-3xl md:text-4xl font-bold mb-6 text-green-400 text-shadow"
+                    style="text-shadow: 0 4px 8px rgba(0,0,0,0.3);">
+                    🌟 麦思星球（3D版） 🌟
+                </h1>
+                <p class="text-lg mb-8 text-gray-300 max-w-2xl mx-auto">
+                    专为5-16岁孩子打造的在线<span class="text-highlight"> 思维训练 </span>世界 + <span
+                        class="text-highlight">3D动画编程</span> 创作平台
+                </p> <!-- 宣传视频区域 -->
+                <div class="max-w-3xl mx-auto mb-12">
+                    <div class="relative rounded-2xl overflow-hidden shadow-2xl bg-white/10 backdrop-blur-sm video-container cursor-pointer hover:bg-white/15 transition-all duration-300"
+                        onclick="playVideo()"> <video id="promotionalVideo" class="w-full h-auto" controls
+                            preload="none"
+                            poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'%3E%3Crect width='800' height='450' fill='%23667eea'/%3E%3C/svg%3E">
+                            <source src="https://cdn.keepwork.com/maisi/promotional-video/maisi.mp4" type="video/mp4">
+                            您的浏览器不支持视频播放。
+                        </video>
+                        <!-- 合并的视频覆盖层 -->
+                        <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/20 hover:bg-black/10 transition-all duration-300 pointer-events-none"
+                            id="videoOverlay">
+                            <div class="text-white text-xl md:text-2xl font-semibold text-center px-4 mb-6">
+                                点击播放<span class="planet-name"> 麦思星球 </span>介绍视频
+                            </div>
+                            <div
+                                class="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-300">
+                                <div
+                                    class="w-0 h-0 border-l-[12px] border-l-white border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent ml-1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 下载按钮组 -->
+                <div class="flex justify-center items-center mb-4">
+                    <button
+                        class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-12 py-5 rounded-full font-bold text-xl hover:shadow-xl transform hover:scale-105 transition-all duration-200 w-full sm:w-auto">
+                        📱 下载App
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 产品特色 -->
+        <section class="container mx-auto px-4 py-4">
+            <h2 class="text-3xl font-bold text-center mb-16">✨ 核心特色</h2>
+
+            <div class="grid md:grid-cols-3 gap-8 mb-16">
+                <!-- 测评建模 -->
+                <div
+                    class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 hover:bg-white/15 transition-all duration-300 floating">
+                    <div class="text-4xl mb-4">🎯</div>
+                    <h3 class="text-xl font-semibold mb-4">学习能力训练</h3>
+                    <p class="text-gray-300">通过有趣的小游戏精准识别孩子学习能力长短版，生成个性化能力雷达图，让每个孩子的天赋都被看见。</p>
+                </div>
+
+                <!-- 编程思维 -->
+                <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 hover:bg-white/15 transition-all duration-300 floating"
+                    style="animation-delay: 0.4s;">
+                    <div class="text-4xl mb-4">💻</div>
+                    <h3 class="text-xl font-semibold mb-4">3D动画编程</h3>
+                    <p class="text-gray-300">从图形化编程到代码编程，让孩子在游戏中学会逻辑思维，培养面向未来的核心技能。</p>
+                </div>
+
+                <!-- AI创作 -->
+                <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 hover:bg-white/15 transition-all duration-300 floating"
+                    style="animation-delay: 0.2s;">
+                    <div class="text-4xl mb-4">🤖</div>
+                    <h3 class="text-xl font-semibold mb-4">AI智能创作</h3>
+                    <p class="text-gray-300">掌握AI工具，学会创作表达。孩子可以通过图文生成3D世界，在自己的星球上自由创造和分享。</p>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- 社交协作 -->
+                <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 hover:bg-white/15 transition-all duration-300">
+                    <div class="text-4xl mb-4">👥</div>
+                    <h3 class="text-xl font-semibold mb-4">社交协作能力</h3>
+                    <p class="text-gray-300">和AI宠物抱抱龙一起成长，在多人世界中与其他小伙伴互动，学会表达、分享和协作，培养情商和社交技能。</p>
+                </div>
+
+                <!-- 能力成长 -->
+                <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 hover:bg-white/15 transition-all duration-300">
+                    <div class="text-4xl mb-4">📈</div>
+                    <h3 class="text-xl font-semibold mb-4">全面能力成长</h3>
+                    <p class="text-gray-300">不是打怪升级，而是能力成长。培养认知能力、学习策略、学习动机、情绪智力等综合素质。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 产品亮点 -->
+        <section class="container mx-auto px-4 py-16">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-3xl font-bold mb-8">🌟 为什么选择麦思星球</h2>
+                <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8">
+                    <p class="text-lg leading-relaxed text-gray-200">
+                        <strong class="text-yellow-400">独特的教育理念：</strong>
+                        人机关系是21世纪的教育难题，麦思星球帮助家长理解孩子并培养良好的电脑使用习惯。
+                        我们与传统的语数外分数体系平行发展，在学习机内容生态上开辟全新的素质与AI教育门类。
+                    </p>
+                    <p class="mt-4 text-lg leading-relaxed text-gray-200">
+                        <strong class="text-yellow-400">玩学比：</strong>
+                        产品围绕“玩学比”理念设计：“做中学，玩中学”，让孩子学会创作，学会学习。
+                    </p>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl p-6">
+                        <h4 class="font-semibold mb-2 text-blue-300">🎮 沉浸式体验</h4>
+                        <p class="text-sm text-gray-300">3D像素风格世界，孩子喜欢，爸妈放心</p>
+                    </div>
+                    <div class="bg-gradient-to-r from-purple-600/20 to-pink-600/20 rounded-xl p-6">
+                        <h4 class="font-semibold mb-2 text-purple-300">🔧 强互补性</h4>
+                        <p class="text-sm text-gray-300">与传统应试教育互补，让孩子发现自己的兴趣，创造属于自己的3D世界。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 下载APP容器 -->
+    <div class="download-app-container" id="downloadAppContainer" onclick="openDownloadDrawer()">
+        <img class="download-app-icon"
+            src="https://qiniu-public.keepwork.com/paracraft-cdn-resource/Texture/Aries/Paracraft/Mod/MaiSi/maseai_icon_128x128.jpg"
+            alt="下载APP" loading="lazy">
+        <div class="download-app-text">
+            下载麦思星球APP<br>获得最佳体验
+            <div class="support-text">支持PC/Android/IOS</div>
+        </div>
+    </div>
+
+    <!-- 抽屉式弹窗 -->
+    <div class="drawer-overlay" id="downloadDrawer" onclick="closeDownloadDrawer(event)">
+        <div class="drawer-content" onclick="event.stopPropagation()">
+            <div class="drawer-header">
+                <div class="drawer-title">下载麦思星球APP</div>
+                <button class="drawer-close" onclick="closeDownloadDrawer()">×</button>
+            </div> <iframe class="drawer-iframe" data-src="https://keepwork.com/maisi/maisi/download?layout=none"
+                title="下载麦思星球APP">
+            </iframe>
+        </div>
+    </div>
+    <script>
+        const miniGameProxyVersion = '6' // 每当miniGameProxy发版时，版本号请加1；lastUpdated: 2025/08/13
+        let urlParams = {};
+        let planetNameClickCount = 0;
+        let planetNameClickTimer = null;
+        let shineTextClickCount = 0;
+        let shineTextClickTimer = null;
+        let devModeUnlocked = false;
+
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        function showMessage(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 2000);
+        }
+
+        function showEnterButton() {
+            showMessage('🎉 已解锁隐藏功能！')
+        }
+
+        function showDownloadAppButton() {
+            const downloadContainer = document.getElementById('downloadAppContainer');
+            if (downloadContainer) {
+                downloadContainer.classList.add('dev-mode');
+            }
+        }
+
+        function startTodayTask() {
+            showMessage('跳转中...');
+            let filename = 'miniGameProxy'
+            let gameName = 'ms_games';
+            if (urlParams && (urlParams.dev === 'true')) {
+                filename = 'miniGameProxyDev';
+                gameName = 'ms_games_dev';
+            }
+            let url = `https://keepwork.com/public/resource/${filename}.html?projectPath=maisi/maisi/webgames/data&gameName=${gameName}`;
+            if (urlParams && Object.keys(urlParams).length > 0) {
+                const params = new URLSearchParams();
+                for (const [key, value] of Object.entries(urlParams)) {
+                    params.append(key, value);
+                }
+                url += '&' + params.toString();
+                url += `&version=${miniGameProxyVersion}`;
+            } else {
+                url += `&version=${miniGameProxyVersion}`;
+            }
+
+            if (devModeUnlocked && (!urlParams || urlParams.dev !== 'true')) {
+                url += '&dev=true';
+            }
+
+            window.location.href = url;
+        }
+
+        function initPlanetNameClick() {
+            const planetNameElement = document.querySelector('h1');
+            if (planetNameElement) {
+                planetNameElement.style.cursor = 'pointer';
+                planetNameElement.addEventListener('click', function () {
+                    planetNameClickCount++;
+
+                    if (planetNameClickTimer) {
+                        clearTimeout(planetNameClickTimer);
+                    }
+
+                    planetNameClickTimer = setTimeout(() => {
+                        planetNameClickCount = 0;
+                    }, 5000);
+
+                    // 如果连续点击5次，显示隐藏功能
+                    if (planetNameClickCount >= 5) {
+                        showEnterButton();
+                        showDownloadAppButton();
+                        showMessage('🎉 恭喜！已解锁隐藏功能！');
+                        planetNameClickCount = 0; // 重置计数器
+                        if (planetNameClickTimer) {
+                            clearTimeout(planetNameClickTimer);
+                            planetNameClickTimer = null;
+                        }
+                    }
+                });
+            }
+
+            const shineTextElement = document.querySelector('span[style*="color: #fbbf24"]');
+            if (shineTextElement) {
+                shineTextElement.style.cursor = 'pointer';
+                shineTextElement.addEventListener('click', function () {
+                    shineTextClickCount++;
+
+                    if (shineTextClickTimer) {
+                        clearTimeout(shineTextClickTimer);
+                    }
+
+                    shineTextClickTimer = setTimeout(() => {
+                        shineTextClickCount = 0;
+                    }, 5000);
+
+                    // 如果连续点击5次，解锁开发模式
+                    if (shineTextClickCount >= 5) {
+                        showEnterButton();
+                        showDownloadAppButton();
+                        devModeUnlocked = true;
+                        showMessage('🎉 开发模式已解锁！');
+                        shineTextClickCount = 0; // 重置计数器
+                        if (shineTextClickTimer) {
+                            clearTimeout(shineTextClickTimer);
+                            shineTextClickTimer = null;
+                        }
+                    }
+                });
+            }
+        }
+        function playVideo() {
+            const video = document.getElementById('promotionalVideo');
+            const overlay = document.getElementById('videoOverlay');
+            const container = video.closest('.video-container');
+
+            if (video) {
+                // 隐藏播放覆盖层
+                container.classList.add('playing');
+
+                // 开始加载并播放视频
+                video.load(); // 强制加载视频
+                video.play().then(() => {
+                    console.log('视频开始播放');
+                }).catch((error) => {
+                    console.error('视频播放失败:', error);
+                    // 如果自动播放失败，显示提示
+                    showMessage('请点击视频控件开始播放');
+                    container.classList.remove('playing');
+                });
+
+                // 监听视频暂停事件，恢复覆盖层
+                video.addEventListener('pause', function () {
+                    if (!video.ended) {
+                        container.classList.remove('playing');
+                    }
+                });
+
+                // 监听视频播放事件，隐藏覆盖层
+                video.addEventListener('play', function () {
+                    container.classList.add('playing');
+                });
+
+                // 监听视频结束事件，恢复覆盖层
+                video.addEventListener('ended', function () {
+                    container.classList.remove('playing');
+                });
+            }
+        }        // 打开下载抽屉
+        function openDownloadDrawer() {
+            const drawer = document.getElementById('downloadDrawer');
+            const iframe = drawer.querySelector('.drawer-iframe');
+
+            // 如果是第一次打开，加载iframe内容
+            if (!iframe.src && iframe.dataset.src) {
+                iframe.src = iframe.dataset.src;
+            }
+
+            drawer.classList.add('open');
+            // 阻止body滚动
+            document.body.style.overflow = 'hidden';
+        }
+
+        // 关闭下载抽屉
+        function closeDownloadDrawer(event) {
+            // 如果事件存在且点击的是抽屉内容，不关闭
+            if (event && event.target.closest('.drawer-content')) {
+                return;
+            }
+
+            const drawer = document.getElementById('downloadDrawer');
+            drawer.classList.remove('open');
+            // 恢复body滚动
+            document.body.style.overflow = '';
+        }
+
+        // ESC键关闭抽屉
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeDownloadDrawer();
+            }
+        });
+
+        // 下载和体验按钮点击事件
+        document.querySelectorAll('button').forEach(button => {
+            if (button.textContent.includes('下载')) {
+                button.addEventListener('click', function () {
+                    openDownloadDrawer();
+                });
+            } else if (button.textContent.includes('体验')) {
+                button.addEventListener('click', function () {
+                    startTodayTask();
+                });
+            }
+        });
+
+        // 初始化
+        initPlanetNameClick();
+    </script>
+</body>
+
+</html>

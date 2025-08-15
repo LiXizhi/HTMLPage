@@ -19,7 +19,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-      }      .login-container {
+      }
+      .login-container {
         background: rgba(255, 255, 255, 0.95);
         border-radius: 24px;
         padding: 50px 60px;
@@ -359,10 +360,10 @@
         font-size: 18px;
       }
     </style>
-
   </head>
 
-  <body>    <div class="login-container">
+  <body>
+    <div class="login-container">
       <!-- 切换登录方式按钮 -->
       <div class="login-switch">
         <button type="button" class="switch-btn active" id="phoneLoginBtn" onclick="switchToPhoneLogin()">📱手机号登录</button>
@@ -371,12 +372,10 @@
 
       <div class="header">
         <div class="icon">
-          <img
-            src="https://cdn.keepwork.com/update61/assetdownload/update/texture/aries/creator/keepwork/minigame/logo.png.p,ba44b8275f4bdb7e6dacebc939b2ac13,33659"
-            alt="麦思星球"
-          />
+          <img src="https://cdn.keepwork.com/update61/assetdownload/update/texture/aries/creator/keepwork/minigame/logo.png.p,ba44b8275f4bdb7e6dacebc939b2ac13,33659" alt="麦思星球" />
         </div>
-      </div>      <!-- 手机号登录表单 -->
+      </div>
+      <!-- 手机号登录表单 -->
       <form class="login-form" id="phoneLoginForm">
         <div class="form-group">
           <div class="input-container">
@@ -387,13 +386,7 @@
 
         <div class="form-group">
           <div class="input-container">
-            <input
-              type="text"
-              class="input-field verify-input"
-              id="codeInput"
-              placeholder="请输入验证码"
-              maxlength="4"
-            />
+            <input type="text" class="input-field verify-input" id="codeInput" placeholder="请输入验证码" maxlength="4" />
             <button type="button" class="verify-btn" id="verifyBtn">获取验证码</button>
           </div>
           <div class="error-message" id="codeError">请输入正确的验证码</div>
@@ -413,7 +406,7 @@
       </form>
 
       <!-- 用户名密码登录表单 -->
-      <form class="login-form" id="usernameLoginForm" style="display: none;">
+      <form class="login-form" id="usernameLoginForm" style="display: none">
         <div class="form-group">
           <div class="input-container">
             <input type="text" class="input-field" id="usernameInput" placeholder="请输入用户名/邮箱" />
@@ -426,6 +419,12 @@
             <input type="password" class="input-field" id="passwordInput" placeholder="请输入密码" />
           </div>
           <div class="error-message" id="passwordError">请输入密码</div>
+        </div>        <!-- 记住密码选项 -->
+        <div class="agreement-section">
+          <input type="checkbox" class="agreement-checkbox" id="rememberPasswordCheckbox" />
+          <div class="agreement-text">
+            <span>记住账号密码</span>
+          </div>
         </div>
 
         <div class="agreement-section">
@@ -554,7 +553,7 @@
           this.pendingRequests = new Map()
 
           // 监听父页面的响应
-          window.addEventListener('message', (event) => {
+          window.addEventListener('message', event => {
             if (event.data.type === 'localStorageResponse') {
               const { requestId, success, data, error } = event.data
               const request = this.pendingRequests.get(requestId)
@@ -639,9 +638,7 @@
       }
 
       // 创建全局实例
-      window.parentLocalStorage = new LocalStorageProxy()
-
-      // Token管理器
+      window.parentLocalStorage = new LocalStorageProxy()      // Token管理器
       class TokenManager {
         constructor() {
           this.TOKEN_KEY = 'keepwork_access_token'
@@ -649,6 +646,8 @@
           this.MAISI_TOKEN_KEY = 'mais_games_access_token'
           this.MAISI_EXPIRES_KEY = 'mais_games_token_expires'
           this.USER_INFO_KEY = 'keepwork_user_info'
+          this.SAVED_CREDENTIALS_KEY = 'saved_credentials'
+          this.REMEMBER_PASSWORD_KEY = 'remember_password'
 
           // 确保parentLocalStorage存在
           this.storage = window.parentLocalStorage || localStorage
@@ -750,9 +749,7 @@
 
           // 提前5分钟判断过期（安全边际）
           return now < expires - 5 * 60 * 1000
-        }
-
-        // 清除所有token信息
+        }        // 清除所有token信息
         async clearTokens() {
           if (this.isUsingProxy) {
             await this.storage.removeItem(this.TOKEN_KEY)
@@ -766,6 +763,67 @@
             this.storage.removeItem(this.MAISI_TOKEN_KEY)
             this.storage.removeItem(this.MAISI_EXPIRES_KEY)
             this.storage.removeItem(this.USER_INFO_KEY)
+          }
+        }
+
+        // 保存账号密码
+        async saveCredentials(username, password) {
+          const credentials = {
+            username: username,
+            password: password,
+            savedTime: new Date().toISOString()
+          }
+          
+          if (this.isUsingProxy) {
+            await this.storage.setItem(this.SAVED_CREDENTIALS_KEY, JSON.stringify(credentials))
+          } else {
+            this.storage.setItem(this.SAVED_CREDENTIALS_KEY, JSON.stringify(credentials))
+          }
+        }
+
+        // 获取保存的账号密码
+        async getSavedCredentials() {
+          let credentials
+
+          if (this.isUsingProxy) {
+            credentials = await this.storage.getItem(this.SAVED_CREDENTIALS_KEY)
+          } else {
+            credentials = this.storage.getItem(this.SAVED_CREDENTIALS_KEY)
+          }
+
+          return credentials ? JSON.parse(credentials) : null
+        }
+
+        // 保存记住密码设置
+        async setRememberPassword(remember) {
+          if (this.isUsingProxy) {
+            await this.storage.setItem(this.REMEMBER_PASSWORD_KEY, remember.toString())
+          } else {
+            this.storage.setItem(this.REMEMBER_PASSWORD_KEY, remember.toString())
+          }
+        }
+
+        // 获取记住密码设置
+        async getRememberPassword() {
+          let remember
+
+          if (this.isUsingProxy) {
+            remember = await this.storage.getItem(this.REMEMBER_PASSWORD_KEY)
+          } else {
+            remember = this.storage.getItem(this.REMEMBER_PASSWORD_KEY)
+          }
+
+          return remember === 'true'
+        }
+
+        // 清除保存的账号密码
+        async clearSavedCredentials() {
+          if (this.isUsingProxy) {
+            await this.storage.removeItem(this.SAVED_CREDENTIALS_KEY)
+            await this.storage.removeItem(this.REMEMBER_PASSWORD_KEY)
+          } else {
+            this.storage.removeItem(this.SAVED_CREDENTIALS_KEY)
+            this.storage.removeItem(this.REMEMBER_PASSWORD_KEY)
           }
         }
 
@@ -790,13 +848,14 @@
 
           return userInfo ? JSON.parse(userInfo) : null
         }
-      }
-
-      // 创建token管理器实例
+      }      // 创建token管理器实例
       const tokenManager = new TokenManager()
 
       // 页面加载时检查登录状态
       checkLoginStatus()
+
+      // 加载保存的账号密码
+      loadSavedCredentials()
 
       // Markdown转HTML的简单实现
       function markdownToHtml(markdown) {
@@ -925,15 +984,40 @@
       }
 
       async function navigateToMSGames(href) {
-        const url = new URL(href)
-        url.searchParams.set('gameName', 'ms_games')
+        let originalUrl
+        try {
+          originalUrl = new URL(href, window.location.href)
+        } catch (e) {
+          originalUrl = new URL(window.location.href)
+        }
+
+        const isNavToFrontPageOrGamePage = true
+
+        let targetHref = href
+        if (isNavToFrontPageOrGamePage) {
+          targetHref = 'https://keepwork.com/api/public/paracraft/index_release_html?pid=4108584&customLoader=https%3A%2F%2Fkeepwork.com%2Fmaisi%2Fmaisi%2Fwebgames%2Fdata%2Fcustom_loader1'
+        }
+
+        const url = new URL(targetHref)
+
+        for (const [key, value] of originalUrl.searchParams.entries()) {
+          url.searchParams.set(key, value)
+        }
+
+        if (isNavToFrontPageOrGamePage) {
+          url.searchParams.set('token', (await tokenManager.getAccessToken()) || '')
+        } else {
+          url.searchParams.set('gameName', 'ms_games')
+        }
 
         const userInfo = await tokenManager.getUserInfo()
+        const username = userInfo?.username || ''
         const phone = userInfo?.phone || ''
-        const token = (await tokenManager.getMaisiAccessToken()) || ''
+        const maToken = (await tokenManager.getMaisiAccessToken()) || ''
 
+        url.searchParams.set('username', username)
         url.searchParams.set('phone', phone)
-        url.searchParams.set('thirdpartytoken', token)
+        url.searchParams.set('thirdpartytoken', maToken)
 
         // console.log('跳转到MS游戏页面:', url.toString());
         window.parent.postMessage(
@@ -1078,7 +1162,7 @@
             }
           }, 2000)
         }
-      }      // 切换到手机号登录
+      } // 切换到手机号登录
       function switchToPhoneLogin() {
         const phoneForm = document.getElementById('phoneLoginForm')
         const usernameForm = document.getElementById('usernameLoginForm')
@@ -1112,9 +1196,7 @@
       // 验证密码
       function validatePassword(password) {
         return password && password.trim().length >= 6
-      }
-
-      // DOM 元素
+      }      // DOM 元素
       const phoneInput = document.getElementById('phoneInput')
       const codeInput = document.getElementById('codeInput')
       const verifyBtn = document.getElementById('verifyBtn')
@@ -1124,15 +1206,56 @@
       const agreementCheckbox2 = document.getElementById('agreementCheckbox2')
       const usernameInput = document.getElementById('usernameInput')
       const passwordInput = document.getElementById('passwordInput')
+      const rememberPasswordCheckbox = document.getElementById('rememberPasswordCheckbox')
+
+      // 加载保存的账号密码
+      async function loadSavedCredentials() {
+        try {
+          const isRemember = await tokenManager.getRememberPassword()
+          const savedCredentials = await tokenManager.getSavedCredentials()
+          
+          // 设置记住密码复选框状态
+          rememberPasswordCheckbox.checked = isRemember
+          
+          // 如果有保存的账号密码且用户选择记住密码，则自动填入
+          if (isRemember && savedCredentials) {
+            usernameInput.value = savedCredentials.username || ''
+            passwordInput.value = savedCredentials.password || ''
+            console.log('已自动填入保存的账号密码')
+          }
+        } catch (error) {
+          console.error('加载保存的账号密码失败:', error)
+        }
+      }      // 保存账号密码
+      async function saveCredentialsIfNeeded(username, password) {
+        try {
+          const isRemember = rememberPasswordCheckbox.checked
+          
+          // 保存记住密码设置
+          await tokenManager.setRememberPassword(isRemember)
+          
+          if (isRemember) {
+            // 如果勾选记住密码，保存账号密码
+            await tokenManager.saveCredentials(username, password)
+            console.log('已保存账号密码')
+            showMessage('账号密码已保存')
+          } else {
+            // 如果取消勾选，清除保存的账号密码
+            await tokenManager.clearSavedCredentials()
+            console.log('已清除保存的账号密码')
+          }
+        } catch (error) {
+          console.error('保存账号密码失败:', error)
+          showMessage('保存账号密码失败')
+        }
+      }
 
       // 手机号输入事件
       phoneInput.addEventListener('input', function (e) {
         // 只允许输入数字
         e.target.value = e.target.value.replace(/\D/g, '')
         hideError('phoneInput', 'phoneError')
-      })
-
-      // 验证码输入事件
+      })      // 验证码输入事件
       codeInput.addEventListener('input', function (e) {
         // 只允许输入数字
         e.target.value = e.target.value.replace(/\D/g, '')
@@ -1172,7 +1295,7 @@
 
           showMessage(errorMessage)
         }
-      })      // 表单提交
+      }) // 表单提交
       phoneLoginForm.addEventListener('submit', async function (e) {
         e.preventDefault()
 
@@ -1296,25 +1419,26 @@
         if (!agreementCheckbox2.checked) {
           showMessage('请勾选同意隐私政策和用户协议')
           return
-        }
-
-        // 使用封装的API方法进行登录
+        }        // 使用封装的API方法进行登录
         const loginBtn = document.querySelector('#usernameLoginForm .login-btn')
         loginBtn.disabled = true
         loginBtn.textContent = '登录中...'
 
         try {
           let response2 = await api.post('/users/login', {
-              username: username,
-              password: password,
-              platform: 'WEB',
-            })
-          
+            username: username,
+            password: password,
+            platform: 'WEB',
+          })
+
           console.log('用户名密码登录响应:', response2)
 
           // 保存登录信息
           if (response2 && response2.token) {
             await tokenManager.saveTokens(response2)
+
+            // 保存或清除账号密码（根据记住密码选项）
+            await saveCredentialsIfNeeded(username, password)
 
             // 保存用户信息
             await tokenManager.saveUserInfo({
@@ -1332,7 +1456,7 @@
                 const response3 = await api.post(
                   '/oauth/getMaisiToken',
                   {
-                    phone: response2.cellphone, 
+                    phone: response2.cellphone,
                   },
                   header
                 )
@@ -1408,8 +1532,11 @@
           //     break;
         }
       })
-    </script>
 
+      // 默认切换到用户名密码登录
+      setTimeout(() => {
+        switchToUsernameLogin()
+      }, 200);
+    </script>
   </body>
 </html>
-
