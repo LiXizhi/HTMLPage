@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,27 +13,21 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 75%, #c850c0 100%);
             overflow: hidden;
         }
+
         .mobile-frame {
-            height: 100vh;
-            width: calc(100vh * 375 / 667); /* 维持375:667的纵横比 */
             border: 2px solid #333;
             border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-        }
-        .mobile-frame iframe {
+            transform-origin: center center;
+            transition: transform 0.5s ease-in-out;
+        }        .mobile-frame iframe {
             width: 100%;
             height: 100%;
             border: none;
+            transition: all 0.5s ease-in-out;
         }
-          /* 竖屏模式样式 */
-        .mobile-frame.portrait-mode {
-            transform: rotate(-90deg);
-            transform-origin: center;
-            width: calc(100vh * 375 / 667);
-            height: 100vw;
-        }
-        
+
         /* 切换按钮样式 */
         .toggle-button {
             position: fixed;
@@ -50,34 +44,22 @@
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
-        
+
         .toggle-button:hover {
             background: rgba(255, 255, 255, 1);
             transform: scale(1.05);
         }
-        
+
         /* 旋转过渡动画 */
         .mobile-frame {
             transition: transform 0.5s ease-in-out;
         }
-        
-        /* 响应式处理：如果计算的宽度超过视窗宽度，则以宽度为准 */
-        @media (max-aspect-ratio: 375/667) {
-            .mobile-frame {
-                width: 100vw;
-                height: calc(100vw * 667 / 375);
-            }
-            
-            .mobile-frame.portrait-mode {
-                width: calc(100vh * 375 / 667);
-                height: 100vw;
-            }
-        }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center">
+
+<body class="min-h-screen flex items-center justify-center relative">
     <button class="toggle-button" onclick="toggleOrientation()">竖屏显示</button>
-    
+
     <div class="mobile-frame" id="mobileFrame">
         <iframe id="mobileIframe" src="" frameborder="0" allowfullscreen></iframe>
     </div>
@@ -93,39 +75,100 @@
 
         // 获取accessToken参数
         const accessToken = getUrlParameter('accessToken');
-        
+
         // 构建iframe的src URL
         const baseUrl = 'https://maseai-mp-qa.langcong.com/#/pages/evaluation/index';
         const iframeSrc = `${baseUrl}?accessToken=${accessToken || ''}`;
-        
+
         // 设置iframe的src
         document.getElementById('mobileIframe').src = iframeSrc;
-          // 如果没有找到accessToken参数，在控制台输出提示
+        // 如果没有找到accessToken参数，在控制台输出提示
         if (!accessToken) {
             console.log('未找到accessToken参数');
         } else {
             console.log('使用accessToken:', accessToken);
         }
-        
         // 方向切换功能
-        let isPortraitMode = false;
-        
-        function toggleOrientation() {
-            const mobileFrame = document.getElementById('mobileFrame');
-            const toggleButton = document.querySelector('.toggle-button');
+        let isPortraitMode = false;        function calculateDimensions() {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const buttonMargin = 80; // 为按钮留出空间
             
+            let frameWidth, frameHeight;
+
+            if (isPortraitMode) {
+                // 竖屏模式：旋转后宽高互换，所以要按旋转后的尺寸计算
+                // 旋转后：原来的高度变成宽度，原来的宽度变成高度
+                const maxRotatedWidth = viewportHeight - buttonMargin; // 旋转后的实际宽度
+                const maxRotatedHeight = viewportWidth - 40; // 旋转后的实际高度
+                
+                // 竖屏比例 375:667 (宽:高)
+                const portraitRatio = 375 / 667;
+                
+                // 计算在旋转前的尺寸（因为我们要设置旋转前的width/height）
+                if (maxRotatedHeight * portraitRatio <= maxRotatedWidth) {
+                    // 以高度为基准
+                    frameHeight = maxRotatedHeight; // 这将成为旋转后的宽度
+                    frameWidth = maxRotatedHeight * portraitRatio; // 这将成为旋转后的高度
+                } else {
+                    // 以宽度为基准
+                    frameWidth = maxRotatedWidth / portraitRatio; // 这将成为旋转后的高度
+                    frameHeight = maxRotatedWidth; // 这将成为旋转后的宽度
+                }
+            } else {
+                // 横屏模式：正常计算
+                const landscapeRatio = 667 / 375; // 横屏比例 (宽:高)
+                const maxWidth = viewportWidth - 40;
+                const maxHeight = viewportHeight - buttonMargin;
+
+                if (maxWidth / landscapeRatio <= maxHeight) {
+                    frameWidth = maxWidth;
+                    frameHeight = maxWidth / landscapeRatio;
+                } else {
+                    frameHeight = maxHeight;
+                    frameWidth = maxHeight * landscapeRatio;
+                }
+            }
+            return { width: frameWidth, height: frameHeight };
+        }        function applyFrameStyle() {
+            const mobileFrame = document.getElementById('mobileFrame');
+            const dimensions = calculateDimensions();
+
+            if (isPortraitMode) {
+                // 竖屏模式：设置尺寸并旋转整个容器（包括iframe）
+                mobileFrame.style.width = dimensions.width + 'px';
+                mobileFrame.style.height = dimensions.height + 'px';
+                mobileFrame.style.transform = 'rotate(-90deg)';
+            } else {
+                // 横屏模式：正常显示
+                mobileFrame.style.width = dimensions.width + 'px';
+                mobileFrame.style.height = dimensions.height + 'px';
+                mobileFrame.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function toggleOrientation() {
+            const toggleButton = document.querySelector('.toggle-button');
+
             if (isPortraitMode) {
                 // 切换回横屏
-                mobileFrame.classList.remove('portrait-mode');
                 toggleButton.textContent = '竖屏显示';
                 isPortraitMode = false;
             } else {
                 // 切换到竖屏
-                mobileFrame.classList.add('portrait-mode');
                 toggleButton.textContent = '横屏显示';
                 isPortraitMode = true;
             }
+
+            applyFrameStyle();
         }
+
+        // 窗口大小改变时重新计算
+        window.addEventListener('resize', function () {
+            applyFrameStyle();
+        });
+        applyFrameStyle();
     </script>
 </body>
+
 </html>
