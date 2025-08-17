@@ -221,23 +221,30 @@
         <div class="bg-white rounded-xl p-4 mb-4 shadow-lg">
             <div class="flex items-center justify-center space-x-4 flex-wrap">
                 <span class="text-lg font-bold text-blue-600">📋 计划模板:</span>
-                <div class="relative">
-                    <input type="text" id="templateCombobox" list="templateList" 
+                <div class="relative flex">
+                    <input type="text" id="templateCombobox" 
                            placeholder="选择或输入模板名称" 
-                           class="px-3 py-2 border-2 border-blue-300 rounded-lg min-w-48"
+                           class="px-3 py-2 border-2 border-blue-300 rounded-l-lg min-w-48 flex-1"
                            onchange="handleTemplateSelect()"
                            oninput="handleTemplateInput()" />
-                    <datalist id="templateList">
+                    <button type="button" id="templateDropdownBtn"
+                            class="px-3 py-2 border-2 border-l-0 border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-r-lg"
+                            onclick="toggleTemplateDropdown()">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <div id="templateDropdown" class="absolute top-full left-0 w-full bg-white border-2 border-blue-300 rounded-lg shadow-lg z-10 hidden max-h-48 overflow-y-auto">
                         <!-- 模板选项将通过JavaScript动态生成 -->
-                    </datalist>
+                    </div>
                 </div>
                 <button onclick="saveCurrentTemplate()"
                     class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
-                    💾 保存模板
+                    💾 保存
                 </button>
                 <button onclick="deleteCurrentTemplate()"
                     class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
-                    🗑️ 删除模板
+                    🗑️ 删除
                 </button>
             </div>
             
@@ -930,27 +937,75 @@
 
         // 更新模板下拉列表
         function updateTemplateSelect() {
-            const datalist = document.getElementById('templateList');
-            if (!datalist) {
-                console.error('templateList element not found');
+            const dropdown = document.getElementById('templateDropdown');
+            if (!dropdown) {
+                console.error('templateDropdown element not found');
                 return;
             }
             
-            datalist.innerHTML = '';
+            dropdown.innerHTML = '';
             
             // 调试信息
             console.log('Templates available:', Object.keys(templates));
             
             // 只添加用户自定义的模板选项
             Object.keys(templates).forEach(templateName => {
-                const option = document.createElement('option');
-                option.value = templateName;
-                option.textContent = templateName; // 添加文本内容
-                datalist.appendChild(option);
+                const option = document.createElement('div');
+                option.className = 'px-3 py-2 hover:bg-blue-100 cursor-pointer border-b border-gray-100 last:border-b-0';
+                option.textContent = templateName;
+                option.onclick = () => selectTemplate(templateName);
+                dropdown.appendChild(option);
                 console.log('Added template option:', templateName);
             });
             
-            console.log('Total options added:', datalist.children.length);
+            // 如果没有模板，显示提示
+            if (Object.keys(templates).length === 0) {
+                const emptyOption = document.createElement('div');
+                emptyOption.className = 'px-3 py-2 text-gray-500 text-center';
+                emptyOption.textContent = '暂无模板，请先创建模板';
+                dropdown.appendChild(emptyOption);
+            }
+            
+            console.log('Total options added:', dropdown.children.length);
+        }
+
+        // 切换模板下拉菜单
+        function toggleTemplateDropdown() {
+            const dropdown = document.getElementById('templateDropdown');
+            if (!dropdown) return;
+            
+            if (dropdown.classList.contains('hidden')) {
+                dropdown.classList.remove('hidden');
+                // 点击外部关闭下拉菜单
+                setTimeout(() => {
+                    document.addEventListener('click', closeDropdownOnClickOutside);
+                }, 0);
+            } else {
+                dropdown.classList.add('hidden');
+                document.removeEventListener('click', closeDropdownOnClickOutside);
+            }
+        }
+
+        // 选择模板
+        function selectTemplate(templateName) {
+            document.getElementById('templateCombobox').value = templateName;
+            document.getElementById('templateDropdown').classList.add('hidden');
+            document.removeEventListener('click', closeDropdownOnClickOutside);
+            handleTemplateSelect();
+        }
+
+        // 点击外部关闭下拉菜单
+        function closeDropdownOnClickOutside(event) {
+            const dropdown = document.getElementById('templateDropdown');
+            const button = document.getElementById('templateDropdownBtn');
+            const input = document.getElementById('templateCombobox');
+            
+            if (!dropdown.contains(event.target) && 
+                !button.contains(event.target) && 
+                !input.contains(event.target)) {
+                dropdown.classList.add('hidden');
+                document.removeEventListener('click', closeDropdownOnClickOutside);
+            }
         }
 
         // 处理模板选择
