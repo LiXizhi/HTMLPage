@@ -371,9 +371,7 @@
             }
             activityDurations[slotId][instanceId] = newDuration;
 
-            updateSlotDisplay(slotId);
-            updateTimeUsed(slotId);
-            updateTotalPlannedTime();
+            updateSlotAll(slotId);
             autoSaveTemplate();
         }
 
@@ -602,10 +600,7 @@
             }
             activityDurations[slotId][instanceId] = activity.defaultDuration;
 
-            updateSlotDisplay(slotId);
-            updateTimeUsed(slotId);
-            updateTotalPlannedTime();
-            updateScore();
+            updateSlotAll(slotId);
             autoSaveTemplate();
         }
 
@@ -855,10 +850,7 @@
                 delete activityDurations[slotId][instanceId];
             }
 
-            updateSlotDisplay(slotId);
-            updateTimeUsed(slotId);
-            updateTotalPlannedTime();
-            updateScore();
+            updateSlotAll(slotId);
             autoSaveTemplate();
         }
 
@@ -939,14 +931,26 @@
         // 更新模板下拉列表
         function updateTemplateSelect() {
             const datalist = document.getElementById('templateList');
+            if (!datalist) {
+                console.error('templateList element not found');
+                return;
+            }
+            
             datalist.innerHTML = '';
+            
+            // 调试信息
+            console.log('Templates available:', Object.keys(templates));
             
             // 只添加用户自定义的模板选项
             Object.keys(templates).forEach(templateName => {
                 const option = document.createElement('option');
                 option.value = templateName;
+                option.textContent = templateName; // 添加文本内容
                 datalist.appendChild(option);
+                console.log('Added template option:', templateName);
             });
+            
+            console.log('Total options added:', datalist.children.length);
         }
 
         // 处理模板选择
@@ -969,29 +973,52 @@
         }
 
         // 显示警告消息
-        function showWarningMessage(message) {
+        // 通用消息显示函数
+        function showMessage(message, type = 'success') {
             const messageDiv = document.createElement('div');
-            messageDiv.className = 'fixed top-4 right-4 bg-yellow-100 border-l-4 border-yellow-400 text-yellow-700 p-4 rounded shadow-lg z-50';
-            messageDiv.innerHTML = `<div class="flex items-center"><span class="text-2xl mr-2">⚠️</span><span>${message}</span></div>`;
+            const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 
+                           type === 'warning' ? 'bg-yellow-100 border-yellow-400 text-yellow-700' :
+                           type === 'error' ? 'bg-red-100 border-red-400 text-red-700' :
+                           'bg-blue-100 border-blue-400 text-blue-700';
+            
+            const iconMap = {
+                success: '✅',
+                warning: '⚠️',
+                error: '❌',
+                info: 'ℹ️'
+            };
+            
+            messageDiv.className = `fixed top-4 right-4 ${bgColor} border-l-4 p-4 rounded shadow-lg z-50 schedule-message`;
+            messageDiv.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <span class="text-lg">${iconMap[type] || iconMap.info}</span>
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-lg hover:opacity-70">×</button>
+                </div>
+            `;
+
             document.body.appendChild(messageDiv);
+
             setTimeout(() => {
                 if (messageDiv.parentNode) {
-                    messageDiv.parentNode.removeChild(messageDiv);
+                    messageDiv.remove();
                 }
             }, 3000);
         }
 
+        // 显示警告消息
+        function showWarningMessage(message) {
+            showMessage(message, 'warning');
+        }
+
         // 显示成功消息
         function showSuccessMessage(message) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'fixed top-4 right-4 bg-green-100 border-l-4 border-green-400 text-green-700 p-4 rounded shadow-lg z-50';
-            messageDiv.innerHTML = `<div class="flex items-center"><span class="text-2xl mr-2">✅</span><span>${message}</span></div>`;
-            document.body.appendChild(messageDiv);
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.parentNode.removeChild(messageDiv);
-                }
-            }, 3000);
+            showMessage(message, 'success');
+        }
+
+        // 显示错误消息
+        function showErrorMessage(message) {
+            showMessage(message, 'error');
         }
 
         // 保存当前模板
@@ -1041,74 +1068,6 @@
             }
         }
 
-        // 显示删除确认对话框
-        function showDeleteConfirmation(templateName) {
-            if (confirm(`确定要删除模板 "${templateName}" 吗？`)) {
-                delete templates[templateName];
-                localStorage.setItem('planTemplates', JSON.stringify(templates));
-                updateTemplateSelect();
-                
-                if (currentTemplate === templateName) {
-                    const remainingTemplates = Object.keys(templates);
-                    if (remainingTemplates.length > 0) {
-                        currentTemplate = remainingTemplates[0];
-                        document.getElementById('templateCombobox').value = currentTemplate;
-                        loadTemplateData(currentTemplate);
-                    }
-                }
-                showSuccessMessage(`模板 "${templateName}" 删除成功！`);
-            }
-        }
-
-        // 切换完成状态
-        function toggleComplete(slotId, instanceId) {
-            if (!completedTasks[slotId]) {
-                completedTasks[slotId] = [];
-            }
-
-            const index = completedTasks[slotId].indexOf(instanceId);
-            if (index > -1) {
-                completedTasks[slotId].splice(index, 1);
-            } else {
-                completedTasks[slotId].push(instanceId);
-            }
-
-            updateSlotDisplay(slotId);
-            updateScore();
-            autoSaveTemplate();
-
-            if (isAllCompleted()) {
-                showRewards();
-            }
-        }
-
-        // 移除活动
-        function removeActivity(slotId, instanceId) {
-            if (currentPlan[slotId]) {
-                const index = currentPlan[slotId].findIndex(item => item.instanceId === instanceId);
-                if (index > -1) {
-                    currentPlan[slotId].splice(index, 1);
-                }
-            }
-
-            if (completedTasks[slotId]) {
-                const index = completedTasks[slotId].indexOf(instanceId);
-                if (index > -1) {
-                    completedTasks[slotId].splice(index, 1);
-                }
-            }
-
-            if (activityDurations[slotId]) {
-                delete activityDurations[slotId][instanceId];
-            }
-
-            updateSlotDisplay(slotId);
-            updateTimeUsed(slotId);
-            updateTotalPlannedTime();
-            updateScore();
-            autoSaveTemplate();
-        }
-
         // 自定义活动处理
         function handleDiyInput(event, input) {
             if (event.key === 'Enter') {
@@ -1125,9 +1084,9 @@
             const id = 'custom_' + Date.now();
             const newActivity = {
                 id: id,
-                name: '✨ ' + name,
+                name: name,
                 emoji: '✨',
-                color: 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-300',
+                color: 'bg-violet-100 border-violet-300',
                 defaultDuration: 30,
                 custom: true
             };
@@ -1136,6 +1095,21 @@
             saveCustomActivities();
             generateActivityCards();
             showSuccessMessage(`自定义活动 "${name}" 添加成功！`);
+        }
+
+        // 加载自定义活动
+        function loadCustomActivities() {
+            const saved = localStorage.getItem('customActivities');
+            if (saved) {
+                try {
+                    customActivities = JSON.parse(saved);
+                } catch (error) {
+                    console.error('Failed to load custom activities:', error);
+                    customActivities = [];
+                }
+            } else {
+                customActivities = [];
+            }
         }
 
         // 删除自定义活动
@@ -1157,6 +1131,11 @@
             if (saved) {
                 scheduleSettings = JSON.parse(saved);
             }
+        }
+        
+        // 获取所有活动（预设 + 自定义）
+        function getAllActivities() {
+            return [...activities, ...customActivities];
         }
 
         // 更新作息时间
@@ -1214,33 +1193,22 @@
             return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         }
 
-        // 更新模板下拉列表
-        function updateTemplateSelect() {
-            const datalist = document.getElementById('templateList');
-            datalist.innerHTML = '';
-            
-            // 只添加用户自定义的模板选项
-            Object.keys(templates).forEach(templateName => {
-                const option = document.createElement('option');
-                option.value = templateName;
-                datalist.appendChild(option);
-            });
+        // 通用弹窗关闭函数
+        function closeModal() {
+            const modal = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (modal) {
+                modal.remove();
+            }
         }
 
         // 取消覆盖
         function cancelOverwrite() {
-            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
-            if (confirmDiv) {
-                confirmDiv.remove();
-            }
+            closeModal();
         }
 
         // 确认覆盖
         function confirmOverwrite(templateName) {
-            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
-            if (confirmDiv) {
-                confirmDiv.remove();
-            }
+            closeModal();
             saveTemplateData(templateName);
         }
 
@@ -1308,18 +1276,12 @@
 
         // 取消删除
         function cancelDelete() {
-            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
-            if (confirmDiv) {
-                confirmDiv.remove();
-            }
+            closeModal();
         }
 
         // 确认删除
         function confirmDelete(templateName) {
-            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
-            if (confirmDiv) {
-                confirmDiv.remove();
-            }
+            closeModal();
 
             delete templates[templateName];
             localStorage.setItem('planTemplates', JSON.stringify(templates));
@@ -1479,10 +1441,7 @@
 
         // 取消打卡
         function cancelCheckIn() {
-            const dialogDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
-            if (dialogDiv) {
-                dialogDiv.remove();
-            }
+            closeModal();
         }
 
         // 确认打卡
@@ -1595,64 +1554,21 @@
         //     updateCheckInButton();
         // });
 
-        // 处理DIY输入
-        function handleDiyInput(event, input) {
-            if (event.key === 'Enter') {
-                const activityName = input.value.trim();
-                if (activityName) {
-                    addCustomActivity(activityName);
-                    input.value = '';
-                }
-            }
-        }
-
-        // 添加自定义活动
-        function addCustomActivity(name) {
-            const id = 'custom_' + Date.now();
-            const newActivity = {
-                id: id,
-                name: '✨ ' + name,
-                emoji: '✨',
-                color: 'bg-purple-100 border-purple-300',
-                defaultDuration: 30,
-                custom: true
-            };
-
-            customActivities.push(newActivity);
-            saveCustomActivities();
-            generateActivityCards();
-        }
-
-        // 移除自定义活动
-        function removeCustomActivity(activityId) {
-            customActivities = customActivities.filter(activity => activity.id !== activityId);
-            saveCustomActivities();
-            generateActivityCards();
-        }
-
-        // 保存自定义活动到localStorage
-        function saveCustomActivities() {
-            localStorage.setItem('customActivities', JSON.stringify(customActivities));
-        }
-
-        // 从localStorage加载自定义活动
-        function loadCustomActivities() {
-            const saved = localStorage.getItem('customActivities');
-            if (saved) {
-                customActivities = JSON.parse(saved);
-            }
-        }
-
-        // 获取所有活动（预设 + 自定义）
-        function getAllActivities() {
-            return [...activities, ...customActivities];
-        }
-
         // 让activities变量全局可访问
         window.activities = activities;
 
         // 页面加载完成后初始化
         initializePage();
+
+        // 清理拖拽样式的辅助函数
+        function clearDragStyles() {
+            document.querySelectorAll('.dragging').forEach(el => {
+                el.classList.remove('dragging');
+            });
+            document.querySelectorAll('.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+        }
 
         // 拖拽开始
         function dragStart(e, slotId, instanceId) {
@@ -1691,12 +1607,7 @@
             const position = e.target.dataset.position;
             
             // 移除拖拽样式
-            document.querySelectorAll('.dragging').forEach(el => {
-                el.classList.remove('dragging');
-            });
-            document.querySelectorAll('.drag-over').forEach(el => {
-                el.classList.remove('drag-over');
-            });
+            clearDragStyles();
             
             if (!position || !targetSlotId) return;
             
@@ -1824,9 +1735,7 @@
             const { slotId: sourceSlotId, instanceId: sourceInstanceId } = dragData;
             
             // 移除拖拽样式
-            document.querySelectorAll('.dragging').forEach(el => {
-                el.classList.remove('dragging');
-            });
+            clearDragStyles();
             
             // 如果是同一个元素，不执行操作
             if (sourceSlotId === targetSlotId && sourceInstanceId === targetInstanceId) {
@@ -2011,44 +1920,24 @@
             generateTimeSlots();
         }
 
-        // 自动保存模板
-        function autoSaveTemplate() {
-            if (currentTemplate) {
-                templates[currentTemplate] = {
-                    plan: JSON.parse(JSON.stringify(currentPlan)),
-                    durations: JSON.parse(JSON.stringify(activityDurations)),
-                    completed: JSON.parse(JSON.stringify(completedTasks)),
-                    scheduleSettings: JSON.parse(JSON.stringify(scheduleSettings)),
-                    customActivities: JSON.parse(JSON.stringify(customActivities))
-                };
-                localStorage.setItem('planTemplates', JSON.stringify(templates));
-            }
+        // 更新时间段的所有相关显示
+        function updateSlotAll(slotId) {
+            updateSlotDisplay(slotId);
+            updateTimeUsed(slotId);
+            updateTotalPlannedTime();
+            updateScore();
         }
 
-        // 通用消息显示函数
-        function showMessage(message, type = 'info') {
-            const messageDiv = document.createElement('div');
-            const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 
-                           type === 'warning' ? 'bg-yellow-100 border-yellow-400 text-yellow-700' :
-                           'bg-blue-100 border-blue-400 text-blue-700';
-            
-            messageDiv.className = `fixed top-4 right-4 ${bgColor} border-l-4 p-4 rounded shadow-lg z-50 schedule-message`;
-            messageDiv.innerHTML = `
-                <div class="flex items-center space-x-2">
-                    <span class="text-lg">${type === 'success' ? '✅' : '⚠️'}</span>
-                    <span>${message}</span>
-                    <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-lg hover:opacity-70">×</button>
-                </div>
-            `;
-
-            document.body.appendChild(messageDiv);
-
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.remove();
-                }
-            }, 3000);
+        // 更新多个时间段的所有相关显示
+        function updateMultipleSlotsAll(...slotIds) {
+            slotIds.forEach(slotId => {
+                updateSlotDisplay(slotId);
+                updateTimeUsed(slotId);
+            });
+            updateTotalPlannedTime();
+            updateScore();
         }
+        
     </script>
 </body>
 
