@@ -219,19 +219,23 @@
     <div class="max-w-6xl mx-auto">
         <!-- 模板管理区 -->
         <div class="bg-white rounded-xl p-4 mb-4 shadow-lg">
-            <div class="flex items-center justify-center space-x-4 flex-wrap mb-4">
+            <div class="flex items-center justify-center space-x-4 flex-wrap">
                 <span class="text-lg font-bold text-blue-600">📋 计划模板:</span>
-                <select id="templateSelect" class="px-3 py-2 border-2 border-blue-300 rounded-lg"
-                    onchange="loadTemplate()">
-                    <option value="">选择模板</option>
-                </select>
-                <input type="text" id="templateName" placeholder="新模板名称"
-                    class="px-3 py-2 border-2 border-gray-300 rounded-lg" />
-                <button onclick="saveTemplate()"
+                <div class="relative">
+                    <input type="text" id="templateCombobox" list="templateList" 
+                           placeholder="选择或输入模板名称" 
+                           class="px-3 py-2 border-2 border-blue-300 rounded-lg min-w-48"
+                           onchange="handleTemplateSelect()"
+                           oninput="handleTemplateInput()" />
+                    <datalist id="templateList">
+                        <!-- 模板选项将通过JavaScript动态生成 -->
+                    </datalist>
+                </div>
+                <button onclick="saveCurrentTemplate()"
                     class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
                     💾 保存模板
                 </button>
-                <button onclick="deleteTemplate()"
+                <button onclick="deleteCurrentTemplate()"
                     class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
                     🗑️ 删除模板
                 </button>
@@ -302,7 +306,9 @@
             { id: 'help', name: '🏠 帮忙做家务', emoji: '🏠', color: 'bg-orange-100 border-orange-300', defaultDuration: 30 },
             { id: 'outdoor', name: '🌳 户外活动', emoji: '🌳', color: 'bg-teal-100 border-teal-300', defaultDuration: 60 },
             { id: 'friend', name: '👫 和朋友玩', emoji: '👫', color: 'bg-indigo-100 border-indigo-300', defaultDuration: 30 },
-            { id: 'rest', name: '😴 休息', emoji: '😴', color: 'bg-gray-100 border-gray-300', defaultDuration: 30 }
+            { id: 'rest', name: '😴 休息', emoji: '😴', color: 'bg-gray-100 border-gray-300', defaultDuration: 30 },
+            { id: 'meal', name: '🍽️ 吃饭', emoji: '🍽️', color: 'bg-amber-100 border-amber-300', defaultDuration: 30 },
+            { id: 'create', name: '✨ 自由创作', emoji: '✨', color: 'bg-violet-100 border-violet-300', defaultDuration: 45 }
         ];
 
         let customActivities = []; // 存储自定义活动
@@ -335,24 +341,27 @@
             
             // 确保时间不少于5分钟，不超过120分钟
             if (newDuration < 5) {
-                alert('⚠️ 活动时间不能少于5分钟！');
+                showWarningMessage('活动时间不能少于5分钟！');
                 return;
             }
             if (newDuration > 120) {
-                alert('⚠️ 活动时间不能超过120分钟！');
+                showWarningMessage('活动时间不能超过120分钟！');
                 return;
             }
 
-            // 计算其他活动的总时长
-            const otherActivitiesTime = currentPlan[slotId]
-                .filter(item => item.instanceId !== instanceId)
-                .reduce((total, item) => total + item.duration, 0);
+            // 只有在增加时间时才检查是否超过限制
+            if (adjustment > 0) {
+                // 计算其他活动的总时长
+                const otherActivitiesTime = currentPlan[slotId]
+                    .filter(item => item.instanceId !== instanceId)
+                    .reduce((total, item) => total + item.duration, 0);
 
-            const maxTime = timeSlotConfig[slotId].maxHours * 60;
+                const maxTime = timeSlotConfig[slotId].maxHours * 60;
 
-            if (otherActivitiesTime + newDuration > maxTime) {
-                alert(`⚠️ 时间超限！${timeSlotConfig[slotId].name}最多${maxTime}分钟，其他活动已用${otherActivitiesTime}分钟。`);
-                return;
+                if (otherActivitiesTime + newDuration > maxTime) {
+                    showWarningMessage(`时间超限！${timeSlotConfig[slotId].name}最多${maxTime}分钟，其他活动已用${otherActivitiesTime}分钟。`);
+                    return;
+                }
             }
 
             // 更新时长
@@ -383,6 +392,9 @@
             // 加载作息时间设置
             loadScheduleSettings();
             
+            // 初始化模板系统（不创建默认模板）
+            initializeDefaultTemplates();
+            
             // 加载模板
             loadTemplates();
 
@@ -403,7 +415,7 @@
             // 初始化总计划时间
             updateTotalPlannedTime();
 
-            // 自动加载默认模板或创建新模板
+            // 自动加载模板或提示用户创建新模板
             autoLoadTemplate();
         }
 
@@ -575,7 +587,7 @@
             const maxTime = timeSlotConfig[slotId].maxHours * 60;
 
             if (currentUsed + activity.defaultDuration > maxTime) {
-                alert(`⚠️ 时间不够了！${timeSlotConfig[slotId].name}最多只能安排${maxTime}分钟，当前已用${currentUsed}分钟。`);
+                showWarningMessage(`时间不够了！${timeSlotConfig[slotId].name}最多只能安排${maxTime}分钟，当前已用${currentUsed}分钟。`);
                 return;
             }
 
@@ -648,7 +660,7 @@
             const maxTime = timeSlotConfig[slotId].maxHours * 60;
 
             if (otherActivitiesTime + newDuration > maxTime) {
-                alert(`⚠️ 时间超限！${timeSlotConfig[slotId].name}最多${maxTime}分钟，其他活动已用${otherActivitiesTime}分钟。`);
+                showWarningMessage(`时间超限！${timeSlotConfig[slotId].name}最多${maxTime}分钟，其他活动已用${otherActivitiesTime}分钟。`);
                 // 恢复原值
                 updateSlotDisplay(slotId);
                 return;
@@ -689,6 +701,8 @@
                 if (!activity) return '';
 
                 const isCompleted = completedTasks[slotId]?.includes(activityItem.instanceId);
+                const startTime = calculateActivityStartTime(slotId, index);
+                const endTime = calculateActivityEndTime(slotId, index);
 
                 return `
                     <div class="activity-item-wrapper" style="margin: 4px 0;">
@@ -696,8 +710,11 @@
                             <div class="flex items-center space-x-3 flex-1">
                                 <span class="text-2xl">${activity.emoji}</span>
                                 <div class="flex-1">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-xl font-bold">${activity.name.replace(activity.emoji + ' ', '')}</span>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="text-xl font-bold">${activity.name.replace(activity.emoji + ' ', '')}</span>
+                                            <span class="text-sm text-gray-600 font-medium">⏰ ${startTime} - ${endTime}</span>
+                                        </div>
                                         <div class="flex items-center space-x-2">
                                             <button onclick="adjustActivityTime('${slotId}', '${activityItem.instanceId}', -5)"
                                                     class="bg-red-500 hover:bg-red-600 text-white font-bold w-8 h-8 rounded-full text-sm">
@@ -902,6 +919,14 @@
             }, 3000);
         }
 
+        // 初始化模板（不创建默认模板，需要用户自己创建）
+        function initializeDefaultTemplates() {
+            const saved = localStorage.getItem('planTemplates');
+            let savedTemplates = saved ? JSON.parse(saved) : {};
+            
+            templates = savedTemplates;
+        }
+
         // 加载模板列表
         function loadTemplates() {
             const saved = localStorage.getItem('planTemplates');
@@ -913,77 +938,387 @@
 
         // 更新模板下拉列表
         function updateTemplateSelect() {
-            const select = document.getElementById('templateSelect');
-            select.innerHTML = '<option value="">选择模板</option>';
-
+            const datalist = document.getElementById('templateList');
+            datalist.innerHTML = '';
+            
+            // 只添加用户自定义的模板选项
             Object.keys(templates).forEach(templateName => {
                 const option = document.createElement('option');
                 option.value = templateName;
-                option.textContent = templateName;
-                select.appendChild(option);
+                datalist.appendChild(option);
             });
         }
 
-        // 保存模板
-        function saveTemplate() {
-            const templateName = document.getElementById('templateName').value.trim();
-            if (!templateName) {
-                alert('请输入模板名称！');
-                return;
-            }
-
-            // 创建新模板或重命名当前模板
-            if (currentTemplate && currentTemplate !== templateName) {
-                // 重命名模板
-                templates[templateName] = templates[currentTemplate];
-                delete templates[currentTemplate];
+        // 处理模板选择
+        function handleTemplateSelect() {
+            const templateName = document.getElementById('templateCombobox').value.trim();
+            if (!templateName || templateName === currentTemplate) return;
+            
+            if (currentTemplate && Object.keys(currentPlan).length > 0) {
+                autoSaveTemplate();
             }
 
             currentTemplate = templateName;
-            autoSaveTemplate();
-            updateTemplateSelect();
-            document.getElementById('templateSelect').value = templateName;
-            document.getElementById('templateName').value = '';
+            loadTemplateData(templateName);
+            showSuccessMessage(`模板 "${templateName}" 加载成功！`);
+        }
 
-            alert(`🎉 模板 "${templateName}" 保存成功！`);
+        // 处理模板输入
+        function handleTemplateInput() {
+            // 实时搜索功能可以在这里添加
+        }
+
+        // 显示警告消息
+        function showWarningMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'fixed top-4 right-4 bg-yellow-100 border-l-4 border-yellow-400 text-yellow-700 p-4 rounded shadow-lg z-50';
+            messageDiv.innerHTML = `<div class="flex items-center"><span class="text-2xl mr-2">⚠️</span><span>${message}</span></div>`;
+            document.body.appendChild(messageDiv);
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 3000);
+        }
+
+        // 显示成功消息
+        function showSuccessMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'fixed top-4 right-4 bg-green-100 border-l-4 border-green-400 text-green-700 p-4 rounded shadow-lg z-50';
+            messageDiv.innerHTML = `<div class="flex items-center"><span class="text-2xl mr-2">✅</span><span>${message}</span></div>`;
+            document.body.appendChild(messageDiv);
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 3000);
+        }
+
+        // 保存当前模板
+        function saveCurrentTemplate() {
+            const templateName = document.getElementById('templateCombobox').value.trim();
+            if (!templateName) {
+                showWarningMessage('请输入模板名称！');
+                return;
+            }
+            if (templates[templateName] && templateName !== currentTemplate) {
+                showOverwriteConfirmation(templateName);
+                return;
+            }
+            saveTemplateData(templateName);
+        }
+
+        // 删除当前模板
+        function deleteCurrentTemplate() {
+            const templateName = document.getElementById('templateCombobox').value.trim();
+            if (!templateName) {
+                showWarningMessage('请选择要删除的模板！');
+                return;
+            }
+            showDeleteConfirmation(templateName);
+        }
+
+        // 保存模板数据
+        function saveTemplateData(templateName) {
+            currentTemplate = templateName;
+            templates[templateName] = {
+                plan: JSON.parse(JSON.stringify(currentPlan)),
+                durations: JSON.parse(JSON.stringify(activityDurations)),
+                completed: JSON.parse(JSON.stringify(completedTasks)),
+                scheduleSettings: JSON.parse(JSON.stringify(scheduleSettings)),
+                customActivities: JSON.parse(JSON.stringify(customActivities))
+            };
+            localStorage.setItem('planTemplates', JSON.stringify(templates));
+            updateTemplateSelect();
+            document.getElementById('templateCombobox').value = templateName;
+            showSuccessMessage(`模板 "${templateName}" 保存成功！`);
+        }
+
+        // 显示覆盖确认对话框
+        function showOverwriteConfirmation(templateName) {
+            if (confirm(`模板 "${templateName}" 已存在，是否覆盖？`)) {
+                saveTemplateData(templateName);
+            }
+        }
+
+        // 显示删除确认对话框
+        function showDeleteConfirmation(templateName) {
+            if (confirm(`确定要删除模板 "${templateName}" 吗？`)) {
+                delete templates[templateName];
+                localStorage.setItem('planTemplates', JSON.stringify(templates));
+                updateTemplateSelect();
+                
+                if (currentTemplate === templateName) {
+                    const remainingTemplates = Object.keys(templates);
+                    if (remainingTemplates.length > 0) {
+                        currentTemplate = remainingTemplates[0];
+                        document.getElementById('templateCombobox').value = currentTemplate;
+                        loadTemplateData(currentTemplate);
+                    }
+                }
+                showSuccessMessage(`模板 "${templateName}" 删除成功！`);
+            }
+        }
+
+        // 切换完成状态
+        function toggleComplete(slotId, instanceId) {
+            if (!completedTasks[slotId]) {
+                completedTasks[slotId] = [];
+            }
+
+            const index = completedTasks[slotId].indexOf(instanceId);
+            if (index > -1) {
+                completedTasks[slotId].splice(index, 1);
+            } else {
+                completedTasks[slotId].push(instanceId);
+            }
+
+            updateSlotDisplay(slotId);
+            updateScore();
+            autoSaveTemplate();
+
+            if (isAllCompleted()) {
+                showRewards();
+            }
+        }
+
+        // 移除活动
+        function removeActivity(slotId, instanceId) {
+            if (currentPlan[slotId]) {
+                const index = currentPlan[slotId].findIndex(item => item.instanceId === instanceId);
+                if (index > -1) {
+                    currentPlan[slotId].splice(index, 1);
+                }
+            }
+
+            if (completedTasks[slotId]) {
+                const index = completedTasks[slotId].indexOf(instanceId);
+                if (index > -1) {
+                    completedTasks[slotId].splice(index, 1);
+                }
+            }
+
+            if (activityDurations[slotId]) {
+                delete activityDurations[slotId][instanceId];
+            }
+
+            updateSlotDisplay(slotId);
+            updateTimeUsed(slotId);
+            updateTotalPlannedTime();
+            updateScore();
+            autoSaveTemplate();
+        }
+
+        // 自定义活动处理
+        function handleDiyInput(event, input) {
+            if (event.key === 'Enter') {
+                const activityName = input.value.trim();
+                if (activityName) {
+                    addCustomActivity(activityName);
+                    input.value = '';
+                }
+            }
+        }
+
+        // 添加自定义活动
+        function addCustomActivity(name) {
+            const id = 'custom_' + Date.now();
+            const newActivity = {
+                id: id,
+                name: '✨ ' + name,
+                emoji: '✨',
+                color: 'bg-gradient-to-r from-purple-100 to-pink-100 border-purple-300',
+                defaultDuration: 30,
+                custom: true
+            };
+            
+            customActivities.push(newActivity);
+            saveCustomActivities();
+            generateActivityCards();
+            showSuccessMessage(`自定义活动 "${name}" 添加成功！`);
+        }
+
+        // 删除自定义活动
+        function removeCustomActivity(activityId) {
+            customActivities = customActivities.filter(activity => activity.id !== activityId);
+            saveCustomActivities();
+            generateActivityCards();
+            showSuccessMessage('自定义活动删除成功！');
+        }
+
+        // 保存自定义活动到localStorage
+        function saveCustomActivities() {
+            localStorage.setItem('customActivities', JSON.stringify(customActivities));
+        }
+
+        // 加载作息时间设置
+        function loadScheduleSettings() {
+            const saved = localStorage.getItem('scheduleSettings');
+            if (saved) {
+                scheduleSettings = JSON.parse(saved);
+            }
+        }
+
+        // 更新作息时间
+        function updateSchedule() {
+            const wakeUpInput = document.getElementById('wakeUpTime');
+            const bedTimeInput = document.getElementById('bedTime');
+            
+            if (wakeUpInput) {
+                scheduleSettings.wakeUpTime = wakeUpInput.value;
+            }
+            if (bedTimeInput) {
+                scheduleSettings.bedTime = bedTimeInput.value;
+            }
+            
+            localStorage.setItem('scheduleSettings', JSON.stringify(scheduleSettings));
+            autoSaveTemplate();
+            showSuccessMessage('作息时间更新成功！');
+        }
+
+        // 计算活动开始时间
+        function calculateActivityStartTime(slotId, index) {
+            const config = timeSlotConfig[slotId];
+            const startHour = parseInt(config.start.split(':')[0]);
+            const startMinute = parseInt(config.start.split(':')[1]);
+            
+            let totalMinutes = startHour * 60 + startMinute;
+            
+            const activities = currentPlan[slotId] || [];
+            for (let i = 0; i < index; i++) {
+                totalMinutes += activities[i].duration;
+            }
+            
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        // 计算活动结束时间
+        function calculateActivityEndTime(slotId, index) {
+            const config = timeSlotConfig[slotId];
+            const startHour = parseInt(config.start.split(':')[0]);
+            const startMinute = parseInt(config.start.split(':')[1]);
+            
+            let totalMinutes = startHour * 60 + startMinute;
+            
+            const activities = currentPlan[slotId] || [];
+            for (let i = 0; i <= index; i++) {
+                totalMinutes += activities[i].duration;
+            }
+            
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        // 更新模板下拉列表
+        function updateTemplateSelect() {
+            const datalist = document.getElementById('templateList');
+            datalist.innerHTML = '';
+            
+            // 只添加用户自定义的模板选项
+            Object.keys(templates).forEach(templateName => {
+                const option = document.createElement('option');
+                option.value = templateName;
+                datalist.appendChild(option);
+            });
+        }
+
+        // 取消覆盖
+        function cancelOverwrite() {
+            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (confirmDiv) {
+                confirmDiv.remove();
+            }
+        }
+
+        // 确认覆盖
+        function confirmOverwrite(templateName) {
+            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (confirmDiv) {
+                confirmDiv.remove();
+            }
+            saveTemplateData(templateName);
         }
 
         // 加载模板
         function loadTemplate() {
-            const templateName = document.getElementById('templateSelect').value;
+            const templateName = document.getElementById('templateCombobox').value;
             if (!templateName) return;
 
             if (templateName === currentTemplate) return; // 已经是当前模板
 
-            // 确认是否切换模板
+            // 自动保存当前进度（如果有的话）
             if (currentTemplate && Object.keys(currentPlan).length > 0) {
-                if (!confirm('切换模板会保存当前进度，确定继续吗？')) {
-                    document.getElementById('templateSelect').value = currentTemplate;
-                    return;
-                }
+                autoSaveTemplate();
             }
 
             currentTemplate = templateName;
             loadTemplateData(templateName);
 
-            alert(`✨ 模板 "${templateName}" 加载成功！`);
+            // 显示成功提示
+            showSuccessMessage(`模板 "${templateName}" 加载成功！`);
         }
 
         // 删除模板
         function deleteTemplate() {
-            const templateName = document.getElementById('templateSelect').value;
+            const templateName = document.getElementById('templateCombobox').value;
             if (!templateName) {
-                alert('请先选择要删除的模板！');
+                // 显示提示但不用alert
+                document.getElementById('templateCombobox').style.borderColor = '#ef4444';
+                setTimeout(() => {
+                    document.getElementById('templateCombobox').style.borderColor = '';
+                }, 2000);
                 return;
             }
 
-            if (Object.keys(templates).length <= 1) {
-                alert('至少需要保留一个模板！');
-                return;
-            }
+            // 显示删除确认对话框
+            showDeleteConfirmation(templateName);
+        }
 
-            if (!confirm(`确定要删除模板 "${templateName}" 吗？`)) {
-                return;
+        // 显示删除确认对话框
+        function showDeleteConfirmation(templateName) {
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            confirmDiv.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-lg">
+                    <div class="text-center">
+                        <div class="text-4xl mb-3">🗑️</div>
+                        <h3 class="text-lg font-bold text-gray-800 mb-2">确认删除</h3>
+                        <p class="text-gray-600 mb-4">确定要删除模板 "${templateName}" 吗？</p>
+                        <div class="flex space-x-3 justify-center">
+                            <button onclick="cancelDelete()" 
+                                    class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg font-medium">
+                                取消
+                            </button>
+                            <button onclick="confirmDelete('${templateName}')" 
+                                    class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium">
+                                删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(confirmDiv);
+        }
+
+        // 取消删除
+        function cancelDelete() {
+            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (confirmDiv) {
+                confirmDiv.remove();
+            }
+        }
+
+        // 确认删除
+        function confirmDelete(templateName) {
+            const confirmDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (confirmDiv) {
+                confirmDiv.remove();
             }
 
             delete templates[templateName];
@@ -994,11 +1329,12 @@
             if (remainingTemplates.length > 0) {
                 currentTemplate = remainingTemplates[0];
                 updateTemplateSelect();
-                document.getElementById('templateSelect').value = currentTemplate;
+                document.getElementById('templateCombobox').value = currentTemplate;
                 loadTemplateData(currentTemplate);
             }
 
-            alert(`🗑️ 模板 "${templateName}" 删除成功！`);
+            // 显示成功提示
+            showSuccessMessage(`模板 "${templateName}" 删除成功！`);
         }
 
         // 自动保存模板
@@ -1013,24 +1349,33 @@
                 };
 
                 localStorage.setItem('planTemplates', JSON.stringify(templates));
+                // 保存当前使用的模板名称
+                localStorage.setItem('currentTemplate', currentTemplate);
+                // 更新下拉列表以确保新模板显示
+                updateTemplateSelect();
             }
         }
 
         // 自动加载模板
         function autoLoadTemplate() {
-            if (Object.keys(templates).length > 0) {
-                // 加载第一个模板
+            // 首先尝试加载上次使用的模板
+            const lastUsedTemplate = localStorage.getItem('currentTemplate');
+            
+            if (lastUsedTemplate && templates[lastUsedTemplate]) {
+                currentTemplate = lastUsedTemplate;
+                document.getElementById('templateCombobox').value = lastUsedTemplate;
+                loadTemplateData(lastUsedTemplate);
+            } else if (Object.keys(templates).length > 0) {
+                // 如果没有上次使用的模板，加载第一个可用模板
                 const firstTemplate = Object.keys(templates)[0];
                 currentTemplate = firstTemplate;
-                document.getElementById('templateSelect').value = firstTemplate;
+                document.getElementById('templateCombobox').value = firstTemplate;
                 loadTemplateData(firstTemplate);
             } else {
-                // 创建默认模板
-                currentTemplate = '我的计划';
-                document.getElementById('templateName').value = currentTemplate;
-                autoSaveTemplate();
-                updateTemplateSelect();
-                document.getElementById('templateSelect').value = currentTemplate;
+                // 没有任何模板，提示用户创建第一个模板
+                currentTemplate = null;
+                document.getElementById('templateCombobox').value = '';
+                showWarningMessage('欢迎使用计划制定器！请先创建您的第一个计划模板：在上方输入框中输入模板名称，安排好活动后点击"保存模板"按钮。');
             }
         }
 
@@ -1086,18 +1431,75 @@
 
             // 检查是否已经打卡
             if (checkInRecord[date]) {
-                alert(`📋 ${date} 已经打卡过了！\n打卡时间: ${checkInRecord[date].time}\n心情: ${checkInRecord[date].mood}`);
+                showSuccessMessage(`${date} 已经打卡过了！打卡时间: ${checkInRecord[date].time}，心情: ${checkInRecord[date].mood}`);
                 return;
             }
 
-            // 打卡对话框
-            const mood = prompt('🌟 今天的心情怎么样？\n输入一个表情符号或简单描述：', '😊');
-            if (mood === null) return; // 用户取消
+            // 显示打卡对话框
+            showCheckInDialog(date, checkInRecord);
+        }
 
+        // 显示打卡对话框
+        function showCheckInDialog(date, checkInRecord) {
+            const dialogDiv = document.createElement('div');
+            dialogDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialogDiv.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-lg">
+                    <div class="text-center">
+                        <div class="text-4xl mb-3">🌟</div>
+                        <h3 class="text-lg font-bold text-gray-800 mb-2">今日打卡</h3>
+                        <p class="text-gray-600 mb-4">今天的心情怎么样？</p>
+                        <input type="text" id="moodInput" placeholder="输入表情符号或描述" value="😊"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 text-center">
+                        <div class="flex space-x-3 justify-center">
+                            <button onclick="cancelCheckIn()" 
+                                    class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg font-medium">
+                                取消
+                            </button>
+                            <button onclick="confirmCheckIn('${date}')" 
+                                    class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium">
+                                打卡
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(dialogDiv);
+            
+            // 聚焦到输入框
+            setTimeout(() => {
+                const input = document.getElementById('moodInput');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }, 100);
+        }
+
+        // 取消打卡
+        function cancelCheckIn() {
+            const dialogDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (dialogDiv) {
+                dialogDiv.remove();
+            }
+        }
+
+        // 确认打卡
+        function confirmCheckIn(date) {
+            const mood = document.getElementById('moodInput')?.value || '😊';
+            
+            // 加载打卡记录
+            let checkInRecord = {};
+            const saved = localStorage.getItem('dailyCheckIn');
+            if (saved) {
+                checkInRecord = JSON.parse(saved);
+            }
+            
             const checkInTime = new Date().toLocaleString();
             checkInRecord[date] = {
                 time: checkInTime,
-                mood: mood || '😊',
+                mood: mood,
                 plannedTasks: Object.keys(currentPlan).reduce((total, slotId) =>
                     total + (currentPlan[slotId] || []).length, 0),
                 completedTasks: Object.keys(completedTasks).reduce((total, slotId) =>
@@ -1106,7 +1508,11 @@
 
             localStorage.setItem('dailyCheckIn', JSON.stringify(checkInRecord));
 
-            alert(`🎉 打卡成功！\n日期: ${date}\n时间: ${checkInTime}\n心情: ${mood}\n计划任务: ${checkInRecord[date].plannedTasks}\n完成任务: ${checkInRecord[date].completedTasks}`);
+            // 关闭对话框
+            cancelCheckIn();
+            
+            // 显示成功消息
+            showSuccessMessage(`🎉 打卡成功！心情: ${mood}，计划任务: ${checkInRecord[date].plannedTasks}，完成任务: ${checkInRecord[date].completedTasks}`);
         }
 
         // 更新打卡按钮状态（当前版本暂未实现对应的HTML元素）
@@ -1121,31 +1527,59 @@
             const history = saved ? JSON.parse(saved) : {};
 
             if (Object.keys(history).length === 0) {
-                alert('还没有打卡记录呢！');
+                showWarningMessage('还没有打卡记录呢！');
                 return;
             }
 
-            // 简单显示历史记录
+            // 显示历史记录对话框
             const sortedDates = Object.keys(history).sort().reverse();
-            let historyText = '📋 打卡历史记录：\n\n';
+            let historyHTML = '<div class="max-h-80 overflow-y-auto">';
 
             sortedDates.slice(0, 10).forEach(date => { // 只显示最近10条
                 const record = history[date];
                 const completionRate = record.plannedTasks > 0 ?
                     Math.round((record.completedTasks / record.plannedTasks) * 100) : 0;
 
-                historyText += `${date}\n`;
-                historyText += `心情: ${record.mood} | 完成率: ${completionRate}%\n`;
-                historyText += `任务: ${record.completedTasks}/${record.plannedTasks}\n\n`;
+                historyHTML += `
+                    <div class="border-b border-gray-200 py-3">
+                        <div class="font-semibold text-gray-800">${date}</div>
+                        <div class="text-sm text-gray-600">
+                            心情: ${record.mood} | 完成率: ${completionRate}%<br>
+                            任务: ${record.completedTasks}/${record.plannedTasks}
+                        </div>
+                    </div>
+                `;
             });
 
-            alert(historyText);
+            historyHTML += '</div>';
+
+            const dialogDiv = document.createElement('div');
+            dialogDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialogDiv.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-md mx-4 shadow-lg">
+                    <div class="text-center mb-4">
+                        <div class="text-3xl mb-2">📋</div>
+                        <h3 class="text-lg font-bold text-gray-800">打卡历史记录</h3>
+                    </div>
+                    ${historyHTML}
+                    <div class="mt-4 text-center">
+                        <button onclick="closeCheckInModal()" 
+                                class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium">
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(dialogDiv);
         }
 
         // 关闭打卡历史弹窗（当前版本暂未实现对应的HTML元素）
         function closeCheckInModal() {
-            // 功能暂时保留，等待UI实现
-            return;
+            const dialogDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (dialogDiv) {
+                dialogDiv.remove();
+            }
         }
 
         // 点击弹窗外部关闭
@@ -1277,7 +1711,7 @@
                 const maxTime = timeSlotConfig[targetSlotId].maxHours * 60;
                 
                 if (targetUsed + sourceActivity.duration > maxTime) {
-                    alert(`⚠️ 时间不够了！${timeSlotConfig[targetSlotId].name}最多只能安排${maxTime}分钟，当前已用${targetUsed}分钟。`);
+                    showWarningMessage(`时间不够了！${timeSlotConfig[targetSlotId].name}最多只能安排${maxTime}分钟，当前已用${targetUsed}分钟。`);
                     return;
                 }
                 
@@ -1410,7 +1844,7 @@
                 const maxTime = timeSlotConfig[targetSlotId].maxHours * 60;
                 
                 if (targetUsed + sourceActivity.duration > maxTime) {
-                    alert(`⚠️ 时间不够了！${timeSlotConfig[targetSlotId].name}最多只能安排${maxTime}分钟，当前已用${targetUsed}分钟。`);
+                    showWarningMessage(`时间不够了！${timeSlotConfig[targetSlotId].name}最多只能安排${maxTime}分钟，当前已用${targetUsed}分钟。`);
                     return;
                 }
                 
@@ -1486,7 +1920,7 @@
             // 重新生成时间段显示
             generateTimeSlots();
             
-            // 更新所有时间段的显示
+            // 更新所有时间段的显示（这会重新计算开始时间）
             Object.keys(timeSlotConfig).forEach(slotId => {
                 updateSlotDisplay(slotId);
                 updateTimeUsed(slotId);
@@ -1562,44 +1996,58 @@
             const afternoonEndHour = Math.min(parseInt(afternoonStart.split(':')[0]) + 5, 18); // 最多到晚上6点
             const afternoonEnd = `${afternoonEndHour.toString().padStart(2, '0')}:00`;
             
-            const eveningStart = afternoonEnd;
+            const eveningStart = afternoonEndHour < 18 ? afternoonEnd : '18:00';
             const eveningEnd = bedTime;
             
-            // 计算各时间段的最大小时数
-            const morningHours = morningEndHour - wakeUpHour;
-            const afternoonHours = afternoonEndHour - parseInt(afternoonStart.split(':')[0]);
-            const eveningHours = bedHour - parseInt(eveningStart.split(':')[0]);
+            // 更新配置
+            timeSlotConfig.morning.start = morningStart;
+            timeSlotConfig.morning.end = morningEnd;
+            timeSlotConfig.afternoon.start = afternoonStart;
+            timeSlotConfig.afternoon.end = afternoonEnd;
+            timeSlotConfig.evening.start = eveningStart;
+            timeSlotConfig.evening.end = eveningEnd;
             
-            // 更新时间段配置
-            timeSlotConfig = {
-                morning: { 
-                    name: '🌅 上午', 
-                    maxHours: Math.max(1, morningHours), 
-                    start: morningStart, 
-                    end: morningEnd 
-                },
-                afternoon: { 
-                    name: '☀️ 下午', 
-                    maxHours: Math.max(1, afternoonHours), 
-                    start: afternoonStart, 
-                    end: afternoonEnd 
-                },
-                evening: { 
-                    name: '🌙 晚上', 
-                    maxHours: Math.max(1, eveningHours), 
-                    start: eveningStart, 
-                    end: eveningEnd 
-                }
-            };
+            // 重新生成时间段
+            generateTimeSlots();
         }
-        
-        // 加载作息时间设置
-        function loadScheduleSettings() {
-            const saved = localStorage.getItem('scheduleSettings');
-            if (saved) {
-                scheduleSettings = JSON.parse(saved);
-                updateTimeSlotConfig();
+
+        // 自动保存模板
+        function autoSaveTemplate() {
+            if (currentTemplate) {
+                templates[currentTemplate] = {
+                    plan: JSON.parse(JSON.stringify(currentPlan)),
+                    durations: JSON.parse(JSON.stringify(activityDurations)),
+                    completed: JSON.parse(JSON.stringify(completedTasks)),
+                    scheduleSettings: JSON.parse(JSON.stringify(scheduleSettings)),
+                    customActivities: JSON.parse(JSON.stringify(customActivities))
+                };
+                localStorage.setItem('planTemplates', JSON.stringify(templates));
             }
+        }
+
+        // 通用消息显示函数
+        function showMessage(message, type = 'info') {
+            const messageDiv = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 
+                           type === 'warning' ? 'bg-yellow-100 border-yellow-400 text-yellow-700' :
+                           'bg-blue-100 border-blue-400 text-blue-700';
+            
+            messageDiv.className = `fixed top-4 right-4 ${bgColor} border-l-4 p-4 rounded shadow-lg z-50 schedule-message`;
+            messageDiv.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <span class="text-lg">${type === 'success' ? '✅' : '⚠️'}</span>
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-lg hover:opacity-70">×</button>
+                </div>
+            `;
+
+            document.body.appendChild(messageDiv);
+
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 3000);
         }
     </script>
 </body>
