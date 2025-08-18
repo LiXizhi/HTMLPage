@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,42 +15,50 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
+
         .connected-dot {
             background-color: #ec4899;
             border: 2px solid #be185d;
         }
+
         .empty-dot {
             background-color: #9ca3af;
             border: 2px solid #6b7280;
         }
+
         .clickable-dot {
             cursor: pointer;
         }
+
         .clickable-dot:hover {
             transform: scale(1.2);
         }
+
         .selected-dot {
-            background-color: #fbbf24;
-            border: 3px solid #f59e0b;
-            transform: scale(1.1);
+            transform: scale(1.3);
         }
+
         .line {
             position: absolute;
             background-color: #ec4899;
             z-index: 1;
         }
+
         .horizontal-line {
             height: 4px;
         }
+
         .vertical-line {
             width: 4px;
         }
+
         .pattern-area {
             background: #d4af85;
             border-radius: 8px;
             position: relative;
             padding: 20px;
         }
+
         .custom-select {
             appearance: none;
             background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23666' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
@@ -57,9 +66,85 @@
             background-position: right 12px center;
             background-size: 12px;
             padding-right: 40px;
+            min-width: 120px;
+            white-space: nowrap;
+        }
+
+        /* Toast notification styles */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #22c55e;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: all 0.3s ease;
+            max-width: 400px;
+            word-wrap: break-word;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.error {
+            background: #ef4444;
+        }
+
+        .toast.warning {
+            background: #f59e0b;
+        }
+
+        .toast.info {
+            background: #3b82f6;
+        }
+
+        /* Success animation */
+        @keyframes successPulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .success-animation {
+            animation: successPulse 0.6s ease;
+        }
+
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #22c55e;
+            animation: confetti-fall 1s linear forwards;
+            z-index: 999;
+        }
+
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(300px) rotate(720deg);
+                opacity: 0;
+            }
         }
     </style>
 </head>
+
 <body class="bg-gradient-to-br from-red-300 to-red-500 min-h-screen p-4">
     <div class="max-w-4xl mx-auto">
         <!-- 游戏头部 -->
@@ -69,7 +154,9 @@
                 <span class="font-bold">回答: <span id="answers">0</span>/10</span>
                 <span class="font-bold">分数: <span id="score">0</span></span>
                 <div class="flex items-center gap-2">
-                    <span class="font-bold">难度:</span>                    <select id="difficultySelect" class="custom-select bg-white border border-gray-300 rounded px-3 py-1 font-medium">
+                    <span class="font-bold">难度:</span>
+                    <select id="difficultySelect"
+                        class="custom-select bg-white border border-gray-300 rounded px-3 py-1 font-medium">
                         <option value="easy">简单 (3×3)</option>
                         <option value="medium" selected>中等 (4×4)</option>
                         <option value="hard">困难 (5×5)</option>
@@ -86,17 +173,20 @@
                 <!-- 原始图案 -->
                 <div class="text-center">
                     <div class="text-white mb-2 flex items-center gap-2 justify-center">
-                        <div class="w-12 h-8 rounded border-2 border-white flex items-center justify-center text-sm bg-white bg-opacity-20">
+                        <div
+                            class="w-12 h-8 rounded border-2 border-white flex items-center justify-center text-sm bg-white bg-opacity-20">
                             原图
                         </div>
                     </div>
                     <div class="pattern-area" id="originalPattern">
                         <!-- 原始图案将在这里生成 -->
                     </div>
-                </div>                <!-- 变换后图案 -->
+                </div> <!-- 变换后图案 -->
                 <div class="text-center">
                     <div class="text-white mb-2 flex items-center gap-2 justify-center">
-                        <span class="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-sm" id="transformIcon">90°</span>
+                        <span
+                            class="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-sm"
+                            id="transformIcon">90°</span>
                         <span class="text-xs" id="transformText">顺时针旋转 90°</span>
                     </div>
                     <div class="pattern-area" id="targetPattern">
@@ -108,29 +198,36 @@
             <!-- 操作提示 -->
             <div class="text-white text-center mb-6">
                 <p class="text-lg">点击右侧相邻的粉色点进行连线，重现左侧变换后的图案</p>
-                <p class="text-sm mt-2">先点击要连接的粉色点让它们高亮，再点击相邻的高亮点进行连线</p>
             </div>
 
             <!-- 控制按钮 -->
             <div class="text-center">
-                <button id="checkBtn" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
+                <button id="checkBtn"
+                    class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
                     检查答案
                 </button>
-                <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
+                <button id="clearBtn"
+                    class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
                     清除连线
                 </button>
-                <button id="newGameBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
+                <button id="newGameBtn"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
                     新题目
                 </button>
-                <button id="hintBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold">
+                <button id="hintBtn"
+                    class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold">
                     提示
                 </button>
             </div>
         </div>
     </div>
 
+    <!-- Toast container -->
+    <div id="toastContainer"></div>
+
     <script>
-        class SpatialGame {            constructor() {
+        class SpatialGame {
+            constructor() {
                 this.level = 1;
                 this.score = 0;
                 this.answers = 0;
@@ -141,7 +238,8 @@
                 this.allGridPositions = [];
                 this.userConnections = [];
                 this.selectedDot = null;
-                
+                this.isProcessingCorrectAnswer = false;
+
                 this.difficulties = {
                     easy: { gridSize: 3, cellSize: 50, minConnections: 2, maxConnections: 4, patternSize: 220 },
                     medium: { gridSize: 4, cellSize: 45, minConnections: 3, maxConnections: 6, patternSize: 260 },
@@ -150,8 +248,72 @@
                 };
 
                 this.transforms = ['rotate90', 'rotate-90', 'rotate180', 'flipH', 'flipV'];
-                
+
                 this.init();
+            }
+
+            // Toast notification system
+            showToast(message, type = 'info', duration = 3000) {
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+
+                container.appendChild(toast);
+
+                // Trigger animation
+                setTimeout(() => {
+                    toast.classList.add('show');
+                }, 10);
+
+                // Auto remove
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => {
+                        if (container.contains(toast)) {
+                            container.removeChild(toast);
+                        }
+                    }, 300);
+                }, duration);
+            }
+
+            // Success effect with confetti
+            showSuccessEffect() {
+                // Add success animation to check button
+                const checkBtn = document.getElementById('checkBtn');
+                checkBtn.classList.add('success-animation');
+                setTimeout(() => {
+                    checkBtn.classList.remove('success-animation');
+                }, 600);
+
+                // Create confetti effect
+                for (let i = 0; i < 20; i++) {
+                    this.createConfetti();
+                }
+            }
+            createConfetti() {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+
+                // 获取右侧目标图案区域的位置和大小
+                const targetPattern = document.getElementById('targetPattern');
+                const rect = targetPattern.getBoundingClientRect();
+
+                // 在目标图案区域内随机生成confetti位置，考虑页面滚动
+                const leftOffset = rect.left + window.scrollX + Math.random() * rect.width;
+                const topOffset = rect.top + window.scrollY + Math.random() * rect.height;
+                confetti.style.left = leftOffset + 'px';
+                confetti.style.top = topOffset + 'px';
+
+                confetti.style.background = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][Math.floor(Math.random() * 5)];
+
+                document.body.appendChild(confetti);
+
+                setTimeout(() => {
+                    if (document.body.contains(confetti)) {
+                        document.body.removeChild(confetti);
+                    }
+                }, 1000);
             }
 
             init() {
@@ -159,9 +321,34 @@
                 this.setupEventListeners();
                 this.updateUI();
             }
-
             getCurrentConfig() {
                 return this.difficulties[this.difficulty];
+            }
+
+            // 根据关卡自动设置难度
+            getDifficultyByLevel() {
+                if (this.level <= 3) return 'easy';
+                if (this.level <= 6) return 'medium';
+                if (this.level <= 9) return 'hard';
+                return 'expert';
+            }            // 根据关卡获取连接点数量范围，随着关卡增加逐渐增加
+            getConnectionsByLevel() {
+                const baseDifficulty = this.getDifficultyByLevel();
+                const config = this.difficulties[baseDifficulty];
+
+                // 更精细的难度递增：每关都略微增加复杂度
+                const levelInDifficulty = this.level % 3; // 0, 1, 2
+                const difficultyBonus = Math.floor(this.level / 6); // 每6关增加额外难度
+                const extraConnections = levelInDifficulty + difficultyBonus;
+
+                // 确保连接数逐渐增加，但不超过合理范围
+                const minConnections = Math.min(config.minConnections + extraConnections, config.maxConnections + 3);
+                const maxConnections = Math.min(config.maxConnections + extraConnections + 1, config.maxConnections + 5);
+
+                return {
+                    min: Math.max(2, minConnections), // 至少2个连接
+                    max: Math.max(3, maxConnections)  // 至少3个连接
+                };
             }
 
             // 生成网格坐标
@@ -169,7 +356,7 @@
                 const config = this.getCurrentConfig();
                 const positions = [];
                 const padding = 20; // 统一padding
-                
+
                 for (let row = 0; row < config.gridSize; row++) {
                     for (let col = 0; col < config.gridSize; col++) {
                         positions.push({
@@ -181,42 +368,48 @@
                     }
                 }
                 return positions;
-            }            generatePattern() {
+            } generatePattern() {
                 // 清除所有状态
                 this.userConnections = [];
                 this.selectedDot = null;
                 this.originalPattern = { dots: [], connections: [] };
                 this.targetPattern = { dots: [], connections: [] };
-                
-                // 强制使用 rotate-90 进行测试
-                this.currentTransform = 'rotate-90'; // 临时强制用于测试
-                // this.currentTransform = this.transforms[Math.floor(Math.random() * this.transforms.length)];
-                
+
+                // 根据关卡自动设置难度
+                this.difficulty = this.getDifficultyByLevel();
+
+                // 随机选择变换类型（移除强制测试代码）
+                this.currentTransform = this.transforms[Math.floor(Math.random() * this.transforms.length)];
+
                 const config = this.getCurrentConfig();
                 this.allGridPositions = this.getGridPositions();
-                
+
+                console.log('Current level:', this.level);
+                console.log('Current difficulty:', this.difficulty);
                 console.log('Current transform:', this.currentTransform);
                 console.log('Grid size:', config.gridSize);
-                console.log('All grid positions:', this.allGridPositions);
-                
-                // 随机选择要连接的点数量
-                const numConnectedDots = Math.floor(Math.random() * 
-                    (config.maxConnections - config.minConnections + 1)) + config.minConnections;
-                
+
+                // 根据关卡获取连接点数量
+                const connectionRange = this.getConnectionsByLevel();
+                const numConnectedDots = Math.floor(Math.random() *
+                    (connectionRange.max - connectionRange.min + 1)) + connectionRange.min;
+
+                console.log('Target connections:', numConnectedDots);
+
                 // 选择连接的点
                 const connectedIndices = new Set();
                 const connections = [];
-                
+
                 // 选择起始点
                 let currentIndex = Math.floor(Math.random() * this.allGridPositions.length);
                 connectedIndices.add(currentIndex);
-                
+
                 // 通过相邻连接的方式选择其他点
                 while (connectedIndices.size < numConnectedDots) {
                     const currentPos = this.allGridPositions[currentIndex];
                     const neighbors = this.getNeighborIndices(currentPos);
                     const availableNeighbors = neighbors.filter(idx => !connectedIndices.has(idx));
-                    
+
                     if (availableNeighbors.length > 0) {
                         const nextIndex = availableNeighbors[Math.floor(Math.random() * availableNeighbors.length)];
                         connectedIndices.add(nextIndex);
@@ -226,7 +419,7 @@
                         // 如果没有可用的相邻点，从已连接的点中随机选择一个继续
                         const connectedArray = Array.from(connectedIndices);
                         currentIndex = connectedArray[Math.floor(Math.random() * connectedArray.length)];
-                        
+
                         // 如果还是找不到，就随机添加一些连接
                         const remainingConnected = Array.from(connectedIndices);
                         for (let i = 0; i < remainingConnected.length - 1; i++) {
@@ -244,16 +437,16 @@
                     connectedIndices: Array.from(connectedIndices),
                     connections: connections
                 };
-
                 this.updatePatternSizes();
                 this.renderOriginalPattern();
                 this.renderTargetPattern();
+                this.updateUI();
             }
 
             updatePatternSizes() {
                 const config = this.getCurrentConfig();
                 const patternSize = config.patternSize;
-                
+
                 document.getElementById('originalPattern').style.width = `${patternSize}px`;
                 document.getElementById('originalPattern').style.height = `${patternSize}px`;
                 document.getElementById('targetPattern').style.width = `${patternSize}px`;
@@ -264,16 +457,16 @@
                 const config = this.getCurrentConfig();
                 const neighbors = [];
                 const directions = [
-                    {dr: -1, dc: 0}, // 上
-                    {dr: 1, dc: 0},  // 下
-                    {dr: 0, dc: -1}, // 左
-                    {dr: 0, dc: 1}   // 右
+                    { dr: -1, dc: 0 }, // 上
+                    { dr: 1, dc: 0 },  // 下
+                    { dr: 0, dc: -1 }, // 左
+                    { dr: 0, dc: 1 }   // 右
                 ];
 
                 directions.forEach(dir => {
                     const newRow = pos.row + dir.dr;
                     const newCol = pos.col + dir.dc;
-                    
+
                     if (newRow >= 0 && newRow < config.gridSize && newCol >= 0 && newCol < config.gridSize) {
                         neighbors.push(newRow * config.gridSize + newCol);
                     }
@@ -309,13 +502,13 @@
                     dotElement.style.top = `${dot.y - 8}px`;
                     container.appendChild(dotElement);
                 });
-            }            renderTargetPattern() {
+            } renderTargetPattern() {
                 const container = document.getElementById('targetPattern');
                 container.innerHTML = '';
 
                 // 计算变换后的图案
                 this.targetPattern = this.transformPattern(this.originalPattern, this.currentTransform);
-                
+
                 // 绘制所有网格点，需要连接的点显示为粉色
                 const transformedPositions = this.getTransformedPositions();
                 transformedPositions.forEach((dot, index) => {
@@ -332,7 +525,7 @@
                 // 清除用户连线和选择状态
                 this.userConnections = [];
                 this.selectedDot = null;
-                
+
                 // 清除所有选择状态的视觉效果
                 document.querySelectorAll('.selected-dot').forEach(dot => {
                     dot.classList.remove('selected-dot');
@@ -343,7 +536,7 @@
                 const config = this.getCurrentConfig();
                 const positions = [];
                 const padding = 20; // 统一padding
-                
+
                 for (let row = 0; row < config.gridSize; row++) {
                     for (let col = 0; col < config.gridSize; col++) {
                         positions.push({
@@ -360,26 +553,24 @@
             transformPattern(pattern, transform) {
                 const config = this.getCurrentConfig();
                 const transformedConnectedIndices = [];
-                
+
                 console.log('Transform function called with:', transform);
                 console.log('Original pattern:', pattern);
                 console.log('Grid size:', config.gridSize);
-                
+
                 // 变换连接的点的索引
                 pattern.connectedIndices.forEach(index => {
                     const originalPos = this.allGridPositions[index];
                     let newRow, newCol;
-                    
+
                     console.log(`Transforming index ${index} from position (${originalPos.row}, ${originalPos.col})`);
-                    
+
                     switch (transform) {
                         case 'rotate90':
-                            // 90° clockwise: (row, col) → (col, gridSize - 1 - row)
                             newRow = originalPos.col;
                             newCol = config.gridSize - 1 - originalPos.row;
                             break;
                         case 'rotate-90':
-                            // 90° counter-clockwise: (row, col) → (gridSize - 1 - col, row)
                             newRow = config.gridSize - 1 - originalPos.col;
                             newCol = originalPos.row;
                             break;
@@ -396,7 +587,7 @@
                             newCol = originalPos.col;
                             break;
                     }
-                    
+
                     const newIndex = newRow * config.gridSize + newCol;
                     console.log(`  -> New position (${newRow}, ${newCol}), index ${newIndex}`);
                     transformedConnectedIndices.push(newIndex);
@@ -421,7 +612,7 @@
             createLine(start, end) {
                 const line = document.createElement('div');
                 line.className = 'line';
-                
+
                 if (start.x === end.x) {
                     // 垂直线 - 调整长度，不要覆盖到圆点
                     line.classList.add('vertical-line');
@@ -439,18 +630,16 @@
                     line.style.top = `${start.y - 2}px`;
                     line.style.width = `${Math.max(0, width)}px`;
                 }
-                
-                return line;
-            }
 
-            handleDotClick(index, element) {
+                return line;
+            } handleDotClick(index, element) {
                 const transformedPositions = this.getTransformedPositions();
-                
+
                 // 只允许点击应该被连接的粉色点
                 if (!this.targetPattern.connectedIndices.includes(index)) {
                     return;
                 }
-                
+
                 if (this.selectedDot === null) {
                     // 选择第一个点
                     this.selectedDot = index;
@@ -463,40 +652,54 @@
                     // 连接两个点
                     const dot1 = transformedPositions[this.selectedDot];
                     const dot2 = transformedPositions[index];
-                    
+
                     if (this.areAdjacent(dot1, dot2)) {
                         // 检查是否已经连接
-                        const existingConnection = this.userConnections.find(conn => 
+                        const existingConnection = this.userConnections.find(conn =>
                             (conn[0] === this.selectedDot && conn[1] === index) ||
                             (conn[0] === index && conn[1] === this.selectedDot)
                         );
-                        
+
                         if (existingConnection) {
                             // 移除连接
                             this.userConnections = this.userConnections.filter(conn => conn !== existingConnection);
                         } else {
                             // 添加连接
                             this.userConnections.push([this.selectedDot, index]);
-                        }
-                        
-                        this.updateUserLines();
+                        } this.updateUserLines();
+
+                        // 自动检测是否完成
+                        setTimeout(() => {
+                            this.autoCheckCompletion();
+                        }, 100);
+
+                        // 关键改进：不清除选择状态，而是将新点设为选中状态
+                        // 清除之前选中点的视觉效果
+                        document.querySelectorAll('.selected-dot').forEach(dot => {
+                            dot.classList.remove('selected-dot');
+                        });
+
+                        // 将新点设为选中状态，这样可以连续连接
+                        this.selectedDot = index;
+                        element.classList.add('selected-dot');
+                    } else {
+                        // 如果不相邻，则切换选择到新点
+                        document.querySelectorAll('.selected-dot').forEach(dot => {
+                            dot.classList.remove('selected-dot');
+                        });
+                        this.selectedDot = index;
+                        element.classList.add('selected-dot');
                     }
-                    
-                    // 清除选择
-                    document.querySelectorAll('.selected-dot').forEach(dot => {
-                        dot.classList.remove('selected-dot');
-                    });
-                    this.selectedDot = null;
                 }
             }
 
             updateUserLines() {
                 const container = document.getElementById('targetPattern');
                 const transformedPositions = this.getTransformedPositions();
-                
+
                 // 清除所有用户连线
                 container.querySelectorAll('.line').forEach(line => line.remove());
-                
+
                 // 绘制用户连线
                 this.userConnections.forEach(([start, end]) => {
                     const startDot = transformedPositions[start];
@@ -506,10 +709,72 @@
                 });
             }
 
-            checkAnswer() {
+            // 自动检测是否完成任务
+            autoCheckCompletion() {
+                // 只有当连接数量正确时才自动检测
+                if (this.userConnections.length === this.targetPattern.connections.length) {
+                    const correctConnections = this.targetPattern.connections.map(([start, end]) => {
+                        return [Math.min(start, end), Math.max(start, end)].join('-');
+                    }).sort();
+
+                    const userConnectionStrings = this.userConnections.map(([start, end]) => {
+                        return [Math.min(start, end), Math.max(start, end)].join('-');
+                    }).sort();
+
+                    const isCorrect = JSON.stringify(correctConnections) === JSON.stringify(userConnectionStrings);
+
+                    if (isCorrect) {
+                        // 延迟一点时间让用户看到最后的连线
+                        setTimeout(() => {
+                            this.handleCorrectAnswer();
+                        }, 500);
+                    }
+                }
+            }            // 处理正确答案的逻辑
+            handleCorrectAnswer() {
+                // 防止重复执行
+                if (this.isProcessingCorrectAnswer) {
+                    return;
+                }
+                this.isProcessingCorrectAnswer = true;
+
+                // 根据难度计算分数，随关卡递增
+                const scoreMap = { easy: 75, medium: 100, hard: 150, expert: 200 };
+                const baseScore = scoreMap[this.difficulty];
+                const levelBonus = Math.floor(this.level / 3) * 25; // 每3关额外奖励25分
+                this.score += baseScore + levelBonus;
+
+                this.answers++;
+
+                // Show success effect and toast
+                this.showSuccessEffect();
+                this.showToast(`正确！恭喜你！获得 ${baseScore + levelBonus} 分！`, 'success');
+
+                // 自动通关：正确答案后立即进入下一关
+                this.level++;
+                this.answers = 0; // 重置答题数，因为每次正确就进入下一关
+
+                setTimeout(() => {
+                    this.showToast(`恭喜通过第${this.level - 1}关！进入第${this.level}关！难度：${this.getDifficultyByLevel()}`, 'success', 4000);
+                }, 1000);
+
+                // 自动生成下一关题目
+                setTimeout(() => {
+                    this.generatePattern();
+                    // 重置标志，允许下一关的处理
+                    this.isProcessingCorrectAnswer = false;
+                }, 2000);
+
+                this.updateUI();
+            } checkAnswer() {
+                // 防止重复执行
+                if (this.isProcessingCorrectAnswer) {
+                    return;
+                }
+
                 // 检查连线是否正确
                 if (this.userConnections.length !== this.targetPattern.connections.length) {
-                    alert(`连接数量不对！应该有 ${this.targetPattern.connections.length} 条连线，您连了 ${this.userConnections.length} 条。`);
+                    this.showToast(`连接数量不对！应该有 ${this.targetPattern.connections.length} 条连线，您连了 ${this.userConnections.length} 条。`, 'error');
                     return;
                 }
 
@@ -524,50 +789,37 @@
                 const isCorrect = JSON.stringify(correctConnections) === JSON.stringify(userConnectionStrings);
 
                 if (isCorrect) {
-                    const scoreMap = { easy: 75, medium: 100, hard: 150, expert: 200 };
-                    this.score += scoreMap[this.difficulty];
-                    this.answers++;
-                    alert('正确！恭喜你！');
-                    
-                    if (this.answers >= 10) {
-                        this.level++;
-                        this.answers = 0;
-                        alert(`恭喜通过第${this.level - 1}关！进入第${this.level}关！`);
-                    }
-                    
-                    setTimeout(() => {
-                        this.generatePattern();
-                    }, 1000);
+                    this.handleCorrectAnswer();
                 } else {
-                    alert('连接不正确，请再试试！');
+                    this.showToast('连接不正确，请再试试！', 'error');
                 }
-                
+
                 this.updateUI();
-            }            clearLines() {
+            } clearLines() {
                 this.userConnections = [];
                 this.selectedDot = null;
-                
+
                 // 清除所有选择状态的视觉效果
                 document.querySelectorAll('.selected-dot').forEach(dot => {
                     dot.classList.remove('selected-dot');
                 });
-                
+
                 // 清除用户连线
                 this.updateUserLines();
-            }            setDifficulty(newDifficulty) {
+            } setDifficulty(newDifficulty) {
                 this.difficulty = newDifficulty;
-                
+
                 // 完全重置游戏状态
                 this.userConnections = [];
                 this.selectedDot = null;
                 this.originalPattern = { dots: [], connections: [] };
                 this.targetPattern = { dots: [], connections: [] };
-                
+
                 // 清除所有选择状态的视觉效果
                 document.querySelectorAll('.selected-dot').forEach(dot => {
                     dot.classList.remove('selected-dot');
                 });
-                
+
                 // 重新生成题目
                 this.generatePattern();
                 this.updateUI();
@@ -603,19 +855,25 @@
 
                 document.getElementById('transformText').textContent = transformTexts[this.currentTransform];
                 document.getElementById('transformIcon').textContent = transformIcons[this.currentTransform];
-            }
-
-            showHint() {
+            } showHint() {
                 const difficultyNames = { easy: '简单', medium: '中等', hard: '困难', expert: '专家' };
                 const difficultyName = difficultyNames[this.difficulty];
-                alert(`提示：\n1. 当前难度: ${difficultyName}\n2. 观察左侧粉色点和连线的模式\n3. 想象它经过"${document.getElementById('transformText').textContent}"后的样子\n4. 右侧的粉色点是需要连接的点\n5. 点击相邻的粉色点进行连线\n6. 只能连接水平或垂直相邻的点`);
+                const hintMessage = `提示：
+1. 当前难度: ${difficultyName}
+2. 观察左侧粉色点和连线的模式
+3. 想象它经过"${document.getElementById('transformText').textContent}"后的样子
+4. 右侧的粉色点是需要连接的点
+5. 点击相邻的粉色点进行连线
+6. 只能连接水平或垂直相邻的点`;
+
+                this.showToast(hintMessage, 'info', 8000);
             }
 
             updateUI() {
                 document.getElementById('level').textContent = this.level;
                 document.getElementById('score').textContent = this.score;
                 document.getElementById('answers').textContent = this.answers;
-                
+
                 this.updateTransformUI();
             }
         }
@@ -626,4 +884,5 @@
         });
     </script>
 </body>
+
 </html>
