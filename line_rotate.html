@@ -151,7 +151,6 @@
         <div class="bg-white bg-opacity-90 rounded-lg p-4 mb-4 flex justify-between items-center">
             <div class="flex gap-4 items-center">
                 <span class="font-bold">关卡: <span id="level">1</span></span>
-                <span class="font-bold">回答: <span id="answers">0</span>/10</span>
                 <span class="font-bold">分数: <span id="score">0</span></span>
                 <div class="flex items-center gap-2">
                     <span class="font-bold">难度:</span>
@@ -230,7 +229,6 @@
             constructor() {
                 this.level = 1;
                 this.score = 0;
-                this.answers = 0;
                 this.difficulty = 'medium';
                 this.currentTransform = 'rotate90';
                 this.originalPattern = { dots: [], connections: [] };
@@ -239,12 +237,11 @@
                 this.userConnections = [];
                 this.selectedDot = null;
                 this.isProcessingCorrectAnswer = false;
-
                 this.difficulties = {
-                    easy: { gridSize: 3, cellSize: 50, minConnections: 2, maxConnections: 4, patternSize: 220 },
-                    medium: { gridSize: 4, cellSize: 45, minConnections: 3, maxConnections: 6, patternSize: 260 },
-                    hard: { gridSize: 5, cellSize: 40, minConnections: 4, maxConnections: 8, patternSize: 300 },
-                    expert: { gridSize: 6, cellSize: 35, minConnections: 5, maxConnections: 10, patternSize: 340 }
+                    easy: { gridSize: 3, cellSize: 50, minConnections: 2, maxConnections: 4 },
+                    medium: { gridSize: 4, cellSize: 45, minConnections: 3, maxConnections: 6 },
+                    hard: { gridSize: 5, cellSize: 40, minConnections: 4, maxConnections: 8 },
+                    expert: { gridSize: 6, cellSize: 35, minConnections: 5, maxConnections: 10 }
                 };
 
                 this.transforms = ['rotate90', 'rotate-90', 'rotate180', 'flipH', 'flipV'];
@@ -323,18 +320,11 @@
             }
             getCurrentConfig() {
                 return this.difficulties[this.difficulty];
-            }
-
-            // 根据关卡自动设置难度
-            getDifficultyByLevel() {
-                if (this.level <= 3) return 'easy';
-                if (this.level <= 6) return 'medium';
-                if (this.level <= 9) return 'hard';
-                return 'expert';
-            }            // 根据关卡获取连接点数量范围，随着关卡增加逐渐增加
+            }            // 根据关卡自动设置难度
+            
             getConnectionsByLevel() {
-                const baseDifficulty = this.getDifficultyByLevel();
-                const config = this.difficulties[baseDifficulty];
+                const baseDifficulty = this.difficulty;
+                const config = this.difficulties[this.difficulty];
 
                 // 更精细的难度递增：每关都略微增加复杂度
                 const levelInDifficulty = this.level % 3; // 0, 1, 2
@@ -375,9 +365,7 @@
                 this.originalPattern = { dots: [], connections: [] };
                 this.targetPattern = { dots: [], connections: [] };
 
-                // 根据关卡自动设置难度
-                this.difficulty = this.getDifficultyByLevel();
-
+                
                 // 随机选择变换类型（移除强制测试代码）
                 this.currentTransform = this.transforms[Math.floor(Math.random() * this.transforms.length)];
 
@@ -441,16 +429,21 @@
                 this.renderOriginalPattern();
                 this.renderTargetPattern();
                 this.updateUI();
-            }
-
+            } 
             updatePatternSizes() {
                 const config = this.getCurrentConfig();
-                const patternSize = config.patternSize;
+                const padding = 20; // Same padding used in getGridPositions()
 
-                document.getElementById('originalPattern').style.width = `${patternSize}px`;
-                document.getElementById('originalPattern').style.height = `${patternSize}px`;
-                document.getElementById('targetPattern').style.width = `${patternSize}px`;
-                document.getElementById('targetPattern').style.height = `${patternSize}px`;
+                // Calculate actual size needed based on grid dimensions
+                const gridWidth = (config.gridSize - 1) * config.cellSize;
+                const gridHeight = (config.gridSize - 1) * config.cellSize;
+                const totalWidth = gridWidth + (padding * 2); 
+                const totalHeight = gridHeight + (padding * 2);
+
+                document.getElementById('originalPattern').style.width = `${totalWidth}px`;
+                document.getElementById('originalPattern').style.height = `${totalHeight}px`;
+                document.getElementById('targetPattern').style.width = `${totalWidth}px`;
+                document.getElementById('targetPattern').style.height = `${totalHeight}px`;
             }
 
             getNeighborIndices(pos) {
@@ -744,18 +737,16 @@
                 const levelBonus = Math.floor(this.level / 3) * 25; // 每3关额外奖励25分
                 this.score += baseScore + levelBonus;
 
-                this.answers++;
-
+                
                 // Show success effect and toast
                 this.showSuccessEffect();
                 this.showToast(`正确！恭喜你！获得 ${baseScore + levelBonus} 分！`, 'success');
 
                 // 自动通关：正确答案后立即进入下一关
                 this.level++;
-                this.answers = 0; // 重置答题数，因为每次正确就进入下一关
-
+                
                 setTimeout(() => {
-                    this.showToast(`恭喜通过第${this.level - 1}关！进入第${this.level}关！难度：${this.getDifficultyByLevel()}`, 'success', 4000);
+                    this.showToast(`恭喜通过第${this.level - 1}关！进入第${this.level}关`, 'success', 4000);
                 }, 1000);
 
                 // 自动生成下一关题目
@@ -855,7 +846,8 @@
 
                 document.getElementById('transformText').textContent = transformTexts[this.currentTransform];
                 document.getElementById('transformIcon').textContent = transformIcons[this.currentTransform];
-            } showHint() {
+            } 
+            showHint() {
                 const difficultyNames = { easy: '简单', medium: '中等', hard: '困难', expert: '专家' };
                 const difficultyName = difficultyNames[this.difficulty];
                 const hintMessage = `提示：
@@ -872,8 +864,7 @@
             updateUI() {
                 document.getElementById('level').textContent = this.level;
                 document.getElementById('score').textContent = this.score;
-                document.getElementById('answers').textContent = this.answers;
-
+                
                 this.updateTransformUI();
             }
         }
