@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM驱动的角色对话游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <style>
+        .chat-bubble-left {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 18px 18px 18px 4px;
+        }
+
+        .chat-bubble-right {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 18px 18px 4px 18px;
+        }
+
+        .action-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-style: italic;
+        }
+
+        .progress-bar {
+            transition: width 0.5s ease-in-out;
+        }
+
+        .typing-indicator {
+            animation: typing 1.5s infinite;
+        }
+
+        @keyframes typing {
+
+            0%,
+            50% {
+                opacity: 1;
+            }
+
+            51%,
+            100% {
+                opacity: 0.3;
+            }
+        }
+
+        .config-panel {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-purple-100 to-pink-100 min-h-screen">
+
+    <div class="container mx-auto max-w-4xl p-4"> <!-- 顶部工具栏 -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">LLM驱动的角色对话游戏</h1>
+        </div>
+
+        <!-- 角色信息卡片 -->
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+            <div class="flex items-center space-x-4">
+                <div id="character-avatar"
+                    class="w-16 h-16 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                    小明
+                </div>
+                <div class="flex-1">
+                    <h2 id="character-info" class="text-2xl font-bold text-gray-800">小明 - 高二学生</h2>
+                    <p id="character-description" class="text-gray-600 mt-1">最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！</p>
+                </div>
+            </div>
+
+            <!-- 目标进度 -->
+            <div class="mt-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span id="objective-title" class="text-sm font-medium text-gray-700">学习动力恢复进度</span>
+                    <span class="text-sm text-gray-500" id="progress-text">0/100</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div class="bg-gradient-to-r from-green-400 to-blue-500 h-3 rounded-full progress-bar"
+                        id="progress-bar" style="width: 0%"></div>
+                </div>
+                <div id="progress-reason" class="text-xs text-gray-500 mt-1"></div>
+            </div>
+
+            <!-- 角色情感状态 -->
+            <div class="mt-4">
+                <span class="text-sm font-medium text-gray-700">当前情感：</span>
+                <span id="character-emotion" class="text-sm text-blue-600">初始状态</span>
+            </div>
+        </div>
+
+        <!-- 聊天区域 -->
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div class="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4">
+                <h3 id="chat-title" class="text-lg font-semibold">与小明对话</h3>
+                <p id="chat-description" class="text-sm opacity-90">通过耐心的交流，帮助小明重新找回学习的乐趣</p>
+            </div>
+
+            <div id="chat-container" class="h-96 overflow-y-auto p-4 space-y-4">
+                <!-- 对话内容将在这里动态生成 -->
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="border-t border-gray-200 p-4">
+                <div class="flex space-x-2">
+                    <input type="text" id="user-input" placeholder="输入你想说的话..."
+                        class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <button id="send-btn"
+                        class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity font-medium">
+                        发送
+                    </button>
+                </div>
+
+                <!-- 快捷回复 -->
+                <div class="mt-3 flex flex-wrap gap-2" id="quick-replies">
+                    <!-- 快捷回复按钮将在这里动态生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- LLM响应状态 -->
+        <div id="llm-status" class="mt-4 text-center text-sm text-gray-500"></div>
+    </div>
+    <script>
+        // Initialize SDK
+        const sdk = new KeepworkSDK({
+            timeout: 30000
+        });
+
+        // Initialize AI Chat Session
+        let aiChatSession;
+
+        function initializeAIChatSession() {
+            if (sdk && sdk.aiChat) {
+                aiChatSession = sdk.aiChat.createSession({
+                    model: 'keepwork-pro',
+                    stream: true
+                });
+            }
+        }
+
+        class LLMCharacterGame {
+            constructor() {
+                this.config = null;
+                this.gameState = {
+                    progress: 0,
+                    chatHistory: [],
+                    isObjectiveAchieved: false
+                };
+
+                this.elements = {
+                    chatContainer: document.getElementById('chat-container'),
+                    userInput: document.getElementById('user-input'),
+                    sendBtn: document.getElementById('send-btn'),
+                    progressBar: document.getElementById('progress-bar'),
+                    progressText: document.getElementById('progress-text'),
+                    progressReason: document.getElementById('progress-reason'),
+                    characterEmotion: document.getElementById('character-emotion'),
+                    llmStatus: document.getElementById('llm-status')
+                };
+
+                this.initEventListeners();
+                this.loadDefaultConfig();
+                initializeAIChatSession();
+            } initEventListeners() {
+                // 发送消息
+                this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.elements.userInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendMessage();
+                });
+            } loadDefaultConfig() {
+                // 简化配置，只保留角色和游戏设定
+                this.config = {
+                    character: {
+                        name: "小明",
+                        avatar: "小",
+                        age: 17,
+                        role: "高二学生",
+                        description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！"
+                    },
+                    objective: {
+                        title: "学习动力恢复进度",
+                        description: "通过耐心的交流，帮助小明重新找回学习的乐趣",
+                        max_progress: 100
+                    },
+                    initial: {
+                        message: "哎呀，又要学习了吗... (无精打采地看着书本) 我昨天刚通关了一个超难的副本呢！",
+                        progress: 0
+                    },
+                    quick_replies: [
+                        "游戏确实很有趣，但学习也有它的乐趣哦",
+                        "你最喜欢哪个科目？",
+                        "我们可以制定一个学习计划",
+                        "你觉得游戏和学习有什么相似之处？",
+                        "你的梦想是什么？"
+                    ],
+                    system_prompt: `你是小明，一个17岁的高二学生。你最近沉迷游戏，学习成绩下滑，但内心其实渴望改变。
+                    
+## 角色设定
+- 表面：看起来无所谓，经常说游戏比学习有趣
+- 内心：对现状焦虑，害怕让父母失望，渴望找到学习乐趣
+- 说话风格：年轻人口吻，经常用括号描述动作和神态，如"(无精打采地看着书本)"
+
+## 性格发展规律
+- 0-25分：主要抗拒学习，热衷游戏，偶尔流露不安
+- 26-50分：开始意识到问题，但不知如何改变
+- 51-75分：逐渐接受学习重要性，寻求解决方案
+- 76-99分：主动思考学习方法，表现改变意愿
+- 100分：彻底转变，制定具体行动计划
+
+## 对话要求
+1. 根据当前进度调整回复风格和内容
+2. 用括号描述非语言行为，如"(叹气)"、"(眼睛发亮)"
+3. 回复要符合17岁学生的语言习惯
+4. 对积极正面的引导要有相应的情感反应
+
+## 输出格式
+你必须严格按照以下JSON格式输出，不要有任何其他内容：
+{
+  "message": "你的回复内容，包含括号内的动作描述",
+  "progress_change": 进度变化数值(可为负数),
+  "progress_reason": "进度变化的原因说明",
+  "is_objective_achieved": false,
+  "current_emotion": "当前情感状态描述"
+}`
+                };
+
+                this.initializeGame();
+            } initializeGame() {
+                if (!this.config) return;
+
+                // 更新UI
+                document.getElementById('character-avatar').textContent = this.config.character?.avatar || '角';
+                document.getElementById('character-info').textContent =
+                    `${this.config.character?.name || '角色'} - ${this.config.character?.role || ''}`;
+                document.getElementById('character-description').textContent =
+                    this.config.character?.description || '';
+                document.getElementById('objective-title').textContent =
+                    this.config.objective?.title || '目标进度';
+                document.getElementById('chat-title').textContent =
+                    `与${this.config.character?.name || '角色'}对话`;
+                document.getElementById('chat-description').textContent =
+                    this.config.objective?.description || '';
+
+                // 重置游戏状态
+                this.gameState.progress = this.config.initial?.progress || 0;
+                this.gameState.chatHistory = [];
+                this.gameState.isObjectiveAchieved = false;
+
+                // 清空聊天区域
+                this.elements.chatContainer.innerHTML = '';
+
+                // 添加初始消息
+                if (this.config.initial?.message) {
+                    this.addMessage(this.config.initial.message, false);
+                }
+
+                // 更新快捷回复
+                this.updateQuickReplies();
+
+                // 更新进度显示
+                this.updateProgress(0, '游戏开始');
+                this.elements.characterEmotion.textContent = '初始状态';
+            }
+
+            updateQuickReplies() {
+                const container = document.getElementById('quick-replies');
+                container.innerHTML = '';
+
+                if (!this.config.quick_replies) return;
+
+                this.config.quick_replies.forEach(reply => {
+                    const button = document.createElement('button');
+                    button.className = 'quick-reply bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm transition-colors';
+                    button.textContent = reply;
+                    button.addEventListener('click', () => {
+                        this.elements.userInput.value = reply;
+                        this.sendMessage();
+                    });
+                    container.appendChild(button);
+                });
+            } async sendMessage() {
+                const message = this.elements.userInput.value.trim();
+                if (!message || this.gameState.isObjectiveAchieved) return;
+
+                this.addMessage(message, true);
+                this.elements.userInput.value = '';
+                this.gameState.chatHistory.push({ role: 'user', content: message });
+
+                this.addTypingIndicator();
+                this.updateLLMStatus('正在思考中...');
+
+                try {
+                    const response = await this.callLLM(message);
+                    this.removeTypingIndicator();
+
+                    if (response) {
+                        this.addMessage(response.message, false);
+                        this.gameState.chatHistory.push({ role: 'assistant', content: response.message });
+
+                        this.updateProgress(response.progress_change, response.progress_reason);
+                        this.elements.characterEmotion.textContent = response.current_emotion || '思考中';
+
+                        if (response.is_objective_achieved && this.gameState.progress >= this.config.objective.max_progress) {
+                            this.handleObjectiveAchieved();
+                        }
+                    }
+                } catch (error) {
+                    this.removeTypingIndicator();
+                    this.updateLLMStatus(`错误: ${error.message}`);
+                    this.addMessage('抱歉，我现在有些困扰，可能需要一点时间来整理思绪...', false);
+                }
+            }
+
+            async callLLM(userMessage) {
+                if (!aiChatSession) {
+                    throw new Error('AI聊天会话未初始化');
+                }
+
+                // 构建完整的系统提示词，包含当前进度
+                const systemPrompt = `${this.config.system_prompt}\n\n当前进度：${this.gameState.progress}/${this.config.objective.max_progress}`;
+
+                // 构建消息数组
+                const messages = [
+                    { role: 'system', content: systemPrompt },
+                    ...this.gameState.chatHistory.slice(-10), // 保留最近10轮对话
+                    { role: 'user', content: userMessage }
+                ];
+
+                return new Promise((resolve, reject) => {
+                    let fullResponse = '';
+
+                    aiChatSession.aiChat.chat({
+                        messages: messages,
+                        model: 'keepwork-pro',
+                        stream: true,
+                        onMessage: (text) => {
+                            fullResponse = text;
+                            this.updateLLMStatus('接收响应中...');
+                        },
+                        onComplete: (finalText) => {
+                            this.updateLLMStatus('响应完成');
+                            try {
+                                // 尝试解析JSON格式的响应
+                                const jsonResponse = JSON.parse(finalText);
+                                resolve(jsonResponse);
+                            } catch (error) {
+                                // 如果不是JSON格式，创建一个默认格式的响应
+                                const response = {
+                                    message: finalText,
+                                    progress_change: 10,
+                                    progress_reason: 'LLM回复',
+                                    is_objective_achieved: false,
+                                    current_emotion: '思考'
+                                };
+                                resolve(response);
+                            }
+                        },
+                        onError: (error) => {
+                            reject(error);
+                        }
+                    });
+                });
+            } addMessage(message, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `flex items-start space-x-2 ${isUser ? 'justify-end' : ''}`;
+
+                const processedMessage = this.processMessage(message);
+
+                if (isUser) {
+                    messageDiv.innerHTML = `
+                        <div class="chat-bubble-right text-white p-3 max-w-xs">
+                            <p>${processedMessage}</p>
+                        </div>
+                        <div class="w-8 h-8 bg-gradient-to-r from-pink-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">你</div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.avatar || '角'}</div>
+                        <div class="chat-bubble-left text-white p-3 max-w-xs">
+                            <p>${processedMessage}</p>
+                        </div>
+                    `;
+                }
+
+                this.elements.chatContainer.appendChild(messageDiv);
+                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+            }
+
+            processMessage(message) {
+                return message.replace(/\(([^)]+)\)/g, '<span class="action-text">($1)</span>');
+            }
+
+            addTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typing-indicator';
+                typingDiv.className = 'flex items-start space-x-2';
+                typingDiv.innerHTML = `
+                    <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.avatar || '角'}</div>
+                    <div class="chat-bubble-left text-white p-3 max-w-xs typing-indicator">
+                        <p>正在思考...</p>
+                    </div>
+                `;
+                this.elements.chatContainer.appendChild(typingDiv);
+                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+            }
+
+            removeTypingIndicator() {
+                const indicator = document.getElementById('typing-indicator');
+                if (indicator) indicator.remove();
+            }
+
+            updateProgress(change, reason) {
+                this.gameState.progress = Math.max(0, Math.min(this.gameState.progress + change, this.config.objective.max_progress));
+
+                this.elements.progressBar.style.width = `${this.gameState.progress}%`;
+                this.elements.progressText.textContent = `${this.gameState.progress}/${this.config.objective.max_progress}`;
+
+                if (reason) {
+                    this.elements.progressReason.textContent = `${change > 0 ? '+' : ''}${change} - ${reason}`;
+                }
+            }
+
+            updateLLMStatus(status) {
+                this.elements.llmStatus.textContent = status;
+                setTimeout(() => {
+                    this.elements.llmStatus.textContent = '';
+                }, 3000);
+            }
+
+            handleObjectiveAchieved() {
+                this.gameState.isObjectiveAchieved = true;
+
+                setTimeout(() => {
+                    const congratsDiv = document.createElement('div');
+                    congratsDiv.className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mt-4';
+                    congratsDiv.innerHTML = `
+                        <div class="flex items-center">
+                            <span class="text-2xl mr-2">🎉</span>
+                            <div>
+                                <strong>目标完成！</strong><br>
+                                <span class="text-sm">你成功帮助${this.config.character?.name}找回了学习动力！</span>
+                            </div>
+                        </div>
+                    `;
+                    this.elements.chatContainer.appendChild(congratsDiv);
+                    this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+                }, 1000);
+            }
+        }
+
+        // 初始化游戏
+        document.addEventListener('DOMContentLoaded', () => {
+            new LLMCharacterGame();
+        });
+    </script>
+</body>
+
+</html>
