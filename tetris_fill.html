@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄罗斯方块拼图游戏</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        .game-cell {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ddd;
+        }
+
+        .tetris-piece {
+            cursor: grab;
+            transition: transform 0.2s;
+        }
+
+        .tetris-piece:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+        }
+
+        .piece-cell {
+            width: 20px;
+            height: 20px;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+        }
+
+        .dragging {
+            opacity: 0.8;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .valid-drop {
+            background-color: rgba(34, 197, 94, 0.3) !important;
+        }
+
+        .invalid-drop {
+            background-color: rgba(239, 68, 68, 0.3) !important;
+        }
+
+        /* 确保游戏棋盘在不同屏幕下的适配 */
+        #gameBoard {
+            min-width: fit-content;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 p-4">
+    <div class="max-w-6xl mx-auto"> <!-- 顶部控制栏 - 横屏布局 -->
+        <div class="bg-white rounded-lg shadow-lg p-4 mb-4">
+            <div class="control-bar flex items-center justify-between flex-wrap gap-4">
+                <!-- 左侧：难度选择 -->
+                <div class="flex items-center gap-3">
+                    <label class="text-lg font-semibold">难度:</label>
+                    <select id="difficultySelect" class="bg-white border border-gray-300 px-3 py-2 rounded">
+                        <option value="easy">简单 (4-6个方块)</option>
+                        <option value="medium">中等 (8-12个方块)</option>
+                        <option value="hard">困难 (14-18个方块)</option>
+                        <option value="expert">专家 (16-20个方块)</option>
+                    </select>
+                </div>
+
+                <!-- 中间：关卡信息 -->
+                <div class="text-xl font-bold text-blue-600">
+                    关卡: <span id="level">1</span>/5
+                </div>
+
+                <!-- 右侧：游戏控制按钮 -->
+                <div class="flex items-center gap-3">
+                    <button id="newGame"
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-semibold">
+                        🎮 新游戏
+                    </button>
+                    <button id="clearBoard"
+                        class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-semibold">
+                        🗑️ 清空棋盘
+                    </button>
+                </div>
+            </div>
+        </div> <!-- 游戏主区域 - 横屏布局 -->
+        <div class="flex gap-4 flex-horizontal">
+            <!-- 左侧：游戏棋盘 -->
+            <div class="bg-white rounded-lg shadow-lg p-6 flex-shrink-0">
+                <div class="flex justify-center">
+                    <div id="gameBoard" class="inline-grid gap-0 border-2 border-gray-400 bg-gray-50"></div>
+                </div>
+            </div>
+
+            <!-- 右侧：方块区域和说明 -->
+            <div class="flex-1 space-y-4">
+                <!-- 方块区域 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4 text-center">🧩 拖拽到目标区域 | 单击方块可旋转</h3>
+                    <div id="piecesContainer" class="flex flex-wrap justify-center gap-4"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 胜利弹窗 -->
+        <div id="winModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-8 text-center">
+                <h2 class="text-2xl font-bold text-green-600 mb-4">🎉 恭喜通关！</h2>
+                <p class="text-gray-700 mb-6">你成功完成了关卡 <span id="completedLevel"></span>！</p>
+                <button id="nextLevel"
+                    class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded mr-2">下一关</button>
+                <button id="closeModal" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>        class TetrisPuzzle {
+            constructor() {
+                this.boardSize = 8;
+                this.board = [];
+                this.targetBoard = []; // 目标地图
+                this.pieces = [];
+                this.currentLevel = 1;
+                this.currentDifficulty = 'easy';
+                this.maxLevel = 5;
+                this.draggedPiece = null;
+                this.dragOffset = { x: 0, y: 0 };
+                this.placedPieces = []; // 记录已放置的方块
+                this.currentDragElement = null; // 保存当前拖拽元素的引用
+
+                // 难度配置
+                this.difficultyConfig = {
+                    easy: { minPieces: 4, maxPieces: 6, name: '简单' },
+                    medium: { minPieces: 8, maxPieces: 12, name: '中等' },
+                    hard: { minPieces: 14, maxPieces: 18, name: '困难' },
+                    expert: { minPieces: 16, maxPieces: 20, name: '专家' }
+                };
+
+                // 俄罗斯方块形状定义
+                this.shapes = {
+                    I: [[1, 1, 1, 1]],
+                    O: [[1, 1], [1, 1]],
+                    T: [[0, 1, 0], [1, 1, 1]],
+                    L: [[1, 0], [1, 0], [1, 1]],
+                    J: [[0, 1], [0, 1], [1, 1]],
+                    S: [[0, 1, 1], [1, 1, 0]],
+                    Z: [[1, 1, 0], [0, 1, 1]]
+                };
+
+                this.colors = [
+                    '#3B82F6', // 蓝色
+                    '#EF4444', // 红色
+                    '#10B981', // 绿色
+                    '#F59E0B', // 黄色
+                    '#8B5CF6', // 紫色
+                    '#EC4899', // 粉色
+                    '#06B6D4'  // 青色
+                ];
+
+                this.initializeBoard();
+                this.generateLevel();
+                this.setupEventListeners();
+            } initializeBoard() {
+                this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(0));
+                this.targetBoard = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(0));
+                this.placedPieces = [];
+                this.renderBoard();
+            } renderBoard() {
+                const gameBoard = document.getElementById('gameBoard');
+                gameBoard.style.gridTemplateColumns = `repeat(${this.boardSize}, 30px)`;
+                gameBoard.innerHTML = '';
+
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'game-cell';
+                        cell.dataset.row = row;
+                        cell.dataset.col = col;
+
+                        // 查找该位置是否有已放置的方块
+                        const placedPiece = this.findPlacedPieceAt(row, col);
+
+                        if (placedPiece) {
+                            cell.style.backgroundColor = placedPiece.color;
+                            cell.style.cursor = 'grab';
+                            cell.dataset.pieceId = placedPiece.id;
+                            cell.addEventListener('mousedown', (e) => this.startDragFromBoard(e, placedPiece));
+                            cell.addEventListener('touchstart', (e) => this.startDragFromBoard(e, placedPiece));
+                        } else if (this.targetBoard[row][col] === 1) {
+                            cell.style.backgroundColor = '#cccccc'; // 目标区域 - 浅灰色
+                            cell.style.border = '2px dashed #9CA3AF';
+                        } else {
+                            cell.style.backgroundColor = '#FFFFFF'; // 空白
+                            cell.style.border = '1px solid #E5E7EB';
+                        }
+
+                        gameBoard.appendChild(cell);
+                    }
+                }
+            }
+
+            findPlacedPieceAt(row, col) {
+                return this.placedPieces.find(placedPiece => {
+                    const { startRow, startCol, piece } = placedPiece;
+                    for (let r = 0; r < piece.shape.length; r++) {
+                        for (let c = 0; c < piece.shape[r].length; c++) {
+                            if (piece.shape[r][c] && startRow + r === row && startCol + c === col) {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                });
+            } generateLevel() {
+                this.initializeBoard();
+
+                // 获取当前难度配置
+                const config = this.difficultyConfig[this.currentDifficulty];
+                const baseCount = config.minPieces;
+                const extraCount = Math.floor((config.maxPieces - config.minPieces) * (this.currentLevel - 1) / (this.maxLevel - 1));
+                const totalPieces = baseCount + extraCount;
+
+                this.generateTargetMapAndPieces(totalPieces);
+                this.renderBoard();
+                this.renderPieces();
+
+                // 更新UI
+                document.getElementById('level').textContent = this.currentLevel;
+            }
+
+            generateTargetMapAndPieces(pieceCount) {
+                this.pieces = [];
+                this.targetBoard = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(0));
+
+                const shapeNames = Object.keys(this.shapes);
+                let pieceId = 0;
+
+                // 依次生成方块并放置在目标地图上
+                for (let i = 0; i < pieceCount; i++) {
+                    // 随机选择形状和旋转
+                    const shapeName = shapeNames[Math.floor(Math.random() * shapeNames.length)];
+                    const shape = this.shapes[shapeName];
+                    const rotation = Math.floor(Math.random() * 4);
+                    const rotatedShape = this.rotateShape(shape, rotation);
+
+                    // 尝试在目标地图上找位置
+                    const position = this.findBestPositionForShape(rotatedShape);
+
+                    if (position) {
+                        // 在目标地图上标记
+                        this.markShapeOnTarget(position.row, position.col, rotatedShape);
+
+                        // 创建方块对象
+                        const color = this.colors[Math.floor(Math.random() * this.colors.length)];
+                        this.pieces.push({
+                            id: pieceId++,
+                            shape: rotatedShape,
+                            color: color,
+                            placed: false
+                        });
+                    }
+                }
+
+                // 如果生成的方块不够，补充单个方块
+                while (this.pieces.length < pieceCount) {
+                    const emptyPositions = this.getEmptyTargetPositions();
+                    if (emptyPositions.length === 0) break;
+
+                    const randomPos = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+                    this.targetBoard[randomPos.row][randomPos.col] = 1;
+
+                    const color = this.colors[Math.floor(Math.random() * this.colors.length)];
+                    this.pieces.push({
+                        id: pieceId++,
+                        shape: [[1]],
+                        color: color,
+                        placed: false
+                    });
+                }
+            }
+
+            findBestPositionForShape(shape) {
+                const positions = [];
+
+                // 收集所有可能的位置
+                for (let row = 0; row <= this.boardSize - shape.length; row++) {
+                    for (let col = 0; col <= this.boardSize - shape[0].length; col++) {
+                        if (this.canPlaceShapeOnTarget(row, col, shape)) {
+                            // 计算与已有方块的邻接度
+                            const adjacency = this.calculateAdjacency(row, col, shape);
+                            positions.push({ row, col, adjacency });
+                        }
+                    }
+                }
+
+                if (positions.length === 0) return null;
+
+                // 优先选择邻接度高的位置（更容易无缝拼接）
+                positions.sort((a, b) => b.adjacency - a.adjacency);
+
+                // 在前几个最佳位置中随机选择
+                const topPositions = positions.slice(0, Math.min(3, positions.length));
+                return topPositions[Math.floor(Math.random() * topPositions.length)];
+            }
+
+            canPlaceShapeOnTarget(startRow, startCol, shape) {
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[r].length; c++) {
+                        if (shape[r][c]) {
+                            const targetRow = startRow + r;
+                            const targetCol = startCol + c;
+
+                            if (targetRow < 0 || targetRow >= this.boardSize ||
+                                targetCol < 0 || targetCol >= this.boardSize ||
+                                this.targetBoard[targetRow][targetCol] === 1) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+
+            calculateAdjacency(startRow, startCol, shape) {
+                let adjacency = 0;
+                const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[r].length; c++) {
+                        if (shape[r][c]) {
+                            const targetRow = startRow + r;
+                            const targetCol = startCol + c;
+
+                            // 检查四个方向的邻接
+                            for (const [dr, dc] of directions) {
+                                const adjRow = targetRow + dr;
+                                const adjCol = targetCol + dc;
+
+                                if (adjRow >= 0 && adjRow < this.boardSize &&
+                                    adjCol >= 0 && adjCol < this.boardSize &&
+                                    this.targetBoard[adjRow][adjCol] === 1) {
+                                    adjacency++;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return adjacency;
+            }
+
+            markShapeOnTarget(startRow, startCol, shape) {
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[r].length; c++) {
+                        if (shape[r][c]) {
+                            this.targetBoard[startRow + r][startCol + c] = 1;
+                        }
+                    }
+                }
+            } getEmptyTargetPositions() {
+                const positions = [];
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        if (this.targetBoard[row][col] === 0) {
+                            positions.push({ row, col });
+                        }
+                    }
+                }
+                return positions;
+            } startDragFromBoard(e, placedPiece) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // 移除已放置的方块
+                this.removePlacedPiece(placedPiece.id);
+
+                // 设置为当前拖拽的方块
+                this.draggedPiece = placedPiece.piece;
+
+                // 创建临时拖拽元素
+                const tempElement = this.createDragElement(placedPiece.piece);
+                document.body.appendChild(tempElement);
+                this.currentDragElement = tempElement; // 保存引用以便清理
+
+                let clientX, clientY;
+                if (e.type === 'mousedown') {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                } else {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                }
+
+                this.dragOffset = {
+                    x: tempElement.offsetWidth / 2,
+                    y: tempElement.offsetHeight / 2
+                };
+
+                tempElement.style.left = (clientX - this.dragOffset.x) + 'px';
+                tempElement.style.top = (clientY - this.dragOffset.y) + 'px';
+
+                document.addEventListener('mousemove', this.handleDragMoveFromBoard);
+                document.addEventListener('mouseup', this.handleDragEndFromBoard);
+                document.addEventListener('touchmove', this.handleDragMoveFromBoard);
+                document.addEventListener('touchend', this.handleDragEndFromBoard);
+            } createDragElement(piece) {
+                const pieceDiv = document.createElement('div');
+                pieceDiv.className = 'tetris-piece dragging';
+                pieceDiv.style.position = 'fixed';
+                pieceDiv.style.zIndex = '1000';
+                pieceDiv.style.pointerEvents = 'none';
+                pieceDiv.dataset.pieceId = piece.id;
+
+                const grid = document.createElement('div');
+                grid.className = 'inline-grid gap-0 p-2 bg-white rounded shadow';
+                grid.style.gridTemplateColumns = `repeat(${piece.shape[0].length}, 20px)`;
+
+                piece.shape.forEach(row => {
+                    row.forEach(cell => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = 'piece-cell';
+                        cellDiv.style.backgroundColor = cell ? piece.color : 'transparent';
+                        grid.appendChild(cellDiv);
+                    });
+                });
+                pieceDiv.appendChild(grid);
+                return pieceDiv;
+            }
+
+            // 从游戏板拖拽的事件处理
+            handleDragMoveFromBoard = (e) => {
+                if (!this.draggedPiece || !this.currentDragElement) return;
+
+                let clientX, clientY;
+                if (e.type === 'mousemove') {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                } else {
+                    const touch = e.touches[0];
+                    clientX = touch.clientX;
+                    clientY = touch.clientY;
+                }
+
+                this.currentDragElement.style.left = (clientX - this.dragOffset.x) + 'px';
+                this.currentDragElement.style.top = (clientY - this.dragOffset.y) + 'px';
+
+                this.highlightDropZoneByPiecePosition(clientX, clientY);
+            };
+
+            handleDragEndFromBoard = (e) => {
+                if (!this.draggedPiece || !this.currentDragElement) return;
+
+                let clientX, clientY;
+                if (e.type === 'mouseup') {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                } else {
+                    const touch = e.changedTouches[0];
+                    clientX = touch.clientX;
+                    clientY = touch.clientY;
+                }
+
+                // 清理临时拖拽元素
+                if (this.currentDragElement) {
+                    document.body.removeChild(this.currentDragElement);
+                    this.currentDragElement = null;
+                }
+
+                this.tryPlacePieceByPosition(clientX, clientY);
+                this.clearHighlights();
+                this.draggedPiece = null;
+
+                document.removeEventListener('mousemove', this.handleDragMoveFromBoard);
+                document.removeEventListener('mouseup', this.handleDragEndFromBoard);
+                document.removeEventListener('touchmove', this.handleDragMoveFromBoard);
+                document.removeEventListener('touchend', this.handleDragEndFromBoard);
+            };
+
+            // 基于方块位置的高亮显示
+            highlightDropZoneByPiecePosition(clientX, clientY) {
+                this.clearHighlights();
+                const boardElement = document.getElementById('gameBoard');
+                const boardRect = boardElement.getBoundingClientRect();
+
+                if (clientX >= boardRect.left && clientX <= boardRect.right &&
+                    clientY >= boardRect.top && clientY <= boardRect.bottom) {
+
+                    const cellSize = 30;
+                    // 计算方块左上角对应的网格位置
+                    const pieceLeftX = clientX - this.dragOffset.x;
+                    const pieceTopY = clientY - this.dragOffset.y;
+
+                    const row = Math.floor((pieceTopY - boardRect.top) / cellSize);
+                    const col = Math.floor((pieceLeftX - boardRect.left) / cellSize);
+
+                    if (this.canPlacePiece(row, col, this.draggedPiece.shape)) {
+                        this.highlightCells(row, col, this.draggedPiece.shape, 'valid-drop');
+                    } else {
+                        this.highlightCells(row, col, this.draggedPiece.shape, 'invalid-drop');
+                    }
+                }
+            }
+
+            // 基于方块位置的放置尝试
+            tryPlacePieceByPosition(clientX, clientY) {
+                const boardElement = document.getElementById('gameBoard');
+                const boardRect = boardElement.getBoundingClientRect();
+
+                if (clientX >= boardRect.left && clientX <= boardRect.right &&
+                    clientY >= boardRect.top && clientY <= boardRect.bottom) {
+
+                    const cellSize = 30;
+                    // 计算方块左上角对应的网格位置
+                    const pieceLeftX = clientX - this.dragOffset.x;
+                    const pieceTopY = clientY - this.dragOffset.y;
+
+                    const row = Math.floor((pieceTopY - boardRect.top) / cellSize);
+                    const col = Math.floor((pieceLeftX - boardRect.left) / cellSize);
+
+                    if (this.canPlacePiece(row, col, this.draggedPiece.shape)) {
+                        this.placePiece(row, col, this.draggedPiece);
+                    }
+                }
+            }
+
+            removePlacedPiece(pieceId) {
+                // 找到要移除的方块
+                const placedPiece = this.placedPieces.find(p => p.id === pieceId);
+                if (placedPiece) {
+                    // 清除棋盘上的位置
+                    const { startRow, startCol, piece } = placedPiece;
+                    piece.shape.forEach((row, r) => {
+                        row.forEach((cell, c) => {
+                            if (cell) {
+                                this.board[startRow + r][startCol + c] = 0;
+                            }
+                        });
+                    });
+                }
+
+                // 从已放置列表中移除
+                this.placedPieces = this.placedPieces.filter(p => p.id !== pieceId);
+                this.pieces.find(p => p.id === pieceId).placed = false;
+                this.renderBoard();
+                this.renderPieces();
+            }
+
+            canPlacePieceInEmptyBoard(startRow, startCol, shape, emptySpaces) {
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[r].length; c++) {
+                        if (shape[r][c]) {
+                            const targetRow = startRow + r;
+                            const targetCol = startCol + c;
+
+                            // 检查边界
+                            if (targetRow < 0 || targetRow >= this.boardSize ||
+                                targetCol < 0 || targetCol >= this.boardSize) {
+                                return false;
+                            }
+
+                            // 检查是否在空位列表中
+                            const isEmpty = emptySpaces.some(space =>
+                                space.row === targetRow && space.col === targetCol);
+                            if (!isEmpty) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+
+            rotateShape(shape, times) {
+                let rotated = shape;
+                for (let i = 0; i < times; i++) {
+                    const rows = rotated.length;
+                    const cols = rotated[0].length;
+                    const newShape = Array(cols).fill().map(() => Array(rows).fill(0));
+
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            newShape[c][rows - 1 - r] = rotated[r][c];
+                        }
+                    }
+                    rotated = newShape;
+                }
+                return rotated;
+            }
+
+            renderPieces() {
+                const container = document.getElementById('piecesContainer');
+                container.innerHTML = '';
+
+                this.pieces.forEach(piece => {
+                    if (!piece.placed) {
+                        const pieceElement = this.createPieceElement(piece);
+                        container.appendChild(pieceElement);
+                    }
+                });
+            }
+
+            createPieceElement(piece) {
+                const pieceDiv = document.createElement('div');
+                pieceDiv.className = 'tetris-piece m-2 p-2 bg-white rounded shadow';
+                pieceDiv.dataset.pieceId = piece.id;
+
+                const grid = document.createElement('div');
+                grid.className = 'inline-grid gap-0';
+                grid.style.gridTemplateColumns = `repeat(${piece.shape[0].length}, 20px)`;
+
+                piece.shape.forEach(row => {
+                    row.forEach(cell => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.className = 'piece-cell';
+                        cellDiv.style.backgroundColor = cell ? piece.color : 'transparent';
+                        grid.appendChild(cellDiv);
+                    });
+                });
+
+                pieceDiv.appendChild(grid);
+
+                // 添加拖拽事件
+                this.addDragEvents(pieceDiv, piece);
+                return pieceDiv;
+            }
+
+            addDragEvents(element, piece) {
+                let startX, startY;
+                let dragStarted = false;
+                let startTime = 0;
+
+                // 鼠标事件
+                element.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    dragStarted = false;
+                    startTime = Date.now();
+                    startX = e.clientX;
+                    startY = e.clientY;
+
+                    // 延迟启动拖拽，给单击留出时间
+                    setTimeout(() => {
+                        if (!dragStarted) {
+                            this.startDrag(e, element, piece, e.clientX, e.clientY);
+                            dragStarted = true;
+                        }
+                    }, 150);
+                });
+
+                element.addEventListener('mouseup', (e) => {
+                    const endTime = Date.now();
+                    const distance = Math.sqrt(Math.pow(e.clientX - startX, 2) + Math.pow(e.clientY - startY, 2));
+
+                    // 如果是短时间点击且没有移动，则旋转
+                    if (!dragStarted && endTime - startTime < 200 && distance < 5) {
+                        piece.shape = this.rotateShape(piece.shape, 1);
+                        this.renderPieces();
+                    }
+                });
+
+                // 触摸事件
+                element.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    dragStarted = false;
+                    startTime = Date.now();
+                    startX = touch.clientX;
+                    startY = touch.clientY;
+
+                    // 延迟启动拖拽
+                    setTimeout(() => {
+                        if (!dragStarted && e.touches.length > 0) {
+                            this.startDrag(e, element, piece, touch.clientX, touch.clientY);
+                            dragStarted = true;
+                        }
+                    }, 150);
+                });
+
+                element.addEventListener('touchend', (e) => {
+                    const endTime = Date.now();
+                    const touch = e.changedTouches[0];
+                    const distance = Math.sqrt(Math.pow(touch.clientX - startX, 2) + Math.pow(touch.clientY - startY, 2));
+
+                    // 如果是短时间点击且没有移动，则旋转
+                    if (!dragStarted && endTime - startTime < 200 && distance < 5) {
+                        piece.shape = this.rotateShape(piece.shape, 1);
+                        this.renderPieces();
+                    }
+                });
+            }
+
+            startDrag(e, element, piece, clientX, clientY) {
+                this.draggedPiece = piece;
+                const rect = element.getBoundingClientRect();
+                this.dragOffset = {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+
+                element.classList.add('dragging');
+                element.style.position = 'fixed';
+                element.style.left = (clientX - this.dragOffset.x) + 'px';
+                element.style.top = (clientY - this.dragOffset.y) + 'px';
+                element.style.zIndex = '1000';
+
+                document.addEventListener('mousemove', this.handleDragMove);
+                document.addEventListener('mouseup', this.handleDragEnd);
+                document.addEventListener('touchmove', this.handleDragMove);
+                document.addEventListener('touchend', this.handleDragEnd);
+            }
+
+            handleDragMove = (e) => {
+                if (!this.draggedPiece) return;
+
+                let clientX, clientY;
+                if (e.type === 'mousemove') {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                } else {
+                    const touch = e.touches[0];
+                    clientX = touch.clientX;
+                    clientY = touch.clientY;
+                }
+
+                const element = document.querySelector(`[data-piece-id="${this.draggedPiece.id}"]`);
+                element.style.left = (clientX - this.dragOffset.x) + 'px';
+                element.style.top = (clientY - this.dragOffset.y) + 'px';
+
+                this.highlightDropZone(clientX, clientY);
+            };
+
+            handleDragEnd = (e) => {
+                if (!this.draggedPiece) return;
+
+                let clientX, clientY;
+                if (e.type === 'mouseup') {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                } else {
+                    const touch = e.changedTouches[0];
+                    clientX = touch.clientX;
+                    clientY = touch.clientY;
+                }
+
+                const element = document.querySelector(`[data-piece-id="${this.draggedPiece.id}"]`);
+                element.classList.remove('dragging');
+                element.style.position = '';
+                element.style.left = '';
+                element.style.top = '';
+                element.style.zIndex = '';
+
+                this.tryPlacePiece(clientX, clientY);
+                this.clearHighlights();
+                this.draggedPiece = null;
+
+                document.removeEventListener('mousemove', this.handleDragMove);
+                document.removeEventListener('mouseup', this.handleDragEnd);
+                document.removeEventListener('touchmove', this.handleDragMove);
+                document.removeEventListener('touchend', this.handleDragEnd);
+            }; highlightDropZone(clientX, clientY) {
+                this.clearHighlights();
+                const boardElement = document.getElementById('gameBoard');
+                const boardRect = boardElement.getBoundingClientRect();
+
+                if (clientX >= boardRect.left && clientX <= boardRect.right &&
+                    clientY >= boardRect.top && clientY <= boardRect.bottom) {
+
+                    const cellSize = 30;
+                    // 计算方块左上角对应的网格位置
+                    const pieceLeftX = clientX - this.dragOffset.x;
+                    const pieceTopY = clientY - this.dragOffset.y;
+
+                    const row = Math.floor((pieceTopY - boardRect.top) / cellSize);
+                    const col = Math.floor((pieceLeftX - boardRect.left) / cellSize);
+
+                    if (this.canPlacePiece(row, col, this.draggedPiece.shape)) {
+                        this.highlightCells(row, col, this.draggedPiece.shape, 'valid-drop');
+                    } else {
+                        this.highlightCells(row, col, this.draggedPiece.shape, 'invalid-drop');
+                    }
+                }
+            }
+
+            highlightCells(startRow, startCol, shape, className) {
+                shape.forEach((row, r) => {
+                    row.forEach((cell, c) => {
+                        if (cell) {
+                            const targetRow = startRow + r;
+                            const targetCol = startCol + c;
+                            const cellElement = document.querySelector(`[data-row="${targetRow}"][data-col="${targetCol}"]`);
+                            if (cellElement) {
+                                cellElement.classList.add(className);
+                            }
+                        }
+                    });
+                });
+            }
+
+            clearHighlights() {
+                document.querySelectorAll('.valid-drop, .invalid-drop').forEach(cell => {
+                    cell.classList.remove('valid-drop', 'invalid-drop');
+                });
+            } tryPlacePiece(clientX, clientY) {
+                const boardElement = document.getElementById('gameBoard');
+                const boardRect = boardElement.getBoundingClientRect();
+
+                if (clientX >= boardRect.left && clientX <= boardRect.right &&
+                    clientY >= boardRect.top && clientY <= boardRect.bottom) {
+
+                    const cellSize = 30;
+                    // 计算方块左上角对应的网格位置
+                    const pieceLeftX = clientX - this.dragOffset.x;
+                    const pieceTopY = clientY - this.dragOffset.y;
+
+                    const row = Math.floor((pieceTopY - boardRect.top) / cellSize);
+                    const col = Math.floor((pieceLeftX - boardRect.left) / cellSize);
+
+                    if (this.canPlacePiece(row, col, this.draggedPiece.shape)) {
+                        this.placePiece(row, col, this.draggedPiece);
+                    }
+                }
+            }
+
+            canPlacePiece(startRow, startCol, shape) {
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[r].length; c++) {
+                        if (shape[r][c]) {
+                            const targetRow = startRow + r;
+                            const targetCol = startCol + c;
+
+                            if (targetRow < 0 || targetRow >= this.boardSize ||
+                                targetCol < 0 || targetCol >= this.boardSize ||
+                                this.board[targetRow][targetCol] !== 0) {
+                                return false;
+                            }
+                        }
+                    }
+                } return true;
+            }
+
+            placePiece(startRow, startCol, piece) {
+                // 更新游戏板状态
+                piece.shape.forEach((row, r) => {
+                    row.forEach((cell, c) => {
+                        if (cell) {
+                            this.board[startRow + r][startCol + c] = 1;
+                        }
+                    });
+                });
+
+                // 记录已放置的方块，以便能够拖拽回来
+                this.placedPieces.push({
+                    id: piece.id,
+                    piece: piece,
+                    startRow: startRow,
+                    startCol: startCol,
+                    color: piece.color
+                });
+
+                piece.placed = true;
+                this.renderBoard();
+                this.renderPieces();
+
+                if (this.checkWin()) {
+                    setTimeout(() => this.showWinModal(), 500);
+                }
+            }
+
+            checkWin() {
+                // 检查是否所有目标位置都被填满
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        if (this.targetBoard[row][col] === 1 && this.board[row][col] === 0) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            showWinModal() {
+                document.getElementById('completedLevel').textContent = this.currentLevel;
+                document.getElementById('winModal').classList.remove('hidden');
+            } nextLevel() {
+                this.currentLevel++;
+                this.generateLevel();
+                document.getElementById('winModal').classList.add('hidden');
+            }
+
+            clearPlacedPieces() {
+                // 只清空游戏板上已放置的方块，保留目标地图
+                this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(0));
+                this.placedPieces = [];
+
+                // 将所有方块标记为未放置
+                this.pieces.forEach(piece => piece.placed = false);
+
+                // 重新渲染
+                this.renderBoard();
+                this.renderPieces();
+            }
+
+            setupEventListeners() {
+                document.getElementById('difficultySelect').addEventListener('change', (e) => {
+                    this.currentDifficulty = e.target.value;
+                    this.currentLevel = 1;
+                    this.generateLevel();
+                });
+
+                document.getElementById('newGame').addEventListener('click', () => {
+                    this.currentLevel = 1;
+                    this.generateLevel();
+                }); document.getElementById('clearBoard').addEventListener('click', () => {
+                    this.clearPlacedPieces();
+                });
+
+                document.getElementById('nextLevel').addEventListener('click', () => {
+                    this.nextLevel();
+                });
+
+                document.getElementById('closeModal').addEventListener('click', () => {
+                    document.getElementById('winModal').classList.add('hidden');
+                });
+            }
+        }
+
+        // 初始化游戏
+        new TetrisPuzzle();
+    </script>
+</body>
+
+</html>
