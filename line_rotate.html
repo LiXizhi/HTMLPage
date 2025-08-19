@@ -42,6 +42,8 @@
             position: absolute;
             background-color: #ec4899;
             z-index: 1;
+            pointer-events: auto;
+            cursor: pointer;
         }
 
         .horizontal-line {
@@ -146,7 +148,7 @@
 </head>
 
 <body class="bg-gradient-to-br from-red-300 to-red-500 min-h-screen p-4">
-    <div class="max-w-4xl mx-auto">        <!-- 游戏头部 -->
+    <div class="max-w-4xl mx-auto"> <!-- 游戏头部 -->
         <div class="bg-white bg-opacity-90 rounded-lg p-4 mb-4 flex justify-between items-center">
             <div class="flex gap-4 items-center">
                 <span class="font-bold">关卡: <span id="level">1/10</span></span>
@@ -163,8 +165,7 @@
                     </select>
                 </div>
             </div>
-            <button id="hintBtn"
-                class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-bold">
+            <button id="hintBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-bold">
                 提示
             </button>
         </div>
@@ -195,19 +196,16 @@
                         <!-- 目标图案将在这里生成 -->
                     </div>
                 </div>
-            </div>
-
-            <!-- 操作提示 -->
+            </div> <!-- 操作提示 -->
             <div class="text-white text-center mb-6">
-                <p class="text-lg">点击右侧相邻的粉色点进行连线，重现左侧变换后的图案</p>
-            </div>            <!-- 控制按钮 -->
+                <p class="text-lg">点击或拖动相邻的粉色点进行连线，重现左侧变换后的图案</p>
+            </div><!-- 控制按钮 -->
             <div class="text-center">
                 <button id="checkBtn"
                     class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
                     检查答案
                 </button>
-                <button id="clearBtn"
-                    class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold">
+                <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold">
                     清除连线
                 </button>
             </div>
@@ -229,6 +227,11 @@
                 this.userConnections = [];
                 this.selectedDot = null;
                 this.isProcessingCorrectAnswer = false;
+                // 拖动相关状态
+                this.isDragging = false;
+                this.dragStartDot = null;
+                this.dragCurrentPath = [];
+
                 this.difficulties = {
                     easy: { gridSize: 3, cellSize: 50, minConnections: 2, maxConnections: 4 },
                     medium: { gridSize: 4, cellSize: 45, minConnections: 3, maxConnections: 6 },
@@ -540,8 +543,7 @@
                     dotElement.style.top = `${dot.y - 8}px`;
                     container.appendChild(dotElement);
                 });
-            } 
-            renderTargetPattern() {
+            } renderTargetPattern() {
                 const container = document.getElementById('targetPattern');
                 container.innerHTML = '';
 
@@ -560,9 +562,21 @@
                     dotElement.style.left = `${dot.x - 8}px`;
                     dotElement.style.top = `${dot.y - 8}px`;
                     dotElement.dataset.index = index;
+
+                    // 添加点击和拖动事件
                     dotElement.addEventListener('click', () => this.handleDotClick(index, dotElement));
+                    dotElement.addEventListener('mousedown', (e) => this.handleDragStart(e, index));
+                    dotElement.addEventListener('touchstart', (e) => this.handleDragStart(e, index));
+
                     container.appendChild(dotElement);
                 });
+
+                // 添加容器的拖动事件监听
+                container.addEventListener('mousemove', (e) => this.handleDragMove(e));
+                container.addEventListener('mouseup', (e) => this.handleDragEnd(e));
+                container.addEventListener('touchmove', (e) => this.handleDragMove(e));
+                container.addEventListener('touchend', (e) => this.handleDragEnd(e));
+                container.addEventListener('mouseleave', (e) => this.handleDragEnd(e));
 
                 // 清除用户连线和选择状态
                 this.userConnections = [];
@@ -687,9 +701,7 @@
                     connectedIndices: transformedConnectedIndices,
                     connections: transformedConnections
                 };
-            }
-
-            createLine(start, end) {
+            } createLine(start, end) {
                 const line = document.createElement('div');
                 line.className = 'line';
 
@@ -712,6 +724,152 @@
                 }
 
                 return line;
+            }            // 拖动开始处理
+            handleDragStart(e, index) {
+                e.preventDefault();
+
+                // 只允许在应该被连接的粉色点上开始拖动
+                if (!this.targetPattern.connectedIndices.includes(index)) {
+                    return;
+                }
+
+                // 默认为连接模式，允许从有连接的点继续创建新连接
+                this.dragMode = 'connect';
+
+                this.isDragging = true;
+                this.dragStartDot = index;
+                this.dragCurrentPath = [index];
+
+                // 添加拖动中的视觉反馈
+                const dotElement = e.target;
+                dotElement.classList.add('selected-dot');
+
+                // 阻止默认的触摸行为
+                if (e.type === 'touchstart') {
+                    e.preventDefault();
+                }
+            }
+
+            // 拖动移动处理
+            handleDragMove(e) {
+                if (!this.isDragging) return;
+
+                e.preventDefault();
+
+                const containerRect = document.getElementById('targetPattern').getBoundingClientRect();
+                let clientX, clientY;
+
+                if (e.type === 'touchmove') {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+
+                // 计算相对于容器的坐标
+                const x = clientX - containerRect.left;
+                const y = clientY - containerRect.top;
+
+                // 找到当前鼠标位置下的点
+                const currentDot = this.findDotAtPosition(x, y);
+
+                if (currentDot !== null && this.targetPattern.connectedIndices.includes(currentDot)) {
+                    const lastDot = this.dragCurrentPath[this.dragCurrentPath.length - 1];
+
+                    if (currentDot !== lastDot) {
+                        const transformedPositions = this.getTransformedPositions();
+                        // 检查是否与路径中的上一个点相邻
+                        if (this.areAdjacent(transformedPositions[lastDot], transformedPositions[currentDot])) {
+
+                            // 智能处理连接/删除逻辑
+                            if (this.hasConnection(lastDot, currentDot)) {
+                                // 如果已经有连接，则删除它
+                                this.removeConnectionIfExists(lastDot, currentDot);
+                            } else {
+                                // 如果没有连接，则创建新连接
+                                this.userConnections.push([lastDot, currentDot]);
+                            }
+
+                            this.dragCurrentPath.push(currentDot);
+                            this.updateUserLines();
+
+                            // 更新视觉反馈
+                            this.updateDragVisualFeedback(currentDot);
+                        }
+                    }
+                }
+            }            // 拖动结束处理
+            handleDragEnd(e) {
+                if (!this.isDragging) return;
+
+                this.isDragging = false;
+                this.dragStartDot = null;
+                this.dragCurrentPath = [];
+
+                // 清除所有选择状态的视觉效果
+                document.querySelectorAll('.selected-dot').forEach(dot => {
+                    dot.classList.remove('selected-dot');
+                });
+
+                // 自动检测是否完成
+                setTimeout(() => {
+                    this.autoCheckCompletion();
+                }, 100);
+            }
+
+            // 查找位置上的点
+            findDotAtPosition(x, y) {
+                const transformedPositions = this.getTransformedPositions();
+                const tolerance = 20; // 检测容差
+
+                for (let i = 0; i < transformedPositions.length; i++) {
+                    const dot = transformedPositions[i];
+                    const distance = Math.sqrt(Math.pow(x - dot.x, 2) + Math.pow(y - dot.y, 2));
+                    if (distance <= tolerance) {
+                        return i;
+                    }
+                }
+                return null;
+            }
+
+            // 查找点上的现有连接
+            findConnectionAtPoint(index) {
+                return this.userConnections.find(conn =>
+                    conn[0] === index || conn[1] === index
+                );
+            }
+
+            // 检查两点之间是否有连接
+            hasConnection(dot1, dot2) {
+                return this.userConnections.some(conn =>
+                    (conn[0] === dot1 && conn[1] === dot2) ||
+                    (conn[0] === dot2 && conn[1] === dot1)
+                );
+            }
+
+            // 移除连接（如果存在）
+            removeConnectionIfExists(dot1, dot2) {
+                this.userConnections = this.userConnections.filter(conn =>
+                    !((conn[0] === dot1 && conn[1] === dot2) ||
+                        (conn[0] === dot2 && conn[1] === dot1))
+                );
+            }
+
+            // 更新拖动过程中的视觉反馈
+            updateDragVisualFeedback(currentDot) {
+                // 清除之前的选择状态
+                document.querySelectorAll('.selected-dot').forEach(dot => {
+                    dot.classList.remove('selected-dot');
+                });
+
+                // 高亮当前路径上的所有点
+                this.dragCurrentPath.forEach(dotIndex => {
+                    const dotElement = document.querySelector(`[data-index="${dotIndex}"]`);
+                    if (dotElement) {
+                        dotElement.classList.add('selected-dot');
+                    }
+                });
             } handleDotClick(index, element) {
                 const transformedPositions = this.getTransformedPositions();
 
@@ -771,9 +929,7 @@
                         element.classList.add('selected-dot');
                     }
                 }
-            }
-
-            updateUserLines() {
+            } updateUserLines() {
                 const container = document.getElementById('targetPattern');
                 const transformedPositions = this.getTransformedPositions();
 
@@ -781,12 +937,34 @@
                 container.querySelectorAll('.line').forEach(line => line.remove());
 
                 // 绘制用户连线
-                this.userConnections.forEach(([start, end]) => {
+                this.userConnections.forEach(([start, end], index) => {
                     const startDot = transformedPositions[start];
                     const endDot = transformedPositions[end];
                     const line = this.createLine(startDot, endDot);
+
+                    // 为线添加点击删除功能
+                    line.dataset.connectionIndex = index;
+                    line.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.removeConnection(index);
+                    });
+
                     container.appendChild(line);
                 });
+            }
+
+            // 移除指定索引的连接
+            removeConnection(connectionIndex) {
+                if (connectionIndex >= 0 && connectionIndex < this.userConnections.length) {
+                    this.userConnections.splice(connectionIndex, 1);
+                    this.updateUserLines();
+
+                    // 清除选择状态
+                    this.selectedDot = null;
+                    document.querySelectorAll('.selected-dot').forEach(dot => {
+                        dot.classList.remove('selected-dot');
+                    });
+                }
             }
 
             // 自动检测是否完成任务
@@ -934,9 +1112,9 @@
                 // 重新生成题目
                 this.generatePattern();
                 this.updateUI();
-            } setupEventListeners() {
+            }
+            setupEventListeners() {
                 document.getElementById('checkBtn').addEventListener('click', () => this.checkAnswer());
-                document.getElementById('newGameBtn').addEventListener('click', () => this.newGame());
                 document.getElementById('clearBtn').addEventListener('click', () => this.clearLines());
                 document.getElementById('hintBtn').addEventListener('click', () => this.showHint());
 
@@ -974,8 +1152,7 @@
 
                 document.getElementById('transformText').textContent = transformTexts[this.currentTransform];
                 document.getElementById('transformIcon').textContent = transformIcons[this.currentTransform];
-            }
-            showHint() {
+            } showHint() {
                 const difficultyNames = { easy: '简单', medium: '中等', hard: '困难', expert: '专家' };
                 const difficultyName = difficultyNames[this.difficulty];
                 const hintMessage = `提示：
@@ -983,8 +1160,9 @@
 2. 观察左侧粉色点和连线的模式
 3. 想象它经过"${document.getElementById('transformText').textContent}"后的样子
 4. 右侧的粉色点是需要连接的点
-5. 点击相邻的粉色点进行连线
-6. 只能连接水平或垂直相邻的点`;
+5. 点击相邻的粉色点进行连线，或拖动一次连接多个点
+6. 在已有连线上点击或拖动可以删除连线
+7. 只能连接水平或垂直相邻的点`;
 
                 this.showToast(hintMessage, 'info', 8000);
             } updateUI() {
