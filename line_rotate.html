@@ -54,7 +54,7 @@
 
         .pattern-area {
             background: #d4af85;
-            border-radius: 8px;
+            border-radius: 2px 2px 2px 30px;
             position: relative;
             padding: 20px;
         }
@@ -146,12 +146,12 @@
 </head>
 
 <body class="bg-gradient-to-br from-red-300 to-red-500 min-h-screen p-4">
-    <div class="max-w-4xl mx-auto">
-        <!-- 游戏头部 -->
+    <div class="max-w-4xl mx-auto">        <!-- 游戏头部 -->
         <div class="bg-white bg-opacity-90 rounded-lg p-4 mb-4 flex justify-between items-center">
             <div class="flex gap-4 items-center">
-                <span class="font-bold">关卡: <span id="level">1</span></span>
+                <span class="font-bold">关卡: <span id="level">1/10</span></span>
                 <span class="font-bold">分数: <span id="score">0</span></span>
+                <span class="font-bold text-blue-600">最高分: <span id="highestScore">0</span></span>
                 <div class="flex items-center gap-2">
                     <span class="font-bold">难度:</span>
                     <select id="difficultySelect"
@@ -163,7 +163,10 @@
                     </select>
                 </div>
             </div>
-            <button id="pauseBtn" class="text-2xl">⏸</button>
+            <button id="hintBtn"
+                class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-bold">
+                提示
+            </button>
         </div>
 
         <!-- 游戏区域 -->
@@ -197,25 +200,15 @@
             <!-- 操作提示 -->
             <div class="text-white text-center mb-6">
                 <p class="text-lg">点击右侧相邻的粉色点进行连线，重现左侧变换后的图案</p>
-            </div>
-
-            <!-- 控制按钮 -->
+            </div>            <!-- 控制按钮 -->
             <div class="text-center">
                 <button id="checkBtn"
                     class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
                     检查答案
                 </button>
                 <button id="clearBtn"
-                    class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
+                    class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold">
                     清除连线
-                </button>
-                <button id="newGameBtn"
-                    class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-bold mr-4">
-                    新题目
-                </button>
-                <button id="hintBtn"
-                    class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold">
-                    提示
                 </button>
             </div>
         </div>
@@ -224,8 +217,7 @@
     <!-- Toast container -->
     <div id="toastContainer"></div>
 
-    <script>
-        class SpatialGame {
+    <script>        class SpatialGame {
             constructor() {
                 this.level = 1;
                 this.score = 0;
@@ -246,7 +238,19 @@
 
                 this.transforms = ['rotate90', 'rotate-90', 'rotate180', 'flipH', 'flipV'];
 
+                // 游戏状态跟踪
+                this.gameStarted = false;
+                this.highestScore = 0; // 记录最高分数
+                this.gameConfig = null; // 存储外部配置
+
+                // 新的关卡系统：每个难度10关，每关20分
+                this.maxLevelsPerDifficulty = 10;
+                this.pointsPerLevel = 20;
+
                 this.init();
+
+                // 发送游戏加载完成事件
+                window.parent.postMessage({ type: 'gameLoaded' }, '*');
             }
 
             // Toast notification system
@@ -311,17 +315,52 @@
                         document.body.removeChild(confetti);
                     }
                 }, 1000);
-            }
-
-            init() {
+            } init() {
                 this.generatePattern();
                 this.setupEventListeners();
                 this.updateUI();
+                this.setupMessageListener();
+            }
+
+            // 设置消息监听器
+            setupMessageListener() {
+                window.addEventListener('message', (e) => {
+                    switch (e.data.type) {
+                        case 'setGameConfig':
+                            this.gameConfig = e.data.data; // 存储配置信息
+                            // 可以在这里根据配置更新游戏设置
+                            break;
+                        case 'getGameStats':
+                            // 返回当前最高分数和难度等级
+                            const difficultyLevel = this.getDifficultyLevel();
+                            window.parent.postMessage({
+                                type: 'gameStats',
+                                data: {
+                                    score: this.highestScore, // 返回最高分数
+                                    difficulty: difficultyLevel,
+                                    currentScore: this.score,
+                                    level: this.level
+                                }
+                            }, '*');
+                            break;
+                    }
+                });
+            }
+
+            // 将难度转换为数字等级
+            getDifficultyLevel() {
+                const difficultyMap = {
+                    'easy': 1,
+                    'medium': 2,
+                    'hard': 3,
+                    'expert': 3
+                };
+                return difficultyMap[this.difficulty] || 2;
             }
             getCurrentConfig() {
                 return this.difficulties[this.difficulty];
             }            // 根据关卡自动设置难度
-            
+
             getConnectionsByLevel() {
                 const baseDifficulty = this.difficulty;
                 const config = this.difficulties[this.difficulty];
@@ -365,7 +404,12 @@
                 this.originalPattern = { dots: [], connections: [] };
                 this.targetPattern = { dots: [], connections: [] };
 
-                
+                // 发送游戏开始事件（仅第一次）
+                if (!this.gameStarted) {
+                    this.gameStarted = true;
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
+                }
+
                 // 随机选择变换类型（移除强制测试代码）
                 this.currentTransform = this.transforms[Math.floor(Math.random() * this.transforms.length)];
 
@@ -429,7 +473,7 @@
                 this.renderOriginalPattern();
                 this.renderTargetPattern();
                 this.updateUI();
-            } 
+            }
             updatePatternSizes() {
                 const config = this.getCurrentConfig();
                 const padding = 20; // Same padding used in getGridPositions()
@@ -437,7 +481,7 @@
                 // Calculate actual size needed based on grid dimensions
                 const gridWidth = (config.gridSize - 1) * config.cellSize;
                 const gridHeight = (config.gridSize - 1) * config.cellSize;
-                const totalWidth = gridWidth + (padding * 2); 
+                const totalWidth = gridWidth + (padding * 2);
                 const totalHeight = gridHeight + (padding * 2);
 
                 document.getElementById('originalPattern').style.width = `${totalWidth}px`;
@@ -472,11 +516,12 @@
                 const rowDiff = Math.abs(pos1.row - pos2.row);
                 const colDiff = Math.abs(pos1.col - pos2.col);
                 return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
-            }
-
-            renderOriginalPattern() {
+            } renderOriginalPattern() {
                 const container = document.getElementById('originalPattern');
                 container.innerHTML = '';
+
+                // 确保原始图案始终使用原始的边框圆角
+                container.style.borderRadius = '2px 2px 2px 30px';
 
                 // 绘制连线
                 this.originalPattern.connections.forEach(([startIdx, endIdx]) => {
@@ -495,12 +540,16 @@
                     dotElement.style.top = `${dot.y - 8}px`;
                     container.appendChild(dotElement);
                 });
-            } renderTargetPattern() {
+            } 
+            renderTargetPattern() {
                 const container = document.getElementById('targetPattern');
                 container.innerHTML = '';
 
                 // 计算变换后的图案
                 this.targetPattern = this.transformPattern(this.originalPattern, this.currentTransform);
+
+                // 更新目标图案的边框圆角
+                this.updateTargetPatternBorderRadius();
 
                 // 绘制所有网格点，需要连接的点显示为粉色
                 const transformedPositions = this.getTransformedPositions();
@@ -523,6 +572,44 @@
                 document.querySelectorAll('.selected-dot').forEach(dot => {
                     dot.classList.remove('selected-dot');
                 });
+            }
+
+            // 更新目标图案的边框圆角以匹配变换
+            updateTargetPatternBorderRadius() {
+                const targetContainer = document.getElementById('targetPattern');
+
+                // 原始边框圆角: top-left, top-right, bottom-right, bottom-left
+                // 原始设置是: 2px 2px 2px 30px (左下角是30px)
+                let borderRadius;
+
+                switch (this.currentTransform) {
+                    case 'rotate90':
+                        // 顺时针90度：左下角 -> 左上角
+                        borderRadius = '30px 2px 2px 2px';
+                        break;
+                    case 'rotate-90':
+                        // 逆时针90度：左下角 -> 右下角  
+                        borderRadius = '2px 2px 30px 2px';
+                        break;
+                    case 'rotate180':
+                        // 180度：左下角 -> 右上角
+                        borderRadius = '2px 30px 2px 2px';
+                        break;
+                    case 'flipH':
+                        // 水平翻转：左下角 -> 右下角
+                        borderRadius = '2px 2px 30px 2px';
+                        break;
+                    case 'flipV':
+                        // 垂直翻转：左下角 -> 左上角
+                        borderRadius = '30px 2px 2px 2px';
+                        break;
+                    default:
+                        // 无变换：保持原样
+                        borderRadius = '2px 2px 2px 30px';
+                        break;
+                }
+
+                targetContainer.style.borderRadius = borderRadius;
             }
 
             getTransformedPositions() {
@@ -723,7 +810,9 @@
                         }, 500);
                     }
                 }
-            }            // 处理正确答案的逻辑
+            }
+
+            // 处理正确答案的逻辑
             handleCorrectAnswer() {
                 // 防止重复执行
                 if (this.isProcessingCorrectAnswer) {
@@ -731,33 +820,60 @@
                 }
                 this.isProcessingCorrectAnswer = true;
 
-                // 根据难度计算分数，随关卡递增
-                const scoreMap = { easy: 75, medium: 100, hard: 150, expert: 200 };
-                const baseScore = scoreMap[this.difficulty];
-                const levelBonus = Math.floor(this.level / 3) * 25; // 每3关额外奖励25分
-                this.score += baseScore + levelBonus;
+                // 固定每关20分
+                this.score += this.pointsPerLevel;
 
-                
+                // 更新最高分数
+                if (this.score > this.highestScore) {
+                    this.highestScore = this.score;
+                }
+
                 // Show success effect and toast
                 this.showSuccessEffect();
-                this.showToast(`正确！恭喜你！获得 ${baseScore + levelBonus} 分！`, 'success');
+                this.showToast(`正确！恭喜你！获得 ${this.pointsPerLevel} 分！`, 'success');
 
-                // 自动通关：正确答案后立即进入下一关
-                this.level++;
-                
-                setTimeout(() => {
-                    this.showToast(`恭喜通过第${this.level - 1}关！进入第${this.level}关`, 'success', 4000);
-                }, 1000);
+                // 检查是否完成了当前难度的所有关卡
+                if (this.level >= this.maxLevelsPerDifficulty) {
+                    // 完成了当前难度的所有10关
+                    setTimeout(() => {
+                        this.showToast(`🎉 恭喜完成${this.difficulty}难度所有${this.maxLevelsPerDifficulty}关！总分：${this.score}分`, 'success', 6000);
+                    }, 1000);
 
-                // 自动生成下一关题目
-                setTimeout(() => {
-                    this.generatePattern();
-                    // 重置标志，允许下一关的处理
+                    // 发送游戏完成事件
+                    setTimeout(() => {
+                        window.parent.postMessage({
+                            type: 'gameFinished',
+                            data: {
+                                score: this.score,
+                                level: this.level,
+                                difficulty: this.getDifficultyLevel(),
+                                completed: true,
+                                totalLevels: this.maxLevelsPerDifficulty
+                            }
+                        }, '*');
+                    }, 2000);
+
+                    // 重置标志
                     this.isProcessingCorrectAnswer = false;
-                }, 2000);
+                    return;
+                } else {
+                    // 还有关卡要完成，进入下一关
+                    this.level++;
 
-                this.updateUI();
-            } checkAnswer() {
+                    setTimeout(() => {
+                        this.showToast(`恭喜通过第${this.level - 1}关！进入第${this.level}关 (${this.level}/${this.maxLevelsPerDifficulty})`, 'success', 4000);
+                    }, 1000);
+
+                    // 自动生成下一关题目
+                    setTimeout(() => {
+                        this.generatePattern();
+                        // 重置标志，允许下一关的处理
+                        this.isProcessingCorrectAnswer = false;
+                    }, 2000);
+                } this.updateUI();
+            }
+
+            checkAnswer() {
                 // 防止重复执行
                 if (this.isProcessingCorrectAnswer) {
                     return;
@@ -800,11 +916,15 @@
             } setDifficulty(newDifficulty) {
                 this.difficulty = newDifficulty;
 
-                // 完全重置游戏状态
+                // 完全重置游戏状态，但保持最高分数
                 this.userConnections = [];
                 this.selectedDot = null;
                 this.originalPattern = { dots: [], connections: [] };
                 this.targetPattern = { dots: [], connections: [] };
+                // 重置当前分数和关卡，但保持最高分数
+                this.score = 0;
+                this.level = 1;
+                this.gameStarted = false; // 允许重新发送游戏开始事件
 
                 // 清除所有选择状态的视觉效果
                 document.querySelectorAll('.selected-dot').forEach(dot => {
@@ -814,17 +934,25 @@
                 // 重新生成题目
                 this.generatePattern();
                 this.updateUI();
-            }
-
-            setupEventListeners() {
+            } setupEventListeners() {
                 document.getElementById('checkBtn').addEventListener('click', () => this.checkAnswer());
-                document.getElementById('newGameBtn').addEventListener('click', () => this.generatePattern());
+                document.getElementById('newGameBtn').addEventListener('click', () => this.newGame());
                 document.getElementById('clearBtn').addEventListener('click', () => this.clearLines());
                 document.getElementById('hintBtn').addEventListener('click', () => this.showHint());
 
                 document.getElementById('difficultySelect').addEventListener('change', (e) => {
                     this.setDifficulty(e.target.value);
                 });
+            }
+
+            // 新游戏方法
+            newGame() {
+                // 重置游戏状态但保持最高分数
+                this.score = 0;
+                this.level = 1;
+                this.gameStarted = false; // 允许重新发送游戏开始事件
+                this.generatePattern();
+                this.updateUI();
             }
 
             updateTransformUI() {
@@ -846,7 +974,7 @@
 
                 document.getElementById('transformText').textContent = transformTexts[this.currentTransform];
                 document.getElementById('transformIcon').textContent = transformIcons[this.currentTransform];
-            } 
+            }
             showHint() {
                 const difficultyNames = { easy: '简单', medium: '中等', hard: '困难', expert: '专家' };
                 const difficultyName = difficultyNames[this.difficulty];
@@ -859,20 +987,17 @@
 6. 只能连接水平或垂直相邻的点`;
 
                 this.showToast(hintMessage, 'info', 8000);
-            }
-
-            updateUI() {
-                document.getElementById('level').textContent = this.level;
+            } updateUI() {
+                document.getElementById('level').textContent = `${this.level}/${this.maxLevelsPerDifficulty}`;
                 document.getElementById('score').textContent = this.score;
-                
+                document.getElementById('highestScore').textContent = this.highestScore;
+
                 this.updateTransformUI();
             }
         }
 
         // 启动游戏
-        window.addEventListener('DOMContentLoaded', () => {
-            new SpatialGame();
-        });
+        new SpatialGame();
     </script>
 </body>
 
