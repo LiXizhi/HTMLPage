@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM驱动的角色对话游戏</title>
+    <title>角色AI对话游戏</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
     <style>
@@ -86,6 +86,46 @@
                 opacity: 0;
             }
         }
+
+        /* 语音播放按钮样式 */
+        .audio-btn {
+            background: rgba(86, 60, 233, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-left: 8px;
+            align-self: flex-end;
+            flex-shrink: 0;
+        }
+
+        .audio-btn:hover {
+            background: rgba(58, 141, 236, 0.8);
+            transform: scale(1.1);
+        }
+
+        .audio-btn.playing {
+            background: rgba(0, 255, 0, 0.8);
+            animation: audio-pulse 1s infinite;
+        }
+
+        @keyframes audio-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
     </style>
 </head>
 
@@ -118,8 +158,8 @@
                     </div>
                 </div> <!-- 角色内心想法 -->
                 <div class="mb-6">
-                    <span class="text-sm font-medium text-gray-700">内心想法：</span>
-                    <div id="inner-thoughts" class="mt-2 text-sm text-gray-600 max-h-32 overflow-y-auto">
+                    <span class="text-lg text-gray-700">内心想法：</span>
+                    <div id="inner-thoughts" class="mt-2 text-base text-gray-600 max-h-32 overflow-y-auto">
                     </div>
                 </div>
             </div>
@@ -184,7 +224,12 @@
                     progress: 0,
                     chatHistory: [],
                     isObjectiveAchieved: false
-                }; this.elements = {
+                };                // 音频播放控制
+                this.currentAudioController = null; // 当前播放的音频控制器
+                this.currentPlayingButton = null;   // 当前播放的按钮
+                this.audioCache = new Map();        // 缓存音频URL，key为文本，value为URL
+
+                this.elements = {
                     chatContainer: document.getElementById('chat-container'),
                     userInput: document.getElementById('user-input'),
                     sendBtn: document.getElementById('send-btn'),
@@ -207,13 +252,12 @@
                 });
             }
 
-            loadDefaultConfig() {
-                // 简化配置，只保留角色和游戏设定
+            loadDefaultConfig() {                // 简化配置，只保留角色和游戏设定
                 this.config = {
                     character: {
                         name: "小明",
-                        avatar: "小",
                         age: 17,
+                        gender: "male",
                         role: "高二学生",
                         description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！"
                     },
@@ -258,7 +302,6 @@
   "message": "你的回复内容，包含括号内的动作描述",
   "progress_percentage": 当前学习动力恢复的绝对进度百分比(0-100的整数),
   "progress_reason": "当前进度百分比的原因说明",
-  "is_objective_achieved": false,
   "inner_thoughts": "你此刻真实的内心想法和感受"
 }`,
                     completion_messages: {
@@ -272,10 +315,8 @@
             }
 
             initializeGame() {
-                if (!this.config) return;
-
-                // 更新UI
-                document.getElementById('character-avatar').textContent = this.config.character?.avatar || '角';
+                if (!this.config) return;                // 更新UI
+                document.getElementById('character-avatar').textContent = this.config.character?.name?.[0] || '角';
                 document.getElementById('character-info').textContent =
                     `${this.config.character?.name || '角色'} - ${this.config.character?.role || ''}`;
                 document.getElementById('character-description').textContent =
@@ -349,7 +390,7 @@
                         // 在最后一条消息下面添加进度显示
                         this.addProgressIndicator(progressChange, response.progress_reason);
 
-                        if (response.is_objective_achieved && newProgress >= this.config.objective.max_progress) {
+                        if (newProgress >= this.config.objective.max_progress) {
                             this.handleObjectiveAchieved();
                         }
                     }
@@ -369,7 +410,6 @@
                     message: '',
                     progress_percentage: null,
                     progress_reason: '',
-                    is_objective_achieved: null,
                     inner_thoughts: ''
                 };
 
@@ -392,13 +432,6 @@
                 const progressReasonMatch = progressReasonRegex.exec(text);
                 if (progressReasonMatch) {
                     fields.progress_reason = progressReasonMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-                }
-
-                // Extract is_objective_achieved field
-                const objectiveRegex = /"is_objective_achieved"\s*:\s*(true|false)/;
-                const objectiveMatch = objectiveRegex.exec(text);
-                if (objectiveMatch) {
-                    fields.is_objective_achieved = objectiveMatch[1] === 'true';
                 }
 
                 // Extract inner_thoughts field
@@ -473,7 +506,6 @@
                                         message: fields.message || finalText,
                                         progress_percentage: fields.progress_percentage !== null ? fields.progress_percentage : 0,
                                         progress_reason: fields.progress_reason || '积极交流',
-                                        is_objective_achieved: fields.is_objective_achieved || false,
                                         inner_thoughts: fields.inner_thoughts || '正在思考'
                                     };
                                 }
@@ -496,9 +528,7 @@
                 } catch (error) {
                     throw error;
                 }
-            }
-
-            addMessage(message, isUser = false) {
+            } addMessage(message, isUser = false) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `flex items-start space-x-2 ${isUser ? 'justify-end' : ''}`;
 
@@ -513,26 +543,173 @@
                     `;
                 } else {
                     messageDiv.innerHTML = `
-                        <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.avatar || '角'}</div>
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.name?.[0] || '角'}</div>
                         <div class="chat-bubble-left text-white p-3 max-w-xs">
                             <p>${processedMessage}</p>
                         </div>
+                        <button class="audio-btn" title="播放语音" onclick="game.playMessageAudio('${this.escapeForAttribute(message)}', this)">
+                            🔊
+                        </button>
                     `;
                 }
 
                 this.elements.chatContainer.appendChild(messageDiv);
                 this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+            } processMessage(message) {
+                return message.replace(/\(([^)]+)\)/g, '<span class="action-text">($1)</span>');
             }
 
-            processMessage(message) {
-                return message.replace(/\(([^)]+)\)/g, '<span class="action-text">($1)</span>');
+            // 转义字符串用于HTML属性
+            escapeForAttribute(str) {
+                return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/\\/g, '\\\\');
+            }
+
+            // 移除括号内容用于语音播放
+            removeBracketsContent(text) {
+                // 移除中文括号和英文括号中的内容
+                return text.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
+            }            // 播放消息语音
+            async playMessageAudio(messageText, buttonElement) {
+                try {
+                    // 如果没有传入按钮元素，通过文本内容查找
+                    let currentButton = buttonElement;
+                    if (!currentButton) {
+                        const audioButtons = document.querySelectorAll('.audio-btn');
+                        audioButtons.forEach(btn => {
+                            const bubble = btn.closest('.chat-bubble-left');
+                            if (bubble) {
+                                const content = bubble.querySelector('p') || bubble.querySelector('.streaming-content');
+                                if (content && content.textContent.includes(messageText.substring(0, 20))) {
+                                    currentButton = btn;
+                                }
+                            }
+                        });
+                    }
+
+                    // 如果当前有音频正在播放
+                    if (this.currentPlayingButton) {
+                        // 如果点击的是同一个按钮，则停止播放
+                        if (currentButton === this.currentPlayingButton) {
+                            this.stopCurrentAudio();
+                            return;
+                        } else {
+                            // 停止当前播放，开始新的播放
+                            this.stopCurrentAudio();
+                        }
+                    }
+
+                    // 过滤掉括号中的内容
+                    const textToRead = this.removeBracketsContent(messageText);
+
+                    if (!textToRead.trim()) {
+                        console.log('没有可播放的文本内容');
+                        return;
+                    }
+
+                    if (!currentButton) {
+                        console.log('找不到对应的音频按钮');
+                        return;
+                    }
+
+                    // 设置播放状态
+                    currentButton.classList.add('playing');
+                    currentButton.innerHTML = '⏸️';
+                    currentButton.title = '停止语音';
+
+                    // 保存当前播放信息
+                    this.currentPlayingButton = currentButton;                    // 使用SDK播放语音
+                    try {
+                        let audio_url;
+
+                        // 检查缓存中是否已有该文本的音频URL
+                        if (this.audioCache.has(textToRead)) {
+                            audio_url = this.audioCache.get(textToRead);
+                            console.log('使用缓存的音频URL');
+                        } else {
+                            // 从SDK获取新的音频URL
+                            const result = await sdk.speech.textToAudio(textToRead, {
+                                gender: this.config.character?.gender,
+                                age: this.config.character?.age
+                            });
+
+                            if (result && result.data) {
+                                audio_url = result.data;
+                                // 缓存音频URL
+                                this.audioCache.set(textToRead, audio_url);
+                                console.log('缓存新的音频URL');
+                            } else {
+                                throw new Error('无法获取音频URL');
+                            }
+                        }
+
+                        if (audio_url) {
+                            // 创建音频元素
+                            const audio = new Audio(audio_url);
+
+                            // 确保音频不循环播放
+                            audio.loop = false;
+
+                            // 保存音频控制器引用
+                            this.currentAudioController = audio;
+
+                            // 音频播放完成事件
+                            audio.addEventListener('ended', () => {
+                                console.log('音频播放完成');
+                                this.stopCurrentAudio();
+                            });
+
+                            // 音频出错事件
+                            audio.addEventListener('error', (e) => {
+                                console.error('音频播放出错:', e);
+                                this.stopCurrentAudio();
+                            });
+
+                            // 音频加载完成后开始播放
+                            audio.addEventListener('canplay', () => {
+                                // 确保当前按钮仍然是正确的按钮（防止快速点击导致的状态混乱）
+                                if (this.currentPlayingButton === currentButton && this.currentAudioController === audio) {
+                                    audio.play().catch(error => {
+                                        console.error('音频播放失败:', error);
+                                        this.stopCurrentAudio();
+                                    });
+                                }
+                            });
+
+                            // 加载音频
+                            audio.load();
+                        }
+                    } catch (audioError) {
+                        console.error('语音播放出错:', audioError);
+                        this.stopCurrentAudio();
+                    }
+
+                } catch (error) {
+                    console.error('语音播放失败:', error);
+                    this.stopCurrentAudio();
+                }
+            }            // 停止当前音频播放
+            stopCurrentAudio() {
+                // 停止并清理音频
+                if (this.currentAudioController) {
+                    this.currentAudioController.pause();
+                    this.currentAudioController.currentTime = 0;
+                    this.currentAudioController = null;
+                }
+
+                // 重置按钮状态
+                if (this.currentPlayingButton) {
+                    this.currentPlayingButton.classList.remove('playing');
+                    this.currentPlayingButton.innerHTML = '🔊';
+                    this.currentPlayingButton.title = '播放语音';
+                    this.currentPlayingButton = null;
+                }
             }
 
             addStreamingMessage() {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = 'flex items-start space-x-2 streaming-message';
                 messageDiv.innerHTML = `
-                    <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.avatar || '角'}</div>
+                    <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.name?.[0] || '角'}</div>
                     <div class="chat-bubble-left text-white p-3 max-w-xs">
                         <p class="streaming-content"></p>
                         <span class="streaming-cursor">▋</span>
@@ -549,28 +726,36 @@
                     contentElement.innerHTML = this.processMessage(text);
                     this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
                 }
-            }
-
-            finalizeStreamingMessage(messageDiv) {
+            } finalizeStreamingMessage(messageDiv) {
                 const cursor = messageDiv.querySelector('.streaming-cursor');
                 if (cursor) {
                     cursor.remove();
                 }
                 messageDiv.classList.remove('streaming-message');
+
+                // 为完成的流式消息添加语音播放按钮
+                const contentElement = messageDiv.querySelector('.streaming-content');
+                if (contentElement) {
+                    const messageText = contentElement.textContent || contentElement.innerText;
+                    const audioBtn = document.createElement('button');
+                    audioBtn.className = 'audio-btn';
+                    audioBtn.title = '播放语音';
+                    audioBtn.innerHTML = '🔊';
+                    audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
+                    messageDiv.appendChild(audioBtn);
+                }
             }
 
             removeStreamingMessage(messageDiv) {
                 if (messageDiv && messageDiv.parentNode) {
                     messageDiv.parentNode.removeChild(messageDiv);
                 }
-            }
-
-            addTypingIndicator() {
+            } addTypingIndicator() {
                 const typingDiv = document.createElement('div');
                 typingDiv.id = 'typing-indicator';
                 typingDiv.className = 'flex items-start space-x-2';
                 typingDiv.innerHTML = `
-                    <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.avatar || '角'}</div>
+                    <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.name?.[0] || '角'}</div>
                     <div class="chat-bubble-left text-white p-3 max-w-xs typing-indicator">
                         <p>正在思考...</p>
                     </div>
@@ -613,7 +798,7 @@
                 if (!thought || thought.trim() === '') return;
 
                 const thoughtDiv = document.createElement('div');
-                thoughtDiv.className = 'mb-1 p-2 bg-blue-50 rounded text-blue-700 text-xs border-l-2 border-blue-300';
+                thoughtDiv.className = 'mb-1 p-2 bg-blue-50 rounded text-blue-700 text-base border-l-2 border-blue-300';
                 thoughtDiv.textContent = thought;
 
                 this.elements.innerThoughts.appendChild(thoughtDiv);
@@ -664,7 +849,8 @@
             }
         }
 
-        new LLMCharacterGame();
+        // 创建游戏实例并保存为全局变量
+        const game = new LLMCharacterGame();
 
     </script>
 </body>
