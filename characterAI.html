@@ -226,30 +226,95 @@
             margin-right: 30%;
         }
 
-        /* 内心想法区域样式 */
-        #inner-thoughts {
-            background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 12px;
+        /* 想法气泡容器 */
+        .thoughts-content {
+            position: relative;
+            z-index: 2;
+            height: 100%;
+            overflow-y: auto;
         }
 
-        #inner-thoughts::-webkit-scrollbar {
+        /* 想法气泡样式 - 毛玻璃效果 */
+        .thought-bubble {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 16px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            box-shadow: 0 8px 32px rgba(59, 130, 246, 0.1);
+            animation: bubble-float-in 0.6s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .thought-bubble::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+            border-radius: 16px;
+            pointer-events: none;
+        }
+
+        .thought-bubble-text {
+            position: relative;
+            z-index: 1;
+            color: #1e40af;
+            line-height: 1.5;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+            animation: thought-fade-scale-in-out 10s ease-in-out forwards;
+        }
+
+        @keyframes thought-fade-scale-in-out {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            20% {
+                opacity: 0.7;
+                transform: scale(1.1);
+            }
+            40% {
+                opacity: 0.3;
+                transform: scale(0.9);
+            }
+            60% {
+                opacity: 0.8;
+                transform: scale(1.15);
+            }
+            80% {
+                opacity: 0.4;
+                transform: scale(0.95);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* 自定义滚动条 */
+        .thoughts-content::-webkit-scrollbar {
             width: 6px;
         }
 
-        #inner-thoughts::-webkit-scrollbar-track {
-            background: #f1f5f9;
+        .thoughts-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
         }
 
-        #inner-thoughts::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+        .thoughts-content::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.4);
             border-radius: 3px;
+            backdrop-filter: blur(4px);
         }
 
-        #inner-thoughts::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+        .thoughts-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.6);
         }
     </style>
 </head>
@@ -281,12 +346,14 @@
                             id="progress-bar" style="width: 0%"></div>
                     </div>
                 </div>
-            </div>
-
-            <!-- 角色内心想法 -->
+            </div> <!-- 角色内心想法 -->
             <div class="flex flex-col flex-1 min-h-0">
-                <span class="text-lg text-gray-700 flex-shrink-0 mb-2">内心想法：</span>
+                <span class="text-lg text-gray-700 flex-shrink-0 mb-2" style="color:#1e40af">内心想法：</span>
                 <div id="inner-thoughts" class="flex-1 text-base text-gray-600 overflow-y-auto">
+                    <!-- 内容层 -->
+                    <div class="thoughts-content" id="thoughts-content">
+                        <!-- 想法内容将在这里显示 -->
+                    </div>
                 </div>
             </div>
 
@@ -563,25 +630,24 @@
                 this.maxSessions = 10;
 
                 // 音频播放控制
-                this.currentAudioController = null; // 当前播放的音频控制器
-                this.currentPlayingButton = null;   // 当前播放的按钮
-                this.audioCache = new Map();        // 缓存音频URL，key为文本，value为URL                
+                this.currentAudioController = null;
+                this.currentPlayingButton = null;
+                this.audioCache = new Map();
                 this.elements = {
                     chatContainer: document.getElementById('chat-container'),
                     userInput: document.getElementById('user-input'),
                     sendBtn: document.getElementById('send-btn'),
                     progressBar: document.getElementById('progress-bar'),
                     progressText: document.getElementById('progress-text'),
-                    innerThoughts: document.getElementById('inner-thoughts'),
+                    innerThoughts: document.getElementById('thoughts-content'),
                     llmStatus: document.getElementById('llm-status'),
                     resetChatBtn: document.getElementById('reset-chat-btn'),
                     historyDropdown: document.getElementById('history-dropdown')
                 };
-
                 this.initEventListeners();
                 this.loadDefaultConfig();
-
-            } initEventListeners() {
+            }
+            initEventListeners() {
                 // 发送消息
                 this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
                 this.elements.userInput.addEventListener('keypress', (e) => {
@@ -1196,24 +1262,31 @@
                 this.gameState.progress = Math.max(0, Math.min(newProgress, this.config.objective.max_progress)); this.elements.progressBar.style.width = `${this.gameState.progress}%`;
                 this.elements.progressText.textContent = `${this.gameState.progress}/${this.config.objective.max_progress}`;
             }
-
             addInnerThought(thought) {
                 if (!thought || thought.trim() === '') return;
 
-                const thoughtDiv = document.createElement('div');
-                thoughtDiv.className = 'mb-1 p-2 bg-blue-50 rounded text-blue-700 text-base border-l-2 border-blue-300';
-                thoughtDiv.textContent = thought;
+                // 使用thoughts-content容器而不是inner-thoughts
+                const thoughtsContainer = document.getElementById('thoughts-content');
+                if (!thoughtsContainer) return;
 
-                this.elements.innerThoughts.appendChild(thoughtDiv);
+                const thoughtDiv = document.createElement('div');
+                thoughtDiv.className = 'thought-bubble';
+
+                const thoughtText = document.createElement('div');
+                thoughtText.className = 'thought-bubble-text';
+                thoughtText.textContent = thought;
+
+                thoughtDiv.appendChild(thoughtText);
+                thoughtsContainer.appendChild(thoughtDiv);
 
                 // 自动滚动到最新的内心想法
-                this.elements.innerThoughts.scrollTop = this.elements.innerThoughts.scrollHeight;
+                thoughtsContainer.scrollTop = thoughtsContainer.scrollHeight;
 
                 // 限制显示的内心想法数量，避免过多占用空间
                 const maxThoughts = 5;
-                const thoughts = this.elements.innerThoughts.children;
+                const thoughts = thoughtsContainer.children;
                 while (thoughts.length > maxThoughts) {
-                    this.elements.innerThoughts.removeChild(thoughts[0]);
+                    thoughtsContainer.removeChild(thoughts[0]);
                 }
             }
 
@@ -1608,13 +1681,11 @@
                 }
             }
 
-            // ========== 原有方法继续 ==========
-        }// 创建游戏实例并保存为全局变量
-        const game = new LLMCharacterGame();
+        }
 
         // 创建AI工具箱管理器
         const aiToolbox = new AIToolboxManager();
-
+        const game = new LLMCharacterGame();        // 初始化内心想法背景动画
     </script>
 </body>
 
