@@ -181,7 +181,7 @@
             border-radius: 50%;
             border: 1px solid rgba(255, 255, 255, 0.8);
         }
-        
+
         .iframe-overlay {
             position: fixed;
             top: 0;
@@ -336,6 +336,89 @@
         .thoughts-content::-webkit-scrollbar-thumb:hover {
             background: rgba(59, 130, 246, 0.6);
         }
+
+        /* 角色动画视频播放器样式 */
+        .character-video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .character-video-container {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            max-width: 90%;
+            max-height: 90%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .character-video-canvas {
+            border-radius: 15px;
+            border: 3px solid #667eea;
+            margin-bottom: 15px;
+            max-width: 400px;
+            max-height: 300px;
+        }
+
+        .character-video-message {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            max-width: 400px;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .character-video-back-btn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .character-video-back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .character-video-overlay.show {
+            display: flex;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
     </style>
 </head>
 
@@ -402,7 +485,6 @@
                 </div>
                 <p id="chat-description" class="text-sm opacity-90">通过耐心的交流，帮助小明重新找回学习的乐趣</p>
             </div>
-
             <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4">
                 <!-- 对话内容将在这里动态生成 -->
             </div>
@@ -431,6 +513,19 @@
             <div id="ai-tools-container" class="space-y-3">
                 <!-- AI工具按钮将在这里动态生成 -->
             </div>
+        </div>
+    </div>
+
+    <!-- 角色动画视频播放器 -->
+    <div id="character-video-overlay" class="character-video-overlay">
+        <div class="character-video-container">
+            <canvas id="character-video-canvas" class="character-video-canvas" width="400" height="300"></canvas>
+            <div id="character-video-message" class="character-video-message">
+                <!-- 消息文本将在这里显示 -->
+            </div>
+            <button id="character-video-back-btn" class="character-video-back-btn">
+                返回对话
+            </button>
         </div>
     </div>
 
@@ -772,6 +867,14 @@
                     description: `你成功帮助${this.config.character.name}解决了问题：${objective}！`,
                     icon: "🎉"
                 };
+                this.config.videoActions = {
+                    "期待": {
+                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4.mp4"
+                    },
+                    "高兴": {
+                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4.mp4"
+                    }
+                };
             }
             loadDefaultConfig() {
                 this.config = {
@@ -824,7 +927,7 @@
   "progress_percentage": 当前学习动力恢复的绝对进度百分比(0-100的整数),
   "progress_reason": "当前进度百分比的原因说明",
   "inner_thoughts": "你此刻真实的内心想法和感受"
-}`,
+}`, 
                     completion_messages: {
                         title: "目标完成！",
                         description: "你成功帮助${character_name}找回了学习动力！",
@@ -897,6 +1000,10 @@
                     // Send game started event
                     window.parent.postMessage({ type: 'gameStarted' }, '*');
                 }
+                // if there is only one message (initial), play video animation 
+                if (this.elements.chatContainer.children.length === 1) {
+                    this.checkAndPlayVideoAction(this.config.initial?.message);
+                }
             }
 
             updateQuickReplies() {
@@ -915,7 +1022,8 @@
                     });
                     container.appendChild(button);
                 });
-            } async sendMessage() {
+            } 
+            async sendMessage() {
                 const message = this.elements.userInput.value.trim();
                 if (!message || this.gameState.isObjectiveAchieved) return;
 
@@ -928,8 +1036,10 @@
                 this.gameState.chatHistory.push({ role: 'user', content: message });
 
                 this.addTypingIndicator();
-                this.updateLLMStatus('正在连接AI...'); try {
-                    const { parsedResponse, rawResponse } = await this.callLLM(message); if (parsedResponse && rawResponse) {
+                this.updateLLMStatus('正在连接AI...'); 
+                try {
+                    const { parsedResponse, rawResponse } = await this.callLLM(message); 
+                    if (parsedResponse && rawResponse) {
                         // 存储原始响应到聊天历史中
                         this.gameState.chatHistory.push({
                             role: 'assistant',
@@ -1013,12 +1123,14 @@
                 }
 
                 return fields;
-            } updateStreamingStatus(fields) {
+            } 
+            updateStreamingStatus(fields) {
                 // 只在流式传输过程中临时更新内心想法区域的状态
                 if (fields.inner_thoughts) {
                     // 可以在这里添加临时的流式显示效果，如果需要的话
                 }
-            } async callLLM(userMessage) {
+            } 
+            async callLLM(userMessage) {
                 if (!aiChatSession) {
                     throw new Error('AI聊天会话未初始化');
                 }
@@ -1113,7 +1225,8 @@
                 } catch (error) {
                     throw error;
                 }
-            } addMessage(message, isUser = false) {
+            } 
+            addMessage(message, isUser = false) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `flex items-start space-x-2 ${isUser ? 'justify-end' : ''}`;
 
@@ -1148,12 +1261,105 @@
             escapeForAttribute(str) {
                 return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/\\/g, '\\\\');
             }
+            checkAndPlayVideoAction(message) {
+                if (!this.config.videoActions || !message) return;
+
+                // 提取所有括号中的文字
+                const actionMatches = message.match(/\(([^)]+)\)/g);
+                if (!actionMatches) return;
+
+                // 合并所有括号中的文字
+                const allActions = actionMatches.map(match =>
+                    match.replace(/[()]/g, '')
+                ).join(' ');
+
+                // 检查是否包含配置中的动作关键词
+                for (const actionKey in this.config.videoActions) {
+                    if (allActions.includes(actionKey)) {
+                        this.playVideoAction(actionKey, message);
+                        break;
+                    }
+                }
+            }
+            playVideoAction(actionKey, messageText) {
+                const videoConfig = this.config.videoActions[actionKey];
+                if (!videoConfig) return;
+
+                // 显示视频播放器覆盖层
+                const overlay = document.getElementById('character-video-overlay');
+                const messageDiv = document.getElementById('character-video-message');
+                const canvas = document.getElementById('character-video-canvas');
+                const backBtn = document.getElementById('character-video-back-btn');
+
+                // 设置消息文本
+                messageDiv.textContent = messageText;
+
+                // 显示覆盖层
+                overlay.classList.add('show');
+
+                // 播放视频
+                this.loadAndPlayVideo(canvas, videoConfig.url);
+
+                // 绑定返回按钮事件
+                const handleBackClick = () => {
+                    overlay.classList.remove('show');
+                    backBtn.removeEventListener('click', handleBackClick);
+                };
+                backBtn.addEventListener('click', handleBackClick);
+            }            
+            async loadAndPlayVideo(canvas, videoUrl) {
+                try {
+                    if (!canvas) {
+                        console.error('Canvas element is null');
+                        return;
+                    }
+
+                    const ctx = canvas.getContext('2d');
+                    const video = document.createElement('video');
+
+                    video.src = videoUrl;
+                    video.loop = true;
+                    video.muted = true; // 静音以允许自动播放
+
+                    video.addEventListener('loadeddata', () => {
+                        // 调整canvas尺寸以适应视频
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+
+                        // 开始播放
+                        video.play();
+
+                        // 绘制视频帧
+                        const drawFrame = () => {
+                            if (!video.paused && !video.ended) {
+                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                requestAnimationFrame(drawFrame);
+                            }
+                        };
+
+                        video.addEventListener('play', drawFrame);
+                    });
+
+                    video.addEventListener('error', (e) => {
+                        console.error('视频加载失败:', e);
+                        ctx.fillStyle = '#667eea';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = 'white';
+                        ctx.font = '16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('视频加载失败', canvas.width / 2, canvas.height / 2);
+                    });
+
+                } catch (error) {
+                    console.error('播放视频时出错:', error);
+                }
+            }
 
             // 移除括号内容用于语音播放
             removeBracketsContent(text) {
                 // 移除中文括号和英文括号中的内容
                 return text.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
-            }            // 播放消息语音
+            }// 播放消息语音
             async playMessageAudio(messageText, buttonElement) {
                 try {
                     // 如果没有传入按钮元素，通过文本内容查找
@@ -1328,6 +1534,7 @@
                     audioBtn.innerHTML = '🔊';
                     audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
                     messageDiv.appendChild(audioBtn);
+                    this.checkAndPlayVideoAction(messageText);
                 }
             }
 
@@ -1553,7 +1760,11 @@
                 this.updateHistoryDropdown();
 
                 this.updateLLMStatus('对话已重置，开始新的会话');
-            }            // 保存当前session到历史记录
+
+                if (this.elements.chatContainer.children.length === 1) {
+                    this.checkAndPlayVideoAction(this.config.initial?.message);
+                }
+            }            
             saveCurrentSessionToHistory() {
                 // 如果没有session ID、没有聊天记录或进度为0，则不保存
                 if (!this.currentSessionId || this.gameState.chatHistory.length === 0 || this.gameState.progress === 0) {
@@ -1642,7 +1853,7 @@
                 }
 
                 return progress;
-            }            // 加载指定的session
+            }            
             async loadSession(sessionId) {
                 try {
                     const sessionsKey = this.getSessionsStorageKey();
