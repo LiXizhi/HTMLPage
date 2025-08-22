@@ -166,7 +166,22 @@
             font-weight: 500;
         }
 
-        /* iframe滑出效果 */
+        /* Red dot indicator for wikiword */
+        .ai-tool-item {
+            position: relative;
+        }
+
+        .red-dot-indicator {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 12px;
+            height: 12px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+        
         .iframe-overlay {
             position: fixed;
             top: 0;
@@ -275,22 +290,27 @@
                 opacity: 0;
                 transform: scale(0.8);
             }
+
             20% {
                 opacity: 0.7;
                 transform: scale(1.1);
             }
+
             40% {
                 opacity: 0.3;
                 transform: scale(0.9);
             }
+
             60% {
                 opacity: 0.8;
                 transform: scale(1.15);
             }
+
             80% {
                 opacity: 0.4;
                 transform: scale(0.95);
             }
+
             100% {
                 opacity: 1;
                 transform: scale(1);
@@ -463,9 +483,7 @@
                 url: 'https://www.kimi.com/',
                 width: 30 // 30% 宽度
             }
-        ];
-
-        // AI工具箱管理器
+        ];        // AI工具箱管理器
         class AIToolboxManager {
             constructor() {
                 this.currentTool = null;
@@ -475,6 +493,7 @@
                 this.closeBtn = document.getElementById('iframe-close-btn');
                 this.container = document.querySelector('.iframe-container');
                 this.mainContent = document.getElementById('main-content');
+                this.config = null; // Reference to game config
 
                 this.initEventListeners();
                 this.renderTools();
@@ -501,15 +520,27 @@
                 });
             }
 
-            renderTools() {
+            // Update config and re-render tools
+            updateConfig(config) {
+                this.config = config;
+                this.renderTools();
+            } renderTools() {
                 const container = document.getElementById('ai-tools-container');
+                container.innerHTML = ''; // Clear existing tools
 
                 aiToolsConfig.forEach(tool => {
                     const toolElement = document.createElement('div');
                     toolElement.className = 'ai-tool-item p-3 cursor-pointer';
+                    // Check if this is the baike tool and if wikiword is valid
+                    const hasWikiword = tool.id === 'baike' &&
+                        this.config &&
+                        this.config.objective &&
+                        this.config.objective.wikiword;
+
                     toolElement.innerHTML = `
                         <div class="ai-tool-icon">${tool.icon}</div>
                         <div class="ai-tool-text">${tool.name}</div>
+                        ${hasWikiword ? '<div class="red-dot-indicator"></div>' : ''}
                     `;
 
                     toolElement.addEventListener('click', () => {
@@ -546,10 +577,16 @@
 
                 if (!iframe) {
                     // 创建新的iframe
-                    iframe = document.createElement('iframe');
+                    iframe = document.createElement('iframe');                    // 特殊处理百度百科，如果有wikiword则使用特定URL
+                    let iframeUrl = tool.url;
+                    if (tool.id === 'baike' &&
+                        this.config &&
+                        this.config.objective &&
+                        this.config.objective.wikiword) {
+                        iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
+                    }
 
                     // 如果URL以token=结尾，则自动添加SDK token
-                    let iframeUrl = tool.url;
                     if (iframeUrl.endsWith('token=') && sdk && sdk.token) {
                         iframeUrl += sdk.token;
                     }
@@ -646,6 +683,11 @@
                 };
                 this.initEventListeners();
                 this.loadDefaultConfig();
+                let urlObjective = new URLSearchParams(window.location.search).get('objective');
+                if (urlObjective) {
+                    this.loadConfigByObjective(urlObjective);
+                }
+                this.initializeGame();
             }
             initEventListeners() {
                 // 发送消息
@@ -664,8 +706,74 @@
                     }
                 });
             }
+            // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
+            loadConfigByObjective(objective) {
+                if (!objective) {
+                    console.error("Objective is required to load config.");
+                    return;
+                }                // find the first wikiword in (), remove it from the objective
+                const wikimatch = objective.match(/\(([^)]+)\)/);
+                let wikiword = null;
+                if (wikimatch) {
+                    wikiword = wikimatch[1]; // Extract just the word, not the match array
+                    objective = objective.replace(/\s*\([^)]*\)/, '').trim();
+                }
+                this.config.objective.wikiword = wikiword;
 
-            loadDefaultConfig() {                // 简化配置，只保留角色和游戏设定
+                this.config.character.name = "抱抱龙";
+                this.config.character.age = 8;
+                this.config.character.role = "AI宠物";
+                this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
+                this.config.objective.title = objective;
+                this.config.objective.description = `通过耐心的交流解决, 解决问题: ${objective}`;
+                this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
+                this.config.quick_replies = [
+                    "当然可以！",
+                    "你有什么好想法？",
+                    "你觉得呢？",
+                    "让我用工具搜索下（我打开了AI工具箱，努力搜索中...）",
+                    "这个想法不错！(你点点头，拍了拍抱抱龙)",
+                    "我们可以一起解决"
+                ];
+                this.config.system_prompt = `你是抱抱龙，一个8岁的AI宠物。你喜欢和主人交流，总是提出一些奇怪的问题，有时还有小情绪。
+
+## 角色设定
+- 表面：好奇心强，喜欢提问，偶尔有小情绪
+- 内心：渴望得到主人的关注和理解，喜欢探索世界
+- 工具箱：如果主人没有思路可以提示主人用工具箱。例如百度百科或问小麦老师等。
+- 说话风格：幼稚口吻，喜欢用括号描述动作和神态，如"(眨了眨眼睛望着你)"、"(指了指屏幕右侧的AI工具箱)"
+
+## 目标设定
+你希望主人帮你解决的问题是： ${objective}
+
+## progress_percentage的发展规律
+- 0-25分：主要提问，偶尔有小情绪
+- 26-50分：开始理解问题，但不知如何解决
+- 51-75分：逐渐接受问题的重要性，寻求解决方案或提出更多相关的问题
+- 76-99分：主动思考解决方法，开始用自己的方式归纳和总结问题
+- 100分：彻底转变或解决，用自己的话总结了问题的解决方案
+
+## 对话要求
+1. 根据当前对话内容和历史发展判断当前应有的进度百分比
+2. 用括号描述非语言行为，如"(期待地看着你)"、"(有点生气地嘟囔)"
+3. 回复要符合8岁孩子的语言习惯
+4. 对积极正面的引导要有相应的情感反应
+
+## 输出格式
+你必须严格按照以下JSON格式输出，不要有任何其他内容：
+{
+    "message": "你的回复内容，包含括号内的动作描述",
+    "progress_percentage": 当前问题解决的绝对进度百分比(0-100的整数),
+    "progress_reason": "当前进度百分比的原因说明",
+    "inner_thoughts": "你此刻真实的内心想法和感受"
+}`;
+                this.config.completion_messages = {
+                    title: "目标完成！",
+                    description: `你成功帮助${this.config.character.name}解决了问题：${objective}！`,
+                    icon: "🎉"
+                };
+            }
+            loadDefaultConfig() {
                 this.config = {
                     character: {
                         name: "小明",
@@ -696,7 +804,7 @@
 - 内心：对现状焦虑，害怕让父母失望，渴望找到学习乐趣
 - 说话风格：年轻人口吻，经常用括号描述动作和神态，如"(无精打采地看着书本)"
 
-## 性格发展规律
+## progress_percentage的发展规律
 - 0-25分：主要抗拒学习，热衷游戏，偶尔流露不安
 - 26-50分：开始意识到问题，但不知如何改变
 - 51-75分：逐渐接受学习重要性，寻求解决方案
@@ -723,9 +831,8 @@
                         icon: "🎉"
                     }
                 };
-
-                this.initializeGame();
-            } initializeGame() {
+            }
+            initializeGame() {
                 if (!this.config) return;
 
                 // 更新UI
@@ -770,16 +877,25 @@
                 // 创建新的session（仅在不是从session加载时创建）
                 if (!this.currentSessionId) {
                     this.createNewSession();
+                }                // 更新历史下拉菜单
+                this.updateHistoryDropdown();
+
+                // 更新AI工具箱配置
+                if (window.aiToolbox) {
+                    window.aiToolbox.updateConfig(this.config);
                 }
 
-                // 更新历史下拉菜单
-                this.updateHistoryDropdown();                // 尝试自动加载历史记录（仅在首次初始化时）
+                // 尝试自动加载历史记录（仅在首次初始化时）
                 if (!this.hasAutoLoaded) {
                     this.autoLoadHistory().then(() => {
                         this.hasAutoLoaded = true;
+                        // Send game started event after initialization
+                        window.parent.postMessage({ type: 'gameStarted' }, '*');
                     });
                 } else {
                     this.hasAutoLoaded = true;
+                    // Send game started event
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
                 }
             }
 
@@ -1295,10 +1411,19 @@
                 setTimeout(() => {
                     this.elements.llmStatus.textContent = '';
                 }, 3000);
-            }
-
-            handleObjectiveAchieved() {
+            } handleObjectiveAchieved() {
                 this.gameState.isObjectiveAchieved = true;
+
+                // Send game finished event to host
+                window.parent.postMessage({
+                    type: 'gameFinished',
+                    data: {
+                        score: this.gameState.progress,
+                        characterName: this.config?.character?.name || '角色',
+                        totalMessages: this.gameState.chatHistory.length,
+                        finalProgress: this.gameState.progress
+                    }
+                }, '*');
 
                 setTimeout(() => {
                     const congratsDiv = document.createElement('div');
@@ -1321,7 +1446,7 @@
                     `; this.elements.chatContainer.appendChild(congratsDiv);
                     this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
                 }, 1000);
-            }            // 生成历史记录的存储键（保留用于清理旧数据）
+            }// 生成历史记录的存储键（保留用于清理旧数据）
             getHistoryKey() {
                 const objectiveTitle = this.config?.objective?.title || '目标进度';
                 const characterName = this.config?.character?.name || '角色';
@@ -1680,12 +1805,78 @@
                     this.elements.historyDropdown.value = '';
                 }
             }
-
         }
-
-        // 创建AI工具箱管理器
         const aiToolbox = new AIToolboxManager();
-        const game = new LLMCharacterGame();        // 初始化内心想法背景动画
+        window.aiToolbox = aiToolbox;
+        const game = new LLMCharacterGame();
+
+        // Window message handling for host communication
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    // Update game config on the fly
+                    if (e.data.data) {
+                        try {
+                            // If it's a string, try to parse as JSON, otherwise use as markdown/text
+                            let newConfig;
+                            if (typeof e.data.data === 'string') {
+                                try {
+                                    newConfig = JSON.parse(e.data.data);
+                                } catch (jsonError) {
+                                    // If not JSON, treat as markdown/text and merge with default config
+                                    console.log('Config data is not JSON, treating as text description');
+                                    newConfig = {
+                                        character: {
+                                            ...game.config.character,
+                                            description: e.data.data
+                                        }
+                                    };
+                                }
+                            } else {
+                                newConfig = e.data.data;
+                            }
+
+                            // Merge with existing config
+                            game.config = {
+                                ...game.config,
+                                ...newConfig,
+                                character: {
+                                    ...game.config.character,
+                                    ...(newConfig.character || {})
+                                },
+                                objective: {
+                                    ...game.config.objective,
+                                    ...(newConfig.objective || {})
+                                }
+                            };
+
+                            // Reinitialize game with new config
+                            game.initializeGame();
+                            console.log('Game config updated:', game.config);
+                        } catch (error) {
+                            console.error('Failed to update game config:', error);
+                        }
+                    }
+                    break;
+                case 'getGameStats':
+                    // Send current game statistics
+                    window.parent.postMessage({
+                        type: 'gameStats',
+                        data: {
+                            score: game.gameState.progress,
+                            difficulty: game.difficulty || 1,
+                            isCompleted: game.gameState.isObjectiveAchieved,
+                            chatHistory: game.gameState.chatHistory.length,
+                            characterName: game.config?.character?.name || '角色'
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        // Send game loaded event
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+
     </script>
 </body>
 
