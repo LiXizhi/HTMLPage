@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💬 趣味讨论问答</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <style>
+        body {
+            height: 100vh;
+            overflow: hidden;
+        }
+        .main-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            max-width: none;
+            width: 100%;
+        }
+        .columns-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            overflow: hidden;
+            width: 100%;
+        }
+        .column {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .column-content {
+            flex: 1;
+            overflow-y: auto;
+            max-height: none;
+        }
+        .progress-section {
+            flex-shrink: 0;
+        }
+
+        /* 拖拽样式 */
+        .question-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .question-card.dragging {
+            transform: rotate(5deg) scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            opacity: 0.8;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .drop-zone {
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        
+        .drop-zone.drag-over {
+            background-color: rgba(147, 197, 253, 0.2) !important;
+            border-color: #3b82f6 !important;
+            border-style: dashed !important;
+        }
+        
+        .drop-zone.invalid-drop {
+            background-color: rgba(248, 113, 113, 0.2) !important;
+            border-color: #ef4444 !important;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100">
+    <!-- Main Content -->
+    <div class="main-container w-full px-2">
+        <!-- Header & Progress -->
+        <div class="progress-section bg-white/90 backdrop-blur-sm rounded-2xl p-3 mb-2 mt-2 shadow-xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-bold text-gray-800">💬 抱抱龙成长百科</h3>
+                <div class="flex items-center space-x-4">
+                    <span class="text-base font-bold text-gray-700">本期进度：<span class="text-blue-600" id="progress-text">0/10</span></span>
+                    <button id="claim-reward-btn" class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-1.5 rounded-lg text-base font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        🎁 领取礼包
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Question Categories -->
+        <div class="columns-container">
+            <!-- Unexplored Questions -->
+            <div class="column bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">🔍</span>
+                        <h3 class="text-xl font-bold text-gray-800">待探索</h3>
+                        <span class="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm" id="unexplored-count">0</span>
+                    </div>
+                    <button id="refresh-questions-btn" class="bg-gradient-to-r from-purple-400 to-blue-500 text-white px-3 py-1 rounded-lg text-base font-bold hover:shadow-lg transition-all">
+                        换一换
+                    </button>
+                </div>
+                <div class="column-content space-y-3" id="unexplored-questions">
+                    <!-- Questions will be populated here -->
+                </div>
+            </div>
+
+            <!-- In Progress Questions -->
+            <div class="column bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center mb-4">
+                    <span class="text-2xl mr-3">⚡</span>
+                    <h3 class="text-xl font-bold text-gray-800">进行中</h3>
+                    <span class="ml-auto bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-sm" id="progress-count">0</span>
+                </div>
+                <div class="column-content space-y-3" id="progress-questions">
+                    <!-- Questions will be populated here -->
+                </div>
+            </div>
+
+            <!-- Completed Questions -->
+            <div class="column bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center mb-4">
+                    <span class="text-2xl mr-3">✅</span>
+                    <h3 class="text-xl font-bold text-gray-800">已完成</h3>
+                    <span class="ml-auto bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm" id="completed-count">0</span>
+                </div>
+                <div class="column-content space-y-3" id="completed-questions">
+                    <!-- Questions will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Question Details -->
+    <div id="question-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-4">
+                        🐲
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-6" id="modal-question">问题标题</h3>
+                    <div class="flex space-x-4">
+                        <button id="start-learning" class="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 px-6 rounded-xl font-bold hover:shadow-lg transition-all">
+                            开始对话 🚀
+                        </button>
+                        <button id="close-modal" class="flex-1 bg-gray-300 text-gray-700 py-3 px-6 rounded-xl font-bold hover:bg-gray-400 transition-all">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize SDK
+        const sdk = new KeepworkSDK({
+            timeout: 30000
+        });
+        console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+
+        // Global variables
+        let allQuestions = [];
+        let currentPeriodQuestions = [];
+        const QUESTIONS_PER_PERIOD = 10;
+
+        // Question data source in markdown format
+        const questionsMarkdown = `
+# 自然科学类
+- 为什么天空是蓝色的？(光散射)
+- 恐龙为什么会灭绝？(恐龙)
+- 植物怎么制造氧气？(光合作用)
+- 为什么会下雨？(降水)
+
+# 动物世界类
+- 企鹅为什么不会冷？(企鹅)
+- 蝴蝶是怎么变出来的？(变态发育)
+- 为什么猫咪总是用舌头洗脸？(猫咪)
+- 鸟儿为什么会飞？(飞行原理)
+
+# 宇宙探索类
+- 月亮为什么有时圆有时弯？(月相)
+- 星星为什么会发光？(恒星)
+- 地球为什么是圆的？(地球形状)
+- 太阳系有多少颗行星？(太阳系)
+
+# 人体奥秘类
+- 为什么我们要睡觉？(睡眠)
+- 心脏为什么会跳动？(心脏)
+- 为什么会做梦？(梦境)
+- 眼睛是怎么看见东西的？(视觉)
+        `;
+
+        // Parse markdown to extract questions
+        function parseQuestions(markdown) {
+            const lines = markdown.trim().split('\n');
+            const questions = [];
+            let currentCategory = '';
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.startsWith('# ')) {
+                    currentCategory = line.substring(2);
+                } else if (line.startsWith('- ')) {
+                    const fullText = line.substring(2);
+                    
+                    // Extract wiki words in brackets
+                    const wikiWordMatch = fullText.match(/\(([^)]+)\)$/);
+                    let question = fullText;
+                    let wikiWord = null;
+                    
+                    if (wikiWordMatch) {
+                        // Remove the wiki word from the question
+                        question = fullText.replace(/\s*\([^)]+\)$/, '');
+                        wikiWord = wikiWordMatch[1];
+                    }
+                    
+                    questions.push({
+                        id: `q_${questions.length + 1}`,
+                        question,
+                        category: currentCategory,
+                        wikiWord: wikiWord,
+                        status: 'unexplored'
+                    });
+                }
+            }
+            
+            return questions;
+        }
+
+        // Load questions from localStorage or use default
+        function loadQuestions() {
+            const saved = localStorage.getItem('discussion-questions');
+            if (saved) {
+                return JSON.parse(saved);
+            } else {
+                const questions = parseQuestions(questionsMarkdown);
+                saveQuestions(questions);
+                return questions;
+            }
+        }
+
+
+
+        // Load current period data
+        function loadCurrentPeriod() {
+            const saved = localStorage.getItem('discussion-current-period');
+            if (saved) {
+                const data = JSON.parse(saved);
+                currentPeriodQuestions = data.questions || [];
+            }
+        }
+
+        // Save current period data
+        function saveCurrentPeriod() {
+            const data = {
+                questions: currentPeriodQuestions
+            };
+            localStorage.setItem('discussion-current-period', JSON.stringify(data));
+        }
+
+        // Generate random questions for current period
+        function generateCurrentPeriodQuestions() {
+            // Get available questions
+            const availableQuestions = allQuestions.filter(q => q.status === 'unexplored');
+            
+            // Randomly select questions
+            const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
+            const newQuestions = shuffled.slice(0, QUESTIONS_PER_PERIOD);
+            
+            // Set current period questions
+            currentPeriodQuestions = newQuestions;
+            saveCurrentPeriod();
+        }
+
+        // Save questions to localStorage
+        function saveQuestions(questions) {
+            localStorage.setItem('discussion-questions', JSON.stringify(questions));
+        }
+
+        // Create question card element
+        function createQuestionCard(question) {
+            const card = document.createElement('div');
+            card.className = 'bg-gradient-to-r from-white to-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all cursor-pointer hover:border-purple-300 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50';
+            
+            // Create the bottom section with category and wiki word
+            let bottomSection = `<span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${question.category}</span>`;
+            
+            if (question.wikiWord) {
+                bottomSection += `<span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full ml-2">${question.wikiWord}</span>`;
+            }
+            
+            card.innerHTML = `
+                <h4 class="font-bold text-gray-800 mb-3">${question.question}</h4>
+                <div class="flex items-center justify-start">
+                    ${bottomSection}
+                </div>
+            `;
+            
+            card.addEventListener('click', () => showQuestionModal(question));
+            return card;
+        }
+
+
+
+        // Get status icon
+        function getStatusIcon(status) {
+            switch (status) {
+                case 'unexplored': return '🔍';
+                case 'progress': return '⚡';
+                case 'completed': return '✅';
+                default: return '❓';
+            }
+        }
+
+        // Show question modal
+        function showQuestionModal(question) {
+            document.getElementById('modal-question').textContent = question.question;
+            document.getElementById('question-modal').classList.remove('hidden');
+            
+            const startButton = document.getElementById('start-learning');
+            startButton.onclick = () => startLearning(question);
+        }
+
+        // Start learning process
+        function startLearning(question) {
+            // Update question status to progress in both all questions and current period
+            const allQuestionsIndex = allQuestions.findIndex(q => q.id === question.id);
+            if (allQuestionsIndex !== -1) {
+                allQuestions[allQuestionsIndex].status = 'progress';
+            }
+            
+            const currentIndex = currentPeriodQuestions.findIndex(q => q.id === question.id);
+            if (currentIndex !== -1) {
+                currentPeriodQuestions[currentIndex].status = 'progress';
+            }
+            
+            saveQuestions(allQuestions);
+            saveCurrentPeriod();
+            
+            // Close modal
+            document.getElementById('question-modal').classList.add('hidden');
+            
+            // Simulate opening external page
+            // remove ? in question.question when passing to URL
+            let objective = question.question.replace(/\?/g, '');
+            if (question.wikiWord) {
+                objective += ` (${question.wikiWord})`;
+            }
+            // replace current href's wiki_dashboard with characterAI. 
+            let url = window.location.href;
+            url = url.split('?')[0];
+            url = url.replace('wiki_dashboard', 'characterAI');
+            window.location.href = `${url}?objective=${encodeURIComponent(objective)}`;
+            
+            // Refresh the display
+            renderQuestions();
+        }
+
+        // Complete a question (for simulation)
+        function completeQuestion(questionId) {
+            const allQuestionsIndex = allQuestions.findIndex(q => q.id === questionId);
+            if (allQuestionsIndex !== -1) {
+                allQuestions[allQuestionsIndex].status = 'completed';
+            }
+            
+            const currentIndex = currentPeriodQuestions.findIndex(q => q.id === questionId);
+            if (currentIndex !== -1) {
+                currentPeriodQuestions[currentIndex].status = 'completed';
+            }
+            
+            saveQuestions(allQuestions);
+            saveCurrentPeriod();
+            renderQuestions();
+        }
+
+        // Check if reward can be claimed
+        function canClaimReward() {
+            const completedInPeriod = currentPeriodQuestions.filter(q => q.status === 'completed').length;
+            return completedInPeriod >= QUESTIONS_PER_PERIOD;
+        }
+
+        // Claim reward
+        function claimReward() {
+            if (canClaimReward()) {
+                alert('🎉 恭喜！你成功完成了本期的10个问题，获得了一个神秘礼包！\n\n礼包内容：\n🏆 学习徽章 x1\n⭐ 经验值 +100\n🎁 神秘道具 x1');
+                
+                // Reset current period
+                currentPeriodQuestions = [];
+                saveCurrentPeriod();
+                
+                // Generate new period questions
+                generateCurrentPeriodQuestions();
+                renderQuestions();
+            }
+        }
+
+        // Render questions in their respective categories
+        function renderQuestions() {
+            const unexploredContainer = document.getElementById('unexplored-questions');
+            const progressContainer = document.getElementById('progress-questions');
+            const completedContainer = document.getElementById('completed-questions');
+            
+            // Clear containers
+            unexploredContainer.innerHTML = '';
+            progressContainer.innerHTML = '';
+            completedContainer.innerHTML = '';
+            
+            // Filter current period questions by status
+            const unexplored = currentPeriodQuestions.filter(q => q.status === 'unexplored');
+            const progress = currentPeriodQuestions.filter(q => q.status === 'progress');
+            const completed = currentPeriodQuestions.filter(q => q.status === 'completed');
+            
+            // Render questions
+            unexplored.forEach(q => unexploredContainer.appendChild(createQuestionCard(q)));
+            progress.forEach(q => progressContainer.appendChild(createQuestionCard(q)));
+            completed.forEach(q => completedContainer.appendChild(createQuestionCard(q)));
+            
+            // Update counters
+            document.getElementById('unexplored-count').textContent = unexplored.length;
+            document.getElementById('progress-count').textContent = progress.length;
+            document.getElementById('completed-count').textContent = completed.length;
+            
+            // Update progress display
+            const completedInPeriod = currentPeriodQuestions.filter(q => q.status === 'completed').length;
+            const progressText = `${completedInPeriod}/${QUESTIONS_PER_PERIOD}`;
+            
+            document.getElementById('progress-text').textContent = progressText;
+            
+            // Update reward button
+            const rewardBtn = document.getElementById('claim-reward-btn');
+            if (canClaimReward()) {
+                rewardBtn.disabled = false;
+                rewardBtn.classList.add('animate-pulse');
+            } else {
+                rewardBtn.disabled = true;
+                rewardBtn.classList.remove('animate-pulse');
+            }
+        }
+
+        // Close modal functionality
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('question-modal').classList.add('hidden');
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('question-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'question-modal') {
+                document.getElementById('question-modal').classList.add('hidden');
+            }
+        });
+
+        // Refresh questions button
+        document.getElementById('refresh-questions-btn').addEventListener('click', () => {
+            generateCurrentPeriodQuestions();
+            renderQuestions();
+        });
+
+        // Claim reward button
+        document.getElementById('claim-reward-btn').addEventListener('click', claimReward);
+
+        // Demo function to mark random questions as completed (for demonstration)
+        function simulateCompletion() {
+            const progressQuestions = allQuestions.filter(q => q.status === 'progress');
+            if (progressQuestions.length > 0) {
+                const randomQuestion = progressQuestions[Math.floor(Math.random() * progressQuestions.length)];
+                completeQuestion(randomQuestion.id);
+            }
+        }
+
+        // Add keyboard shortcut for demo completion (press 'C' key)
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'c' && e.ctrlKey) {
+                e.preventDefault();
+                simulateCompletion();
+            }
+        });
+
+        // Initialize the app
+        function initializeApp() {
+            // Load all questions
+            allQuestions = loadQuestions();
+            
+            // Load current period data
+            loadCurrentPeriod();
+            
+            // If no current period questions, generate them
+            if (currentPeriodQuestions.length === 0) {
+                generateCurrentPeriodQuestions();
+            }
+            
+            // Render the interface
+            renderQuestions();
+        }
+        
+        initializeApp();
+        
+        // Simulate some completed questions for demo (remove in production)
+        setTimeout(() => {
+            if (allQuestions.filter(q => q.status === 'completed').length === 0) {
+                allQuestions[0].status = 'completed';
+                allQuestions[1].status = 'progress';
+                allQuestions[2].status = 'progress';
+                
+                // Also update current period if these questions are in it
+                currentPeriodQuestions.forEach((q, index) => {
+                    if (q.id === allQuestions[0].id) currentPeriodQuestions[index].status = 'completed';
+                    if (q.id === allQuestions[1].id) currentPeriodQuestions[index].status = 'progress';
+                    if (q.id === allQuestions[2].id) currentPeriodQuestions[index].status = 'progress';
+                });
+                
+                saveQuestions(allQuestions);
+                saveCurrentPeriod();
+                renderQuestions();
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
