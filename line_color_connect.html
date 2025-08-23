@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Connect - 连线游戏</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        .game-cell {
+            transition: all 0.2s ease;
+            z-index: 1;
+        }
+
+        .path-line {
+            position: absolute;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .color-dot {
+            border-radius: 50%;
+            z-index: 2;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .game-grid {
+            position: relative;
+            background: #f5f5f0;
+            border-radius: 8px;
+        }
+
+        .inner-area {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .path-segment {
+            position: absolute;
+            background-color: currentColor;
+            border-radius: 2px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Toast 通知样式 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            background-color: #10b981;
+        }
+
+        .toast.info {
+            background-color: #3b82f6;
+        }
+
+        .toast.warning {
+            background-color: #f59e0b;
+        }
+
+        /* Modal dialog z-index fixes */
+        #winModal,
+        #completeModal {
+            z-index: 9999 !important;
+        }
+
+        /* Ensure modal backdrop is above all game elements */
+        .fixed.inset-0.bg-black.bg-opacity-50 {
+            z-index: 9998 !important;
+        }
+    </style>
+</head>
+
+<body class="bg-yellow-50 min-h-screen">
+    <div class="container mx-auto p-4 max-w-full">
+        <!-- 头部信息 - 横屏布局 -->
+        <div class="bg-white rounded-lg shadow-lg p-4 mb-4">
+            <div class="flex items-center justify-between w-full gap-6">
+                <!-- 游戏标题 -->
+                <div class="flex-shrink-0">
+                    <h1 class="text-xl font-bold text-gray-800">颜色连线</h1>
+                    <p class="text-sm text-gray-600">第 <span id="currentLevel">1</span> 关 / 10 关</p>
+                </div>
+
+                <!-- 难度选择 -->
+                <div class="flex items-center gap-2 flex-1 max-w-xs">
+                    <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">难度:</label>
+                    <select id="difficultySelect"
+                        class="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="beginner">入门 (5×5, 3色)</option>
+                        <option value="easy">简单 (6×6, 4色)</option>
+                        <option value="medium">中等 (7×7, 5色)</option>
+                        <option value="hard">困难 (8×8, 6色)</option>
+                        <option value="expert">专家 (9×9, 7色)</option>
+                        <option value="master">大师 (10×10, 8色)</option>
+                    </select>
+                </div> <!-- 连接统计 -->
+                <div class="flex items-center gap-4 flex-shrink-0">
+                    <p class="text-lg font-bold text-orange-500">连接: <span id="connectedPairs">0</span>/<span
+                            id="totalPairs">0</span></p>
+                    <button id="showAnswerBtn"
+                        class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded whitespace-nowrap">显示答案</button>
+                    <button id="resetBtn"
+                        class="text-sm bg-gray-200 px-4 py-2 rounded hover:bg-gray-300 whitespace-nowrap">重置</button>
+                </div>
+            </div>
+        </div> <!-- 游戏界面 -->
+        <div id="gameArea" class="flex justify-center">
+            <div class="game-grid mx-auto" id="gameGrid">
+            </div>
+        </div>
+
+        <div class="mt-4 text-center">
+            <p class="text-sm text-gray-600 mb-2">拖动将相同颜色的圆点连接起来，线条不能交叉</p>
+        </div>
+
+        <!-- 过关提示 -->
+        <div id="winModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white rounded-lg p-6 text-center max-w-sm">
+                <h2 class="text-2xl font-bold text-green-600 mb-4">🎉 恭喜过关！</h2>
+                <p id="winMessage" class="mb-4">你成功完成了这一关！</p>
+                <div class="text-lg font-bold text-blue-600 mb-4">3秒后自动进入下一关...</div>
+                <button id="winNextLevel"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg">立即下一关</button>
+            </div>
+        </div>
+
+        <!-- 通关提示 -->
+        <div id="completeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white rounded-lg p-6 text-center max-w-sm">
+                <h2 class="text-3xl font-bold text-yellow-500 mb-4">🏆 完美通关！</h2>
+                <p class="mb-4">恭喜你完成了当前难度的所有10关！<br>可以尝试更高难度继续挑战！</p>
+                <div class="flex gap-2">
+                    <button id="completeRestart"
+                        class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">重新开始</button>
+                    <button id="completeNextDiff"
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">提升难度</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class FlowConnectGame {
+            constructor() {
+                this.currentDifficulty = 'beginner';
+                this.currentLevel = 1;
+                this.maxLevel = 10;
+                this.grid = [];
+                this.paths = new Map();
+                this.isDrawing = false;
+                this.isProcessingStop = false; // 添加标志位防止重复处理stopDrawing
+                this.currentPath = []; this.currentColor = null; this.startPoint = null;
+                this.autoNextTimer = null;                this.cellSize = 0;
+                this.toastContainer = null;
+                this.currentSolution = new Map(); // 存储当前关卡的答案
+                this.answerShown = false; // 标记当前关卡是否已显示答案
+
+                this.colors = {
+                    'red': '#ef4444',
+                    'blue': '#3b82f6',
+                    'green': '#22c55e',
+                    'purple': '#a855f7',
+                    'orange': '#f97316',
+                    'yellow': '#eab308',
+                    'cyan': '#06b6d4',
+                    'magenta': '#ec4899',
+                    'lime': '#84cc16',
+                    'pink': '#f472b6',
+                    'indigo': '#6366f1',
+                    'teal': '#14b8a6'
+                };
+
+                this.colorKeys = Object.keys(this.colors);
+
+                // 难度配置：网格大小和颜色数量
+                this.difficultyConfig = {
+                    'beginner': { size: 5, colors: 3 },
+                    'easy': { size: 6, colors: 4 },
+                    'medium': { size: 7, colors: 5 },
+                    'hard': { size: 8, colors: 6 },
+                    'expert': { size: 9, colors: 7 },
+                    'master': { size: 10, colors: 8 }
+                };
+
+                this.init();
+            } init() {
+                this.createToastContainer();
+                this.setupEventListeners();
+                this.generateRandomLevel();
+                this.updateUI();
+                this.showToast('游戏开始！连接相同颜色的点吧！', 'info');
+            }
+
+            createToastContainer() {
+                this.toastContainer = document.createElement('div');
+                this.toastContainer.id = 'toastContainer';
+                this.toastContainer.style.position = 'fixed';
+                this.toastContainer.style.top = '20px';
+                this.toastContainer.style.right = '20px';
+                this.toastContainer.style.zIndex = '1000';
+                document.body.appendChild(this.toastContainer);
+            }
+
+            showToast(message, type = 'info', duration = 3000) {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+
+                this.toastContainer.appendChild(toast);
+
+                // 触发显示动画
+                setTimeout(() => {
+                    toast.classList.add('show');
+                }, 100);
+
+                // 自动移除
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => {
+                        if (toast.parentNode) {
+                            toast.parentNode.removeChild(toast);
+                        }
+                    }, 300);
+                }, duration);
+            }
+
+            setupEventListeners() {
+                // 难度选择
+                document.getElementById('difficultySelect').addEventListener('change', (e) => {
+                    this.changeDifficulty(e.target.value);
+                });                // 按钮事件
+                document.getElementById('resetBtn').addEventListener('click', () => this.resetGame());
+                document.getElementById('showAnswerBtn').addEventListener('click', () => this.showAnswer());
+                document.getElementById('winNextLevel').addEventListener('click', () => {
+                    this.clearAutoNextTimer();
+                    this.hideWinModal();
+                    this.nextLevel();
+                });
+                document.getElementById('completeRestart').addEventListener('click', () => {
+                    this.hideCompleteModal();
+                    this.restartGame();
+                });
+                document.getElementById('completeNextDiff').addEventListener('click', () => {
+                    this.hideCompleteModal();
+                    this.nextDifficulty();
+                });
+            } changeDifficulty(difficulty) {
+                this.currentDifficulty = difficulty;
+                this.currentLevel = 1;
+                this.generateRandomLevel();
+                this.updateUI();
+                this.showToast(`切换到${this.getDifficultyName(difficulty)}难度`, 'info');
+            }
+
+            getDifficultyName(difficulty) {
+                const names = {
+                    'beginner': '入门',
+                    'easy': '简单',
+                    'medium': '中等',
+                    'hard': '困难',
+                    'expert': '专家',
+                    'master': '大师'
+                };
+                return names[difficulty] || difficulty;
+            }
+
+            getCurrentConfig() {
+                return this.difficultyConfig[this.currentDifficulty];
+            } generateRandomLevel() {
+                const config = this.getCurrentConfig();
+                const gridSize = config.size;
+                const colorCount = config.colors;
+
+                // 显示生成关卡的提示
+                this.showToast('生成新关卡中...', 'info', 1000);
+
+                let attempts = 0;
+                const maxAttempts = 50;
+
+                // 多次尝试生成有解的关卡
+                while (attempts < maxAttempts) {
+                    attempts++;
+
+                    // 创建空网格
+                    this.grid = Array(gridSize).fill().map(() => Array(gridSize).fill(''));
+
+                    if (this.generateSolvableLevel(gridSize, colorCount)) {
+                        break;
+                    }
+                }
+
+                if (attempts >= maxAttempts) {
+                    // 如果生成失败，使用备用简单布局
+                    this.generateFallbackLevel(gridSize, colorCount);
+                    this.showToast('使用备用关卡布局', 'warning', 2000);
+                }                this.paths.clear();
+                this.createGameGrid();
+                this.setupGridEventListeners();
+                this.answerShown = false; // 重置答案显示标记
+            } generateSolvableLevel(gridSize, colorCount) {
+                // 使用回溯算法生成确保有解的关卡
+                const usedColors = this.colorKeys.slice(0, colorCount);
+
+                // 先生成一组解决方案，然后提取端点
+                const solution = this.generateSolutionPaths(gridSize, usedColors);
+                if (!solution) return false;
+
+                // 保存答案
+                this.currentSolution = new Map(solution);
+
+                // 清空网格，只保留端点
+                this.grid = Array(gridSize).fill().map(() => Array(gridSize).fill(''));
+
+                for (const [color, path] of solution.entries()) {
+                    if (path.length >= 2) {
+                        const start = path[0];
+                        const end = path[path.length - 1];
+                        this.grid[start.row][start.col] = color;
+                        this.grid[end.row][end.col] = color;
+                    }
+                }
+
+                // 验证每种颜色都有且仅有2个点
+                return this.validateColorPairs(usedColors);
+            }
+
+            validateColorPairs(expectedColors) {
+                const colorCounts = {};
+                const config = this.getCurrentConfig();
+                const gridSize = config.size;
+
+                // 统计每种颜色的点数
+                for (let row = 0; row < gridSize; row++) {
+                    for (let col = 0; col < gridSize; col++) {
+                        if (this.grid[row][col]) {
+                            const color = this.grid[row][col];
+                            colorCounts[color] = (colorCounts[color] || 0) + 1;
+                        }
+                    }
+                }
+
+                // 检查每种预期颜色是否都有且仅有2个点
+                for (const color of expectedColors) {
+                    if (colorCounts[color] !== 2) {
+                        return false;
+                    }
+                }
+
+                // 检查是否有多余的颜色
+                const actualColors = Object.keys(colorCounts);
+                return actualColors.length === expectedColors.length;
+            }
+
+            generateSolutionPaths(gridSize, colors) {
+                // 使用回溯算法生成不相交的路径
+                const paths = new Map();
+                const occupied = new Set();
+
+                // 随机化颜色顺序
+                const shuffledColors = [...colors].sort(() => Math.random() - 0.5);
+
+                if (this.backtrackGeneratePaths(shuffledColors, 0, paths, occupied, gridSize)) {
+                    return paths;
+                }
+                return null;
+            } backtrackGeneratePaths(colors, colorIndex, paths, occupied, gridSize) {
+                if (colorIndex >= colors.length) {
+                    return true; // 所有颜色都成功生成了路径
+                }
+
+                const color = colors[colorIndex];
+                const attempts = 30; // 增加尝试次数
+
+                for (let attempt = 0; attempt < attempts; attempt++) {
+                    // 随机选择起点和终点
+                    const startPos = this.getRandomFreePosition(gridSize, occupied);
+                    const endPos = this.getRandomFreePosition(gridSize, occupied);
+
+                    if (!startPos || !endPos) continue;
+
+                    // 确保起点和终点有足够距离
+                    const distance = Math.abs(startPos.row - endPos.row) + Math.abs(startPos.col - endPos.col);
+                    if (distance < 3) continue; // 增加最小距离要求
+
+                    // 标记起点和终点为占用，避免其他路径经过
+                    const startKey = `${startPos.row},${startPos.col}`;
+                    const endKey = `${endPos.row},${endPos.col}`;
+
+                    if (occupied.has(startKey) || occupied.has(endKey)) continue;
+
+                    // 临时标记端点为占用
+                    occupied.add(startKey);
+                    occupied.add(endKey);
+
+                    // 尝试找到连接路径
+                    const path = this.findPath(startPos, endPos, occupied, gridSize);
+                    if (path && path.length >= 3) { // 确保路径不会太短
+                        // 标记路径为占用（包括端点）
+                        const pathOccupied = new Set();
+                        for (let i = 0; i < path.length; i++) {
+                            const key = `${path[i].row},${path[i].col}`;
+                            if (!occupied.has(key)) {
+                                occupied.add(key);
+                                pathOccupied.add(key);
+                            }
+                        }
+
+                        paths.set(color, path);
+
+                        // 递归尝试下一个颜色
+                        if (this.backtrackGeneratePaths(colors, colorIndex + 1, paths, occupied, gridSize)) {
+                            return true;
+                        }
+
+                        // 回溯：移除当前路径
+                        paths.delete(color);
+                        for (const key of pathOccupied) {
+                            occupied.delete(key);
+                        }
+                    } else {
+                        // 如果找不到路径，移除端点标记
+                        occupied.delete(startKey);
+                        occupied.delete(endKey);
+                    }
+                }
+
+                return false;
+            } getRandomFreePosition(gridSize, occupied) {
+                const maxAttempts = 50;
+                // Color dots can only be placed in the inner (N-2)x(N-2) area
+                const innerSize = gridSize - 2;
+                const startRow = 1;
+                const startCol = 1;
+
+                for (let i = 0; i < maxAttempts; i++) {
+                    const row = startRow + Math.floor(Math.random() * innerSize);
+                    const col = startCol + Math.floor(Math.random() * innerSize);
+                    const key = `${row},${col}`;
+
+                    if (!occupied.has(key)) {
+                        return { row, col };
+                    }
+                }
+                return null;
+            } findPath(start, end, occupied, gridSize) {
+                // 使用A*算法寻找路径
+                const openSet = [{ ...start, g: 0, f: this.heuristic(start, end), path: [start] }];
+                const closedSet = new Set();
+
+                while (openSet.length > 0) {
+                    // 找到f值最小的节点
+                    openSet.sort((a, b) => a.f - b.f);
+                    const current = openSet.shift();
+
+                    if (current.row === end.row && current.col === end.col) {
+                        return current.path;
+                    }
+
+                    const key = `${current.row},${current.col}`;
+                    closedSet.add(key);
+
+                    // 探索邻居
+                    const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                    for (const [dr, dc] of directions) {
+                        const neighbor = {
+                            row: current.row + dr,
+                            col: current.col + dc
+                        };
+
+                        if (neighbor.row < 0 || neighbor.row >= gridSize ||
+                            neighbor.col < 0 || neighbor.col >= gridSize) continue;
+
+                        const neighborKey = `${neighbor.row},${neighbor.col}`;
+                        if (closedSet.has(neighborKey)) continue;
+
+                        // 检查是否被占用（终点除外）
+                        const isEndPoint = neighbor.row === end.row && neighbor.col === end.col;
+                        const isStartPoint = neighbor.row === start.row && neighbor.col === start.col;
+
+                        // 不能经过已占用的位置（除了起点和终点）
+                        if (!isEndPoint && !isStartPoint && occupied.has(neighborKey)) continue;
+
+                        // 不能经过其他颜色的点（除了起点和终点）
+                        if (!isEndPoint && !isStartPoint && this.grid[neighbor.row] && this.grid[neighbor.row][neighbor.col]) {
+                            continue;
+                        }
+
+                        const g = current.g + 1;
+                        const h = this.heuristic(neighbor, end);
+                        const f = g + h;
+
+                        // 检查是否已在openSet中
+                        const existingIndex = openSet.findIndex(node =>
+                            node.row === neighbor.row && node.col === neighbor.col);
+
+                        if (existingIndex === -1 || openSet[existingIndex].f > f) {
+                            const newNode = {
+                                ...neighbor,
+                                g: g,
+                                f: f,
+                                path: [...current.path, neighbor]
+                            };
+
+                            if (existingIndex !== -1) {
+                                openSet[existingIndex] = newNode;
+                            } else {
+                                openSet.push(newNode);
+                            }
+                        }
+                    }
+                } return null; // 没有找到路径
+            }
+
+            heuristic(a, b) {
+                return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
+            } generateFallbackLevel(gridSize, colorCount) {
+                // 生成简单的关卡作为备用，确保每种颜色都有且仅有2个点
+                this.grid = Array(gridSize).fill().map(() => Array(gridSize).fill(''));
+                const usedColors = this.colorKeys.slice(0, colorCount);
+
+                // 内部区域：(N-2) x (N-2)
+                const innerSize = gridSize - 2;
+                const startRow = 1;
+                const startCol = 1;
+
+                // 为每种颜色生成一对点
+                for (let i = 0; i < colorCount; i++) {
+                    const color = usedColors[i];
+                    let attempts = 0;
+                    const maxAttempts = 100;
+
+                    while (attempts < maxAttempts) {
+                        attempts++;
+
+                        // 在内部区域随机选择两个位置
+                        const row1 = startRow + Math.floor(Math.random() * innerSize);
+                        const col1 = startCol + Math.floor(Math.random() * innerSize);
+                        const row2 = startRow + Math.floor(Math.random() * innerSize);
+                        const col2 = startCol + Math.floor(Math.random() * innerSize);
+
+                        // 确保两个位置不同且都为空
+                        if ((row1 !== row2 || col1 !== col2) &&
+                            !this.grid[row1][col1] && !this.grid[row2][col2]) {
+
+                            // 确保两个点之间有足够距离
+                            const distance = Math.abs(row1 - row2) + Math.abs(col1 - col2);
+                            if (distance >= 2) {
+                                this.grid[row1][col1] = color;
+                                this.grid[row2][col2] = color;
+                                break;
+                            }
+                        }
+                    }                    // 如果无法找到合适位置，使用简单布局确保有2个点
+                    if (attempts >= maxAttempts) {
+                        let placedFirst = false;
+                        let placedSecond = false;
+                        let firstRow = -1, firstCol = -1;
+
+                        // 尝试在内部区域找到两个空位置
+                        for (let row = startRow; row < startRow + innerSize && !placedSecond; row++) {
+                            for (let col = startCol; col < startCol + innerSize && !placedSecond; col++) {
+                                if (!this.grid[row][col]) {
+                                    if (!placedFirst) {
+                                        this.grid[row][col] = color;
+                                        firstRow = row;
+                                        firstCol = col;
+                                        placedFirst = true;
+                                    } else {
+                                        // 确保两个点之间有距离
+                                        const distance = Math.abs(row - firstRow) + Math.abs(col - firstCol);
+                                        if (distance >= 1) {
+                                            this.grid[row][col] = color;
+                                            placedSecond = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 如果还是没能放置2个点，强制放置
+                        if (!placedFirst || !placedSecond) {
+                            // 使用简单的对角线布局确保有2个点
+                            const row1 = startRow + (i % innerSize);
+                            const col1 = startCol + (i % innerSize);
+                            const row2 = startRow + ((i + 1) % innerSize);
+                            const col2 = startCol + ((i + 1) % innerSize);
+
+                            if (!placedFirst && !this.grid[row1][col1]) {
+                                this.grid[row1][col1] = color;
+                                placedFirst = true;
+                            }
+                            if (!placedSecond && !this.grid[row2][col2] && (row1 !== row2 || col1 !== col2)) {
+                                this.grid[row2][col2] = color;
+                                placedSecond = true;
+                            }
+
+                            // 最后的兜底方案
+                            if (!placedFirst || !placedSecond) {
+                                for (let r = startRow; r < startRow + innerSize; r++) {
+                                    for (let c = startCol; c < startCol + innerSize; c++) {
+                                        if (!this.grid[r][c]) {
+                                            if (!placedFirst) {
+                                                this.grid[r][c] = color;
+                                                placedFirst = true;
+                                                firstRow = r;
+                                                firstCol = c;
+                                            } else if (!placedSecond && (r !== firstRow || c !== firstCol)) {
+                                                this.grid[r][c] = color;
+                                                placedSecond = true;
+                                                break;
+                                            }
+                                        }
+                                    } if (placedSecond) break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 最后验证每种颜色都有且仅有2个点
+                if (!this.validateColorPairs(usedColors)) {
+                    console.warn('Fallback level generation failed validation, attempting manual fix...');
+                    this.fixColorPairs(usedColors, gridSize);
+                }
+            }
+
+            fixColorPairs(expectedColors, gridSize) {
+                // 手动修复颜色对，确保每种颜色都有且仅有2个点
+                const innerSize = gridSize - 2;
+                const startRow = 1;
+                const startCol = 1;
+
+                for (const color of expectedColors) {
+                    const positions = [];
+
+                    // 找到该颜色的所有位置
+                    for (let row = 0; row < gridSize; row++) {
+                        for (let col = 0; col < gridSize; col++) {
+                            if (this.grid[row][col] === color) {
+                                positions.push({ row, col });
+                            }
+                        }
+                    }
+
+                    if (positions.length === 0) {
+                        // 没有这种颜色，添加2个点
+                        for (let attempts = 0; attempts < 50; attempts++) {
+                            const row1 = startRow + Math.floor(Math.random() * innerSize);
+                            const col1 = startCol + Math.floor(Math.random() * innerSize);
+                            const row2 = startRow + Math.floor(Math.random() * innerSize);
+                            const col2 = startCol + Math.floor(Math.random() * innerSize);
+
+                            if (!this.grid[row1][col1] && !this.grid[row2][col2] &&
+                                (row1 !== row2 || col1 !== col2)) {
+                                this.grid[row1][col1] = color;
+                                this.grid[row2][col2] = color;
+                                break;
+                            }
+                        }
+                    } else if (positions.length === 1) {
+                        // 只有1个点，添加第2个点
+                        for (let attempts = 0; attempts < 50; attempts++) {
+                            const row = startRow + Math.floor(Math.random() * innerSize);
+                            const col = startCol + Math.floor(Math.random() * innerSize);
+
+                            if (!this.grid[row][col] &&
+                                (row !== positions[0].row || col !== positions[0].col)) {
+                                this.grid[row][col] = color;
+                                break;
+                            }
+                        }
+                    } else if (positions.length > 2) {
+                        // 超过2个点，移除多余的点，只保留前2个
+                        for (let i = 2; i < positions.length; i++) {
+                            this.grid[positions[i].row][positions[i].col] = '';
+                        }
+                    }
+                }
+            }
+
+            generateColorPair(gridSize) {
+                const attempts = 100;
+                for (let i = 0; i < attempts; i++) {
+                    const pos1 = this.getRandomEmptyPosition(gridSize);
+                    const pos2 = this.getRandomEmptyPosition(gridSize);
+
+                    if (pos1 && pos2 && !this.positionsEqual(pos1, pos2)) {
+                        // 确保两个点之间有足够的距离，避免过于简单
+                        const distance = Math.abs(pos1[0] - pos2[0]) + Math.abs(pos1[1] - pos2[1]);
+                        if (distance >= 2) {
+                            return [pos1, pos2];
+                        }
+                    }
+                }
+                return null;
+            } getRandomEmptyPosition(gridSize) {
+                const attempts = 50;
+                // Color dots can only be placed in the inner (N-2)x(N-2) area
+                const innerSize = gridSize - 2;
+                const startRow = 1;
+                const startCol = 1;
+
+                for (let i = 0; i < attempts; i++) {
+                    const row = startRow + Math.floor(Math.random() * innerSize);
+                    const col = startCol + Math.floor(Math.random() * innerSize);
+
+                    if (!this.grid[row][col]) {
+                        return [row, col];
+                    }
+                }
+                return null;
+            }
+
+            positionsEqual(pos1, pos2) {
+                return pos1[0] === pos2[0] && pos1[1] === pos2[1];
+            }
+
+            isLevelSolvable(colorPairs, gridSize) {
+                // 简单的连通性检查 - 确保每对颜色点之间存在路径
+                for (const pair of colorPairs) {
+                    const [pos1, pos2] = pair.positions;
+                    if (!this.hasPath(pos1, pos2, gridSize)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            hasPath(start, end, gridSize) {
+                // 使用BFS检查两点间是否存在路径
+                const queue = [start];
+                const visited = new Set();
+                visited.add(`${start[0]},${start[1]}`);
+
+                const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+                while (queue.length > 0) {
+                    const [row, col] = queue.shift();
+
+                    if (row === end[0] && col === end[1]) {
+                        return true;
+                    }
+
+                    for (const [dr, dc] of directions) {
+                        const newRow = row + dr;
+                        const newCol = col + dc;
+                        const key = `${newRow},${newCol}`;
+
+                        if (newRow >= 0 && newRow < gridSize &&
+                            newCol >= 0 && newCol < gridSize &&
+                            !visited.has(key)) {
+
+                            // 可以经过空格子或目标颜色点
+                            if (!this.grid[newRow][newCol] ||
+                                (newRow === end[0] && newCol === end[1])) {
+                                visited.add(key);
+                                queue.push([newRow, newCol]);
+                            }
+                        }
+                    }
+                }
+                return false;
+            } createGameGrid() {
+                const gameGrid = document.getElementById('gameGrid');
+                gameGrid.innerHTML = '';
+
+                const config = this.getCurrentConfig();
+                const gridSize = config.size;
+
+                // 根据网格大小自适应单元格大小 - 横屏优化
+                const maxGridWidth = Math.min(500, window.innerWidth * 0.6); // 适应横屏
+                this.cellSize = Math.floor(maxGridWidth / gridSize);
+
+                gameGrid.style.width = `${this.cellSize * gridSize}px`;
+                gameGrid.style.height = `${this.cellSize * gridSize}px`;
+                gameGrid.style.display = 'grid';
+                gameGrid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+                gameGrid.style.gap = '1px';
+
+                // 计算内部区域：(N-2) x (N-2)
+                const innerSize = gridSize - 2;
+                const startRow = 1;
+                const startCol = 1;
+
+                for (let row = 0; row < gridSize; row++) {
+                    for (let col = 0; col < gridSize; col++) {
+                        const cell = document.createElement('div');
+                        let cellClass = 'game-cell relative bg-gray-100 border border-gray-200 cursor-pointer';
+
+                        // 标记内部区域
+                        if (row >= startRow && row < startRow + innerSize &&
+                            col >= startCol && col < startCol + innerSize) {
+                            cellClass += ' inner-area';
+                        }
+
+                        cell.className = cellClass;
+                        cell.style.width = `${this.cellSize}px`;
+                        cell.style.height = `${this.cellSize}px`;
+                        cell.dataset.row = row;
+                        cell.dataset.col = col;
+
+                        if (this.grid[row][col]) {
+                            const dot = document.createElement('div');
+                            const dotSize = this.cellSize * 0.6;
+                            dot.className = 'color-dot absolute inset-0 m-auto';
+                            dot.style.width = `${dotSize}px`;
+                            dot.style.height = `${dotSize}px`;
+                            dot.style.backgroundColor = this.colors[this.grid[row][col]];
+                            cell.appendChild(dot);
+                        }
+
+                        gameGrid.appendChild(cell);
+                    }
+                }
+            }
+            setupGridEventListeners() {
+                const cells = document.querySelectorAll('.game-cell');
+                const gameGrid = document.getElementById('gameGrid');
+
+                cells.forEach(cell => {
+                    cell.addEventListener('mousedown', (e) => this.startDrawing(e));
+                    cell.addEventListener('mouseenter', (e) => this.continueDrawing(e));
+                    cell.addEventListener('mouseup', (e) => this.stopDrawing(e));
+
+                    // 移动端支持
+                    cell.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        this.startDrawing(e);
+                    });
+                    cell.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                        if (element && element.closest('.game-cell')) {
+                            this.continueDrawing({ target: element.closest('.game-cell') });
+                        } else {
+                            // 如果触摸移动到网格外，停止绘制
+                            this.stopDrawing(null);
+                        }
+                    });
+                    cell.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        this.stopDrawing(e);
+                    });
+                });
+                document.addEventListener('mousemove', (e) => {
+                    if (this.isDrawing) {
+                        const gameGridRect = gameGrid.getBoundingClientRect();
+                        const mouseX = e.clientX;
+                        const mouseY = e.clientY;
+
+                        // 检查鼠标是否在游戏网格外
+                        if (mouseX < gameGridRect.left || mouseX > gameGridRect.right ||
+                            mouseY < gameGridRect.top || mouseY > gameGridRect.bottom) {
+                            console.log('Mouse moved outside game grid, stopping drawing');
+                            this.stopDrawing(null);
+                        }
+                    }
+                });                // 全局mouseup事件只在游戏网格外时停止绘制
+                document.addEventListener('mouseup', (e) => {
+                    if (this.isDrawing) {
+                        const gameGridRect = gameGrid.getBoundingClientRect();
+                        const mouseX = e.clientX;
+                        const mouseY = e.clientY;
+
+                        // 只有在游戏网格外松手时才停止绘制
+                        if (mouseX < gameGridRect.left || mouseX > gameGridRect.right ||
+                            mouseY < gameGridRect.top || mouseY > gameGridRect.bottom) {
+                            console.log('Mouse up outside game grid, stopping drawing');
+                            this.stopDrawing(null);
+                        }
+                    }
+                });
+
+                document.addEventListener('touchend', (e) => {
+                    if (this.isDrawing && e.touches.length === 0) {
+                        // 触摸结束时检查是否在游戏网格内
+                        const touch = e.changedTouches[0];
+                        const gameGridRect = gameGrid.getBoundingClientRect();
+                        const touchX = touch.clientX;
+                        const touchY = touch.clientY;
+
+                        if (touchX < gameGridRect.left || touchX > gameGridRect.right ||
+                            touchY < gameGridRect.top || touchY > gameGridRect.bottom) {
+                            console.log('Touch end outside game grid, stopping drawing');
+                            this.stopDrawing(null);
+                        }
+                    }
+                });
+            } startDrawing(e) {
+                e.preventDefault();
+                const cell = e.target.closest('.game-cell');
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+
+                if (this.grid[row][col]) {
+                    // 如果正在处理停止操作，先重置状态
+                    if (this.isProcessingStop) {
+                        this.isProcessingStop = false;
+                        this.isDrawing = false;
+                        this.currentPath = [];
+                        this.currentColor = null;
+                        this.startPoint = null;
+                    } const clickedColor = this.grid[row][col];
+
+                    // 立即清除该颜色的完整路径（包括数据和视觉效果）
+                    this.clearPath(clickedColor);
+
+                    // 设置绘制状态
+                    this.isDrawing = true;
+                    console.log(`Starting drawing at cell (${row}, ${col}) with color ${clickedColor}`);
+                    this.currentColor = clickedColor;
+                    this.startPoint = { row, col };
+                    this.currentPath = [{ row, col }];
+                }
+            }
+
+
+            continueDrawing(e) {
+                e.preventDefault();
+                if (!this.isDrawing) return;
+
+                const cell = e.target.closest('.game-cell');
+                if (!cell) {
+                    // 如果鼠标移动到非游戏单元格区域，停止绘制并完全重置状态
+                    this.stopDrawing(null);
+                    return;
+                }
+
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+
+                if (this.canAddToPath(row, col)) {
+                    this.currentPath.push({ row, col });
+                    this.drawPath();
+                }
+            }
+
+            stopDrawing(e) {
+                e && e.preventDefault();
+                if (!this.isDrawing || this.isProcessingStop) return;
+
+                this.isProcessingStop = true; // 设置标志位防止重复处理
+                this.isDrawing = false;
+
+                // 检查当前路径是否构成有效连接
+                const isValidEnd = this.isValidPath();
+
+                if (isValidEnd) {
+                    // 保存有效路径
+                    this.paths.set(this.currentColor, [...this.currentPath]);
+                    this.showToast(`${this.currentColor} 连接成功！`, 'success', 1500);
+                } else {
+                    // 只有在路径无效时才清除视觉效果
+                    if (this.currentColor) {
+                        this.clearPathVisual(this.currentColor);
+                        console.log('Path cleared - invalid connection');
+                    }
+                }
+
+                // 强制重置所有拖动状态，确保下次可以重新开始拖动
+                this.currentPath = [];
+                this.currentColor = null;
+                this.startPoint = null;
+
+                this.checkWinCondition();
+                this.updateUI();
+
+                // 异步重置标志位，确保下次可以正常开始绘制
+                setTimeout(() => {
+                    this.isProcessingStop = false;
+                }, 50);
+            } canAddToPath(row, col) {
+                const config = this.getCurrentConfig();
+                const gridSize = config.size;
+
+                if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) return false;
+
+                const lastPos = this.currentPath[this.currentPath.length - 1];
+                const distance = Math.abs(row - lastPos.row) + Math.abs(col - lastPos.col);
+
+                if (distance !== 1) return false;
+
+                // 允许回退
+                if (this.currentPath.length > 1 &&
+                    this.currentPath[this.currentPath.length - 2].row === row &&
+                    this.currentPath[this.currentPath.length - 2].col === col) {
+                    this.currentPath.pop();
+                    this.drawPath();
+                    return false;
+                }
+
+                // 检查是否与其他路径相交
+                if (this.isPathCrossing(row, col)) {
+                    return false;
+                }
+
+                const cellColor = this.grid[row][col];
+                if (cellColor && cellColor !== this.currentColor) return false;
+
+                return true;
+            }
+
+            isPathCrossing(row, col) {
+                // 检查当前位置是否被其他颜色的路径占用
+                for (const [color, path] of this.paths) {
+                    if (color === this.currentColor) continue;
+
+                    // 检查路径中间部分（不包括端点）
+                    for (let i = 1; i < path.length - 1; i++) {
+                        if (path[i].row === row && path[i].col === col) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            } isValidPath() {
+                if (this.currentPath.length < 2) {
+                    console.log('Path invalid: too short', this.currentPath.length);
+                    return false;
+                }
+
+                const startPos = this.currentPath[0];
+                const endPos = this.currentPath[this.currentPath.length - 1];
+                const startColor = this.grid[startPos.row][startPos.col];
+                const endColor = this.grid[endPos.row][endPos.col];
+
+                console.log('Path validation:', {
+                    pathLength: this.currentPath.length,
+                    currentColor: this.currentColor,
+                    startColor,
+                    endColor,
+                    startPos,
+                    endPos
+                });
+
+                // 检查起点和终点都是同一颜色且为当前颜色
+                const isValid = startColor === this.currentColor && endColor === this.currentColor;
+                console.log('Path valid:', isValid);
+
+                return isValid;
+            }
+
+            drawPath() {
+                this.clearPathVisual(this.currentColor);
+
+                // 绘制每个路径段
+                for (let i = 0; i < this.currentPath.length - 1; i++) {
+                    const from = this.currentPath[i];
+                    const to = this.currentPath[i + 1];
+                    this.drawLineSegment(from, to, this.currentColor);
+                }
+            }
+
+            drawLineSegment(from, to, color) {
+                const gameGrid = document.getElementById('gameGrid');
+
+                // 计算中心点坐标
+                const fromCenterX = from.col * this.cellSize + this.cellSize / 2;
+                const fromCenterY = from.row * this.cellSize + this.cellSize / 2;
+                const toCenterX = to.col * this.cellSize + this.cellSize / 2;
+                const toCenterY = to.row * this.cellSize + this.cellSize / 2;
+
+                const line = document.createElement('div');
+                line.className = `path-segment path-${color}`;
+                line.style.backgroundColor = this.colors[color];
+                line.style.position = 'absolute';
+
+                const lineWidth = Math.max(3, Math.floor(this.cellSize * 0.12));
+
+                if (from.row === to.row) {
+                    // 水平线段
+                    const width = Math.abs(toCenterX - fromCenterX);
+                    const left = Math.min(fromCenterX, toCenterX);
+
+                    line.style.width = `${width}px`;
+                    line.style.height = `${lineWidth}px`;
+                    line.style.left = `${left}px`;
+                    line.style.top = `${fromCenterY - lineWidth / 2}px`;
+                } else {
+                    // 垂直线段
+                    const height = Math.abs(toCenterY - fromCenterY);
+                    const top = Math.min(fromCenterY, toCenterY);
+
+                    line.style.width = `${lineWidth}px`;
+                    line.style.height = `${height}px`;
+                    line.style.left = `${fromCenterX - lineWidth / 2}px`;
+                    line.style.top = `${top}px`;
+                }
+
+                gameGrid.appendChild(line);
+            } clearPath(color) {
+                this.paths.delete(color);
+                this.clearPathVisual(color);
+                this.updateUI(); // 立即更新UI显示连接状态
+            }
+
+            clearPathVisual(color) {
+                document.querySelectorAll(`.path-${color}`).forEach(line => line.remove());
+            }            resetGame() {
+                this.paths.clear();
+                document.querySelectorAll('.path-segment').forEach(line => line.remove());
+                this.answerShown = false; // 重置答案显示标记
+                this.updateUI();
+                this.showToast('游戏已重置', 'info');
+            }
+
+            restartGame() {
+                this.currentLevel = 1;
+                this.generateRandomLevel();
+                this.updateUI();
+                this.showToast('重新开始游戏', 'info');
+            }            nextLevel() {
+                if (this.answerShown) {
+                    // 如果已经显示了答案，重新生成当前关卡而不是进入下一关
+                    this.generateRandomLevel();
+                    this.updateUI();
+                    this.showToast(`第${this.currentLevel}关重新生成`, 'info');
+                } else if (this.currentLevel < this.maxLevel) {
+                    this.currentLevel++;
+                    this.generateRandomLevel();
+                    this.updateUI();
+                    this.showToast(`进入第${this.currentLevel}关`, 'info');
+                } else {
+                    this.showCompleteModal();
+                }
+            }
+
+            nextDifficulty() {
+                const difficulties = ['beginner', 'easy', 'medium', 'hard', 'expert', 'master'];
+                const currentIndex = difficulties.indexOf(this.currentDifficulty);
+                if (currentIndex < difficulties.length - 1) {
+                    const nextDiff = difficulties[currentIndex + 1];
+                    document.getElementById('difficultySelect').value = nextDiff;
+                    this.changeDifficulty(nextDiff);
+                    this.showToast(`🎊 提升到${this.getDifficultyName(nextDiff)}难度！`, 'success');
+                } else {
+                    // 已经是最高难度，重新开始
+                    this.restartGame();
+                    this.showToast('🏆 已经是最高难度！重新开始挑战', 'warning');
+                }
+            } checkWinCondition() {
+                const colors = new Set();
+                const config = this.getCurrentConfig();
+                const gridSize = config.size;
+
+                // 收集所有颜色
+                for (let row = 0; row < gridSize; row++) {
+                    for (let col = 0; col < gridSize; col++) {
+                        if (this.grid[row][col]) {
+                            colors.add(this.grid[row][col]);
+                        }
+                    }
+                }
+
+                const uniqueColors = [...colors];
+                const totalPairs = uniqueColors.length;
+                const connectedPairs = uniqueColors.filter(color => this.paths.has(color)).length;
+
+                // 检查是否所有颜色都已连接，且路径有效
+                if (connectedPairs === totalPairs && this.validateAllPaths()) {
+                    // 延迟一点显示通关提示，让玩家看到完成的路径
+                    setTimeout(() => {
+                        this.showToast(`🎉 第${this.currentLevel}关通过！`, 'success', 2000);
+                        setTimeout(() => {
+                            this.showWinModal();
+                        }, 500);
+                    }, 200);
+                }
+            }
+
+            validateAllPaths() {
+                // 检查所有路径是否有效且不相交
+                const occupiedCells = new Set();
+
+                for (const [color, path] of this.paths) {
+                    // 检查路径的有效性
+                    if (!this.isValidCompletePath(path, color)) {
+                        return false;
+                    }
+
+                    // 检查路径中间部分是否与其他路径相交
+                    for (let i = 1; i < path.length - 1; i++) {
+                        const cellKey = `${path[i].row},${path[i].col}`;
+                        if (occupiedCells.has(cellKey)) {
+                            return false; // 路径相交
+                        }
+                        occupiedCells.add(cellKey);
+                    }
+                }
+
+                return true;
+            }
+
+            isValidCompletePath(path, color) {
+                if (path.length < 2) return false;
+
+                // 检查起点和终点是否都是目标颜色
+                const startPos = path[0];
+                const endPos = path[path.length - 1];
+
+                const startColor = this.grid[startPos.row][startPos.col];
+                const endColor = this.grid[endPos.row][endPos.col];
+
+                return startColor === color && endColor === color;
+            }            showWinModal() {
+                let message;
+                if (this.answerShown) {
+                    // 如果已显示答案，提示将重新生成关卡
+                    message = `第 ${this.currentLevel} 关完成！由于使用了答案，将重新生成本关！`;
+                } else {
+                    // 正常进入下一关的提示
+                    const remaining = this.maxLevel - this.currentLevel;
+                    message = remaining > 0 ?
+                        `第 ${this.currentLevel} 关完成！还有 ${remaining} 关等你挑战！` :
+                        `第 ${this.currentLevel} 关完成！准备进入更高难度！`;
+                }
+
+                document.getElementById('winMessage').textContent = message;
+                document.getElementById('winModal').classList.remove('hidden');
+
+                // 3秒后自动下一关
+                this.autoNextTimer = setTimeout(() => {
+                    this.hideWinModal();
+                    this.nextLevel();
+                }, 3000);
+            }
+
+            showCompleteModal() {
+                const difficultyName = this.getDifficultyName(this.currentDifficulty);
+                this.showToast(`🏆 ${difficultyName}难度全部通关！`, 'success', 4000);
+                document.getElementById('completeModal').classList.remove('hidden');
+            } hideWinModal() {
+                document.getElementById('winModal').classList.add('hidden');
+                this.clearAutoNextTimer();
+            }
+
+            clearAutoNextTimer() {
+                if (this.autoNextTimer) {
+                    clearTimeout(this.autoNextTimer);
+                    this.autoNextTimer = null;
+                }
+            }
+
+            hideCompleteModal() {
+                document.getElementById('completeModal').classList.add('hidden');
+            }            showAnswer() {
+                // 清除所有现有路径
+                this.paths.clear();
+                document.querySelectorAll('.path-segment').forEach(line => line.remove());
+
+                // 显示正确答案
+                if (this.currentSolution && this.currentSolution.size > 0) {
+                    for (const [color, solutionPath] of this.currentSolution) {
+                        // 将解答路径设置为当前路径
+                        this.paths.set(color, [...solutionPath]);
+
+                        // 绘制解答路径
+                        this.drawSolutionPath(solutionPath, color);
+                    }
+
+                    // 更新UI显示
+                    this.updateUI();
+                    this.answerShown = true; // 标记已显示答案
+                    this.showToast('🔍 答案已显示', 'info', 2000);
+                } else {
+                    this.showToast('❌ 当前关卡没有答案数据', 'warning', 2000);
+                }
+            }
+
+            drawSolutionPath(path, color) {
+                // 绘制解答路径的每个线段
+                for (let i = 0; i < path.length - 1; i++) {
+                    const from = path[i];
+                    const to = path[i + 1];
+                    this.drawLineSegment(from, to, color);
+                }
+            }
+
+            updateUI() {
+                document.getElementById('currentLevel').textContent = this.currentLevel;
+
+                const colors = new Set();
+                const config = this.getCurrentConfig();
+                const gridSize = config.size;
+
+                for (let row = 0; row < gridSize; row++) {
+                    for (let col = 0; col < gridSize; col++) {
+                        if (this.grid[row][col]) {
+                            colors.add(this.grid[row][col]);
+                        }
+                    }
+                }
+
+                const totalPairs = [...colors].length;
+                const connectedPairs = [...colors].filter(color => this.paths.has(color)).length;
+
+                document.getElementById('totalPairs').textContent = totalPairs;
+                document.getElementById('connectedPairs').textContent = connectedPairs;
+            }
+        }
+
+        // 启动游戏
+        new FlowConnectGame();
+    </script>
+</body>
+
+</html>
