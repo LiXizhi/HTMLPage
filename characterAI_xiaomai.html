@@ -174,35 +174,10 @@
             font-weight: bold;
             flex-shrink: 0;
         }
-
-        /* 状态指示器 */
-        .status-indicator {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            z-index: 1000;
-            transition: all 0.3s ease;
-        }
-
-        .status-indicator.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
     </style>
 </head>
 
 <body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen">
-    <!-- 状态指示器 -->
-    <div id="status-indicator" class="status-indicator hidden">
-        <span id="status-text">准备中...</span>
-    </div>
-
     <div class="w-full h-screen flex flex-col">
         <!-- 头部 -->
         <div class="bg-white shadow-lg p-4 flex items-center justify-between w-full">
@@ -271,9 +246,7 @@
                 this.elements = {
                     chatContainer: document.getElementById('chat-container'),
                     userInput: document.getElementById('user-input'),
-                    sendBtn: document.getElementById('send-btn'),
-                    statusIndicator: document.getElementById('status-indicator'),
-                    statusText: document.getElementById('status-text')
+                    sendBtn: document.getElementById('send-btn')
                 };
 
                 this.currentAudio = null;
@@ -303,38 +276,16 @@
 
             async initializeAI() {
                 try {
-                    this.updateStatus('正在初始化AI助手...');
-                    
                     // Create AI session without systemPrompt parameter
                     aiChatSession = sdk.aiChat.createSession({
                         model: 'keepwork-pro',
                         stream: true
                     });
 
-                    this.updateStatus('AI助手已就绪', true);
                     console.log('AI Chat Session initialized successfully');
                 } catch (error) {
                     console.error('Failed to initialize AI chat session:', error);
-                    this.updateStatus('AI助手初始化失败，请刷新重试', false);
                 }
-            }
-
-            updateStatus(message, isSuccess = null) {
-                this.elements.statusText.textContent = message;
-                this.elements.statusIndicator.classList.remove('hidden');
-
-                if (isSuccess === true) {
-                    this.elements.statusIndicator.style.background = 'rgba(34, 197, 94, 0.9)';
-                } else if (isSuccess === false) {
-                    this.elements.statusIndicator.style.background = 'rgba(239, 68, 68, 0.9)';
-                } else {
-                    this.elements.statusIndicator.style.background = 'rgba(0, 0, 0, 0.8)';
-                }
-
-                // 3秒后自动隐藏状态指示器
-                setTimeout(() => {
-                    this.elements.statusIndicator.classList.add('hidden');
-                }, 3000);
             }
 
             async sendMessage() {
@@ -351,7 +302,6 @@
 
                 // 添加输入指示器
                 this.addTypingIndicator();
-                this.updateStatus('小麦老师正在思考...');
 
                 try {
                     await this.callLLM(message);
@@ -359,7 +309,6 @@
                     console.error('Error calling LLM:', error);
                     this.removeTypingIndicator();
                     this.addMessage('抱歉，我现在遇到了一些技术问题，请稍后再试...', false);
-                    this.updateStatus('发送失败，请重试', false);
                 } finally {
                     // 重新启用输入控件
                     this.elements.sendBtn.disabled = false;
@@ -382,6 +331,7 @@
 4. 回答特点：
    - 结构清晰，逻辑性强
    - 会用生动的例子和比喻帮助理解
+   - 每次回答尽量不要超过200字
    - 对复杂问题会分步骤解释
    - 鼓励学生主动思考和提问
    - 建议用户用关键词搜索工具箱中的百度百科,了解更多相关知识
@@ -407,7 +357,6 @@
                     const finalText = await aiChatSession.send(userMessage, {
                         onMessage: (text) => {
                             accumulatedText = text;
-                            this.updateStatus('接收响应中...');
 
                             // 移除打字指示器（如果还在）
                             if (!streamingMessageDiv) {
@@ -420,8 +369,6 @@
                             this.updateStreamingMessage(streamingMessageDiv, text);
                         },
                         onComplete: (finalText) => {
-                            this.updateStatus('响应完成');
-
                             if (streamingMessageDiv) {
                                 // 完成流式显示，转换为普通消息
                                 this.finalizeStreamingMessage(streamingMessageDiv);
@@ -440,8 +387,6 @@
                         this.removeTypingIndicator();
                         this.addMessage(finalText, false);
                     }
-
-                    this.updateStatus('回答完成', true);
 
                 } catch (error) {
                     console.error('LLM call failed:', error);
@@ -674,13 +619,11 @@
                     } catch (audioError) {
                         console.error('语音播放出错:', audioError);
                         this.stopCurrentAudio();
-                        this.updateStatus('语音播放失败', false);
                     }
 
                 } catch (error) {
                     console.error('语音播放失败:', error);
                     this.stopCurrentAudio();
-                    this.updateStatus('语音播放失败', false);
                 }
             }
 
@@ -730,9 +673,6 @@
                         </svg>
                     `;
                     
-                    // 显示成功状态
-                    this.updateStatus('文字已复制到剪贴板', true);
-                    
                     // 2秒后恢复按钮状态
                     setTimeout(() => {
                         buttonElement.className = originalClass;
@@ -742,7 +682,6 @@
                     
                 } catch (error) {
                     console.error('复制失败:', error);
-                    this.updateStatus('复制失败，请手动选择文字', false);
                 }
             }
 
