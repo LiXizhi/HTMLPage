@@ -92,8 +92,8 @@
             background: rgba(86, 60, 233, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -103,6 +103,7 @@
             margin-left: 8px;
             align-self: flex-end;
             flex-shrink: 0;
+            font-size: 16px;
         }
 
         .audio-btn:hover {
@@ -680,6 +681,13 @@
                         this.config.objective.wikiword) {
                         iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
                     }
+                    if (tool.id === 'xiaomai')
+                    {
+                        let url = window.location.href;
+                        url = url.split('?')[0];
+                        url = url.replace('characterAI', 'characterAI_xiaomai');
+                        iframeUrl = `${url}?token=`;
+                    }
 
                     // 如果URL以token=结尾，则自动添加SDK token
                     if (iframeUrl.endsWith('token=') && sdk && sdk.token) {
@@ -821,6 +829,7 @@
                 this.config.character.age = 8;
                 this.config.character.role = "AI宠物";
                 this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
+                this.config.character.chat_background = null; 
                 this.config.objective.title = objective;
                 this.config.objective.description = `通过耐心的交流解决, 解决问题: ${objective}`;
                 this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
@@ -885,6 +894,7 @@
                         age: 17,
                         gender: "male",
                         role: "高二学生",
+                        chat_background: null,
                         description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！"
                     },
                     objective: {
@@ -937,6 +947,38 @@
                     }
                 };
             }
+            
+            changeChatBackground(background) {
+                const chatContainer = document.getElementById('chat-container');
+                if (!chatContainer) return;
+                
+                if (background) {
+                    // If background is a URL (image)
+                    if (background.startsWith('http') || background.startsWith('data:') || background.startsWith('blob:')) {
+                        chatContainer.style.backgroundImage = `url(${background})`;
+                        chatContainer.style.backgroundSize = 'cover';
+                        chatContainer.style.backgroundPosition = 'center';
+                        chatContainer.style.backgroundRepeat = 'no-repeat';
+                        chatContainer.style.backgroundColor = ''; // Clear solid color
+                    }
+                    // If background is a gradient or solid color
+                    else if (background.includes('gradient') || background.startsWith('#') || background.startsWith('rgb') || background.startsWith('hsl')) {
+                        chatContainer.style.background = background;
+                        chatContainer.style.backgroundImage = ''; // Clear image
+                    }
+                    // If background is a CSS color name
+                    else {
+                        chatContainer.style.backgroundColor = background;
+                        chatContainer.style.backgroundImage = ''; // Clear image
+                    }
+                } else {
+                    // Reset to default if no background is specified
+                    chatContainer.style.background = '';
+                    chatContainer.style.backgroundImage = '';
+                    chatContainer.style.backgroundColor = '';
+                }
+            }
+            
             initializeGame() {
                 if (!this.config) return;
 
@@ -1006,6 +1048,8 @@
                 if (this.elements.chatContainer.children.length === 1) {
                     this.checkAndPlayVideoAction(this.config.initial?.message);
                 }
+                // 设置聊天背景
+                this.changeChatBackground(this.config?.character?.chat_background);
             }
 
             updateQuickReplies() {
@@ -1549,6 +1593,8 @@
                     audioBtn.title = '播放语音';
                     audioBtn.innerHTML = '🔊';
                     audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
+                    
+                    // 将按钮添加到最外层 div 的最后，与 addMessage 方法保持一致
                     messageDiv.appendChild(audioBtn);
                     this.checkAndPlayVideoAction(messageText);
                 }
@@ -1642,6 +1688,7 @@
                     type: 'gameFinished',
                     data: {
                         score: this.gameState.progress,
+                        earnedPoints: this.gameState.progress + this.gameState.chatHistory.length * 10,
                         characterName: this.config?.character?.name || '角色',
                         totalMessages: this.gameState.chatHistory.length,
                         finalProgress: this.gameState.progress
@@ -2089,13 +2136,12 @@
                     }
                     else if(e.data.type === "miniGameProxyDataResponse"){
                         miniGameProxyReceived = true;
-                        sdk.token = e.data?.keepworkUserInfo?.token;
+                        sdk.token = e.data?.keepworkToken;
                     }
                     if(locationReceived && miniGameProxyReceived){
-                        locationReceived = false;
-                        resolve(e.data);
                         window.removeEventListener('message', messageHandler);
                         clearTimeout(timeout);
+                        resolve(e.data);
                     }
                 };
                 window.addEventListener('message', messageHandler);

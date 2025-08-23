@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>💬 趣味讨论问答</title>
+    <title>抱抱龙成长百科</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.2"></script>
     <style>
         body {
             height: 100vh;
@@ -72,15 +72,12 @@
 <body class="bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100">
     <!-- Main Content -->
     <div class="main-container w-full px-2">
-        <!-- Header & Progress -->
-        <div class="progress-section bg-white/90 backdrop-blur-sm rounded-2xl p-3 mb-2 mt-2 shadow-xl">
+        <!-- Header -->
+        <div class="progress-section p-3 mb-2 mt-2">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-bold text-gray-800">💬 抱抱龙成长百科</h3>
                 <div class="flex items-center space-x-4">
-                    <span class="text-base font-bold text-gray-700">本期进度：<span class="text-blue-600" id="progress-text">0/10</span></span>
-                    <button id="claim-reward-btn" class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-1.5 rounded-lg text-base font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        🎁 领取礼包
-                    </button>
+                    <!-- help section -->
                 </div>
             </div>
         </div>
@@ -162,6 +159,9 @@
         // Global variables
         let allQuestions = [];
         let currentPeriodQuestions = [];
+        let wikiWordToQuestionMap = new Map(); // Map from wikiword to question object
+        let progress_wikiwords = []; // Global array for progress wiki words
+        let completed_wikiwords = []; // Global array for completed wiki words
         const QUESTIONS_PER_PERIOD = 10;
 
         // Question data source in markdown format
@@ -228,35 +228,211 @@
             return questions;
         }
 
-        // Load questions from localStorage or use default
-        function loadQuestions() {
-            const saved = localStorage.getItem('discussion-questions');
-            if (saved) {
-                return JSON.parse(saved);
+        // Build map from wikiword to question object for quick lookup
+        function buildWikiWordMap(questions) {
+            wikiWordToQuestionMap.clear();
+            for (const question of questions) {
+                if (question.wikiWord && !wikiWordToQuestionMap.has(question.wikiWord)) {
+                    // Use the first question that matches this wikiword (in case of duplicates)
+                    wikiWordToQuestionMap.set(question.wikiWord, question);
+                }
+            }
+        }
+
+        // Load questions from SDK personal page store or use default
+        async function loadQuestions() {
+            const questions = parseQuestions(questionsMarkdown);
+            // Build wikiword map first for efficient lookup
+            buildWikiWordMap(questions);
+            // Apply saved progress/completion status from new format
+            await loadProgressData(questions);
+            return questions;
+        }
+
+        
+        async function loadProgressData(questions) {
+            try {
+                const progressData = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
+                
+                if (progressData) {
+                    let data = progressData;
+                    
+                    // Handle case where data might be a string (serialized format)
+                    if (typeof data === 'string') {
+                        console.log('Data received as string, attempting to parse...');
+                        try {
+                            // Try to parse as JSON first
+                            data = JSON.parse(data);
+                        } catch (jsonError) {
+                            console.warn('Data is not valid JSON, skipping string data');
+                            return;
+                        }
+                    }
+                    
+                    // Ensure data is an object and has the expected structure
+                    if (!data || typeof data !== 'object') {
+                        console.warn('Invalid data structure received:', data);
+                        return;
+                    }
+                    
+                    // Apply completed status
+                    if (Array.isArray(data.completed_wikiwords) && Array.isArray(data.completed_times)) {
+                        completed_wikiwords = [...data.completed_wikiwords]; // Store in global array
+                        data.completed_wikiwords.forEach((wikiword, index) => {
+                            const question = wikiWordToQuestionMap.get(wikiword);
+                            if (question) {
+                                question.status = 'completed';
+                                question.completedTime = data.completed_times[index];
+                            }
+                        });
+                    }
+                    
+                    // Apply in-progress status
+                    if (Array.isArray(data.inprogress_wikiwords) && Array.isArray(data.inprogress_times)) {
+                        progress_wikiwords = [...data.inprogress_wikiwords]; // Store in global array
+                        data.inprogress_wikiwords.forEach((wikiword, index) => {
+                            const question = wikiWordToQuestionMap.get(wikiword);
+                            if (question) {
+                                question.status = 'progress';
+                                question.progressTime = data.inprogress_times[index];
+                            }
+                        });
+                    }
+                    
+                    // Load current period questions
+                    if (Array.isArray(data.currentperiod_wikiwords) && Array.isArray(data.currentperiod_times)) {
+                        currentPeriodQuestions = [];
+                        data.currentperiod_wikiwords.forEach((wikiword, index) => {
+                            const question = wikiWordToQuestionMap.get(wikiword);
+                            if (question) {
+                                currentPeriodQuestions.push(question);
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading progress data:', error);
+            }
+        }
+
+        // Save progress and completion data in new format
+        async function saveProgressData(bForceFlush = false) {
+            try {
+                const currentperiod_wikiwords = [];
+                const currentperiod_times = [];
+                
+                // Collect completed questions from global array
+                const completed_wikiwords_data = [];
+                const completed_times_data = [];
+                completed_wikiwords.forEach(wikiword => {
+                    const question = wikiWordToQuestionMap.get(wikiword);
+                    if (question) {
+                        completed_wikiwords_data.push(wikiword);
+                        completed_times_data.push(question.completedTime || getCurrentDateCode());
+                    }
+                });
+                
+                // Collect in-progress questions from global array
+                const inprogress_wikiwords_data = [];
+                const inprogress_times_data = [];
+                progress_wikiwords.forEach(wikiword => {
+                    const question = wikiWordToQuestionMap.get(wikiword);
+                    if (question) {
+                        inprogress_wikiwords_data.push(wikiword);
+                        inprogress_times_data.push(question.progressTime || getCurrentDateCode());
+                    }
+                });
+                
+                // Collect current period questions
+                currentPeriodQuestions.forEach(q => {
+                    if (q.wikiWord) {
+                        currentperiod_wikiwords.push(q.wikiWord);
+                        currentperiod_times.push(getCurrentDateCode());
+                    }
+                });
+                
+                const data = {
+                    completed_wikiwords: completed_wikiwords_data,
+                    completed_times: completed_times_data,
+                    inprogress_wikiwords: inprogress_wikiwords_data,
+                    inprogress_times: inprogress_times_data,
+                    currentperiod_wikiwords,
+                    currentperiod_times
+                };
+                
+                // Defensive checks to ensure data consistency
+                if (completed_wikiwords_data.length !== completed_times_data.length) {
+                    console.error('Mismatch in completed arrays');
+                    const minLength = Math.min(completed_wikiwords_data.length, completed_times_data.length);
+                    data.completed_wikiwords = completed_wikiwords_data.slice(0, minLength);
+                    data.completed_times = completed_times_data.slice(0, minLength);
+                }
+                
+                if (inprogress_wikiwords_data.length !== inprogress_times_data.length) {
+                    console.error('Mismatch in progress arrays');
+                    console.error('inprogress_wikiwords:', inprogress_wikiwords_data);
+                    console.error('inprogress_times:', inprogress_times_data);
+                    const minLength = Math.min(inprogress_wikiwords_data.length, inprogress_times_data.length);
+                    data.inprogress_wikiwords = inprogress_wikiwords_data.slice(0, minLength);
+                    data.inprogress_times = inprogress_times_data.slice(0, minLength);
+                }
+                
+                if (currentperiod_wikiwords.length !== currentperiod_times.length) {
+                    console.error('Mismatch in current period arrays');
+                    const minLength = Math.min(currentperiod_wikiwords.length, currentperiod_times.length);
+                    data.currentperiod_wikiwords = currentperiod_wikiwords.slice(0, minLength);
+                    data.currentperiod_times = currentperiod_times.slice(0, minLength);
+                }
+                
+                await sdk.personalPageStore.savePageData("maisi_dragon_wiki", "discussion-progress-data", data, bForceFlush);
+            } catch (error) {
+                console.error('Error saving progress data:', error);
+            }
+        }
+
+        // Get current date in YYMMDD format
+        function getCurrentDateCode() {
+            const now = new Date();
+            const year = now.getFullYear().toString().slice(-2);
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            return parseInt(year + month + day);
+        }
+
+        // Format date from YYMMDD to user-friendly Chinese format
+        function formatDateConcise(dateCode) {
+            if (!dateCode) return '';
+            
+            const dateStr = dateCode.toString();
+            if (dateStr.length !== 6) return dateStr;
+            
+            // Parse the date code (YYMMDD format)
+            const year = parseInt('20' + dateStr.substring(0, 2));
+            const month = parseInt(dateStr.substring(2, 4));
+            const day = parseInt(dateStr.substring(4, 6));
+            
+            const targetDate = new Date(year, month - 1, day);
+            const today = new Date();
+            
+            // Reset time to compare only dates
+            today.setHours(0, 0, 0, 0);
+            targetDate.setHours(0, 0, 0, 0);
+            
+            const diffTime = today.getTime() - targetDate.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) {
+                return '今天';
+            } else if (diffDays === 1) {
+                return '昨天';
+            } else if (diffDays > 1 && diffDays <= 30) {
+                return `${diffDays}天前`;
+            } else if (diffDays > 30 && year === today.getFullYear()) {
+                return `${month}月${day}日`;
             } else {
-                const questions = parseQuestions(questionsMarkdown);
-                saveQuestions(questions);
-                return questions;
+                const shortYear = year.toString().slice(-2);
+                return `${shortYear}年${month}月${day}日`;
             }
-        }
-
-
-
-        // Load current period data
-        function loadCurrentPeriod() {
-            const saved = localStorage.getItem('discussion-current-period');
-            if (saved) {
-                const data = JSON.parse(saved);
-                currentPeriodQuestions = data.questions || [];
-            }
-        }
-
-        // Save current period data
-        function saveCurrentPeriod() {
-            const data = {
-                questions: currentPeriodQuestions
-            };
-            localStorage.setItem('discussion-current-period', JSON.stringify(data));
         }
 
         // Generate random questions for current period
@@ -268,15 +444,12 @@
             const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
             const newQuestions = shuffled.slice(0, QUESTIONS_PER_PERIOD);
             
-            // Set current period questions
+            // Set current period questions (keep references to same objects)
             currentPeriodQuestions = newQuestions;
-            saveCurrentPeriod();
+            saveProgressData();
         }
 
-        // Save questions to localStorage
-        function saveQuestions(questions) {
-            localStorage.setItem('discussion-questions', JSON.stringify(questions));
-        }
+
 
         // Create question card element
         function createQuestionCard(question) {
@@ -290,10 +463,21 @@
                 bottomSection += `<span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full ml-2">${question.wikiWord}</span>`;
             }
             
+            // Add date display for in-progress and completed questions
+            let dateSection = '';
+            if (question.status === 'progress' && question.progressTime) {
+                dateSection = `<span class="text-xs text-orange-600 font-medium">${formatDateConcise(question.progressTime)}</span>`;
+            } else if (question.status === 'completed' && question.completedTime) {
+                dateSection = `<span class="text-xs text-green-600 font-medium">${formatDateConcise(question.completedTime)}</span>`;
+            }
+            
             card.innerHTML = `
                 <h4 class="font-bold text-gray-800 mb-3">${question.question}</h4>
-                <div class="flex items-center justify-start">
-                    ${bottomSection}
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        ${bottomSection}
+                    </div>
+                    ${dateSection ? `<div class="flex items-center">${dateSection}</div>` : ''}
                 </div>
             `;
             
@@ -324,19 +508,44 @@
 
         // Start learning process
         function startLearning(question) {
+            console.log('Starting learning for question:', {
+                id: question.id, 
+                question: question.question, 
+                wikiWord: question.wikiWord,
+                status: question.status
+            });
+            
             // Update question status to progress in both all questions and current period
             const allQuestionsIndex = allQuestions.findIndex(q => q.id === question.id);
             if (allQuestionsIndex !== -1) {
                 allQuestions[allQuestionsIndex].status = 'progress';
+                allQuestions[allQuestionsIndex].progressTime = getCurrentDateCode();
+                console.log('Updated question in allQuestions:', {
+                    id: allQuestions[allQuestionsIndex].id,
+                    wikiWord: allQuestions[allQuestionsIndex].wikiWord,
+                    status: allQuestions[allQuestionsIndex].status,
+                    progressTime: allQuestions[allQuestionsIndex].progressTime
+                });
             }
             
             const currentIndex = currentPeriodQuestions.findIndex(q => q.id === question.id);
             if (currentIndex !== -1) {
                 currentPeriodQuestions[currentIndex].status = 'progress';
+                currentPeriodQuestions[currentIndex].progressTime = getCurrentDateCode();
+                console.log('Updated question in currentPeriodQuestions:', {
+                    id: currentPeriodQuestions[currentIndex].id,
+                    wikiWord: currentPeriodQuestions[currentIndex].wikiWord,
+                    status: currentPeriodQuestions[currentIndex].status,
+                    progressTime: currentPeriodQuestions[currentIndex].progressTime
+                });
             }
             
-            saveQuestions(allQuestions);
-            saveCurrentPeriod();
+            // Update global progress_wikiwords array
+            if (question.wikiWord && !progress_wikiwords.includes(question.wikiWord)) {
+                progress_wikiwords.push(question.wikiWord);
+            }
+            
+            saveProgressData(true);
             
             // Close modal
             document.getElementById('question-modal').classList.add('hidden');
@@ -362,37 +571,35 @@
             const allQuestionsIndex = allQuestions.findIndex(q => q.id === questionId);
             if (allQuestionsIndex !== -1) {
                 allQuestions[allQuestionsIndex].status = 'completed';
+                allQuestions[allQuestionsIndex].completedTime = getCurrentDateCode();
+                // Remove progress time when completed
+                delete allQuestions[allQuestionsIndex].progressTime;
+                
+                // Update global arrays
+                const wikiWord = allQuestions[allQuestionsIndex].wikiWord;
+                if (wikiWord) {
+                    // Remove from progress array if exists
+                    const progressIndex = progress_wikiwords.indexOf(wikiWord);
+                    if (progressIndex > -1) {
+                        progress_wikiwords.splice(progressIndex, 1);
+                    }
+                    // Add to completed array if not exists
+                    if (!completed_wikiwords.includes(wikiWord)) {
+                        completed_wikiwords.push(wikiWord);
+                    }
+                }
             }
             
             const currentIndex = currentPeriodQuestions.findIndex(q => q.id === questionId);
             if (currentIndex !== -1) {
                 currentPeriodQuestions[currentIndex].status = 'completed';
+                currentPeriodQuestions[currentIndex].completedTime = getCurrentDateCode();
+                // Remove progress time when completed
+                delete currentPeriodQuestions[currentIndex].progressTime;
             }
             
-            saveQuestions(allQuestions);
-            saveCurrentPeriod();
+            saveProgressData();
             renderQuestions();
-        }
-
-        // Check if reward can be claimed
-        function canClaimReward() {
-            const completedInPeriod = currentPeriodQuestions.filter(q => q.status === 'completed').length;
-            return completedInPeriod >= QUESTIONS_PER_PERIOD;
-        }
-
-        // Claim reward
-        function claimReward() {
-            if (canClaimReward()) {
-                alert('🎉 恭喜！你成功完成了本期的10个问题，获得了一个神秘礼包！\n\n礼包内容：\n🏆 学习徽章 x1\n⭐ 经验值 +100\n🎁 神秘道具 x1');
-                
-                // Reset current period
-                currentPeriodQuestions = [];
-                saveCurrentPeriod();
-                
-                // Generate new period questions
-                generateCurrentPeriodQuestions();
-                renderQuestions();
-            }
         }
 
         // Render questions in their respective categories
@@ -406,10 +613,14 @@
             progressContainer.innerHTML = '';
             completedContainer.innerHTML = '';
             
-            // Filter current period questions by status
+            // Filter current period questions by status for unexplored (only current period)
             const unexplored = currentPeriodQuestions.filter(q => q.status === 'unexplored');
-            const progress = currentPeriodQuestions.filter(q => q.status === 'progress');
-            const completed = currentPeriodQuestions.filter(q => q.status === 'completed');
+            
+            // Get progress questions from global progress_wikiwords array
+            const progress = progress_wikiwords.map(wikiword => wikiWordToQuestionMap.get(wikiword)).filter(q => q);
+            
+            // Get completed questions from global completed_wikiwords array
+            const completed = completed_wikiwords.map(wikiword => wikiWordToQuestionMap.get(wikiword)).filter(q => q);
             
             // Render questions
             unexplored.forEach(q => unexploredContainer.appendChild(createQuestionCard(q)));
@@ -420,22 +631,6 @@
             document.getElementById('unexplored-count').textContent = unexplored.length;
             document.getElementById('progress-count').textContent = progress.length;
             document.getElementById('completed-count').textContent = completed.length;
-            
-            // Update progress display
-            const completedInPeriod = currentPeriodQuestions.filter(q => q.status === 'completed').length;
-            const progressText = `${completedInPeriod}/${QUESTIONS_PER_PERIOD}`;
-            
-            document.getElementById('progress-text').textContent = progressText;
-            
-            // Update reward button
-            const rewardBtn = document.getElementById('claim-reward-btn');
-            if (canClaimReward()) {
-                rewardBtn.disabled = false;
-                rewardBtn.classList.add('animate-pulse');
-            } else {
-                rewardBtn.disabled = true;
-                rewardBtn.classList.remove('animate-pulse');
-            }
         }
 
         // Close modal functionality
@@ -456,9 +651,6 @@
             renderQuestions();
         });
 
-        // Claim reward button
-        document.getElementById('claim-reward-btn').addEventListener('click', claimReward);
-
         // Demo function to mark random questions as completed (for demonstration)
         function simulateCompletion() {
             const progressQuestions = allQuestions.filter(q => q.status === 'progress');
@@ -468,21 +660,65 @@
             }
         }
 
+        // Debug function to view serialized data
+        async function viewSerializedData() {
+            const data = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
+            if (data) {
+                console.log('Serialized Progress Data:', data);
+                console.log('Completed:', data.completed_wikiwords?.map((word, i) => `${word}: ${data.completed_times?.[i]}`));
+                console.log('In Progress:', data.inprogress_wikiwords?.map((word, i) => `${word}: ${data.inprogress_times?.[i]}`));
+            } else {
+                console.log('No serialized data found');
+            }
+        }
+
+        // Cleanup function to fix data consistency issues
+        async function cleanupProgressData() {
+            console.log('Starting data cleanup...');
+            
+            // Check all questions for missing wikiWords
+            const questionsWithoutWikiWords = allQuestions.filter(q => !q.wikiWord);
+            if (questionsWithoutWikiWords.length > 0) {
+                console.error('Questions without wikiWords found:', questionsWithoutWikiWords);
+            }
+            
+            // Check for progress questions without wikiWords
+            const progressQuestionsWithoutWikiWords = allQuestions.filter(q => q.status === 'progress' && !q.wikiWord);
+            if (progressQuestionsWithoutWikiWords.length > 0) {
+                console.error('Progress questions without wikiWords found:', progressQuestionsWithoutWikiWords);
+                // Reset their status to unexplored
+                progressQuestionsWithoutWikiWords.forEach(q => {
+                    q.status = 'unexplored';
+                    delete q.progressTime;
+                });
+                console.log('Reset corrupted progress questions to unexplored');
+            }
+            
+            // Force save clean data
+            await saveProgressData(true);
+            console.log('Data cleanup completed');
+        }
+
         // Add keyboard shortcut for demo completion (press 'C' key)
         document.addEventListener('keydown', (e) => {
             if (e.key.toLowerCase() === 'c' && e.ctrlKey) {
                 e.preventDefault();
                 simulateCompletion();
             }
+            // Press 'V' to view serialized data
+            if (e.key.toLowerCase() === 'v' && e.ctrlKey) {
+                e.preventDefault();
+                viewSerializedData();
+            }
         });
 
         // Initialize the app
-        function initializeApp() {
+        async function initializeApp() {
             // Load all questions
-            allQuestions = loadQuestions();
+            allQuestions = await loadQuestions();
             
-            // Load current period data
-            loadCurrentPeriod();
+            // Build wikiword to question map for quick lookup
+            buildWikiWordMap(allQuestions);
             
             // If no current period questions, generate them
             if (currentPeriodQuestions.length === 0) {
@@ -493,27 +729,48 @@
             renderQuestions();
         }
         
-        initializeApp();
-        
-        // Simulate some completed questions for demo (remove in production)
-        setTimeout(() => {
-            if (allQuestions.filter(q => q.status === 'completed').length === 0) {
-                allQuestions[0].status = 'completed';
-                allQuestions[1].status = 'progress';
-                allQuestions[2].status = 'progress';
-                
-                // Also update current period if these questions are in it
-                currentPeriodQuestions.forEach((q, index) => {
-                    if (q.id === allQuestions[0].id) currentPeriodQuestions[index].status = 'completed';
-                    if (q.id === allQuestions[1].id) currentPeriodQuestions[index].status = 'progress';
-                    if (q.id === allQuestions[2].id) currentPeriodQuestions[index].status = 'progress';
-                });
-                
-                saveQuestions(allQuestions);
-                saveCurrentPeriod();
-                renderQuestions();
-            }
-        }, 1000);
+         window.parent.postMessage({ type: 'gameLoaded' }, '*');
+
+        // Wait for several response with 200ms timeout, then start game
+        function checkStartGame(timeoutMs = 200){
+            let gameStarted = false;
+            const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    if (!gameStarted) {
+                        resolve(null);
+                    }
+                }, timeoutMs);
+                let miniGameProxyReceived = false;
+                const messageHandler = function (e) {
+                    if(e.data.type === "miniGameProxyDataResponse"){
+                        miniGameProxyReceived = true;
+                        sdk.token = e.data?.keepworkToken;
+                    }
+                    if(miniGameProxyReceived){
+                        miniGameProxyReceived = false;
+                        window.removeEventListener('message', messageHandler);
+                        clearTimeout(timeout);
+                        resolve(e.data);
+                    }
+                };
+                window.addEventListener('message', messageHandler);
+                window.parent.postMessage({ type: 'getLocation' }, '*');
+                window.parent.postMessage({ type: 'getMiniGameProxyData' }, '*');
+            });
+            
+            waitForMinigameProxyWithTimeout.then(async () => {
+                if (!gameStarted) {
+                    gameStarted = true;
+                    await initializeApp();
+                }
+            }).catch(async (error) => {
+                if (!gameStarted) {
+                    gameStarted = true;
+                    await initializeApp();
+                }
+            });
+        }
+        checkStartGame();
     </script>
 </body>
 </html>

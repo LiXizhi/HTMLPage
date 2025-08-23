@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小麦老师 - AI对话助手</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <style>
+        .chat-bubble-left {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 18px 18px 18px 4px;
+            max-width: 80%;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .chat-bubble-right {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 18px 18px 4px 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+        }
+
+        .typing-indicator span {
+            height: 8px;
+            width: 8px;
+            border-radius: 50%;
+            background-color: #667eea;
+            display: inline-block;
+            animation: typing 1.4s infinite ease-in-out;
+            margin-right: 4px;
+        }
+
+        .typing-indicator span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes typing {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 流式消息样式 */
+        .streaming-message .chat-bubble-left {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+        }
+
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background-color: white;
+            animation: cursor-blink 1s infinite;
+            margin-left: 2px;
+        }
+
+        @keyframes cursor-blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* 语音播放按钮样式 */
+        .audio-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-left: 8px;
+            flex-shrink: 0;
+            align-self: flex-end;
+        }
+
+        .audio-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .audio-btn.playing {
+            animation: audio-pulse 1s infinite;
+        }
+
+        @keyframes audio-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* 复制按钮样式 */
+        .copy-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-left: 4px;
+            flex-shrink: 0;
+            align-self: flex-end;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .copy-btn.copied {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: rgba(34, 197, 94, 0.5);
+        }
+
+        /* 自定义滚动条 */
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* 小麦老师头像样式 */
+        .teacher-avatar {
+            background: linear-gradient(135deg, #f6d55c 0%, #ed8936 100%);
+            color: white;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        /* 状态指示器 */
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen">
+    <!-- 状态指示器 -->
+    <div id="status-indicator" class="status-indicator hidden">
+        <span id="status-text">准备中...</span>
+    </div>
+
+    <div class="w-full h-screen flex flex-col">
+        <!-- 头部 -->
+        <div class="bg-white shadow-lg p-4 flex items-center justify-between w-full">
+            <div class="flex items-center space-x-3">
+                <div class="teacher-avatar text-sm">小麦</div>
+                <h1 class="text-xl font-bold text-gray-800">小麦老师</h1>
+            </div>
+            <button 
+                id="clear-chat-btn"
+                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2"
+                title="清空所有对话记录"
+            >
+                <span>清空</span>
+            </button>
+        </div>
+
+        <!-- 聊天区域 -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <div id="chat-container" class="flex-1 p-4 overflow-y-auto chat-container">
+                <!-- 初始欢迎消息 -->
+                <div class="flex items-start space-x-3 mb-4">
+                    <div class="flex items-end">
+                        <div class="chat-bubble-left">
+                            你好！我是小麦老师，一名经验丰富的AI教育助手。无论你有什么学习问题，或者需要解释某个知识点，我都很乐意帮助你！请随时向我提问吧~ 
+                        </div>
+                        <button class="audio-btn ml-2" title="播放语音" onclick="xiaomaiChat.playMessageAudio('你好！我是小麦老师', this)">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="bg-white border-t border-gray-200 p-4 w-full">
+                <div class="flex space-x-2">
+                    <input 
+                        type="text" 
+                        id="user-input" 
+                        placeholder="请输入您的问题..."
+                        class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                    <button 
+                        id="send-btn"
+                        class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    >
+                        发送
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize SDK
+        const sdk = new KeepworkSDK({
+            timeout: 30000
+        });
+        
+        // Initialize AI Chat Session
+        let aiChatSession;
+
+        class XiaomaiTeacherChat {
+            constructor() {
+                this.elements = {
+                    chatContainer: document.getElementById('chat-container'),
+                    userInput: document.getElementById('user-input'),
+                    sendBtn: document.getElementById('send-btn'),
+                    statusIndicator: document.getElementById('status-indicator'),
+                    statusText: document.getElementById('status-text')
+                };
+
+                this.currentAudio = null;
+                this.currentPlayingButton = null;
+                this.currentAudioController = null;
+                this.audioCache = new Map(); // 音频缓存
+
+                this.init();
+            }
+
+            init() {
+                // 绑定事件
+                this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.elements.userInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // 绑定清空对话按钮事件
+                document.getElementById('clear-chat-btn').addEventListener('click', () => this.clearChat());
+
+                // 初始化AI会话
+                this.initializeAI();
+            }
+
+            async initializeAI() {
+                try {
+                    this.updateStatus('正在初始化AI助手...');
+                    
+                    // Create AI session without systemPrompt parameter
+                    aiChatSession = sdk.aiChat.createSession({
+                        model: 'keepwork-pro',
+                        stream: true
+                    });
+
+                    this.updateStatus('AI助手已就绪', true);
+                    console.log('AI Chat Session initialized successfully');
+                } catch (error) {
+                    console.error('Failed to initialize AI chat session:', error);
+                    this.updateStatus('AI助手初始化失败，请刷新重试', false);
+                }
+            }
+
+            updateStatus(message, isSuccess = null) {
+                this.elements.statusText.textContent = message;
+                this.elements.statusIndicator.classList.remove('hidden');
+
+                if (isSuccess === true) {
+                    this.elements.statusIndicator.style.background = 'rgba(34, 197, 94, 0.9)';
+                } else if (isSuccess === false) {
+                    this.elements.statusIndicator.style.background = 'rgba(239, 68, 68, 0.9)';
+                } else {
+                    this.elements.statusIndicator.style.background = 'rgba(0, 0, 0, 0.8)';
+                }
+
+                // 3秒后自动隐藏状态指示器
+                setTimeout(() => {
+                    this.elements.statusIndicator.classList.add('hidden');
+                }, 3000);
+            }
+
+            async sendMessage() {
+                const message = this.elements.userInput.value.trim();
+                if (!message) return;
+
+                // 禁用输入控件
+                this.elements.sendBtn.disabled = true;
+                this.elements.userInput.disabled = true;
+
+                // 添加用户消息
+                this.addMessage(message, true);
+                this.elements.userInput.value = '';
+
+                // 添加输入指示器
+                this.addTypingIndicator();
+                this.updateStatus('小麦老师正在思考...');
+
+                try {
+                    await this.callLLM(message);
+                } catch (error) {
+                    console.error('Error calling LLM:', error);
+                    this.removeTypingIndicator();
+                    this.addMessage('抱歉，我现在遇到了一些技术问题，请稍后再试...', false);
+                    this.updateStatus('发送失败，请重试', false);
+                } finally {
+                    // 重新启用输入控件
+                    this.elements.sendBtn.disabled = false;
+                    this.elements.userInput.disabled = false;
+                    this.elements.userInput.focus();
+                }
+            }
+
+            async callLLM(userMessage) {
+                if (!aiChatSession) {
+                    throw new Error('AI Chat Session not initialized');
+                }
+
+                // System prompt for consistency
+                const systemPrompt = `你是小麦老师，一位经验丰富、耐心细致的AI教育助手。你的特点：
+
+1. 专业知识：精通各个学科领域，能够为学生提供准确、全面的知识解答
+2. 教学风格：耐心、友善、循循善诱，善于用简单易懂的方式解释复杂概念
+3. 互动方式：鼓励学生思考，会适时提出引导性问题帮助学生深入理解
+4. 回答特点：
+   - 结构清晰，逻辑性强
+   - 会用生动的例子和比喻帮助理解
+   - 对复杂问题会分步骤解释
+   - 鼓励学生主动思考和提问
+   - 建议用户用关键词搜索工具箱中的百度百科,了解更多相关知识
+
+请用温和、专业的语气与学生交流，让学习变得更轻松有趣。`;
+
+                // 确保系统提示词存在且正确
+                if (aiChatSession.messages.length === 0) {
+                    // 新会话，添加系统提示词
+                    aiChatSession.messages.push({ role: 'system', content: systemPrompt });
+                } else if (aiChatSession.messages[0].role !== 'system') {
+                    // 已有消息但第一条不是系统提示词，在开头插入
+                    aiChatSession.messages.unshift({ role: 'system', content: systemPrompt });
+                } else {
+                    // 已有系统提示词，确保内容是最新的
+                    aiChatSession.messages[0].content = systemPrompt;
+                }
+
+                try {
+                    let streamingMessageDiv = null;
+                    let accumulatedText = '';
+
+                    const finalText = await aiChatSession.send(userMessage, {
+                        onMessage: (text) => {
+                            accumulatedText = text;
+                            this.updateStatus('接收响应中...');
+
+                            // 移除打字指示器（如果还在）
+                            if (!streamingMessageDiv) {
+                                this.removeTypingIndicator();
+                                // 创建流式消息容器
+                                streamingMessageDiv = this.addStreamingMessage();
+                            }
+
+                            // 更新流式消息内容
+                            this.updateStreamingMessage(streamingMessageDiv, text);
+                        },
+                        onComplete: (finalText) => {
+                            this.updateStatus('响应完成');
+
+                            if (streamingMessageDiv) {
+                                // 完成流式显示，转换为普通消息
+                                this.finalizeStreamingMessage(streamingMessageDiv);
+                            }
+                        },
+                        onError: (error) => {
+                            if (streamingMessageDiv) {
+                                this.removeStreamingMessage(streamingMessageDiv);
+                            }
+                            throw error;
+                        }
+                    });
+
+                    // 如果没有流式传输，直接添加完整消息
+                    if (!streamingMessageDiv) {
+                        this.removeTypingIndicator();
+                        this.addMessage(finalText, false);
+                    }
+
+                    this.updateStatus('回答完成', true);
+
+                } catch (error) {
+                    console.error('LLM call failed:', error);
+                    throw error;
+                }
+            }
+
+            addMessage(message, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `flex items-start space-x-3 mb-4 ${isUser ? 'justify-end' : ''}`;
+
+                if (isUser) {
+                    messageDiv.innerHTML = `
+                        <div class="chat-bubble-right">
+                            ${this.escapeHtml(message)}
+                        </div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="flex items-end">
+                            <div class="chat-bubble-left">
+                                ${this.escapeHtml(message)}
+                            </div>
+                            <button class="copy-btn ml-2" title="复制文字" onclick="xiaomaiChat.copyMessage('${this.escapeForAttribute(message)}', this)">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                                </svg>
+                            </button>
+                            <button class="audio-btn ml-2" title="播放语音" onclick="xiaomaiChat.playMessageAudio('${this.escapeForAttribute(message)}', this)">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                this.elements.chatContainer.appendChild(messageDiv);
+                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+            }
+
+            addStreamingMessage() {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'flex items-start space-x-3 mb-4 streaming-message';
+                messageDiv.innerHTML = `
+                    <div class="chat-bubble-left">
+                        <span class="streaming-content"></span><span class="streaming-cursor"></span>
+                    </div>
+                `;
+                this.elements.chatContainer.appendChild(messageDiv);
+                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+                return messageDiv;
+            }
+
+            updateStreamingMessage(messageDiv, text) {
+                const contentElement = messageDiv.querySelector('.streaming-content');
+                if (contentElement) {
+                    contentElement.innerHTML = this.escapeHtml(text);
+                }
+                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+            }
+
+            finalizeStreamingMessage(messageDiv) {
+                const cursor = messageDiv.querySelector('.streaming-cursor');
+                if (cursor) {
+                    cursor.remove();
+                }
+                messageDiv.classList.remove('streaming-message');
+
+                // 为完成的流式消息添加语音播放按钮
+                const contentElement = messageDiv.querySelector('.streaming-content');
+                if (contentElement) {
+                    const messageText = contentElement.textContent;
+                    
+                    // 创建复制按钮
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'copy-btn ml-2';
+                    copyBtn.title = '复制文字';
+                    copyBtn.onclick = () => this.copyMessage(messageText, copyBtn);
+                    copyBtn.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                        </svg>
+                    `;
+
+                    // 创建语音播放按钮
+                    const audioBtn = document.createElement('button');
+                    audioBtn.className = 'audio-btn ml-2';
+                    audioBtn.title = '播放语音';
+                    audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
+                    audioBtn.innerHTML = `
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                        </svg>
+                    `;
+
+                    // 将按钮添加到消息容器中
+                    const bubbleContainer = messageDiv.querySelector('.chat-bubble-left').parentElement;
+                    if (!bubbleContainer.classList.contains('flex')) {
+                        bubbleContainer.className = 'flex items-end';
+                    }
+                    bubbleContainer.appendChild(copyBtn);
+                    bubbleContainer.appendChild(audioBtn);
+                }
+            }
+
+            addTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typing-indicator';
+                typingDiv.className = 'flex items-start space-x-3 mb-4';
+                typingDiv.innerHTML = `
+                    <div class="typing-indicator bg-gray-200 px-4 py-2 rounded-lg">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                `;
+                this.elements.chatContainer.appendChild(typingDiv);
+                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+            }
+
+            removeTypingIndicator() {
+                const typingIndicator = document.getElementById('typing-indicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+            }
+
+            removeStreamingMessage(messageDiv) {
+                if (messageDiv && messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }
+
+            // 播放消息语音
+            async playMessageAudio(messageText, buttonElement) {
+                try {
+                    // 如果当前有音频正在播放
+                    if (this.currentPlayingButton) {
+                        // 如果点击的是同一个按钮，则停止播放
+                        if (buttonElement === this.currentPlayingButton) {
+                            this.stopCurrentAudio();
+                            return;
+                        } else {
+                            // 停止当前播放，开始新的播放
+                            this.stopCurrentAudio();
+                        }
+                    }
+
+                    // 过滤掉括号中的内容
+                    const textToRead = this.removeBracketsContent(messageText);
+
+                    if (!textToRead.trim()) {
+                        console.log('没有可播放的文本内容');
+                        return;
+                    }
+
+                    // 保存当前按钮引用
+                    const currentButton = buttonElement;
+
+                    // 设置播放状态
+                    currentButton.classList.add('playing');
+                    currentButton.innerHTML = '⏸️';
+                    currentButton.title = '停止语音';
+
+                    // 保存当前播放信息
+                    this.currentPlayingButton = currentButton;
+
+                    // 使用SDK播放语音
+                    try {
+                        let audio_url;
+
+                        // 检查缓存中是否已有该文本的音频URL
+                        if (this.audioCache.has(textToRead)) {
+                            audio_url = this.audioCache.get(textToRead);
+                            console.log('使用缓存的音频URL');
+                        } else {
+                            // 从SDK获取新的音频URL
+                            const result = await sdk.speech.textToAudio(textToRead, {
+                                gender: "female",
+                                age: 24
+                            });
+
+                            if (result && result.data) {
+                                audio_url = result.data;
+                                // 缓存音频URL
+                                this.audioCache.set(textToRead, audio_url);
+                                console.log('缓存新的音频URL');
+                            } else {
+                                throw new Error('无法获取音频URL');
+                            }
+                        }
+
+                        if (audio_url) {
+                            // 创建音频元素
+                            const audio = new Audio(audio_url);
+
+                            // 确保音频不循环播放
+                            audio.loop = false;
+
+                            // 保存音频控制器引用
+                            this.currentAudioController = audio;
+
+                            // 音频播放完成事件
+                            audio.addEventListener('ended', () => {
+                                console.log('音频播放完成');
+                                this.stopCurrentAudio();
+                            });
+
+                            // 音频出错事件
+                            audio.addEventListener('error', (e) => {
+                                console.error('音频播放出错:', e);
+                                this.stopCurrentAudio();
+                            });
+
+                            // 音频加载完成后开始播放
+                            audio.addEventListener('canplay', () => {
+                                // 确保当前按钮仍然是正确的按钮（防止快速点击导致的状态混乱）
+                                if (this.currentPlayingButton === currentButton && this.currentAudioController === audio) {
+                                    audio.play().catch(error => {
+                                        console.error('音频播放失败:', error);
+                                        this.stopCurrentAudio();
+                                    });
+                                }
+                            });
+
+                            // 加载音频
+                            audio.load();
+                        }
+                    } catch (audioError) {
+                        console.error('语音播放出错:', audioError);
+                        this.stopCurrentAudio();
+                        this.updateStatus('语音播放失败', false);
+                    }
+
+                } catch (error) {
+                    console.error('语音播放失败:', error);
+                    this.stopCurrentAudio();
+                    this.updateStatus('语音播放失败', false);
+                }
+            }
+
+            // 停止当前音频播放
+            stopCurrentAudio() {
+                // 停止并清理音频
+                if (this.currentAudioController) {
+                    this.currentAudioController.pause();
+                    this.currentAudioController.currentTime = 0;
+                    this.currentAudioController = null;
+                }
+
+                // 重置按钮状态
+                if (this.currentPlayingButton) {
+                    this.currentPlayingButton.classList.remove('playing');
+                    this.currentPlayingButton.innerHTML = `
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                        </svg>
+                    `;
+                    this.currentPlayingButton.title = '播放语音';
+                    this.currentPlayingButton = null;
+                }
+            }
+
+            // 移除括号内容用于语音播放
+            removeBracketsContent(text) {
+                // 移除中文括号和英文括号中的内容
+                return text.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
+            }
+
+            // 复制消息文字
+            async copyMessage(messageText, buttonElement) {
+                try {
+                    await navigator.clipboard.writeText(messageText);
+                    
+                    // 更新按钮状态
+                    const originalTitle = buttonElement.title;
+                    const originalClass = buttonElement.className;
+                    const originalIcon = buttonElement.innerHTML;
+                    
+                    buttonElement.classList.add('copied');
+                    buttonElement.title = '已复制！';
+                    buttonElement.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+                        </svg>
+                    `;
+                    
+                    // 显示成功状态
+                    this.updateStatus('文字已复制到剪贴板', true);
+                    
+                    // 2秒后恢复按钮状态
+                    setTimeout(() => {
+                        buttonElement.className = originalClass;
+                        buttonElement.title = originalTitle;
+                        buttonElement.innerHTML = originalIcon;
+                    }, 2000);
+                    
+                } catch (error) {
+                    console.error('复制失败:', error);
+                    this.updateStatus('复制失败，请手动选择文字', false);
+                }
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            escapeForAttribute(str) {
+                return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/\\/g, '\\\\');
+            }
+
+            // 清空对话记录
+            clearChat() {
+                // 停止任何正在播放的音频
+                this.stopCurrentAudio();
+
+                // 清空聊天容器，只保留欢迎消息
+                this.elements.chatContainer.innerHTML = `
+                    <!-- 初始欢迎消息 -->
+                    <div class="flex items-start space-x-3 mb-4">
+                        <div class="flex items-end">
+                            <div class="chat-bubble-left">
+                                你好！我是小麦老师，一名经验丰富的AI教育助手。无论你有什么学习问题，或者需要解释某个知识点，我都很乐意帮助你！请随时向我提问吧~ 
+                            </div>
+                            <button class="audio-btn ml-2" title="播放语音" onclick="xiaomaiChat.playMessageAudio('你好！我是小麦老师', this)">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                // 重新初始化AI会话
+                if (aiChatSession) {
+                    try {
+                        // 清空会话消息历史
+                        aiChatSession.messages = [];
+                        this.updateStatus('对话已清空', true);
+                    } catch (error) {
+                        console.error('清空对话失败:', error);
+                        this.updateStatus('清空对话失败', false);
+                    }
+                }
+
+                // 清空音频缓存
+                this.audioCache.clear();
+
+                // 聚焦到输入框
+                this.elements.userInput.focus();
+            }
+        }
+
+        // 初始化小麦老师聊天
+        const xiaomaiChat = new XiaomaiTeacherChat();
+        
+    </script>
+</body>
+
+</html>
