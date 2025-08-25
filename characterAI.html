@@ -2038,7 +2038,8 @@
             for (const msg of chatHistoryToReplay) {
               if (msg.role === "user") {
                 // 添加用户消息到UI
-                this.addMessage(msg.content, true);
+                let message = msg.content.replace(/^\[.*?\]\s*/, "");
+                this.addMessage(message, true);
                 // 添加到游戏状态和AI会话
                 this.gameState.chatHistory.push({ role: "user", content: msg.content });
                 if (aiChatSession) {
@@ -2176,7 +2177,11 @@
       window.parent.postMessage({ type: "gameLoaded" }, "*");
 
       // Wait for several response with 200ms timeout, then start game
-      function checkStartGame(timeoutMs = 200) {
+      function checkStartGame(timeoutMs) {
+        if( !timeoutMs ) {
+            const urlParams = new URLSearchParams(window.location.search);
+            timeoutMs = (urlParams.get("parent") === "miniGameProxy") ? 3000 : 200;
+        }
         let gameStarted = false;
         const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
