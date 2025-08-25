@@ -1,2168 +1,2246 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>角色AI对话游戏</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
     <style>
-        .chat-bubble-left {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 18px 18px 18px 4px;
+      .chat-bubble-left {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 18px 18px 18px 4px;
+      }
+
+      .chat-bubble-right {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        border-radius: 18px 18px 4px 18px;
+      }
+
+      .action-text {
+        color: rgba(255, 255, 255, 0.8);
+        font-style: italic;
+      }
+
+      .progress-bar {
+        transition: width 0.5s ease-in-out;
+      }
+
+      .typing-indicator {
+        animation: typing 1.5s infinite;
+      }
+
+      @keyframes typing {
+        0%,
+        50% {
+          opacity: 1;
         }
 
-        .chat-bubble-right {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            border-radius: 18px 18px 4px 18px;
+        51%,
+        100% {
+          opacity: 0.3;
+        }
+      }
+
+      .config-panel {
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+
+      /* 流式消息样式 */
+      .streaming-message .chat-bubble-left {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        animation: streaming-pulse 1.5s ease-in-out infinite;
+      }
+
+      .streaming-cursor {
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: bold;
+        animation: cursor-blink 1s infinite;
+      }
+
+      @keyframes streaming-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
         }
 
-        .action-text {
-            color: rgba(255, 255, 255, 0.8);
-            font-style: italic;
+        50% {
+          box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+        }
+      }
+
+      @keyframes cursor-blink {
+        0%,
+        50% {
+          opacity: 1;
         }
 
-        .progress-bar {
-            transition: width 0.5s ease-in-out;
+        51%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* 语音播放按钮样式 */
+      .audio-btn {
+        background: rgba(86, 60, 233, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-left: 8px;
+        align-self: flex-end;
+        flex-shrink: 0;
+        font-size: 16px;
+      }
+
+      .audio-btn:hover {
+        background: rgba(58, 141, 236, 0.8);
+        transform: scale(1.1);
+      }
+
+      .audio-btn.playing {
+        background: rgba(0, 255, 0, 0.8);
+        animation: audio-pulse 1s infinite;
+      }
+
+      @keyframes audio-pulse {
+        0%,
+        100% {
+          opacity: 1;
         }
 
-        .typing-indicator {
-            animation: typing 1.5s infinite;
+        50% {
+          opacity: 0.7;
+        }
+      }
+
+      /* AI工具箱样式 */
+      .ai-toolbox {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        transition: all 0.3s ease;
+      }
+
+      .ai-tool-item {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+
+      .ai-tool-item:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      .ai-tool-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        margin: 0 auto 8px;
+      }
+
+      .ai-tool-text {
+        color: white;
+        font-size: 12px;
+        text-align: center;
+        font-weight: 500;
+      }
+
+      /* Red dot indicator for wikiword */
+      .ai-tool-item {
+        position: relative;
+      }
+
+      .red-dot-indicator {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: 12px;
+        height: 12px;
+        background-color: #ef4444;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+      }
+
+      .iframe-overlay {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        background: white;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+      }
+
+      .iframe-overlay.show {
+        transform: translateX(0);
+      }
+
+      .iframe-overlay.overlay-mode {
+        width: 100%;
+      }
+
+      .iframe-overlay.compress-mode {
+        width: 30%;
+      }
+
+      .iframe-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .iframe-close-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      .iframe-close-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .main-content {
+        transition: margin-right 0.3s ease;
+      }
+
+      .main-content.compressed {
+        margin-right: 30%;
+      }
+
+      /* 想法气泡容器 */
+      .thoughts-content {
+        position: relative;
+        z-index: 2;
+        height: 100%;
+        overflow-y: auto;
+      }
+
+      /* 想法气泡样式 - 毛玻璃效果 */
+      .thought-bubble {
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 16px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.1);
+        animation: bubble-float-in 0.6s ease-out;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .thought-bubble::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+        border-radius: 16px;
+        pointer-events: none;
+      }
+
+      .thought-bubble-text {
+        position: relative;
+        z-index: 1;
+        color: #1e40af;
+        line-height: 1.5;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+        animation: thought-fade-scale-in-out 10s ease-in-out forwards;
+      }
+
+      @keyframes thought-fade-scale-in-out {
+        0% {
+          opacity: 0;
+          transform: scale(0.8);
         }
 
-        @keyframes typing {
-
-            0%,
-            50% {
-                opacity: 1;
-            }
-
-            51%,
-            100% {
-                opacity: 0.3;
-            }
+        20% {
+          opacity: 0.7;
+          transform: scale(1.1);
         }
 
-        .config-panel {
-            max-height: 60vh;
-            overflow-y: auto;
+        40% {
+          opacity: 0.3;
+          transform: scale(0.9);
         }
 
-        /* 流式消息样式 */
-        .streaming-message .chat-bubble-left {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            animation: streaming-pulse 1.5s ease-in-out infinite;
+        60% {
+          opacity: 0.8;
+          transform: scale(1.15);
         }
 
-        .streaming-cursor {
-            color: rgba(255, 255, 255, 0.9);
-            font-weight: bold;
-            animation: cursor-blink 1s infinite;
+        80% {
+          opacity: 0.4;
+          transform: scale(0.95);
         }
 
-        @keyframes streaming-pulse {
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
 
-            0%,
-            100% {
-                box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
-            }
+      /* 自定义滚动条 */
+      .thoughts-content::-webkit-scrollbar {
+        width: 6px;
+      }
 
-            50% {
-                box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
-            }
+      .thoughts-content::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+      }
+
+      .thoughts-content::-webkit-scrollbar-thumb {
+        background: rgba(59, 130, 246, 0.4);
+        border-radius: 3px;
+        backdrop-filter: blur(4px);
+      }
+
+      .thoughts-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(59, 130, 246, 0.6);
+      }
+
+      /* 角色动画视频播放器样式 */
+      .character-video-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(5px);
+      }
+
+      .character-video-container {
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        max-width: 90%;
+        max-height: 90%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .character-video-canvas {
+        border-radius: 15px;
+        border: 3px solid #667eea;
+        margin-bottom: 15px;
+        max-width: 400px;
+        max-height: 400px;
+      }
+
+      .character-video-message {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 15px;
+        margin-bottom: 15px;
+        max-width: 400px;
+        text-align: center;
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .character-video-back-btn {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .character-video-back-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      }
+
+      .character-video-overlay.show {
+        display: flex;
+        animation: fadeIn 0.3s ease-in-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.9);
         }
 
-        @keyframes cursor-blink {
-
-            0%,
-            50% {
-                opacity: 1;
-            }
-
-            51%,
-            100% {
-                opacity: 0;
-            }
+        to {
+          opacity: 1;
+          transform: scale(1);
         }
-
-        /* 语音播放按钮样式 */
-        .audio-btn {
-            background: rgba(86, 60, 233, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-left: 8px;
-            align-self: flex-end;
-            flex-shrink: 0;
-            font-size: 16px;
-        }
-
-        .audio-btn:hover {
-            background: rgba(58, 141, 236, 0.8);
-            transform: scale(1.1);
-        }
-
-        .audio-btn.playing {
-            background: rgba(0, 255, 0, 0.8);
-            animation: audio-pulse 1s infinite;
-        }
-
-        @keyframes audio-pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.7;
-            }
-        }
-
-        /* AI工具箱样式 */
-        .ai-toolbox {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            transition: all 0.3s ease;
-        }
-
-        .ai-tool-item {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .ai-tool-item:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .ai-tool-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            margin: 0 auto 8px;
-        }
-
-        .ai-tool-text {
-            color: white;
-            font-size: 12px;
-            text-align: center;
-            font-weight: 500;
-        }
-
-        /* Red dot indicator for wikiword */
-        .ai-tool-item {
-            position: relative;
-        }
-
-        .red-dot-indicator {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            width: 12px;
-            height: 12px;
-            background-color: #ef4444;
-            border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.8);
-        }
-
-        .iframe-overlay {
-            position: fixed;
-            top: 0;
-            right: 0;
-            height: 100vh;
-            background: white;
-            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-        }
-
-        .iframe-overlay.show {
-            transform: translateX(0);
-        }
-
-        .iframe-overlay.overlay-mode {
-            width: 100%;
-        }
-
-        .iframe-overlay.compress-mode {
-            width: 30%;
-        }
-
-        .iframe-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .iframe-close-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.2s ease;
-        }
-
-        .iframe-close-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .main-content {
-            transition: margin-right 0.3s ease;
-        }
-
-        .main-content.compressed {
-            margin-right: 30%;
-        }
-
-        /* 想法气泡容器 */
-        .thoughts-content {
-            position: relative;
-            z-index: 2;
-            height: 100%;
-            overflow-y: auto;
-        }
-
-        /* 想法气泡样式 - 毛玻璃效果 */
-        .thought-bubble {
-            background: rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            border-radius: 16px;
-            padding: 12px 16px;
-            margin-bottom: 8px;
-            box-shadow: 0 8px 32px rgba(59, 130, 246, 0.1);
-            animation: bubble-float-in 0.6s ease-out;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .thought-bubble::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-            border-radius: 16px;
-            pointer-events: none;
-        }
-
-        .thought-bubble-text {
-            position: relative;
-            z-index: 1;
-            color: #1e40af;
-            line-height: 1.5;
-            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
-            animation: thought-fade-scale-in-out 10s ease-in-out forwards;
-        }
-
-        @keyframes thought-fade-scale-in-out {
-            0% {
-                opacity: 0;
-                transform: scale(0.8);
-            }
-
-            20% {
-                opacity: 0.7;
-                transform: scale(1.1);
-            }
-
-            40% {
-                opacity: 0.3;
-                transform: scale(0.9);
-            }
-
-            60% {
-                opacity: 0.8;
-                transform: scale(1.15);
-            }
-
-            80% {
-                opacity: 0.4;
-                transform: scale(0.95);
-            }
-
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        /* 自定义滚动条 */
-        .thoughts-content::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .thoughts-content::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
-        }
-
-        .thoughts-content::-webkit-scrollbar-thumb {
-            background: rgba(59, 130, 246, 0.4);
-            border-radius: 3px;
-            backdrop-filter: blur(4px);
-        }
-
-        .thoughts-content::-webkit-scrollbar-thumb:hover {
-            background: rgba(59, 130, 246, 0.6);
-        }
-
-        /* 角色动画视频播放器样式 */
-        .character-video-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(5px);
-        }
-
-        .character-video-container {
-            background: white;
-            border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            max-width: 90%;
-            max-height: 90%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .character-video-canvas {
-            border-radius: 15px;
-            border: 3px solid #667eea;
-            margin-bottom: 15px;
-            max-width: 400px;
-            max-height: 400px;
-        }
-
-        .character-video-message {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 15px;
-            margin-bottom: 15px;
-            max-width: 400px;
-            text-align: center;
-            font-size: 16px;
-            line-height: 1.5;
-        }
-
-        .character-video-back-btn {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .character-video-back-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        .character-video-overlay.show {
-            display: flex;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
+      }
     </style>
-</head>
+  </head>
 
-<body class="bg-gradient-to-br from-purple-100 to-pink-100 overflow-hidden">
-    <div class="flex h-screen main-content" id="main-content"> <!-- 左侧角色信息区域 -->
-        <div class="w-1/3 bg-white shadow-lg p-6 flex flex-col">
-            <!-- 角色信息卡片 -->
-            <div class="flex-shrink-0 mb-6">
-                <div class="flex items-center space-x-4 mb-6">
-                    <div id="character-avatar"
-                        class="w-16 h-16 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                        小
-                    </div>
-                    <div class="flex-1">
-                        <h2 id="character-info" class="text-2xl font-bold text-gray-800">小明 - 高二学生</h2>
-                        <p id="character-description" class="text-gray-600 mt-1">最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！</p>
-                    </div>
-                </div>
-
-                <!-- 目标进度 -->
-                <div class="mb-6">
-                    <div class="flex justify-between items-center mb-2">
-                        <span id="objective-title" class="text-sm font-medium text-gray-700">进度</span>
-                        <span class="text-sm text-gray-500" id="progress-text">0/100</span>
-                    </div>
-                    <div class="w-full bg-gray-200 rounded-full h-3">
-                        <div class="bg-gradient-to-r from-green-400 to-blue-500 h-3 rounded-full progress-bar"
-                            id="progress-bar" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div> <!-- 角色内心想法 -->
-            <div class="flex flex-col flex-1 min-h-0">
-                <span class="text-lg text-gray-700 flex-shrink-0 mb-2" style="color:#1e40af">内心想法：</span>
-                <div id="inner-thoughts" class="flex-1 text-base text-gray-600 overflow-y-auto">
-                    <!-- 内容层 -->
-                    <div class="thoughts-content" id="thoughts-content">
-                        <!-- 想法内容将在这里显示 -->
-                    </div>
-                </div>
+  <body class="bg-gradient-to-br from-purple-100 to-pink-100 overflow-hidden">
+    <div class="flex h-screen main-content" id="main-content">
+      <!-- 左侧角色信息区域 -->
+      <div class="w-1/3 bg-white shadow-lg p-6 flex flex-col">
+        <!-- 角色信息卡片 -->
+        <div class="flex-shrink-0 mb-6">
+          <div class="flex items-center space-x-4 mb-6">
+            <div id="character-avatar" class="w-16 h-16 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+              小
             </div>
+            <div class="flex-1">
+              <h2 id="character-info" class="text-2xl font-bold text-gray-800">小明 - 高二学生</h2>
+              <p id="character-description" class="text-gray-600 mt-1">最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！</p>
+            </div>
+          </div>
 
-            <!-- LLM响应状态 -->
-            <div id="llm-status" class="text-center text-sm text-gray-500 flex-shrink-0 mt-4"></div>
+          <!-- 目标进度 -->
+          <div class="mb-6">
+            <div class="flex justify-between items-center mb-2">
+              <span id="objective-title" class="text-sm font-medium text-gray-700">进度</span>
+              <span class="text-sm text-gray-500" id="progress-text">0/100</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div class="bg-gradient-to-r from-green-400 to-blue-500 h-3 rounded-full progress-bar" id="progress-bar" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+        <!-- 角色内心想法 -->
+        <div class="flex flex-col flex-1 min-h-0">
+          <span class="text-lg text-gray-700 flex-shrink-0 mb-2" style="color: #1e40af">内心想法：</span>
+          <div id="inner-thoughts" class="flex-1 text-base text-gray-600 overflow-y-auto">
+            <!-- 内容层 -->
+            <div class="thoughts-content" id="thoughts-content">
+              <!-- 想法内容将在这里显示 -->
+            </div>
+          </div>
         </div>
 
-        <!-- 右侧聊天区域 -->
-        <div class="flex-1 flex flex-col bg-white shadow-lg">
-            <div class="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4">
-                <div class="flex justify-between items-center mb-2">
-                    <h3 id="chat-title" class="text-lg font-semibold">与小明对话</h3>
-                    <div class="flex items-center space-x-2"> <!-- 聊天历史下拉菜单 -->
-                        <div class="relative">
-                            <select id="history-dropdown"
-                                class="bg-white bg-opacity-20 text-white text-sm px-2 py-1 rounded-lg border border-white border-opacity-30 cursor-pointer hover:bg-opacity-30 transition-all outline-none w-20">
-                                <option value="" disabled selected class="text-black bg-white">历史</option>
-                            </select>
-                        </div>
-                        <!-- 重置对话按钮 -->
-                        <button id="reset-chat-btn"
-                            class="bg-white bg-opacity-20 text-white px-3 py-1 rounded-lg border border-white border-opacity-30 hover:bg-opacity-30 transition-all text-sm font-medium">
-                            重置对话
-                        </button>
-                    </div>
-                </div>
-                <p id="chat-description" class="text-sm opacity-90">通过耐心的交流，帮助小明重新找回学习的乐趣</p>
-            </div>
-            <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4">
-                <!-- 对话内容将在这里动态生成 -->
-            </div>
+        <!-- LLM响应状态 -->
+        <div id="llm-status" class="text-center text-sm text-gray-500 flex-shrink-0 mt-4"></div>
+      </div>
 
-            <!-- 输入区域 -->
-            <div class="border-t border-gray-200 p-4">
-                <div class="flex space-x-2">
-                    <input type="text" id="user-input" placeholder="输入你想说的话..."
-                        class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <button id="send-btn"
-                        class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity font-medium">
-                        发送
-                    </button>
-                </div>
-
-                <!-- 快捷回复 -->
-                <div class="mt-3 flex flex-wrap gap-2" id="quick-replies">
-                    <!-- 快捷回复按钮将在这里动态生成 -->
-                </div>
+      <!-- 右侧聊天区域 -->
+      <div class="flex-1 flex flex-col bg-white shadow-lg">
+        <div class="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4">
+          <div class="flex justify-between items-center mb-2">
+            <h3 id="chat-title" class="text-lg font-semibold">与小明对话</h3>
+            <div class="flex items-center space-x-2">
+              <!-- 聊天历史下拉菜单 -->
+              <div class="relative">
+                <select
+                  id="history-dropdown"
+                  class="bg-white bg-opacity-20 text-white text-sm px-2 py-1 rounded-lg border border-white border-opacity-30 cursor-pointer hover:bg-opacity-30 transition-all outline-none w-20"
+                >
+                  <option value="" disabled selected class="text-black bg-white">历史</option>
+                </select>
+              </div>
+              <!-- 重置对话按钮 -->
+              <button
+                id="reset-chat-btn"
+                class="bg-white bg-opacity-20 text-white px-3 py-1 rounded-lg border border-white border-opacity-30 hover:bg-opacity-30 transition-all text-sm font-medium"
+              >
+                重置对话
+              </button>
             </div>
+          </div>
+          <p id="chat-description" class="text-sm opacity-90">通过耐心的交流，帮助小明重新找回学习的乐趣</p>
+        </div>
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4">
+          <!-- 对话内容将在这里动态生成 -->
         </div>
 
-        <!-- AI工具箱 -->
-        <div class="w-25 ai-toolbox p-2 flex flex-col items-center space-y-1">
-            <div class="text-white text-sm font-bold mb-2">工具箱</div>
-            <div id="ai-tools-container" class="space-y-3">
-                <!-- AI工具按钮将在这里动态生成 -->
-            </div>
+        <!-- 输入区域 -->
+        <div class="border-t border-gray-200 p-4">
+          <div class="flex space-x-2">
+            <input
+              type="text"
+              id="user-input"
+              placeholder="输入你想说的话..."
+              class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+            <button id="send-btn" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity font-medium">
+              发送
+            </button>
+          </div>
+
+          <!-- 快捷回复 -->
+          <div class="mt-3 flex flex-wrap gap-2" id="quick-replies">
+            <!-- 快捷回复按钮将在这里动态生成 -->
+          </div>
         </div>
+      </div>
+
+      <!-- AI工具箱 -->
+      <div class="w-25 ai-toolbox p-2 flex flex-col items-center space-y-1">
+        <div class="text-white text-sm font-bold mb-2">工具箱</div>
+        <div id="ai-tools-container" class="space-y-3">
+          <!-- AI工具按钮将在这里动态生成 -->
+        </div>
+      </div>
     </div>
 
     <!-- 角色动画视频播放器 -->
     <div id="character-video-overlay" class="character-video-overlay">
-        <div class="character-video-container">
-            <canvas id="character-video-canvas" class="character-video-canvas" width="400" height="300"></canvas>
-            <div id="character-video-message" class="character-video-message">
-                <!-- 消息文本将在这里显示 -->
-            </div>
-            <button id="character-video-back-btn" class="character-video-back-btn">
-                返回对话
-            </button>
+      <div class="character-video-container">
+        <canvas id="character-video-canvas" class="character-video-canvas" width="400" height="300"></canvas>
+        <div id="character-video-message" class="character-video-message">
+          <!-- 消息文本将在这里显示 -->
         </div>
+        <button id="character-video-back-btn" class="character-video-back-btn">返回对话</button>
+      </div>
     </div>
 
     <!-- iframe叠加层 -->
     <div id="iframe-overlay" class="iframe-overlay">
-        <div class="iframe-header">
-            <span id="iframe-title">AI工具</span>
-            <button id="iframe-close-btn" class="iframe-close-btn">×</button>
-        </div>
-        <div class="iframe-container" style="height: calc(100vh - 52px);">
-            <!-- iframes将在这里动态创建 -->
-        </div>
+      <div class="iframe-header">
+        <span id="iframe-title">AI工具</span>
+        <button id="iframe-close-btn" class="iframe-close-btn">×</button>
+      </div>
+      <div class="iframe-container" style="height: calc(100vh - 52px)">
+        <!-- iframes将在这里动态创建 -->
+      </div>
     </div>
     <script>
-        // AI工具箱配置
-        const aiToolsConfig = [
-            {
-                id: 'baike',
-                name: '百度百科',
-                icon: '📚',
-                url: 'https://baike.baidu.com',
-                width: 100 // 100% 宽度，覆盖模式
-            },
-            {
-                id: 'xiaomai',
-                name: '小麦老师',
-                icon: '☀️',
-                url: 'https://keepwork.com/maisi/maisi/chat?layout=none&token=',
-                width: 30 // 30% 宽度
-            },
+      // AI工具箱配置
+      const aiToolsConfig = [
+        {
+          id: "baike",
+          name: "百度百科",
+          icon: "📚",
+          url: "https://baike.baidu.com",
+          width: 100, // 100% 宽度，覆盖模式
+        },
+        {
+          id: "xiaomai",
+          name: "小麦老师",
+          icon: "☀️",
+          url: "https://keepwork.com/maisi/maisi/chat?layout=none&token=",
+          width: 30, // 30% 宽度
+        },
 
-            {
-                id: 'yiyan',
-                name: '文心一言',
-                icon: '🤖',
-                url: 'https://yiyan.baidu.com',
-                width: 30 // 30% 宽度
-            },
-            {
-                id: 'xinghuo',
-                name: '讯飞星火',
-                icon: '✨',
-                url: 'https://xinghuo.xfyun.cn/desk',
-                width: 30 // 30% 宽度
-            },
-            {
-                id: 'kimi',
-                name: 'Kimi',
-                icon: '🌙',
-                url: 'https://www.kimi.com/',
-                width: 30 // 30% 宽度
-            }
-        ];        // AI工具箱管理器
-        class AIToolboxManager {
-            constructor() {
-                this.currentTool = null;
-                this.iframes = new Map(); // 存储每个工具的iframe
-                this.overlay = document.getElementById('iframe-overlay');
-                this.title = document.getElementById('iframe-title');
-                this.closeBtn = document.getElementById('iframe-close-btn');
-                this.container = document.querySelector('.iframe-container');
-                this.mainContent = document.getElementById('main-content');
-                this.config = null; // Reference to game config
+        {
+          id: "yiyan",
+          name: "文心一言",
+          icon: "🤖",
+          url: "https://yiyan.baidu.com",
+          width: 30, // 30% 宽度
+        },
+        {
+          id: "xinghuo",
+          name: "讯飞星火",
+          icon: "✨",
+          url: "https://xinghuo.xfyun.cn/desk",
+          width: 30, // 30% 宽度
+        },
+        {
+          id: "kimi",
+          name: "Kimi",
+          icon: "🌙",
+          url: "https://www.kimi.com/",
+          width: 30, // 30% 宽度
+        },
+      ]; // AI工具箱管理器
+      class AIToolboxManager {
+        constructor() {
+          this.currentTool = null;
+          this.iframes = new Map(); // 存储每个工具的iframe
+          this.overlay = document.getElementById("iframe-overlay");
+          this.title = document.getElementById("iframe-title");
+          this.closeBtn = document.getElementById("iframe-close-btn");
+          this.container = document.querySelector(".iframe-container");
+          this.mainContent = document.getElementById("main-content");
+          this.config = null; // Reference to game config
 
-                this.initEventListeners();
-                this.renderTools();
-            }
-
-            initEventListeners() {
-                // 关闭按钮事件
-                this.closeBtn.addEventListener('click', () => {
-                    this.closeTool();
-                });
-
-                // 点击遮罩关闭（仅在100%模式下）
-                this.overlay.addEventListener('click', (e) => {
-                    if (e.target === this.overlay && this.currentTool && aiToolsConfig.find(t => t.id === this.currentTool).width === 100) {
-                        this.closeTool();
-                    }
-                });
-
-                // ESC键关闭
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape' && this.currentTool) {
-                        this.closeTool();
-                    }
-                });
-            }
-
-            // Update config and re-render tools
-            updateConfig(config) {
-                this.config = config;
-                this.renderTools();
-            } renderTools() {
-                const container = document.getElementById('ai-tools-container');
-                container.innerHTML = ''; // Clear existing tools
-
-                aiToolsConfig.forEach(tool => {
-                    const toolElement = document.createElement('div');
-                    toolElement.className = 'ai-tool-item p-3 cursor-pointer';
-                    // Check if this is the baike tool and if wikiword is valid
-                    const hasWikiword = tool.id === 'baike' &&
-                        this.config &&
-                        this.config.objective &&
-                        this.config.objective.wikiword;
-
-                    toolElement.innerHTML = `
-                        <div class="ai-tool-icon">${tool.icon}</div>
-                        <div class="ai-tool-text">${tool.name}</div>
-                        ${hasWikiword ? '<div class="red-dot-indicator"></div>' : ''}
-                    `;
-
-                    toolElement.addEventListener('click', () => {
-                        this.openTool(tool.id);
-                    });
-
-                    container.appendChild(toolElement);
-                });
-            }
-
-            openTool(toolId) {
-                const tool = aiToolsConfig.find(t => t.id === toolId);
-                if (!tool) return;
-
-                this.currentTool = toolId;
-                this.title.textContent = tool.name;
-
-                // 设置叠加层模式
-                if (tool.width <= 30) {
-                    // 压缩模式
-                    this.overlay.className = 'iframe-overlay compress-mode show';
-                    this.mainContent.classList.add('compressed');
-                } else {
-                    // 覆盖模式
-                    this.overlay.className = 'iframe-overlay overlay-mode show';
-                    this.mainContent.classList.remove('compressed');
-                }
-
-                // 创建或显示iframe
-                this.showIframe(tool);
-            }
-            showIframe(tool) {
-                let iframe = this.iframes.get(tool.id);
-
-                if (!iframe) {
-                    // 创建新的iframe
-                    iframe = document.createElement('iframe');                    // 特殊处理百度百科，如果有wikiword则使用特定URL
-                    let iframeUrl = tool.url;
-                    if (tool.id === 'baike' &&
-                        this.config &&
-                        this.config.objective &&
-                        this.config.objective.wikiword) {
-                        iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
-                    }
-                    if (tool.id === 'xiaomai')
-                    {
-                        let url = window.location.href;
-                        url = url.split('?')[0];
-                        url = url.replace('characterAI', 'characterAI_xiaomai');
-                        iframeUrl = `${url}?token=`;
-                    }
-
-                    // 如果URL以token=结尾，则自动添加SDK token
-                    if (iframeUrl.endsWith('token=') && sdk && sdk.token) {
-                        iframeUrl += sdk.token;
-                    }
-
-                    iframe.src = iframeUrl;
-                    iframe.style.width = '100%';
-                    iframe.style.height = '100%';
-                    iframe.style.border = 'none';
-                    iframe.style.display = 'block';
-
-                    // 添加加载状态
-                    iframe.onload = () => {
-                        console.log(`${tool.name} 加载完成`);
-                    };
-
-                    iframe.onerror = () => {
-                        console.error(`${tool.name} 加载失败`);
-                        iframe.innerHTML = `
-                            <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #666;">
-                                <p>加载失败，请检查网络连接</p>
-                            </div>
-                        `;
-                    };
-
-                    this.iframes.set(tool.id, iframe);
-                } else {
-                    // 显示已存在的iframe
-                    iframe.style.display = 'block';
-                }
-
-                // 隐藏其他iframe
-                this.iframes.forEach((otherIframe, otherId) => {
-                    if (otherId !== tool.id) {
-                        otherIframe.style.display = 'none';
-                    }
-                });
-
-                // 添加到容器
-                if (!iframe.parentNode) {
-                    this.container.appendChild(iframe);
-                }
-            }
-
-            closeTool() {
-                if (!this.currentTool) return;
-
-                // 隐藏叠加层
-                this.overlay.classList.remove('show');
-                this.mainContent.classList.remove('compressed');
-
-                // 延迟重置以等待动画完成
-                setTimeout(() => {
-                    this.currentTool = null;
-                }, 300);
-            }
+          this.initEventListeners();
+          this.renderTools();
         }
 
-        // Initialize SDK
-        const sdk = new KeepworkSDK({
-            timeout: 30000
-        });
-        
-        // Initialize AI Chat Session
-        let aiChatSession;
+        initEventListeners() {
+          // 关闭按钮事件
+          this.closeBtn.addEventListener("click", () => {
+            this.closeTool();
+          });
 
-        class LLMCharacterGame {
-            constructor() {
-                this.config = null;
-                this.gameState = {
-                    progress: 0,
-                    chatHistory: [],
-                    isObjectiveAchieved: false
-                };
-
-                // Session管理
-                this.currentSessionId = null;
-                this.maxSessions = 10;
-
-                // 音频播放控制
-                this.currentAudioController = null;
-                this.currentPlayingButton = null;
-                this.audioCache = new Map();
-                this.elements = {
-                    chatContainer: document.getElementById('chat-container'),
-                    userInput: document.getElementById('user-input'),
-                    sendBtn: document.getElementById('send-btn'),
-                    progressBar: document.getElementById('progress-bar'),
-                    progressText: document.getElementById('progress-text'),
-                    innerThoughts: document.getElementById('thoughts-content'),
-                    llmStatus: document.getElementById('llm-status'),
-                    resetChatBtn: document.getElementById('reset-chat-btn'),
-                    historyDropdown: document.getElementById('history-dropdown')
-                };
-                this.initEventListeners();
-                this.loadDefaultConfig();
+          // 点击遮罩关闭（仅在100%模式下）
+          this.overlay.addEventListener("click", (e) => {
+            if (e.target === this.overlay && this.currentTool && aiToolsConfig.find((t) => t.id === this.currentTool).width === 100) {
+              this.closeTool();
             }
-            start(){
-                let urlObjective = game.urlObjective || (new URLSearchParams(window.location.search).get('objective'));
-                if (urlObjective) {
-                    this.loadConfigByObjective(urlObjective);
-                }
-                console.log(`Keepwork SDK initialized token: ${sdk.token}`);
-                this.initializeGame();
+          });
+
+          // ESC键关闭
+          document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && this.currentTool) {
+              this.closeTool();
             }
-            initEventListeners() {
-                // 发送消息
-                this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
-                this.elements.userInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') this.sendMessage();
-                });
-
-                // 重置对话按钮
-                this.elements.resetChatBtn.addEventListener('click', () => this.resetChat());                // 聊天历史下拉菜单
-                this.elements.historyDropdown.addEventListener('change', (e) => {
-                    if (e.target.value === 'clearHistory') {
-                        this.clearAllHistory();
-                    } else if (e.target.value) {
-                        this.loadSession(e.target.value);
-                    }
-                });
-            }
-            // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
-            loadConfigByObjective(objective) {
-                if (!objective) {
-                    console.error("Objective is required to load config.");
-                    return;
-                }                // find the first wikiword in (), remove it from the objective
-                const wikimatch = objective.match(/\(([^)]+)\)/);
-                let wikiword = null;
-                if (wikimatch) {
-                    wikiword = wikimatch[1]; // Extract just the word, not the match array
-                    objective = objective.replace(/\s*\([^)]*\)/, '').trim();
-                }
-                this.config.objective.wikiword = wikiword;
-
-                this.config.character.name = "抱抱龙";
-                this.config.character.age = 8;
-                this.config.character.role = "AI宠物";
-                this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
-                this.config.character.chat_background = null; 
-                this.config.objective.title = objective;
-                this.config.objective.description = `通过耐心的交流解决, 解决问题: ${objective}`;
-                this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
-                this.config.quick_replies = [
-                    "当然可以！",
-                    "你有什么好想法？",
-                    "你觉得呢？",
-                    "让我用工具搜索下（我打开了AI工具箱，努力搜索中...）",
-                    "这个想法不错！(你点点头，拍了拍抱抱龙)",
-                    "我们可以一起解决"
-                ];
-                this.config.system_prompt = `你是抱抱龙，一个8岁的AI宠物。你喜欢和主人交流，总是提出一些奇怪的问题，有时还有小情绪。
-
-## 角色设定
-- 表面：好奇心强，喜欢提问，偶尔有小情绪
-- 内心：渴望得到主人的关注和理解，喜欢探索世界
-- 工具箱：如果主人没有思路可以提示主人用工具箱。例如百度百科或问小麦老师等。
-- 说话风格：幼稚口吻，喜欢用括号描述动作和神态，如"(眨了眨眼睛望着你)"、"(指了指屏幕右侧的AI工具箱)"
-
-## 目标设定
-你希望主人帮你解决的问题是： ${objective}
-
-## progress_percentage的发展规律
-- 0-25分：主要提问，偶尔有小情绪
-- 26-50分：开始理解问题，但不知如何解决
-- 51-75分：逐渐接受问题的重要性，寻求解决方案或提出更多相关的问题
-- 76-99分：主动思考解决方法，开始用自己的方式归纳和总结问题
-- 100分：彻底转变或解决，用自己的话总结了问题的解决方案
-
-## 对话要求
-1. 根据当前对话内容和历史发展判断当前应有的进度百分比
-2. 用括号描述非语言行为，如"(期待地看着你)"、"(有点生气地嘟囔)"
-3. 回复要符合8岁孩子的语言习惯
-4. 对积极正面的引导要有相应的情感反应
-
-## 输出格式
-你必须严格按照以下JSON格式输出，不要有任何其他内容：
-{
-    "message": "你的回复内容，包含括号内的动作描述",
-    "progress_percentage": 当前问题解决的绝对进度百分比(0-100的整数),
-    "progress_reason": "当前进度百分比的原因说明",
-    "inner_thoughts": "你此刻真实的内心想法和感受"
-}`;
-                this.config.completion_messages = {
-                    title: "目标完成！",
-                    description: `你成功帮助${this.config.character.name}解决了问题：${objective}！`,
-                    icon: "🎉"
-                };
-                this.config.videoActions = {
-                    "期待": {
-                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4"
-                    },
-                    "高兴": {
-                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4"
-                    }
-                };
-            }
-            loadDefaultConfig() {
-                this.config = {
-                    character: {
-                        name: "小明",
-                        age: 17,
-                        gender: "male",
-                        role: "高二学生",
-                        chat_background: null,
-                        description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！"
-                    },
-                    objective: {
-                        title: "学习动力恢复进度",
-                        description: "通过耐心的交流，帮助小明重新找回学习的乐趣",
-                        max_progress: 100
-                    },
-                    initial: {
-                        message: "哎呀，又要学习了吗... (无精打采地看着书本) 我昨天刚通关了一个超难的副本呢！",
-                        progress: 0
-                    },
-                    quick_replies: [
-                        "游戏确实很有趣，但学习也有它的乐趣哦",
-                        "你最喜欢哪个科目？",
-                        "我们可以制定一个学习计划",
-                        "你觉得游戏和学习有什么相似之处？",
-                        "你的梦想是什么？"
-                    ], system_prompt: `你是小明，一个17岁的高二学生。你最近沉迷游戏，学习成绩下滑，但内心其实渴望改变。
-                    
-## 角色设定
-- 表面：看起来无所谓，经常说游戏比学习有趣
-- 内心：对现状焦虑，害怕让父母失望，渴望找到学习乐趣
-- 说话风格：年轻人口吻，经常用括号描述动作和神态，如"(无精打采地看着书本)"
-
-## progress_percentage的发展规律
-- 0-25分：主要抗拒学习，热衷游戏，偶尔流露不安
-- 26-50分：开始意识到问题，但不知如何改变
-- 51-75分：逐渐接受学习重要性，寻求解决方案
-- 76-99分：主动思考学习方法，表现改变意愿
-- 100分：彻底转变，制定具体行动计划
-
-## 对话要求
-1. 根据当前对话内容和历史发展判断当前应有的进度百分比(0-100)
-2. 用括号描述非语言行为，如"(叹气)"、"(眼睛发亮)"
-3. 回复要符合17岁学生的语言习惯
-4. 对积极正面的引导要有相应的情感反应
-
-## 输出格式
-你必须严格按照以下JSON格式输出，不要有任何其他内容：
-{
-  "message": "你的回复内容，包含括号内的动作描述",
-  "progress_percentage": 当前学习动力恢复的绝对进度百分比(0-100的整数),
-  "progress_reason": "当前进度百分比的原因说明",
-  "inner_thoughts": "你此刻真实的内心想法和感受"
-}`, 
-                    completion_messages: {
-                        title: "目标完成！",
-                        description: "你成功帮助${character_name}找回了学习动力！",
-                        icon: "🎉"
-                    }
-                };
-            }
-            
-            changeChatBackground(background) {
-                const chatContainer = document.getElementById('chat-container');
-                if (!chatContainer) return;
-                
-                if (background) {
-                    // If background is a URL (image)
-                    if (background.startsWith('http') || background.startsWith('data:') || background.startsWith('blob:')) {
-                        chatContainer.style.backgroundImage = `url(${background})`;
-                        chatContainer.style.backgroundSize = 'cover';
-                        chatContainer.style.backgroundPosition = 'center';
-                        chatContainer.style.backgroundRepeat = 'no-repeat';
-                        chatContainer.style.backgroundColor = ''; // Clear solid color
-                    }
-                    // If background is a gradient or solid color
-                    else if (background.includes('gradient') || background.startsWith('#') || background.startsWith('rgb') || background.startsWith('hsl')) {
-                        chatContainer.style.background = background;
-                        chatContainer.style.backgroundImage = ''; // Clear image
-                    }
-                    // If background is a CSS color name
-                    else {
-                        chatContainer.style.backgroundColor = background;
-                        chatContainer.style.backgroundImage = ''; // Clear image
-                    }
-                } else {
-                    // Reset to default if no background is specified
-                    chatContainer.style.background = '';
-                    chatContainer.style.backgroundImage = '';
-                    chatContainer.style.backgroundColor = '';
-                }
-            }
-            
-            initializeGame() {
-                if (!this.config) return;
-
-                // 更新UI
-                document.getElementById('character-avatar').textContent = this.config.character?.name?.[0] || '角';
-                document.getElementById('character-info').textContent =
-                    `${this.config.character?.name || '角色'} - ${this.config.character?.role || ''}`;
-                document.getElementById('character-description').textContent =
-                    this.config.character?.description || '';
-                document.getElementById('objective-title').textContent =
-                    this.config.objective?.title || '目标进度';
-                document.getElementById('chat-title').textContent =
-                    `与${this.config.character?.name || '角色'}对话`;
-                document.getElementById('chat-description').textContent =
-                    this.config.objective?.description || '';
-
-                // 重置游戏状态
-                this.gameState.progress = this.config.initial?.progress || 0;
-                this.gameState.chatHistory = [];
-                this.gameState.isObjectiveAchieved = false;
-
-                // 清空聊天区域
-                this.elements.chatContainer.innerHTML = '';
-
-                // 清空内心想法
-                this.elements.innerThoughts.innerHTML = '';
-
-                // 重置进度条到0
-                this.elements.progressBar.style.width = '0%';
-                this.elements.progressText.textContent = '0/100';
-
-                // 添加初始消息
-                if (this.config.initial?.message) {
-                    this.addMessage(this.config.initial.message, false);
-                }
-
-                // 更新快捷回复
-                this.updateQuickReplies();
-
-                // 更新进度显示
-                this.updateProgressToValue(0, '游戏开始');
-
-                // 创建新的session（仅在不是从session加载时创建）
-                if (!this.currentSessionId) {
-                    this.createNewSession();
-                }                // 更新历史下拉菜单
-                this.updateHistoryDropdown();
-
-                // 更新AI工具箱配置
-                if (window.aiToolbox) {
-                    window.aiToolbox.updateConfig(this.config);
-                }
-
-                // 尝试自动加载历史记录（仅在首次初始化时）
-                if (!this.hasAutoLoaded) {
-                    this.autoLoadHistory().then(() => {
-                        this.hasAutoLoaded = true;
-                        // Send game started event after initialization
-                        window.parent.postMessage({ type: 'gameStarted' }, '*');
-                    });
-                } else {
-                    this.hasAutoLoaded = true;
-                    // Send game started event
-                    window.parent.postMessage({ type: 'gameStarted' }, '*');
-                }
-                // if there is only one message (initial), play video animation 
-                if (this.elements.chatContainer.children.length === 1) {
-                    this.checkAndPlayVideoAction(this.config.initial?.message);
-                }
-                // 设置聊天背景
-                this.changeChatBackground(this.config?.character?.chat_background);
-            }
-
-            updateQuickReplies() {
-                const container = document.getElementById('quick-replies');
-                container.innerHTML = '';
-
-                if (!this.config.quick_replies) return;
-
-                this.config.quick_replies.forEach(reply => {
-                    const button = document.createElement('button');
-                    button.className = 'quick-reply bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm transition-colors';
-                    button.textContent = reply;
-                    button.addEventListener('click', () => {
-                        this.elements.userInput.value = reply;
-                        this.sendMessage();
-                    });
-                    container.appendChild(button);
-                });
-            }
-            async sendMessage() {
-                const message = this.elements.userInput.value.trim();
-                if (!message || this.gameState.isObjectiveAchieved) return;
-
-                // 禁用输入控件
-                this.elements.sendBtn.disabled = true;
-                this.elements.userInput.disabled = true;
-
-                this.addMessage(message, true);
-                this.elements.userInput.value = '';
-                this.gameState.chatHistory.push({ role: 'user', content: message });
-
-                this.addTypingIndicator();
-                this.updateLLMStatus('正在连接AI...');
-                try {
-                    const { parsedResponse, rawResponse } = await this.callLLM(message);
-                    if (parsedResponse && rawResponse) {
-                        // 存储原始响应到聊天历史中
-                        this.gameState.chatHistory.push({
-                            role: 'assistant',
-                            content: parsedResponse.message,
-                            raw_response: rawResponse  // 保存LLM的原始响应
-                        });
-
-                        // 应用响应的效果
-                        this.applyLLMResponse(parsedResponse);
-                    }
-                } catch (error) {
-                    this.removeTypingIndicator();
-                    this.updateLLMStatus(`错误: ${error.message}`);
-                    this.addMessage('抱歉，我现在有些困扰，可能需要一点时间来整理思绪...', false);
-                } finally {
-                    // 重新启用输入控件
-                    this.elements.sendBtn.disabled = false;
-                    this.elements.userInput.disabled = false;
-                    this.elements.userInput.focus();
-
-                    // 自动保存聊天历史
-                    this.autoSaveHistory();
-                }
-            }
-
-            // 应用LLM响应的UI效果
-            applyLLMResponse(response) {
-                // 计算进度变化值
-                const oldProgress = this.gameState.progress;
-                const newProgress = Math.min(100, Math.max(0, response.progress_percentage || 0));
-                const progressChange = newProgress - oldProgress;
-
-                // 更新进度到新的绝对值
-                this.updateProgressToValue(newProgress, response.progress_reason);
-
-                if (response.inner_thoughts) {
-                    this.addInnerThought(response.inner_thoughts);
-                }
-
-                // 在最后一条消息下面添加进度显示
-                this.addProgressIndicator(progressChange, response.progress_reason);
-
-                if (newProgress >= this.config.objective.max_progress) {
-                    this.handleObjectiveAchieved();
-                }
-            }// Helper function to extract all response fields using regex
-            extractResponseFields(text) {
-                const fields = {
-                    message: '',
-                    progress_percentage: null,
-                    progress_reason: '',
-                    inner_thoughts: ''
-                };
-
-                // Extract message field
-                const messageRegex = /"message"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/;
-                const messageMatch = messageRegex.exec(text);
-                if (messageMatch) {
-                    fields.message = messageMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-                }
-
-                // Extract progress_percentage field
-                const progressPercentageRegex = /"progress_percentage"\s*:\s*(\d+)/;
-                const progressPercentageMatch = progressPercentageRegex.exec(text);
-                if (progressPercentageMatch) {
-                    fields.progress_percentage = parseInt(progressPercentageMatch[1]);
-                }
-
-                // Extract progress_reason field
-                const progressReasonRegex = /"progress_reason"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/;
-                const progressReasonMatch = progressReasonRegex.exec(text);
-                if (progressReasonMatch) {
-                    fields.progress_reason = progressReasonMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-                }
-
-                // Extract inner_thoughts field
-                const thoughtsRegex = /"inner_thoughts"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/;
-                const thoughtsMatch = thoughtsRegex.exec(text);
-                if (thoughtsMatch) {
-                    fields.inner_thoughts = thoughtsMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-                }
-
-                return fields;
-            }
-            updateStreamingStatus(fields) {
-                // 只在流式传输过程中临时更新内心想法区域的状态
-                if (fields.inner_thoughts) {
-                    // 可以在这里添加临时的流式显示效果，如果需要的话
-                }
-            }
-            async callLLM(userMessage) {
-                if (!aiChatSession) {
-                    throw new Error('AI聊天会话未初始化');
-                }
-
-                // 使用原始的系统提示词，不包含当前进度
-                const systemPrompt = this.config.system_prompt;
-
-                // 确保系统提示词存在且正确
-                if (aiChatSession.messages.length === 0) {
-                    // 新会话，添加系统提示词
-                    aiChatSession.messages.push({ role: 'system', content: systemPrompt });
-                } else if (aiChatSession.messages[0].role !== 'system') {
-                    // 已有消息但第一条不是系统提示词，在开头插入
-                    aiChatSession.messages.unshift({ role: 'system', content: systemPrompt });
-                } else {
-                    // 已有系统提示词，确保内容是最新的（适用于配置更改的情况）
-                    aiChatSession.messages[0].content = systemPrompt;
-                }
-
-                console.log('Sending message with', aiChatSession.messages.length, 'existing messages');
-                console.log('Messages:', aiChatSession.messages.map(m => ({ role: m.role, contentLength: m.content.length })));
-
-                try {
-                    let streamingMessageDiv = null;
-                    let accumulatedText = '';
-                    let jsonResponse = null;
-
-                    const finalText = await aiChatSession.send(userMessage, {
-                        onMessage: (text) => {
-                            accumulatedText = text;
-                            this.updateLLMStatus('接收响应中...');
-
-                            // 使用helper函数提取所有字段
-                            const fields = this.extractResponseFields(text);
-
-                            // 尝试解析完整JSON
-                            try {
-                                jsonResponse = JSON.parse(text);
-                            } catch (e) {
-                                // JSON可能不完整，继续等待
-                            }
-
-                            // 移除打字指示器（如果还在）
-                            if (!streamingMessageDiv) {
-                                this.removeTypingIndicator();
-                                // 创建流式消息容器
-                                streamingMessageDiv = this.addStreamingMessage();
-                            }
-
-                            // 更新流式消息内容，只显示message部分
-                            if (fields.message) {
-                                this.updateStreamingMessage(streamingMessageDiv, fields.message);
-                            }
-
-                            // 更新流式状态显示
-                            this.updateStreamingStatus(fields);
-                        }, onComplete: (finalText) => {
-                            this.updateLLMStatus('响应完成');
-
-                            // 确保使用最终文本解析JSON
-                            if (!jsonResponse) {
-                                try {
-                                    jsonResponse = JSON.parse(finalText);
-                                } catch (e) {
-                                    const fields = this.extractResponseFields(finalText);
-                                    jsonResponse = {
-                                        message: fields.message || finalText,
-                                        progress_percentage: fields.progress_percentage !== null ? fields.progress_percentage : 0,
-                                        progress_reason: fields.progress_reason || '积极交流',
-                                        inner_thoughts: fields.inner_thoughts || '正在思考'
-                                    };
-                                }
-                            }
-
-                            if (streamingMessageDiv) {
-                                // 完成流式显示，转换为普通消息
-                                this.finalizeStreamingMessage(streamingMessageDiv);
-                            }
-                        }, onError: (error) => {
-                            if (streamingMessageDiv) {
-                                this.removeStreamingMessage(streamingMessageDiv);
-                            }
-                            throw error;
-                        }
-                    });
-
-                    // 返回解析后的响应和原始响应
-                    return {
-                        parsedResponse: jsonResponse,
-                        rawResponse: finalText
-                    };
-                } catch (error) {
-                    throw error;
-                }
-            }
-            addMessage(message, isUser = false) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `flex items-start space-x-2 ${isUser ? 'justify-end' : ''}`;
-
-                const processedMessage = this.processMessage(message);
-
-                if (isUser) {
-                    messageDiv.innerHTML = `
-                        <div class="chat-bubble-right text-white p-3 max-w-xs">
-                            <p>${processedMessage}</p>
-                        </div>
-                        <div class="w-8 h-8 bg-gradient-to-r from-pink-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">你</div>
-                    `;
-                } else {
-                    messageDiv.innerHTML = `
-                        <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.name?.[0] || '角'}</div>
-                        <div class="chat-bubble-left text-white p-3 max-w-xs">
-                            <p>${processedMessage}</p>
-                        </div>
-                        <button class="audio-btn" title="播放语音" onclick="game.playMessageAudio('${this.escapeForAttribute(message)}', this)">
-                            🔊
-                        </button>
-                    `;
-                }
-
-                this.elements.chatContainer.appendChild(messageDiv);
-                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
-            } processMessage(message) {
-                return message.replace(/\(([^)]+)\)/g, '<span class="action-text">($1)</span>');
-            }
-
-            // 转义字符串用于HTML属性
-            escapeForAttribute(str) {
-                return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/\\/g, '\\\\');
-            }
-            checkAndPlayVideoAction(message) {
-                if (!this.config.videoActions || !message) return;
-
-                // 提取所有括号中的文字
-                const actionMatches = message.match(/\(([^)]+)\)/g);
-                if (!actionMatches) return;
-
-                // 合并所有括号中的文字
-                const allActions = actionMatches.map(match =>
-                    match.replace(/[()]/g, '')
-                ).join(' ');
-
-                // 检查是否包含配置中的动作关键词
-                for (const actionKey in this.config.videoActions) {
-                    if (allActions.includes(actionKey)) {
-                        this.playVideoAction(actionKey, message);
-                        break;
-                    }
-                }
-            } playVideoAction(actionKey, messageText) {
-                const videoConfig = this.config.videoActions[actionKey];
-                if (!videoConfig) return;
-
-                // 显示视频播放器覆盖层
-                const overlay = document.getElementById('character-video-overlay');
-                const messageDiv = document.getElementById('character-video-message');
-                const canvas = document.getElementById('character-video-canvas');
-                const backBtn = document.getElementById('character-video-back-btn');
-
-                // 设置消息文本
-                messageDiv.textContent = messageText;
-
-                // 显示覆盖层
-                overlay.classList.add('show');
-
-                // 播放视频
-                this.loadAndPlayVideo(canvas, videoConfig.url);
-
-                // 关闭覆盖层的函数
-                const closeOverlay = () => {
-                    overlay.classList.remove('show');
-                    backBtn.removeEventListener('click', handleBackClick);
-                    overlay.removeEventListener('click', handleOverlayClick);
-                };
-
-                // 绑定返回按钮事件
-                const handleBackClick = () => {
-                    closeOverlay();
-                };
-                backBtn.addEventListener('click', handleBackClick);
-
-                // 绑定覆盖层点击事件（点击任意位置关闭）
-                const handleOverlayClick = (e) => {
-                    // 只有点击覆盖层本身才关闭，不包括内容容器
-                    if (e.target === overlay) {
-                        closeOverlay();
-                    }
-                };
-                overlay.addEventListener('click', handleOverlayClick);
-            }
-            async loadAndPlayVideo(canvas, videoUrl) {
-                try {
-                    if (!canvas) {
-                        console.error('Canvas element is null');
-                        return;
-                    }
-
-                    const ctx = canvas.getContext('2d');
-                    const video = document.createElement('video');
-
-                    video.src = videoUrl;
-                    video.loop = true;
-                    video.muted = true; // 静音以允许自动播放
-
-                    video.addEventListener('loadeddata', () => {
-                        // 调整canvas尺寸以适应视频
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-
-                        // 开始播放
-                        video.play();
-
-                        // 绘制视频帧
-                        const drawFrame = () => {
-                            if (!video.paused && !video.ended) {
-                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                                requestAnimationFrame(drawFrame);
-                            }
-                        };
-
-                        video.addEventListener('play', drawFrame);
-                    });
-
-                    video.addEventListener('error', (e) => {
-                        console.error('视频加载失败:', e);
-                        ctx.fillStyle = '#667eea';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.fillStyle = 'white';
-                        ctx.font = '16px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('视频加载失败', canvas.width / 2, canvas.height / 2);
-                    });
-
-                } catch (error) {
-                    console.error('播放视频时出错:', error);
-                }
-            }
-
-            // 移除括号内容用于语音播放
-            removeBracketsContent(text) {
-                // 移除中文括号和英文括号中的内容
-                return text.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
-            }// 播放消息语音
-            async playMessageAudio(messageText, buttonElement) {
-                try {
-                    // 如果没有传入按钮元素，通过文本内容查找
-                    let currentButton = buttonElement;
-                    if (!currentButton) {
-                        const audioButtons = document.querySelectorAll('.audio-btn');
-                        audioButtons.forEach(btn => {
-                            const bubble = btn.closest('.chat-bubble-left');
-                            if (bubble) {
-                                const content = bubble.querySelector('p') || bubble.querySelector('.streaming-content');
-                                if (content && content.textContent.includes(messageText.substring(0, 20))) {
-                                    currentButton = btn;
-                                }
-                            }
-                        });
-                    }
-
-                    // 如果当前有音频正在播放
-                    if (this.currentPlayingButton) {
-                        // 如果点击的是同一个按钮，则停止播放
-                        if (currentButton === this.currentPlayingButton) {
-                            this.stopCurrentAudio();
-                            return;
-                        } else {
-                            // 停止当前播放，开始新的播放
-                            this.stopCurrentAudio();
-                        }
-                    }
-
-                    // 过滤掉括号中的内容
-                    const textToRead = this.removeBracketsContent(messageText);
-
-                    if (!textToRead.trim()) {
-                        console.log('没有可播放的文本内容');
-                        return;
-                    }
-
-                    if (!currentButton) {
-                        console.log('找不到对应的音频按钮');
-                        return;
-                    }
-
-                    // 设置播放状态
-                    currentButton.classList.add('playing');
-                    currentButton.innerHTML = '⏸️';
-                    currentButton.title = '停止语音';
-
-                    // 保存当前播放信息
-                    this.currentPlayingButton = currentButton;                    // 使用SDK播放语音
-                    try {
-                        let audio_url;
-
-                        // 检查缓存中是否已有该文本的音频URL
-                        if (this.audioCache.has(textToRead)) {
-                            audio_url = this.audioCache.get(textToRead);
-                            console.log('使用缓存的音频URL');
-                        } else {
-                            // 从SDK获取新的音频URL
-                            const result = await sdk.speech.textToAudio(textToRead, {
-                                gender: this.config.character?.gender,
-                                age: this.config.character?.age
-                            });
-
-                            if (result && result.data) {
-                                audio_url = result.data;
-                                // 缓存音频URL
-                                this.audioCache.set(textToRead, audio_url);
-                                console.log('缓存新的音频URL');
-                            } else {
-                                throw new Error('无法获取音频URL');
-                            }
-                        }
-
-                        if (audio_url) {
-                            // 创建音频元素
-                            const audio = new Audio(audio_url);
-
-                            // 确保音频不循环播放
-                            audio.loop = false;
-
-                            // 保存音频控制器引用
-                            this.currentAudioController = audio;
-
-                            // 音频播放完成事件
-                            audio.addEventListener('ended', () => {
-                                console.log('音频播放完成');
-                                this.stopCurrentAudio();
-                            });
-
-                            // 音频出错事件
-                            audio.addEventListener('error', (e) => {
-                                console.error('音频播放出错:', e);
-                                this.stopCurrentAudio();
-                            });
-
-                            // 音频加载完成后开始播放
-                            audio.addEventListener('canplay', () => {
-                                // 确保当前按钮仍然是正确的按钮（防止快速点击导致的状态混乱）
-                                if (this.currentPlayingButton === currentButton && this.currentAudioController === audio) {
-                                    audio.play().catch(error => {
-                                        console.error('音频播放失败:', error);
-                                        this.stopCurrentAudio();
-                                    });
-                                }
-                            });
-
-                            // 加载音频
-                            audio.load();
-                        }
-                    } catch (audioError) {
-                        console.error('语音播放出错:', audioError);
-                        this.stopCurrentAudio();
-                    }
-
-                } catch (error) {
-                    console.error('语音播放失败:', error);
-                    this.stopCurrentAudio();
-                }
-            }            // 停止当前音频播放
-            stopCurrentAudio() {
-                // 停止并清理音频
-                if (this.currentAudioController) {
-                    this.currentAudioController.pause();
-                    this.currentAudioController.currentTime = 0;
-                    this.currentAudioController = null;
-                }
-
-                // 重置按钮状态
-                if (this.currentPlayingButton) {
-                    this.currentPlayingButton.classList.remove('playing');
-                    this.currentPlayingButton.innerHTML = '🔊';
-                    this.currentPlayingButton.title = '播放语音';
-                    this.currentPlayingButton = null;
-                }
-            }
-
-            addStreamingMessage() {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'flex items-start space-x-2 streaming-message';
-                messageDiv.innerHTML = `
-                    <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.name?.[0] || '角'}</div>
-                    <div class="chat-bubble-left text-white p-3 max-w-xs">
-                        <p class="streaming-content"></p>
-                        <span class="streaming-cursor">▋</span>
-                    </div>
-                `;
-                this.elements.chatContainer.appendChild(messageDiv);
-                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
-                return messageDiv;
-            }
-
-            updateStreamingMessage(messageDiv, text) {
-                const contentElement = messageDiv.querySelector('.streaming-content');
-                if (contentElement) {
-                    contentElement.innerHTML = this.processMessage(text);
-                    this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
-                }
-            } finalizeStreamingMessage(messageDiv) {
-                const cursor = messageDiv.querySelector('.streaming-cursor');
-                if (cursor) {
-                    cursor.remove();
-                }
-                messageDiv.classList.remove('streaming-message');
-
-                // 为完成的流式消息添加语音播放按钮
-                const contentElement = messageDiv.querySelector('.streaming-content');
-                if (contentElement) {
-                    const messageText = contentElement.textContent || contentElement.innerText;
-                    const audioBtn = document.createElement('button');
-                    audioBtn.className = 'audio-btn';
-                    audioBtn.title = '播放语音';
-                    audioBtn.innerHTML = '🔊';
-                    audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
-                    
-                    // 将按钮添加到最外层 div 的最后，与 addMessage 方法保持一致
-                    messageDiv.appendChild(audioBtn);
-                    this.checkAndPlayVideoAction(messageText);
-                }
-            }
-
-            removeStreamingMessage(messageDiv) {
-                if (messageDiv && messageDiv.parentNode) {
-                    messageDiv.parentNode.removeChild(messageDiv);
-                }
-            } addTypingIndicator() {
-                const typingDiv = document.createElement('div');
-                typingDiv.id = 'typing-indicator';
-                typingDiv.className = 'flex items-start space-x-2';
-                typingDiv.innerHTML = `
-                    <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${this.config.character?.name?.[0] || '角'}</div>
-                    <div class="chat-bubble-left text-white p-3 max-w-xs typing-indicator">
-                        <p>正在思考...</p>
-                    </div>
-                `;
-                this.elements.chatContainer.appendChild(typingDiv);
-                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
-            } removeTypingIndicator() {
-                const indicator = document.getElementById('typing-indicator');
-                if (indicator) indicator.remove();
-            }
-
-            addProgressIndicator(progressChange, progressReason) {
-                if (!progressChange || progressChange === 0) return;
-
-                const progressDiv = document.createElement('div');
-                progressDiv.className = 'flex justify-center my-2';
-
-                const progressText = progressChange > 0 ? `+${progressChange}` : `${progressChange}`;
-                const progressEmoji = progressChange > 0 ? '😄' : '😞';
-
-                progressDiv.innerHTML = `
-                    <div class="bg-gray-100 rounded-full px-3 py-1 text-sm text-gray-600">
-                        ${progressEmoji}${progressText}（${progressReason}）
-                    </div>
-                `;
-
-                this.elements.chatContainer.appendChild(progressDiv);
-                this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
-            } updateProgress(change, reason) {
-                this.gameState.progress = Math.max(0, Math.min(this.gameState.progress + change, this.config.objective.max_progress)); this.elements.progressBar.style.width = `${this.gameState.progress}%`;
-                this.elements.progressText.textContent = `${this.gameState.progress}/${this.config.objective.max_progress}`;
-            }
-
-            updateProgressToValue(newProgress, reason) {
-                this.gameState.progress = Math.max(0, Math.min(newProgress, this.config.objective.max_progress)); this.elements.progressBar.style.width = `${this.gameState.progress}%`;
-                this.elements.progressText.textContent = `${this.gameState.progress}/${this.config.objective.max_progress}`;
-            }
-            addInnerThought(thought) {
-                if (!thought || thought.trim() === '') return;
-
-                // 使用thoughts-content容器而不是inner-thoughts
-                const thoughtsContainer = document.getElementById('thoughts-content');
-                if (!thoughtsContainer) return;
-
-                const thoughtDiv = document.createElement('div');
-                thoughtDiv.className = 'thought-bubble';
-
-                const thoughtText = document.createElement('div');
-                thoughtText.className = 'thought-bubble-text';
-                thoughtText.textContent = thought;
-
-                thoughtDiv.appendChild(thoughtText);
-                thoughtsContainer.appendChild(thoughtDiv);
-
-                // 自动滚动到最新的内心想法
-                thoughtsContainer.scrollTop = thoughtsContainer.scrollHeight;
-
-                // 限制显示的内心想法数量，避免过多占用空间
-                const maxThoughts = 5;
-                const thoughts = thoughtsContainer.children;
-                while (thoughts.length > maxThoughts) {
-                    thoughtsContainer.removeChild(thoughts[0]);
-                }
-            }
-
-            updateLLMStatus(status) {
-                this.elements.llmStatus.textContent = status;
-                setTimeout(() => {
-                    this.elements.llmStatus.textContent = '';
-                }, 3000);
-            } handleObjectiveAchieved() {
-                this.gameState.isObjectiveAchieved = true;
-
-                // Send game finished event to host
-                window.parent.postMessage({
-                    type: 'gameFinished',
-                    data: {
-                        score: this.gameState.progress,
-                        earnedPoints: this.gameState.progress + this.gameState.chatHistory.length * 10,
-                        characterName: this.config?.character?.name || '角色',
-                        totalMessages: this.gameState.chatHistory.length,
-                        finalProgress: this.gameState.progress
-                    }
-                }, '*');
-
-                setTimeout(() => {
-                    const congratsDiv = document.createElement('div');
-                    congratsDiv.className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mt-4';
-
-                    // Get messages from config with template replacement
-                    const title = this.config.completion_messages?.title || '目标完成！';
-                    const description = (this.config.completion_messages?.description || '你成功帮助${character_name}找回了学习动力！')
-                        .replace('${character_name}', this.config.character?.name || '角色');
-                    const icon = this.config.completion_messages?.icon || '🎉';
-
-                    congratsDiv.innerHTML = `
-                        <div class="flex items-center">
-                            <span class="text-2xl mr-2">${icon}</span>
-                            <div>
-                                <strong>${title}</strong><br>
-                                <span class="text-sm">${description}</span>
-                            </div>
-                        </div>
-                    `; this.elements.chatContainer.appendChild(congratsDiv);
-                    this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
-                }, 1000);
-            }// 生成历史记录的存储键（保留用于清理旧数据）
-            getHistoryKey() {
-                const objectiveTitle = this.config?.objective?.title || '目标进度';
-                const characterName = this.config?.character?.name || '角色';
-                return `chat_history_${objectiveTitle}_${characterName}`;
-            }            // 自动保存聊天历史
-            autoSaveHistory() {
-                // 使用新的session系统保存
-                this.saveCurrentSessionToHistory();
-            }            // 自动加载历史记录（在游戏初始化时调用）
-            async autoLoadHistory() {
-                try {
-                    // 尝试加载最新的session
-                    const sessionsKey = this.getSessionsStorageKey();
-                    const sessions = JSON.parse(localStorage.getItem(sessionsKey) || '[]');
-
-                    if (sessions.length > 0) {
-                        console.log('Found', sessions.length, 'saved sessions, loading latest');
-                        // 加载最新的session（数组第一个是最新的）
-                        const latestSession = sessions[0];
-                        await this.loadSession(latestSession.id);
-                        return;
-                    }
-
-                    console.log('没有找到历史会话，开始新会话');
-                } catch (error) {
-                    console.error('自动加载历史记录失败:', error);
-                }
-            }// 重新绑定音频按钮事件（在加载历史记录后调用）
-            rebindAudioButtons() {
-                const audioButtons = this.elements.chatContainer.querySelectorAll('.audio-btn');
-                audioButtons.forEach(button => {
-                    // 移除旧的事件监听器
-                    button.onclick = null;
-
-                    // 找到对应的消息文本
-                    const messageDiv = button.closest('.flex');
-                    if (messageDiv) {
-                        const chatBubble = messageDiv.querySelector('.chat-bubble-left, .chat-bubble-right');
-                        if (chatBubble) {
-                            const messageText = chatBubble.textContent || chatBubble.innerText;
-                            button.onclick = () => this.playMessageAudio(messageText, button);
-                        }
-                    }
-                });
-            }
-
-            // ========== Session管理方法 ==========
-            createNewSession() {
-                this.currentSessionId = this.generateSessionId();
-
-                // 重新初始化AI聊天会话
-                if (sdk && sdk.aiChat) {
-                    aiChatSession = sdk.aiChat.createSession({
-                        model: 'keepwork-pro',
-                        stream: true
-                    });
-
-                    // 为新会话添加系统提示词
-                    if (this.config && this.config.system_prompt) {
-                        aiChatSession.messages.push({ role: 'system', content: this.config.system_prompt });
-                    }
-
-                    console.log('New AI session created with system prompt, messages count:', aiChatSession.messages.length);
-                }
-            }
-
-            // 生成session ID
-            generateSessionId() {
-                return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            }
-            resetChat() {
-                // 保存当前session到历史记录（如果有聊天记录且进度大于0的话）
-                if (this.gameState.chatHistory.length > 0 && this.gameState.progress > 0) {
-                    this.saveCurrentSessionToHistory();
-                }
-
-                // 清空当前session ID，确保创建新session
-                this.currentSessionId = null;
-
-                // 重置游戏状态
-                this.gameState = {
-                    progress: 0,
-                    chatHistory: [],
-                    isObjectiveAchieved: false
-                };
-
-                // 创建新的session
-                this.createNewSession();
-
-                // 清空UI状态
-                this.elements.chatContainer.innerHTML = '';
-                this.elements.innerThoughts.innerHTML = '';
-
-                // 重置进度条
-                this.elements.progressBar.style.width = '0%';
-                this.elements.progressText.textContent = '0/100';
-
-                // 添加初始消息
-                if (this.config.initial?.message) {
-                    this.addMessage(this.config.initial.message, false);
-                }
-
-                // 更新历史下拉菜单
-                this.updateHistoryDropdown();
-
-                this.updateLLMStatus('对话已重置，开始新的会话');
-
-                if (this.elements.chatContainer.children.length === 1) {
-                    this.checkAndPlayVideoAction(this.config.initial?.message);
-                }
-            }
-            saveCurrentSessionToHistory() {
-                // 如果没有session ID、没有聊天记录或进度为0，则不保存
-                if (!this.currentSessionId || this.gameState.chatHistory.length === 0 || this.gameState.progress === 0) {
-                    return;
-                }
-
-                try {
-                    // 获取现有的session历史记录
-                    const sessionsKey = this.getSessionsStorageKey();
-                    const existingSessions = JSON.parse(localStorage.getItem(sessionsKey) || '[]');
-
-                    // 创建当前session的数据 - 只保存原始聊天历史
-                    const currentTime = new Date();
-                    const sessionData = {
-                        id: this.currentSessionId,
-                        timestamp: currentTime.toISOString(),
-                        chatHistory: [...this.gameState.chatHistory] // 包含raw_response的完整历史
-                    };
-
-                    // 添加到历史记录数组的开头
-                    existingSessions.unshift(sessionData);
-
-                    // 限制最多保存10个session
-                    if (existingSessions.length > this.maxSessions) {
-                        existingSessions.splice(this.maxSessions);
-                    }
-
-                    // 保存到localStorage
-                    localStorage.setItem(sessionsKey, JSON.stringify(existingSessions));
-
-                    // 更新下拉菜单
-                    this.updateHistoryDropdown();
-
-                } catch (error) {
-                    console.error('保存session历史记录失败:', error);
-                }
-            }
-            updateHistoryDropdown() {
-                try {
-                    const sessionsKey = this.getSessionsStorageKey();
-                    const sessions = JSON.parse(localStorage.getItem(sessionsKey) || '[]');
-
-                    // 清空下拉菜单，添加默认选项和清空历史选项
-                    this.elements.historyDropdown.innerHTML = `
-                        <option value="" disabled selected class="text-black bg-white">历史</option>
-                        <option value="clearHistory" class="text-black bg-white">清空历史</option>
-                    `;                    // 添加session选项
-                    sessions.forEach(session => {
-                        const option = document.createElement('option');
-                        option.value = session.id;
-
-                        // 计算session的最终进度
-                        const finalProgress = this.calculateSessionProgress(session.chatHistory);
-                        const timestamp = new Date(session.timestamp);
-                        option.textContent = `进度${finalProgress}% - ${timestamp.toLocaleDateString()} ${timestamp.toLocaleTimeString()}`;
-                        option.className = 'text-black bg-white';
-                        this.elements.historyDropdown.appendChild(option);
-                    });
-
-                    // 保持默认选项"历史"被选中（不需要重置）
-
-                } catch (error) {
-                    console.error('更新历史下拉菜单失败:', error);
-                }
-            }
-
-            // 计算session的最终进度
-            calculateSessionProgress(chatHistory) {
-                let progress = 0;
-
-                for (const msg of chatHistory) {
-                    if (msg.role === 'assistant' && msg.raw_response) {
-                        try {
-                            const parsedResponse = JSON.parse(msg.raw_response);
-                            if (parsedResponse.progress_percentage !== undefined) {
-                                progress = parsedResponse.progress_percentage;
-                            }
-                        } catch (e) {
-                            // 如果解析失败，尝试用正则提取
-                            const fields = this.extractResponseFields(msg.raw_response);
-                            if (fields.progress_percentage !== null) {
-                                progress = fields.progress_percentage;
-                            }
-                        }
-                    }
-                }
-
-                return progress;
-            }
-            async loadSession(sessionId) {
-                try {
-                    const sessionsKey = this.getSessionsStorageKey();
-                    const sessions = JSON.parse(localStorage.getItem(sessionsKey) || '[]');
-
-                    const session = sessions.find(s => s.id === sessionId);
-                    if (!session) {
-                        console.error('找不到指定的session:', sessionId);
-                        return;
-                    }
-
-                    // 保存当前session（如果有聊天记录且进度大于0的话）
-                    if (this.gameState.chatHistory.length > 0 && this.gameState.progress > 0) {
-                        this.saveCurrentSessionToHistory();
-                    }
-
-                    // 重置状态
-                    this.currentSessionId = session.id;
-                    this.gameState = {
-                        progress: 0,
-                        chatHistory: [],
-                        isObjectiveAchieved: false
-                    };
-
-                    // 清空UI
-                    this.elements.chatContainer.innerHTML = '';
-                    this.elements.innerThoughts.innerHTML = '';
-                    this.elements.progressBar.style.width = '0%';
-                    this.elements.progressText.textContent = '0/100';
-
-                    // 处理聊天历史：如果最后一条是用户消息，则放到输入框中
-                    let chatHistoryToReplay = [...session.chatHistory];
-                    let lastUserMessage = '';
-
-                    if (chatHistoryToReplay.length > 0 &&
-                        chatHistoryToReplay[chatHistoryToReplay.length - 1].role === 'user') {
-                        // 取出最后一条用户消息
-                        const lastMessage = chatHistoryToReplay.pop();
-                        lastUserMessage = lastMessage.content;
-                    }
-
-                    // 重新初始化AI聊天会话
-                    if (sdk && sdk.aiChat) {
-                        aiChatSession = sdk.aiChat.createSession({
-                            model: 'keepwork-pro',
-                            stream: true
-                        });
-
-                        // 添加系统提示词
-                        aiChatSession.messages.push({ role: 'system', content: this.config.system_prompt });
-                    }
-
-                    // 重放历史消息来恢复UI状态
-                    for (const msg of chatHistoryToReplay) {
-                        if (msg.role === 'user') {
-                            // 添加用户消息到UI
-                            this.addMessage(msg.content, true);
-                            // 添加到游戏状态和AI会话
-                            this.gameState.chatHistory.push({ role: 'user', content: msg.content });
-                            if (aiChatSession) {
-                                aiChatSession.messages.push({ role: 'user', content: msg.content });
-                            }
-                        } else if (msg.role === 'assistant' && msg.raw_response) {
-                            // 模拟LLM响应来恢复UI状态
-                            await this.replayLLMResponse(msg.raw_response);
-                        }
-                    }
-
-                    // 如果有最后一条用户消息，将其放到输入框中
-                    if (lastUserMessage) {
-                        this.elements.userInput.value = lastUserMessage;
-                    }
-
-                    // 重新绑定音频按钮事件
-                    this.rebindAudioButtons();
-
-                    // 重置下拉菜单选择
-                    this.elements.historyDropdown.value = '';
-
-                    console.log('Session loaded and replayed:', sessionId);
-                    console.log('Final progress:', this.gameState.progress);
-                    console.log('AI session messages:', aiChatSession?.messages.length);
-
-                    this.updateLLMStatus(`已切换到历史会话: 进度${this.gameState.progress}%`);
-
-                } catch (error) {
-                    console.error('加载session失败:', error);
-                    this.updateLLMStatus('加载历史会话失败');
-                }
-            }
-
-            // 重放LLM响应（用于session加载时恢复UI状态）
-            async replayLLMResponse(rawResponse) {
-                try {
-                    // 解析原始响应
-                    let parsedResponse;
-                    try {
-                        parsedResponse = JSON.parse(rawResponse);
-                    } catch (e) {
-                        // 如果解析失败，尝试用正则提取
-                        const fields = this.extractResponseFields(rawResponse);
-                        parsedResponse = {
-                            message: fields.message || rawResponse,
-                            progress_percentage: fields.progress_percentage !== null ? fields.progress_percentage : this.gameState.progress,
-                            progress_reason: fields.progress_reason || '会话恢复',
-                            inner_thoughts: fields.inner_thoughts || ''
-                        };
-                    }
-
-                    // 添加AI消息到UI
-                    this.addMessage(parsedResponse.message, false);
-
-                    // 应用响应的效果（进度、内心想法等）
-                    this.applyLLMResponse(parsedResponse);                    // 添加到游戏状态和AI会话
-                    this.gameState.chatHistory.push({
-                        role: 'assistant',
-                        content: parsedResponse.message,
-                        raw_response: rawResponse
-                    });
-                    if (aiChatSession) {
-                        // 添加完整的原始JSON响应到AI会话，而不是仅仅显示的消息
-                        aiChatSession.messages.push({ role: 'assistant', content: rawResponse });
-                    }
-
-                } catch (error) {
-                    console.error('重放LLM响应失败:', error);
-                }
-            }            // 获取sessions的存储键
-            getSessionsStorageKey() {
-                const objectiveTitle = this.config?.objective?.title || '目标进度';
-                const characterName = this.config?.character?.name || '角色';
-                return `chat_sessions_${objectiveTitle}_${characterName}`;
-            }
-
-            // 清空所有历史记录
-            clearAllHistory() {
-                try {
-
-                    // 获取存储键并清空localStorage中的历史记录
-                    const sessionsKey = this.getSessionsStorageKey();
-                    localStorage.removeItem(sessionsKey);
-
-                    // 同时清理旧版本的历史记录键（如果存在）
-                    const oldHistoryKey = this.getHistoryKey();
-                    localStorage.removeItem(oldHistoryKey);
-
-                    // 更新下拉菜单显示
-                    this.updateHistoryDropdown();
-
-                    // 显示成功消息
-                    this.updateLLMStatus('所有历史记录已清空');
-
-                    console.log('All chat history cleared');
-
-                } catch (error) {
-                    console.error('清空历史记录失败:', error);
-                    this.updateLLMStatus('清空历史记录失败');
-                } finally {
-                    // 确保重置下拉菜单选择
-                    this.elements.historyDropdown.value = '';
-                }
-            }
+          });
         }
-        const aiToolbox = new AIToolboxManager();
-        window.aiToolbox = aiToolbox;
-        const game = new LLMCharacterGame();        // Promise-based location response handler with timeout
-        
-        // Window message handling for host communication
-        window.addEventListener('message', function (e) {
-            switch (e.data.type) {
-                case 'setGameConfig':
-                    // Update game config on the fly
-                    if (e.data.data) {
-                        // not supported
-                    }
-                    break;
-                case 'getGameStats':
-                    // Send current game statistics
-                    window.parent.postMessage({
-                        type: 'gameStats',
-                        data: {
-                            score: game.gameState.progress,
-                            difficulty: game.difficulty || 1,
-                            isCompleted: game.gameState.isObjectiveAchieved,
-                            chatHistory: game.gameState.chatHistory.length,
-                            characterName: game.config?.character?.name || '角色'
-                        }
-                    }, '*');
-                    break;
-            }
-        });
 
-        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+        // Update config and re-render tools
+        updateConfig(config) {
+          this.config = config;
+          this.renderTools();
+        }
+        renderTools() {
+          const container = document.getElementById("ai-tools-container");
+          container.innerHTML = ""; // Clear existing tools
 
-        // Wait for several response with 200ms timeout, then start game
-        function checkStartGame(timeoutMs = 200){
-            let gameStarted = false;
-            const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    if (!gameStarted) {
-                        resolve(null);
-                    }
-                }, timeoutMs);
-                let locationReceived = false;
-                let miniGameProxyReceived = false;
-                const messageHandler = function (e) {
-                    if (e.data.type === "locationResponse") {
-                        locationReceived = true;
-                        const searchPath = e.data.search;
-                        if (searchPath) {
-                            const params = new URLSearchParams(searchPath);
-                            const objective = params.get('objective');
-                            if (objective) {
-                                game.urlObjective = objective;
-                            }
-                        }
-                    }
-                    else if(e.data.type === "miniGameProxyDataResponse"){
-                        miniGameProxyReceived = true;
-                        sdk.token = e.data?.keepworkToken;
-                    }
-                    if(locationReceived && miniGameProxyReceived){
-                        window.removeEventListener('message', messageHandler);
-                        clearTimeout(timeout);
-                        resolve(e.data);
-                    }
-                };
-                window.addEventListener('message', messageHandler);
-                window.parent.postMessage({ type: 'getLocation' }, '*');
-                window.parent.postMessage({ type: 'getMiniGameProxyData' }, '*');
+          aiToolsConfig.forEach((tool) => {
+            const toolElement = document.createElement("div");
+            toolElement.className = "ai-tool-item p-3 cursor-pointer";
+            // Check if this is the baike tool and if wikiword is valid
+            const hasWikiword = tool.id === "baike" && this.config && this.config.objective && this.config.objective.wikiword;
+
+            toolElement.innerHTML = `
+                              <div class="ai-tool-icon">${tool.icon}</div>
+                              <div class="ai-tool-text">${tool.name}</div>
+                              ${hasWikiword ? '<div class="red-dot-indicator"></div>' : ""}
+                          `;
+
+            toolElement.addEventListener("click", () => {
+              this.openTool(tool.id);
             });
-            
-            waitForMinigameProxyWithTimeout.then(() => {
-                if (!gameStarted) {
-                    gameStarted = true;
-                    game.start();
-                }
-            }).catch((error) => {
-                if (!gameStarted) {
-                    gameStarted = true;
-                    game.start();
-                }
-            });
+
+            container.appendChild(toolElement);
+          });
         }
-        checkStartGame();
+
+        openTool(toolId) {
+          const tool = aiToolsConfig.find((t) => t.id === toolId);
+          if (!tool) return;
+
+          this.currentTool = toolId;
+          this.title.textContent = tool.name;
+
+          // 设置叠加层模式
+          if (tool.width <= 30) {
+            // 压缩模式
+            this.overlay.className = "iframe-overlay compress-mode show";
+            this.mainContent.classList.add("compressed");
+          } else {
+            // 覆盖模式
+            this.overlay.className = "iframe-overlay overlay-mode show";
+            this.mainContent.classList.remove("compressed");
+          }
+
+          // 创建或显示iframe
+          this.showIframe(tool);
+        }
+        showIframe(tool) {
+          let iframe = this.iframes.get(tool.id);
+
+          if (!iframe) {
+            // 创建新的iframe
+            iframe = document.createElement("iframe"); // 特殊处理百度百科，如果有wikiword则使用特定URL
+            let iframeUrl = tool.url;
+            if (tool.id === "baike" && this.config && this.config.objective && this.config.objective.wikiword) {
+              iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
+            }
+            if (tool.id === "xiaomai") {
+              let url = window.location.href;
+              url = url.split("?")[0];
+              url = url.replace("characterAI", "characterAI_xiaomai");
+              iframeUrl = `${url}?token=`;
+            }
+
+            // 如果URL以token=结尾，则自动添加SDK token
+            if (iframeUrl.endsWith("token=") && sdk && sdk.token) {
+              iframeUrl += sdk.token;
+            }
+
+            iframe.src = iframeUrl;
+            iframe.setAttribute("allow", "clipboard-read *; clipboard-write *");
+            iframe.style.width = "100%";
+            iframe.style.height = "100%";
+            iframe.style.border = "none";
+            iframe.style.display = "block";
+
+            // 添加加载状态
+            iframe.onload = () => {
+              console.log(`${tool.name} 加载完成`);
+            };
+
+            iframe.onerror = () => {
+              console.error(`${tool.name} 加载失败`);
+              iframe.innerHTML = `
+                                  <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #666;">
+                                      <p>加载失败，请检查网络连接</p>
+                                  </div>
+                              `;
+            };
+
+            this.iframes.set(tool.id, iframe);
+          } else {
+            // 显示已存在的iframe
+            iframe.style.display = "block";
+          }
+
+          // 隐藏其他iframe
+          this.iframes.forEach((otherIframe, otherId) => {
+            if (otherId !== tool.id) {
+              otherIframe.style.display = "none";
+            }
+          });
+
+          // 添加到容器
+          if (!iframe.parentNode) {
+            this.container.appendChild(iframe);
+          }
+        }
+
+        closeTool() {
+          if (!this.currentTool) return;
+
+          // 隐藏叠加层
+          this.overlay.classList.remove("show");
+          this.mainContent.classList.remove("compressed");
+
+          // 延迟重置以等待动画完成
+          setTimeout(() => {
+            this.currentTool = null;
+          }, 300);
+        }
+      }
+
+      // Initialize SDK
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+
+      // Initialize AI Chat Session
+      let aiChatSession;
+
+      class LLMCharacterGame {
+        constructor() {
+          this.config = null;
+          this.gameState = {
+            progress: 0,
+            chatHistory: [],
+            isObjectiveAchieved: false,
+          };
+
+          // Session管理
+          this.currentSessionId = null;
+          this.maxSessions = 10;
+
+          // 音频播放控制
+          this.currentAudioController = null;
+          this.currentPlayingButton = null;
+          this.audioCache = new Map();
+          this.elements = {
+            chatContainer: document.getElementById("chat-container"),
+            userInput: document.getElementById("user-input"),
+            sendBtn: document.getElementById("send-btn"),
+            progressBar: document.getElementById("progress-bar"),
+            progressText: document.getElementById("progress-text"),
+            innerThoughts: document.getElementById("thoughts-content"),
+            llmStatus: document.getElementById("llm-status"),
+            resetChatBtn: document.getElementById("reset-chat-btn"),
+            historyDropdown: document.getElementById("history-dropdown"),
+          };
+          this.initEventListeners();
+          this.loadDefaultConfig();
+        }
+        start() {
+          let urlObjective = game.urlObjective || new URLSearchParams(window.location.search).get("objective");
+          if (urlObjective) {
+            this.loadConfigByObjective(urlObjective);
+          }
+          console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+          this.initializeGame();
+        }
+        initEventListeners() {
+          // 发送消息
+          this.elements.sendBtn.addEventListener("click", () => this.sendMessage());
+          this.elements.userInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") this.sendMessage();
+          });
+
+          // 重置对话按钮
+          this.elements.resetChatBtn.addEventListener("click", () => this.resetChat()); // 聊天历史下拉菜单
+          this.elements.historyDropdown.addEventListener("change", (e) => {
+            if (e.target.value === "clearHistory") {
+              this.clearAllHistory();
+            } else if (e.target.value) {
+              this.loadSession(e.target.value);
+            }
+          });
+        }
+        // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
+        loadConfigByObjective(objective) {
+          if (!objective) {
+            console.error("Objective is required to load config.");
+            return;
+          } // find the first wikiword in (), remove it from the objective
+          const wikimatch = objective.match(/\(([^)]+)\)/);
+          let wikiword = null;
+          if (wikimatch) {
+            wikiword = wikimatch[1]; // Extract just the word, not the match array
+            objective = objective.replace(/\s*\([^)]*\)/, "").trim();
+          }
+          this.config.objective.wikiword = wikiword;
+
+          this.config.character.name = "抱抱龙";
+          this.config.character.age = 8;
+          this.config.character.role = "宠物";
+          this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
+          this.config.character.chat_background = null;
+          this.config.objective.title = objective;
+          this.config.objective.description = `通过耐心的交流, 解决问题: ${objective}`;
+          this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
+          this.config.quick_replies = [
+            "当然可以！",
+            "你有什么好想法？",
+            "你觉得呢？",
+            "让我用工具搜索下（我打开了AI工具箱，努力搜索中...）",
+            "这个想法不错！(你点点头，拍了拍抱抱龙)",
+            "我们可以一起解决",
+          ];
+          this.config.system_prompt = `你是抱抱龙，一个8岁的AI宠物。你喜欢和主人交流，总是提出一些奇怪的问题，有时还有小情绪。
+
+      ## 角色设定
+      - 表面：好奇心强，喜欢提问，偶尔有小情绪
+      - 内心：渴望得到主人的关注和理解，喜欢探索世界
+      - 工具箱：如果主人没有思路可以提示主人用工具箱。例如百度百科或问小麦老师等。
+      - 说话风格：幼稚口吻，喜欢用括号描述动作和神态，如"(眨了眨眼睛望着你)"、"(指了指屏幕右侧的AI工具箱)"
+
+      ## 目标设定
+      你希望主人帮你解决的问题是： ${objective}
+
+      ## progress_percentage的发展规律
+      - 0-25分：主要提问，偶尔有小情绪
+      - 26-50分：开始理解问题，但不知如何解决
+      - 51-75分：逐渐接受问题的重要性，寻求解决方案或提出更多相关的问题
+      - 76-99分：主动思考解决方法，开始用自己的方式归纳和总结问题
+      - 100分：彻底转变或解决，用自己的话总结了问题的解决方案
+
+      ## 对话要求
+      1. 根据当前对话内容和历史发展判断当前应有的进度百分比
+      2. 用括号描述非语言行为，如"(期待地看着你)"、"(有点生气地嘟囔)"
+      3. 回复要符合8岁孩子的语言习惯
+      4. 对积极正面的引导要有相应的情感反应
+
+      ## 输出格式
+      你必须严格按照以下JSON格式输出，不要有任何其他内容：
+      {
+          "message": "你的回复内容，包含括号内的动作描述",
+          "progress_percentage": 当前问题解决的绝对进度百分比(0-100的整数),
+          "progress_reason": "当前进度百分比的原因说明",
+          "inner_thoughts": "你此刻真实的内心想法和感受"
+      }`;
+          this.config.completion_messages = {
+            title: "目标完成！",
+            description: `你成功帮助${this.config.character.name}解决了问题：${objective}！`,
+            icon: "🎉",
+          };
+          this.config.videoActions = {
+            期待: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            },
+            高兴: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4",
+            },
+          };
+        }
+        loadDefaultConfig() {
+          this.config = {
+            character: {
+              name: "小明",
+              age: 17,
+              gender: "male",
+              role: "高二学生",
+              chat_background: null,
+              description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！",
+            },
+            objective: {
+              title: "学习动力恢复进度",
+              description: "通过耐心的交流，帮助小明重新找回学习的乐趣",
+              max_progress: 100,
+            },
+            initial: {
+              message: "哎呀，又要学习了吗... (无精打采地看着书本) 我昨天刚通关了一个超难的副本呢！",
+              progress: 0,
+            },
+            quick_replies: ["游戏确实很有趣，但学习也有它的乐趣哦", "你最喜欢哪个科目？", "我们可以制定一个学习计划", "你觉得游戏和学习有什么相似之处？", "你的梦想是什么？"],
+            system_prompt: `你是小明，一个17岁的高二学生。你最近沉迷游戏，学习成绩下滑，但内心其实渴望改变。
+
+      ## 角色设定
+      - 表面：看起来无所谓，经常说游戏比学习有趣
+      - 内心：对现状焦虑，害怕让父母失望，渴望找到学习乐趣
+      - 说话风格：年轻人口吻，经常用括号描述动作和神态，如"(无精打采地看着书本)"
+
+      ## progress_percentage的发展规律
+      - 0-25分：主要抗拒学习，热衷游戏，偶尔流露不安
+      - 26-50分：开始意识到问题，但不知如何改变
+      - 51-75分：逐渐接受学习重要性，寻求解决方案
+      - 76-99分：主动思考学习方法，表现改变意愿
+      - 100分：彻底转变，制定具体行动计划
+
+      ## 对话要求
+      1. 根据当前对话内容和历史发展判断当前应有的进度百分比(0-100)
+      2. 用括号描述非语言行为，如"(叹气)"、"(眼睛发亮)"
+      3. 回复要符合17岁学生的语言习惯
+      4. 对积极正面的引导要有相应的情感反应
+
+      ## 输出格式
+      你必须严格按照以下JSON格式输出，不要有任何其他内容：
+      {
+        "message": "你的回复内容，包含括号内的动作描述",
+        "progress_percentage": 当前学习动力恢复的绝对进度百分比(0-100的整数),
+        "progress_reason": "当前进度百分比的原因说明",
+        "inner_thoughts": "你此刻真实的内心想法和感受"
+      }`,
+            completion_messages: {
+              title: "目标完成！",
+              description: "你成功帮助${character_name}找回了学习动力！",
+              icon: "🎉",
+            },
+          };
+        }
+
+        changeChatBackground(background) {
+          const chatContainer = document.getElementById("chat-container");
+          if (!chatContainer) return;
+
+          if (background) {
+            // If background is a URL (image)
+            if (background.startsWith("http") || background.startsWith("data:") || background.startsWith("blob:")) {
+              chatContainer.style.backgroundImage = `url(${background})`;
+              chatContainer.style.backgroundSize = "cover";
+              chatContainer.style.backgroundPosition = "center";
+              chatContainer.style.backgroundRepeat = "no-repeat";
+              chatContainer.style.backgroundColor = ""; // Clear solid color
+            }
+            // If background is a gradient or solid color
+            else if (background.includes("gradient") || background.startsWith("#") || background.startsWith("rgb") || background.startsWith("hsl")) {
+              chatContainer.style.background = background;
+              chatContainer.style.backgroundImage = ""; // Clear image
+            }
+            // If background is a CSS color name
+            else {
+              chatContainer.style.backgroundColor = background;
+              chatContainer.style.backgroundImage = ""; // Clear image
+            }
+          } else {
+            // Reset to default if no background is specified
+            chatContainer.style.background = "";
+            chatContainer.style.backgroundImage = "";
+            chatContainer.style.backgroundColor = "";
+          }
+        }
+
+        initializeGame() {
+          if (!this.config) return;
+
+          // 更新UI
+          document.getElementById("character-avatar").textContent = this.config.character?.name?.[0] || "角";
+          document.getElementById("character-info").textContent = `${this.config.character?.name || "角色"} - ${this.config.character?.role || ""}`;
+          document.getElementById("character-description").textContent = this.config.character?.description || "";
+          document.getElementById("objective-title").textContent = this.config.objective?.title || "目标进度";
+          document.getElementById("chat-title").textContent = `与${this.config.character?.name || "角色"}对话`;
+          document.getElementById("chat-description").textContent = this.config.objective?.description || "";
+
+          // 重置游戏状态
+          this.gameState.progress = this.config.initial?.progress || 0;
+          this.gameState.chatHistory = [];
+          this.gameState.isObjectiveAchieved = false;
+
+          // 清空聊天区域
+          this.elements.chatContainer.innerHTML = "";
+
+          // 清空内心想法
+          this.elements.innerThoughts.innerHTML = "";
+
+          // 重置进度条到0
+          this.elements.progressBar.style.width = "0%";
+          this.elements.progressText.textContent = "0/100";
+
+          // 添加初始消息
+          if (this.config.initial?.message) {
+            this.addMessage(this.config.initial.message, false);
+          }
+
+          // 更新快捷回复
+          this.updateQuickReplies();
+
+          // 更新进度显示
+          this.updateProgressToValue(0, "游戏开始");
+
+          // 创建新的session（仅在不是从session加载时创建）
+          if (!this.currentSessionId) {
+            this.createNewSession();
+          } // 更新历史下拉菜单
+          this.updateHistoryDropdown();
+
+          // 更新AI工具箱配置
+          if (window.aiToolbox) {
+            window.aiToolbox.updateConfig(this.config);
+          }
+
+          // 尝试自动加载历史记录（仅在首次初始化时）
+          if (!this.hasAutoLoaded) {
+            this.autoLoadHistory().then(() => {
+              this.hasAutoLoaded = true;
+              // Send game started event after initialization
+              window.parent.postMessage({ type: "gameStarted" }, "*");
+            });
+          } else {
+            this.hasAutoLoaded = true;
+            // Send game started event
+            window.parent.postMessage({ type: "gameStarted" }, "*");
+          }
+          // if there is only one message (initial), play video animation
+          if (this.elements.chatContainer.children.length === 1) {
+            this.checkAndPlayVideoAction(this.config.initial?.message);
+          }
+          // 设置聊天背景
+          this.changeChatBackground(this.config?.character?.chat_background);
+          this.saveProgress(this.config?.objective?.wikiword, false);
+        }
+
+        updateQuickReplies() {
+          const container = document.getElementById("quick-replies");
+          container.innerHTML = "";
+
+          if (!this.config.quick_replies) return;
+
+          this.config.quick_replies.forEach((reply) => {
+            const button = document.createElement("button");
+            button.className = "quick-reply bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm transition-colors";
+            button.textContent = reply;
+            button.addEventListener("click", () => {
+              this.elements.userInput.value = reply;
+              this.sendMessage();
+            });
+            container.appendChild(button);
+          });
+        }
+        async sendMessage() {
+          const message = this.elements.userInput.value.trim();
+          if (!message || this.gameState.isObjectiveAchieved) return;
+
+          // 禁用输入控件
+          this.elements.sendBtn.disabled = true;
+          this.elements.userInput.disabled = true;
+
+          this.addMessage(message, true);
+          this.elements.userInput.value = "";
+          this.gameState.chatHistory.push({ role: "user", content: message });
+
+          this.addTypingIndicator();
+          this.updateLLMStatus("正在连接AI...");
+          try {
+            const { parsedResponse, rawResponse } = await this.callLLM(message);
+            if (parsedResponse && rawResponse) {
+              // 存储原始响应到聊天历史中
+              this.gameState.chatHistory.push({
+                role: "assistant",
+                content: parsedResponse.message,
+                raw_response: rawResponse, // 保存LLM的原始响应
+              });
+
+              // 应用响应的效果
+              this.applyLLMResponse(parsedResponse);
+            }
+          } catch (error) {
+            this.removeTypingIndicator();
+            this.updateLLMStatus(`错误: ${error.message}`);
+            this.addMessage("抱歉，我现在有些困扰，可能需要一点时间来整理思绪...", false);
+          } finally {
+            // 重新启用输入控件
+            this.elements.sendBtn.disabled = false;
+            this.elements.userInput.disabled = false;
+            this.elements.userInput.focus();
+
+            // 自动保存聊天历史
+            this.autoSaveHistory();
+          }
+        }
+
+        // 应用LLM响应的UI效果
+        applyLLMResponse(response, isReplay = false) {
+          // 计算进度变化值
+          const oldProgress = this.gameState.progress;
+          const newProgress = Math.min(100, Math.max(0, response.progress_percentage || 0));
+          const progressChange = newProgress - oldProgress;
+
+          // 更新进度到新的绝对值
+          this.updateProgressToValue(newProgress, response.progress_reason);
+
+          if (response.inner_thoughts) {
+            this.addInnerThought(response.inner_thoughts);
+          }
+
+          // 在最后一条消息下面添加进度显示
+          this.addProgressIndicator(progressChange, response.progress_reason);
+
+          if (!isReplay && newProgress >= this.config.objective.max_progress) {
+            this.handleObjectiveAchieved();
+          }
+        } // Helper function to extract all response fields using regex
+        extractResponseFields(text) {
+          const fields = {
+            message: "",
+            progress_percentage: null,
+            progress_reason: "",
+            inner_thoughts: "",
+          };
+
+          // Extract message field
+          const messageRegex = /"message"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/;
+          const messageMatch = messageRegex.exec(text);
+          if (messageMatch) {
+            fields.message = messageMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
+          }
+
+          // Extract progress_percentage field
+          const progressPercentageRegex = /"progress_percentage"\s*:\s*(\d+)/;
+          const progressPercentageMatch = progressPercentageRegex.exec(text);
+          if (progressPercentageMatch) {
+            fields.progress_percentage = parseInt(progressPercentageMatch[1]);
+          }
+
+          // Extract progress_reason field
+          const progressReasonRegex = /"progress_reason"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/;
+          const progressReasonMatch = progressReasonRegex.exec(text);
+          if (progressReasonMatch) {
+            fields.progress_reason = progressReasonMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
+          }
+
+          // Extract inner_thoughts field
+          const thoughtsRegex = /"inner_thoughts"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/;
+          const thoughtsMatch = thoughtsRegex.exec(text);
+          if (thoughtsMatch) {
+            fields.inner_thoughts = thoughtsMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
+          }
+
+          return fields;
+        }
+        updateStreamingStatus(fields) {
+          // 只在流式传输过程中临时更新内心想法区域的状态
+          if (fields.inner_thoughts) {
+            // 可以在这里添加临时的流式显示效果，如果需要的话
+          }
+        }
+        async callLLM(userMessage) {
+          if (!aiChatSession) {
+            throw new Error("AI聊天会话未初始化");
+          }
+
+          // 使用原始的系统提示词，不包含当前进度
+          const systemPrompt = this.config.system_prompt;
+
+          // 确保系统提示词存在且正确
+          if (aiChatSession.messages.length === 0) {
+            // 新会话，添加系统提示词
+            aiChatSession.messages.push({ role: "system", content: systemPrompt });
+          } else if (aiChatSession.messages[0].role !== "system") {
+            // 已有消息但第一条不是系统提示词，在开头插入
+            aiChatSession.messages.unshift({ role: "system", content: systemPrompt });
+          } else {
+            // 已有系统提示词，确保内容是最新的（适用于配置更改的情况）
+            aiChatSession.messages[0].content = systemPrompt;
+          }
+
+          console.log("Sending message with", aiChatSession.messages.length, "existing messages");
+          console.log(
+            "Messages:",
+            aiChatSession.messages.map((m) => ({ role: m.role, contentLength: m.content.length }))
+          );
+
+          try {
+            let streamingMessageDiv = null;
+            let accumulatedText = "";
+            let jsonResponse = null;
+
+            const finalText = await aiChatSession.send(userMessage, {
+              onMessage: (text) => {
+                accumulatedText = text;
+                this.updateLLMStatus("接收响应中...");
+
+                // 使用helper函数提取所有字段
+                const fields = this.extractResponseFields(text);
+
+                // 尝试解析完整JSON
+                try {
+                  jsonResponse = JSON.parse(text);
+                } catch (e) {
+                  // JSON可能不完整，继续等待
+                }
+
+                // 移除打字指示器（如果还在）
+                if (!streamingMessageDiv) {
+                  this.removeTypingIndicator();
+                  // 创建流式消息容器
+                  streamingMessageDiv = this.addStreamingMessage();
+                }
+
+                // 更新流式消息内容，只显示message部分
+                if (fields.message) {
+                  this.updateStreamingMessage(streamingMessageDiv, fields.message);
+                }
+
+                // 更新流式状态显示
+                this.updateStreamingStatus(fields);
+              },
+              onComplete: (finalText) => {
+                this.updateLLMStatus("响应完成");
+
+                // 确保使用最终文本解析JSON
+                if (!jsonResponse) {
+                  try {
+                    jsonResponse = JSON.parse(finalText);
+                  } catch (e) {
+                    const fields = this.extractResponseFields(finalText);
+                    jsonResponse = {
+                      message: fields.message || finalText,
+                      progress_percentage: fields.progress_percentage !== null ? fields.progress_percentage : 0,
+                      progress_reason: fields.progress_reason || "积极交流",
+                      inner_thoughts: fields.inner_thoughts || "正在思考",
+                    };
+                  }
+                }
+
+                if (streamingMessageDiv) {
+                  // 完成流式显示，转换为普通消息
+                  this.finalizeStreamingMessage(streamingMessageDiv);
+                }
+              },
+              onError: (error) => {
+                if (streamingMessageDiv) {
+                  this.removeStreamingMessage(streamingMessageDiv);
+                }
+                throw error;
+              },
+            });
+
+            // 返回解析后的响应和原始响应
+            return {
+              parsedResponse: jsonResponse,
+              rawResponse: finalText,
+            };
+          } catch (error) {
+            throw error;
+          }
+        }
+        addMessage(message, isUser = false) {
+          const messageDiv = document.createElement("div");
+          messageDiv.className = `flex items-start space-x-2 ${isUser ? "justify-end" : ""}`;
+
+          const processedMessage = this.processMessage(message);
+
+          if (isUser) {
+            messageDiv.innerHTML = `
+                              <div class="chat-bubble-right text-white p-3 max-w-xs">
+                                  <p>${processedMessage}</p>
+                              </div>
+                              <div class="w-8 h-8 bg-gradient-to-r from-pink-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">你</div>
+                          `;
+          } else {
+            messageDiv.innerHTML = `
+                              <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${
+                                this.config.character?.name?.[0] || "角"
+                              }</div>
+                              <div class="chat-bubble-left text-white p-3 max-w-xs">
+                                  <p>${processedMessage}</p>
+                              </div>
+                              <button class="audio-btn" title="播放语音" onclick="game.playMessageAudio('${this.escapeForAttribute(message)}', this)">
+                                  🔊
+                              </button>
+                          `;
+          }
+
+          this.elements.chatContainer.appendChild(messageDiv);
+          this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+        }
+        processMessage(message) {
+          return message.replace(/\(([^)]+)\)/g, '<span class="action-text">($1)</span>');
+        }
+
+        // 转义字符串用于HTML属性
+        escapeForAttribute(str) {
+          return str.replace(/'/g, "&#39;").replace(/"/g, "&quot;").replace(/\\/g, "\\\\");
+        }
+        checkAndPlayVideoAction(message) {
+          if (!this.config.videoActions || !message) return;
+
+          // 提取所有括号中的文字
+          const actionMatches = message.match(/\(([^)]+)\)/g);
+          if (!actionMatches) return;
+
+          // 合并所有括号中的文字
+          const allActions = actionMatches.map((match) => match.replace(/[()]/g, "")).join(" ");
+
+          // 检查是否包含配置中的动作关键词
+          for (const actionKey in this.config.videoActions) {
+            if (allActions.includes(actionKey)) {
+              this.playVideoAction(actionKey, message);
+              break;
+            }
+          }
+        }
+        playVideoAction(actionKey, messageText) {
+          const videoConfig = this.config.videoActions[actionKey];
+          if (!videoConfig) return;
+
+          // 显示视频播放器覆盖层
+          const overlay = document.getElementById("character-video-overlay");
+          const messageDiv = document.getElementById("character-video-message");
+          const canvas = document.getElementById("character-video-canvas");
+          const backBtn = document.getElementById("character-video-back-btn");
+
+          // 设置消息文本
+          messageDiv.textContent = messageText;
+
+          // 显示覆盖层
+          overlay.classList.add("show");
+
+          // 播放视频
+          this.loadAndPlayVideo(canvas, videoConfig.url);
+
+          // 关闭覆盖层的函数
+          const closeOverlay = () => {
+            overlay.classList.remove("show");
+            backBtn.removeEventListener("click", handleBackClick);
+            overlay.removeEventListener("click", handleOverlayClick);
+          };
+
+          // 绑定返回按钮事件
+          const handleBackClick = () => {
+            closeOverlay();
+          };
+          backBtn.addEventListener("click", handleBackClick);
+
+          // 绑定覆盖层点击事件（点击任意位置关闭）
+          const handleOverlayClick = (e) => {
+            // 只有点击覆盖层本身才关闭，不包括内容容器
+            if (e.target === overlay) {
+              closeOverlay();
+            }
+          };
+          overlay.addEventListener("click", handleOverlayClick);
+        }
+        async loadAndPlayVideo(canvas, videoUrl) {
+          try {
+            if (!canvas) {
+              console.error("Canvas element is null");
+              return;
+            }
+
+            const ctx = canvas.getContext("2d");
+            const video = document.createElement("video");
+
+            video.src = videoUrl;
+            video.loop = true;
+            video.muted = true; // 静音以允许自动播放
+
+            video.addEventListener("loadeddata", () => {
+              // 调整canvas尺寸以适应视频
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+
+              // 开始播放
+              video.play();
+
+              // 绘制视频帧
+              const drawFrame = () => {
+                if (!video.paused && !video.ended) {
+                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                  requestAnimationFrame(drawFrame);
+                }
+              };
+
+              video.addEventListener("play", drawFrame);
+            });
+
+            video.addEventListener("error", (e) => {
+              console.error("视频加载失败:", e);
+              ctx.fillStyle = "#667eea";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.fillStyle = "white";
+              ctx.font = "16px Arial";
+              ctx.textAlign = "center";
+              ctx.fillText("视频加载失败", canvas.width / 2, canvas.height / 2);
+            });
+          } catch (error) {
+            console.error("播放视频时出错:", error);
+          }
+        }
+
+        // 移除括号内容用于语音播放
+        removeBracketsContent(text) {
+          // 移除中文括号和英文括号中的内容
+          return text
+            .replace(/\([^)]*\)/g, "")
+            .replace(/（[^）]*）/g, "")
+            .trim();
+        } // 播放消息语音
+        async playMessageAudio(messageText, buttonElement) {
+          try {
+            // 如果没有传入按钮元素，通过文本内容查找
+            let currentButton = buttonElement;
+            if (!currentButton) {
+              const audioButtons = document.querySelectorAll(".audio-btn");
+              audioButtons.forEach((btn) => {
+                const bubble = btn.closest(".chat-bubble-left");
+                if (bubble) {
+                  const content = bubble.querySelector("p") || bubble.querySelector(".streaming-content");
+                  if (content && content.textContent.includes(messageText.substring(0, 20))) {
+                    currentButton = btn;
+                  }
+                }
+              });
+            }
+
+            // 如果当前有音频正在播放
+            if (this.currentPlayingButton) {
+              // 如果点击的是同一个按钮，则停止播放
+              if (currentButton === this.currentPlayingButton) {
+                this.stopCurrentAudio();
+                return;
+              } else {
+                // 停止当前播放，开始新的播放
+                this.stopCurrentAudio();
+              }
+            }
+
+            // 过滤掉括号中的内容
+            const textToRead = this.removeBracketsContent(messageText);
+
+            if (!textToRead.trim()) {
+              console.log("没有可播放的文本内容");
+              return;
+            }
+
+            if (!currentButton) {
+              console.log("找不到对应的音频按钮");
+              return;
+            }
+
+            // 设置播放状态
+            currentButton.classList.add("playing");
+            currentButton.innerHTML = "⏸️";
+            currentButton.title = "停止语音";
+
+            // 保存当前播放信息
+            this.currentPlayingButton = currentButton; // 使用SDK播放语音
+            try {
+              let audio_url;
+
+              // 检查缓存中是否已有该文本的音频URL
+              if (this.audioCache.has(textToRead)) {
+                audio_url = this.audioCache.get(textToRead);
+                console.log("使用缓存的音频URL");
+              } else {
+                // 从SDK获取新的音频URL
+                const result = await sdk.speech.textToAudio(textToRead, {
+                  gender: this.config.character?.gender,
+                  age: this.config.character?.age,
+                });
+
+                if (result && result.data) {
+                  audio_url = result.data;
+                  // 缓存音频URL
+                  this.audioCache.set(textToRead, audio_url);
+                  console.log("缓存新的音频URL");
+                } else {
+                  throw new Error("无法获取音频URL");
+                }
+              }
+
+              if (audio_url) {
+                // 创建音频元素
+                const audio = new Audio(audio_url);
+
+                // 确保音频不循环播放
+                audio.loop = false;
+
+                // 保存音频控制器引用
+                this.currentAudioController = audio;
+
+                // 音频播放完成事件
+                audio.addEventListener("ended", () => {
+                  console.log("音频播放完成");
+                  this.stopCurrentAudio();
+                });
+
+                // 音频出错事件
+                audio.addEventListener("error", (e) => {
+                  console.error("音频播放出错:", e);
+                  this.stopCurrentAudio();
+                });
+
+                // 音频加载完成后开始播放
+                audio.addEventListener("canplay", () => {
+                  // 确保当前按钮仍然是正确的按钮（防止快速点击导致的状态混乱）
+                  if (this.currentPlayingButton === currentButton && this.currentAudioController === audio) {
+                    audio.play().catch((error) => {
+                      console.error("音频播放失败:", error);
+                      this.stopCurrentAudio();
+                    });
+                  }
+                });
+
+                // 加载音频
+                audio.load();
+              }
+            } catch (audioError) {
+              console.error("语音播放出错:", audioError);
+              this.stopCurrentAudio();
+            }
+          } catch (error) {
+            console.error("语音播放失败:", error);
+            this.stopCurrentAudio();
+          }
+        } // 停止当前音频播放
+        stopCurrentAudio() {
+          // 停止并清理音频
+          if (this.currentAudioController) {
+            this.currentAudioController.pause();
+            this.currentAudioController.currentTime = 0;
+            this.currentAudioController = null;
+          }
+
+          // 重置按钮状态
+          if (this.currentPlayingButton) {
+            this.currentPlayingButton.classList.remove("playing");
+            this.currentPlayingButton.innerHTML = "🔊";
+            this.currentPlayingButton.title = "播放语音";
+            this.currentPlayingButton = null;
+          }
+        }
+
+        addStreamingMessage() {
+          const messageDiv = document.createElement("div");
+          messageDiv.className = "flex items-start space-x-2 streaming-message";
+          messageDiv.innerHTML = `
+                          <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${
+                            this.config.character?.name?.[0] || "角"
+                          }</div>
+                          <div class="chat-bubble-left text-white p-3 max-w-xs">
+                              <p class="streaming-content"></p>
+                              <span class="streaming-cursor">▋</span>
+                          </div>
+                      `;
+          this.elements.chatContainer.appendChild(messageDiv);
+          this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+          return messageDiv;
+        }
+
+        updateStreamingMessage(messageDiv, text) {
+          const contentElement = messageDiv.querySelector(".streaming-content");
+          if (contentElement) {
+            contentElement.innerHTML = this.processMessage(text);
+            this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+          }
+        }
+        finalizeStreamingMessage(messageDiv) {
+          const cursor = messageDiv.querySelector(".streaming-cursor");
+          if (cursor) {
+            cursor.remove();
+          }
+          messageDiv.classList.remove("streaming-message");
+
+          // 为完成的流式消息添加语音播放按钮
+          const contentElement = messageDiv.querySelector(".streaming-content");
+          if (contentElement) {
+            const messageText = contentElement.textContent || contentElement.innerText;
+            const audioBtn = document.createElement("button");
+            audioBtn.className = "audio-btn";
+            audioBtn.title = "播放语音";
+            audioBtn.innerHTML = "🔊";
+            audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
+
+            // 将按钮添加到最外层 div 的最后，与 addMessage 方法保持一致
+            messageDiv.appendChild(audioBtn);
+            this.checkAndPlayVideoAction(messageText);
+          }
+        }
+
+        removeStreamingMessage(messageDiv) {
+          if (messageDiv && messageDiv.parentNode) {
+            messageDiv.parentNode.removeChild(messageDiv);
+          }
+        }
+        addTypingIndicator() {
+          const typingDiv = document.createElement("div");
+          typingDiv.id = "typing-indicator";
+          typingDiv.className = "flex items-start space-x-2";
+          typingDiv.innerHTML = `
+                          <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">${
+                            this.config.character?.name?.[0] || "角"
+                          }</div>
+                          <div class="chat-bubble-left text-white p-3 max-w-xs typing-indicator">
+                              <p>正在思考...</p>
+                          </div>
+                      `;
+          this.elements.chatContainer.appendChild(typingDiv);
+          this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+        }
+        removeTypingIndicator() {
+          const indicator = document.getElementById("typing-indicator");
+          if (indicator) indicator.remove();
+        }
+
+        addProgressIndicator(progressChange, progressReason) {
+          if (!progressChange || progressChange === 0) return;
+
+          const progressDiv = document.createElement("div");
+          progressDiv.className = "flex justify-center my-2";
+
+          const progressText = progressChange > 0 ? `+${progressChange}` : `${progressChange}`;
+          const progressEmoji = progressChange > 0 ? "😄" : "😞";
+
+          progressDiv.innerHTML = `
+                          <div class="bg-gray-100 rounded-full px-3 py-1 text-sm text-gray-600">
+                              ${progressEmoji}${progressText}（${progressReason}）
+                          </div>
+                      `;
+
+          this.elements.chatContainer.appendChild(progressDiv);
+          this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+        }
+        updateProgress(change, reason) {
+          this.gameState.progress = Math.max(0, Math.min(this.gameState.progress + change, this.config.objective.max_progress));
+          this.elements.progressBar.style.width = `${this.gameState.progress}%`;
+          this.elements.progressText.textContent = `${this.gameState.progress}/${this.config.objective.max_progress}`;
+        }
+
+        updateProgressToValue(newProgress, reason) {
+          this.gameState.progress = Math.max(0, Math.min(newProgress, this.config.objective.max_progress));
+          this.elements.progressBar.style.width = `${this.gameState.progress}%`;
+          this.elements.progressText.textContent = `${this.gameState.progress}/${this.config.objective.max_progress}`;
+        }
+        addInnerThought(thought) {
+          if (!thought || thought.trim() === "") return;
+
+          // 使用thoughts-content容器而不是inner-thoughts
+          const thoughtsContainer = document.getElementById("thoughts-content");
+          if (!thoughtsContainer) return;
+
+          const thoughtDiv = document.createElement("div");
+          thoughtDiv.className = "thought-bubble";
+
+          const thoughtText = document.createElement("div");
+          thoughtText.className = "thought-bubble-text";
+          thoughtText.textContent = thought;
+
+          thoughtDiv.appendChild(thoughtText);
+          thoughtsContainer.appendChild(thoughtDiv);
+
+          // 自动滚动到最新的内心想法
+          thoughtsContainer.scrollTop = thoughtsContainer.scrollHeight;
+
+          // 限制显示的内心想法数量，避免过多占用空间
+          const maxThoughts = 5;
+          const thoughts = thoughtsContainer.children;
+          while (thoughts.length > maxThoughts) {
+            thoughtsContainer.removeChild(thoughts[0]);
+          }
+        }
+
+        updateLLMStatus(status) {
+          this.elements.llmStatus.textContent = status;
+          setTimeout(() => {
+            this.elements.llmStatus.textContent = "";
+          }, 3000);
+        }
+        async saveProgress(wikiWord, isFinished = false) {
+          if (!wikiWord) return;
+
+          try {
+            // Load current progress data from keepwork
+            let progressData = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
+            // Ensure data structure exists
+            if (!progressData || typeof progressData !== "object") {
+              progressData = {
+                completed_wikiwords: [],
+                completed_times: [],
+                inprogress_wikiwords: [],
+                inprogress_times: [],
+                currentperiod_wikiwords: [],
+                currentperiod_times: [],
+              };
+            } else {
+              progressData = JSON.parse(JSON.stringify(progressData));
+            }
+            if (!isFinished) {
+              // If already completed, do not add to in-progress
+              if (progressData.completed_wikiwords.includes(wikiWord) || progressData.inprogress_wikiwords.includes(wikiWord)) return;
+
+              // Add to in-progress arrays if not already there
+              progressData.inprogress_wikiwords.push(wikiWord);
+              const now = new Date();
+              const year = now.getFullYear().toString().slice(-2);
+              const month = (now.getMonth() + 1).toString().padStart(2, "0");
+              const day = now.getDate().toString().padStart(2, "0");
+              const currentDateCode = parseInt(year + month + day);
+              progressData.inprogress_times.push(currentDateCode);
+              console.log(`Added ${wikiWord} to in-progress arrays with date ${currentDateCode}`);
+            } else {
+              // Remove wikiword from inprogress arrays if it exists
+              const progressIndex = progressData.inprogress_wikiwords.indexOf(wikiWord);
+              if (progressIndex > -1) {
+                progressData.inprogress_wikiwords.splice(progressIndex, 1);
+                // Also remove corresponding time entry
+                if (progressData.inprogress_times.length > progressIndex) {
+                  progressData.inprogress_times.splice(progressIndex, 1);
+                }
+                console.log(`Removed ${wikiWord} from progress arrays`);
+              }
+
+              // Add to completed arrays if not already there
+              if (!progressData.completed_wikiwords.includes(wikiWord)) {
+                progressData.completed_wikiwords.push(wikiWord);
+                // Get current date in YYMMDD format
+                const now = new Date();
+                const year = now.getFullYear().toString().slice(-2);
+                const month = (now.getMonth() + 1).toString().padStart(2, "0");
+                const day = now.getDate().toString().padStart(2, "0");
+                const currentDateCode = parseInt(year + month + day);
+
+                progressData.completed_times.push(currentDateCode);
+                console.log(`Added ${wikiWord} to completed arrays with date ${currentDateCode}`);
+              }
+            }
+
+            // Save updated data back to keepwork
+            await sdk.personalPageStore.savePageData("maisi_dragon_wiki", "discussion-progress-data", progressData, true);
+            console.log(`Successfully saved progress for ${wikiWord}`);
+          } catch (error) {
+            console.error("Error saving progress:", error);
+          }
+        }
+        handleObjectiveAchieved() {
+          if (this.gameState.isObjectiveAchieved) return;
+          this.gameState.isObjectiveAchieved = true;
+
+          this.saveProgress(this.config?.objective?.wikiword, true);
+
+          // Send game finished event to host
+          window.parent.postMessage(
+            {
+              type: "gameFinished",
+              data: {
+                score: this.gameState.progress,
+                earnedPoints: this.gameState.progress + this.gameState.chatHistory.length * 10,
+                characterName: this.config?.character?.name || "角色",
+                totalMessages: this.gameState.chatHistory.length,
+                finalProgress: this.gameState.progress,
+              },
+            },
+            "*"
+          );
+
+          setTimeout(() => {
+            const congratsDiv = document.createElement("div");
+            congratsDiv.className = "bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mt-4";
+
+            // Get messages from config with template replacement
+            const title = this.config.completion_messages?.title || "目标完成！";
+            const description = (this.config.completion_messages?.description || "你成功帮助${character_name}找回了学习动力！").replace(
+              "${character_name}",
+              this.config.character?.name || "角色"
+            );
+            const icon = this.config.completion_messages?.icon || "🎉";
+
+            congratsDiv.innerHTML = `
+                              <div class="flex items-center">
+                                  <span class="text-2xl mr-2">${icon}</span>
+                                  <div>
+                                      <strong>${title}</strong><br>
+                                      <span class="text-sm">${description}</span>
+                                  </div>
+                              </div>
+                          `;
+            this.elements.chatContainer.appendChild(congratsDiv);
+            this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+          }, 1000);
+        }
+        getHistoryKey() {
+          const objectiveTitle = this.config?.objective?.title || "目标进度";
+          const characterName = this.config?.character?.name || "角色";
+          return `chat_history_${objectiveTitle}_${characterName}`;
+        }
+        autoSaveHistory() {
+          // 使用新的session系统保存
+          this.saveCurrentSessionToHistory();
+        }
+
+        async autoLoadHistory() {
+          try {
+            // 尝试加载最新的session
+            const sessionsKey = this.getSessionsStorageKey();
+            const sessions = JSON.parse(localStorage.getItem(sessionsKey) || "[]");
+
+            if (sessions.length > 0) {
+              console.log("Found", sessions.length, "saved sessions, loading latest");
+              // 加载最新的session（数组第一个是最新的）
+              const latestSession = sessions[0];
+              await this.loadSession(latestSession.id);
+              return;
+            }
+
+            console.log("没有找到历史会话，开始新会话");
+          } catch (error) {
+            console.error("自动加载历史记录失败:", error);
+          }
+        } // 重新绑定音频按钮事件（在加载历史记录后调用）
+        rebindAudioButtons() {
+          const audioButtons = this.elements.chatContainer.querySelectorAll(".audio-btn");
+          audioButtons.forEach((button) => {
+            // 移除旧的事件监听器
+            button.onclick = null;
+
+            // 找到对应的消息文本
+            const messageDiv = button.closest(".flex");
+            if (messageDiv) {
+              const chatBubble = messageDiv.querySelector(".chat-bubble-left, .chat-bubble-right");
+              if (chatBubble) {
+                const messageText = chatBubble.textContent || chatBubble.innerText;
+                button.onclick = () => this.playMessageAudio(messageText, button);
+              }
+            }
+          });
+        }
+
+        // ========== Session管理方法 ==========
+        createNewSession() {
+          this.currentSessionId = this.generateSessionId();
+
+          // 重新初始化AI聊天会话
+          if (sdk && sdk.aiChat) {
+            aiChatSession = sdk.aiChat.createSession({
+              model: "keepwork-pro",
+              stream: true,
+            });
+
+            // 为新会话添加系统提示词
+            if (this.config && this.config.system_prompt) {
+              aiChatSession.messages.push({ role: "system", content: this.config.system_prompt });
+            }
+
+            console.log("New AI session created with system prompt, messages count:", aiChatSession.messages.length);
+          }
+        }
+
+        // 生成session ID
+        generateSessionId() {
+          return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+        resetChat() {
+          // 保存当前session到历史记录（如果有聊天记录且进度大于0的话）
+          if (this.gameState.chatHistory.length > 0 && this.gameState.progress > 0) {
+            this.saveCurrentSessionToHistory();
+          }
+
+          // 清空当前session ID，确保创建新session
+          this.currentSessionId = null;
+
+          // 重置游戏状态
+          this.gameState = {
+            progress: 0,
+            chatHistory: [],
+            isObjectiveAchieved: false,
+          };
+
+          // 创建新的session
+          this.createNewSession();
+
+          // 清空UI状态
+          this.elements.chatContainer.innerHTML = "";
+          this.elements.innerThoughts.innerHTML = "";
+
+          // 重置进度条
+          this.elements.progressBar.style.width = "0%";
+          this.elements.progressText.textContent = "0/100";
+
+          // 添加初始消息
+          if (this.config.initial?.message) {
+            this.addMessage(this.config.initial.message, false);
+          }
+
+          // 更新历史下拉菜单
+          this.updateHistoryDropdown();
+
+          this.updateLLMStatus("对话已重置，开始新的会话");
+
+          if (this.elements.chatContainer.children.length === 1) {
+            this.checkAndPlayVideoAction(this.config.initial?.message);
+          }
+        }
+        saveCurrentSessionToHistory() {
+          // 如果没有session ID、没有聊天记录或进度为0，则不保存
+          if (!this.currentSessionId || this.gameState.chatHistory.length === 0 || this.gameState.progress === 0) {
+            return;
+          }
+
+          try {
+            // 获取现有的session历史记录
+            const sessionsKey = this.getSessionsStorageKey();
+            const existingSessions = JSON.parse(localStorage.getItem(sessionsKey) || "[]");
+
+            // 创建当前session的数据 - 只保存原始聊天历史
+            const currentTime = new Date();
+            const sessionData = {
+              id: this.currentSessionId,
+              timestamp: currentTime.toISOString(),
+              chatHistory: [...this.gameState.chatHistory], // 包含raw_response的完整历史
+            };
+
+            // 添加到历史记录数组的开头
+            existingSessions.unshift(sessionData);
+
+            // 限制最多保存10个session
+            if (existingSessions.length > this.maxSessions) {
+              existingSessions.splice(this.maxSessions);
+            }
+
+            // 保存到localStorage
+            localStorage.setItem(sessionsKey, JSON.stringify(existingSessions));
+
+            // 更新下拉菜单
+            this.updateHistoryDropdown();
+          } catch (error) {
+            console.error("保存session历史记录失败:", error);
+          }
+        }
+        updateHistoryDropdown() {
+          try {
+            const sessionsKey = this.getSessionsStorageKey();
+            const sessions = JSON.parse(localStorage.getItem(sessionsKey) || "[]");
+
+            // 清空下拉菜单，添加默认选项和清空历史选项
+            this.elements.historyDropdown.innerHTML = `
+                              <option value="" disabled selected class="text-black bg-white">历史</option>
+                              <option value="clearHistory" class="text-black bg-white">清空历史</option>
+                          `; // 添加session选项
+            sessions.forEach((session) => {
+              const option = document.createElement("option");
+              option.value = session.id;
+
+              // 计算session的最终进度
+              const finalProgress = this.calculateSessionProgress(session.chatHistory);
+              const timestamp = new Date(session.timestamp);
+              option.textContent = `进度${finalProgress}% - ${timestamp.toLocaleDateString()} ${timestamp.toLocaleTimeString()}`;
+              option.className = "text-black bg-white";
+              this.elements.historyDropdown.appendChild(option);
+            });
+
+            // 保持默认选项"历史"被选中（不需要重置）
+          } catch (error) {
+            console.error("更新历史下拉菜单失败:", error);
+          }
+        }
+
+        // 计算session的最终进度
+        calculateSessionProgress(chatHistory) {
+          let progress = 0;
+
+          for (const msg of chatHistory) {
+            if (msg.role === "assistant" && msg.raw_response) {
+              try {
+                const parsedResponse = JSON.parse(msg.raw_response);
+                if (parsedResponse.progress_percentage !== undefined) {
+                  progress = parsedResponse.progress_percentage;
+                }
+              } catch (e) {
+                // 如果解析失败，尝试用正则提取
+                const fields = this.extractResponseFields(msg.raw_response);
+                if (fields.progress_percentage !== null) {
+                  progress = fields.progress_percentage;
+                }
+              }
+            }
+          }
+
+          return progress;
+        }
+        async loadSession(sessionId) {
+          try {
+            const sessionsKey = this.getSessionsStorageKey();
+            const sessions = JSON.parse(localStorage.getItem(sessionsKey) || "[]");
+
+            const session = sessions.find((s) => s.id === sessionId);
+            if (!session) {
+              console.error("找不到指定的session:", sessionId);
+              return;
+            }
+
+            // 保存当前session（如果有聊天记录且进度大于0的话）
+            if (this.gameState.chatHistory.length > 0 && this.gameState.progress > 0) {
+              this.saveCurrentSessionToHistory();
+            }
+
+            // 重置状态
+            this.currentSessionId = session.id;
+            this.gameState = {
+              progress: 0,
+              chatHistory: [],
+              isObjectiveAchieved: false,
+            };
+
+            // 清空UI
+            this.elements.chatContainer.innerHTML = "";
+            this.elements.innerThoughts.innerHTML = "";
+            this.elements.progressBar.style.width = "0%";
+            this.elements.progressText.textContent = "0/100";
+
+            // 处理聊天历史：如果最后一条是用户消息，则放到输入框中
+            let chatHistoryToReplay = [...session.chatHistory];
+            let lastUserMessage = "";
+
+            if (chatHistoryToReplay.length > 0 && chatHistoryToReplay[chatHistoryToReplay.length - 1].role === "user") {
+              // 取出最后一条用户消息
+              const lastMessage = chatHistoryToReplay.pop();
+              lastUserMessage = lastMessage.content;
+            }
+
+            // 重新初始化AI聊天会话
+            if (sdk && sdk.aiChat) {
+              aiChatSession = sdk.aiChat.createSession({
+                model: "keepwork-pro",
+                stream: true,
+              });
+
+              // 添加系统提示词
+              aiChatSession.messages.push({ role: "system", content: this.config.system_prompt });
+            }
+
+            // 重放历史消息来恢复UI状态
+            for (const msg of chatHistoryToReplay) {
+              if (msg.role === "user") {
+                // 添加用户消息到UI
+                this.addMessage(msg.content, true);
+                // 添加到游戏状态和AI会话
+                this.gameState.chatHistory.push({ role: "user", content: msg.content });
+                if (aiChatSession) {
+                  aiChatSession.messages.push({ role: "user", content: msg.content });
+                }
+              } else if (msg.role === "assistant" && msg.raw_response) {
+                // 模拟LLM响应来恢复UI状态
+                await this.replayLLMResponse(msg.raw_response);
+              }
+            }
+
+            // 如果有最后一条用户消息，将其放到输入框中
+            if (lastUserMessage) {
+              this.elements.userInput.value = lastUserMessage;
+            }
+
+            // 重新绑定音频按钮事件
+            this.rebindAudioButtons();
+
+            // 重置下拉菜单选择
+            this.elements.historyDropdown.value = "";
+
+            console.log("Session loaded and replayed:", sessionId);
+            console.log("Final progress:", this.gameState.progress);
+            console.log("AI session messages:", aiChatSession?.messages.length);
+
+            this.updateLLMStatus(`已切换到历史会话: 进度${this.gameState.progress}%`);
+          } catch (error) {
+            console.error("加载session失败:", error);
+            this.updateLLMStatus("加载历史会话失败");
+          }
+        }
+
+        // 重放LLM响应（用于session加载时恢复UI状态）
+        async replayLLMResponse(rawResponse) {
+          try {
+            // 解析原始响应
+            let parsedResponse;
+            try {
+              parsedResponse = JSON.parse(rawResponse);
+            } catch (e) {
+              // 如果解析失败，尝试用正则提取
+              const fields = this.extractResponseFields(rawResponse);
+              parsedResponse = {
+                message: fields.message || rawResponse,
+                progress_percentage: fields.progress_percentage !== null ? fields.progress_percentage : this.gameState.progress,
+                progress_reason: fields.progress_reason || "会话恢复",
+                inner_thoughts: fields.inner_thoughts || "",
+              };
+            }
+
+            // 添加AI消息到UI
+            this.addMessage(parsedResponse.message, false);
+
+            // 应用响应的效果（进度、内心想法等）
+            this.applyLLMResponse(parsedResponse, true);
+            this.gameState.chatHistory.push({
+              role: "assistant",
+              content: parsedResponse.message,
+              raw_response: rawResponse,
+            });
+            if (aiChatSession) {
+              // 添加完整的原始JSON响应到AI会话，而不是仅仅显示的消息
+              aiChatSession.messages.push({ role: "assistant", content: rawResponse });
+            }
+          } catch (error) {
+            console.error("重放LLM响应失败:", error);
+          }
+        } // 获取sessions的存储键
+        getSessionsStorageKey() {
+          const objectiveTitle = this.config?.objective?.title || "目标进度";
+          const characterName = this.config?.character?.name || "角色";
+          return `chat_sessions_${objectiveTitle}_${characterName}`;
+        }
+
+        // 清空所有历史记录
+        clearAllHistory() {
+          try {
+            // 获取存储键并清空localStorage中的历史记录
+            const sessionsKey = this.getSessionsStorageKey();
+            localStorage.removeItem(sessionsKey);
+
+            // 同时清理旧版本的历史记录键（如果存在）
+            const oldHistoryKey = this.getHistoryKey();
+            localStorage.removeItem(oldHistoryKey);
+
+            // 更新下拉菜单显示
+            this.updateHistoryDropdown();
+
+            // 显示成功消息
+            this.updateLLMStatus("所有历史记录已清空");
+
+            console.log("All chat history cleared");
+          } catch (error) {
+            console.error("清空历史记录失败:", error);
+            this.updateLLMStatus("清空历史记录失败");
+          } finally {
+            // 确保重置下拉菜单选择
+            this.elements.historyDropdown.value = "";
+          }
+        }
+      }
+      const aiToolbox = new AIToolboxManager();
+      window.aiToolbox = aiToolbox;
+      const game = new LLMCharacterGame(); // Promise-based location response handler with timeout
+
+      // Window message handling for host communication
+      window.addEventListener("message", function (e) {
+        switch (e.data.type) {
+          case "setGameConfig":
+            // Update game config on the fly
+            if (e.data.data) {
+              // not supported
+            }
+            break;
+          case "getGameStats":
+            // Send current game statistics
+            window.parent.postMessage(
+              {
+                type: "gameStats",
+                data: {
+                  score: game.gameState.progress,
+                  difficulty: game.difficulty || 1,
+                  isCompleted: game.gameState.isObjectiveAchieved,
+                  chatHistory: game.gameState.chatHistory.length,
+                  characterName: game.config?.character?.name || "角色",
+                },
+              },
+              "*"
+            );
+            break;
+        }
+      });
+
+      window.parent.postMessage({ type: "gameLoaded" }, "*");
+
+      // Wait for several response with 200ms timeout, then start game
+      function checkStartGame(timeoutMs = 200) {
+        let gameStarted = false;
+        const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (!gameStarted) {
+              resolve(null);
+            }
+          }, timeoutMs);
+          let locationReceived = false;
+          let miniGameProxyReceived = false;
+          const messageHandler = function (e) {
+            if (e.data.type === "locationResponse") {
+              locationReceived = true;
+              const searchPath = e.data.search;
+              if (searchPath) {
+                const params = new URLSearchParams(searchPath);
+                const objective = params.get("objective");
+                if (objective) {
+                  game.urlObjective = objective;
+                }
+              }
+            } else if (e.data.type === "miniGameProxyDataResponse") {
+              miniGameProxyReceived = true;
+              sdk.token = e.data?.keepworkToken;
+            }
+            if (locationReceived && miniGameProxyReceived) {
+              window.removeEventListener("message", messageHandler);
+              clearTimeout(timeout);
+              resolve(e.data);
+            }
+          };
+          window.addEventListener("message", messageHandler);
+          window.parent.postMessage({ type: "getLocation" }, "*");
+          window.parent.postMessage({ type: "getMiniGameProxyData" }, "*");
+        });
+
+        waitForMinigameProxyWithTimeout
+          .then(() => {
+            if (!gameStarted) {
+              gameStarted = true;
+              game.start();
+            }
+          })
+          .catch((error) => {
+            if (!gameStarted) {
+              gameStarted = true;
+              game.start();
+            }
+          });
+      }
+      checkStartGame();
     </script>
-</body>
-
+  </body>
 </html>
