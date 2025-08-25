@@ -425,7 +425,10 @@
         <!-- 角色信息卡片 -->
         <div class="flex-shrink-0 mb-6">
           <div class="flex items-center space-x-4 mb-6">
-            <div id="character-avatar" class="w-16 h-16 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+            <div
+              id="character-avatar"
+              class="w-16 h-16 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl font-bold"
+            >
               小
             </div>
             <div class="flex-1">
@@ -499,7 +502,10 @@
               placeholder="输入你想说的话..."
               class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
-            <button id="send-btn" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity font-medium">
+            <button
+              id="send-btn"
+              class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity font-medium"
+            >
               发送
             </button>
           </div>
@@ -853,7 +859,7 @@
       - 26-50分：开始理解问题，但不知如何解决
       - 51-75分：逐渐接受问题的重要性，寻求解决方案或提出更多相关的问题
       - 76-99分：主动思考解决方法，开始用自己的方式归纳和总结问题
-      - 100分：彻底转变或解决，用自己的话总结了问题的解决方案
+      - 100分：问题得到了解决，感谢主人的解答
 
       ## 对话要求
       1. 根据当前对话内容和历史发展判断当前应有的进度百分比
@@ -865,7 +871,7 @@
       你必须严格按照以下JSON格式输出，不要有任何其他内容：
       {
           "message": "你的回复内容，包含括号内的动作描述",
-          "progress_percentage": 当前问题解决的绝对进度百分比(0-100的整数),
+          "progress_change": [-10, 30]之间的整数，相对于当前progress_percentage的变化,
           "progress_reason": "当前进度百分比的原因说明",
           "inner_thoughts": "你此刻真实的内心想法和感受"
       }`;
@@ -902,7 +908,13 @@
               message: "哎呀，又要学习了吗... (无精打采地看着书本) 我昨天刚通关了一个超难的副本呢！",
               progress: 0,
             },
-            quick_replies: ["游戏确实很有趣，但学习也有它的乐趣哦", "你最喜欢哪个科目？", "我们可以制定一个学习计划", "你觉得游戏和学习有什么相似之处？", "你的梦想是什么？"],
+            quick_replies: [
+              "游戏确实很有趣，但学习也有它的乐趣哦",
+              "你最喜欢哪个科目？",
+              "我们可以制定一个学习计划",
+              "你觉得游戏和学习有什么相似之处？",
+              "你的梦想是什么？",
+            ],
             system_prompt: `你是小明，一个17岁的高二学生。你最近沉迷游戏，学习成绩下滑，但内心其实渴望改变。
 
       ## 角色设定
@@ -927,7 +939,7 @@
       你必须严格按照以下JSON格式输出，不要有任何其他内容：
       {
         "message": "你的回复内容，包含括号内的动作描述",
-        "progress_percentage": 当前学习动力恢复的绝对进度百分比(0-100的整数),
+        "progress_change": [-10, 30]之间的整数，相对于当前progress_percentage的变化,
         "progress_reason": "当前进度百分比的原因说明",
         "inner_thoughts": "你此刻真实的内心想法和感受"
       }`,
@@ -1057,8 +1069,8 @@
           });
         }
         async sendMessage() {
-          const message = this.elements.userInput.value.trim();
-          if (!message || this.gameState.isObjectiveAchieved) return;
+          let message = this.elements.userInput.value.trim();
+          if (!message) return;
 
           // 禁用输入控件
           this.elements.sendBtn.disabled = true;
@@ -1066,6 +1078,9 @@
 
           this.addMessage(message, true);
           this.elements.userInput.value = "";
+
+          // add current percentage to the message
+          message = `[current progress: ${this.gameState.progress}%] ${message}`;
           this.gameState.chatHistory.push({ role: "user", content: message });
 
           this.addTypingIndicator();
@@ -1096,17 +1111,13 @@
             // 自动保存聊天历史
             this.autoSaveHistory();
           }
-        }
-
-        // 应用LLM响应的UI效果
+        } // 应用LLM响应的UI效果
         applyLLMResponse(response, isReplay = false) {
           // 计算进度变化值
-          const oldProgress = this.gameState.progress;
-          const newProgress = Math.min(100, Math.max(0, response.progress_percentage || 0));
-          const progressChange = newProgress - oldProgress;
+          const progressChange = response.progress_change || 0;
 
-          // 更新进度到新的绝对值
-          this.updateProgressToValue(newProgress, response.progress_reason);
+          // 更新进度
+          this.updateProgress(progressChange, response.progress_reason);
 
           if (response.inner_thoughts) {
             this.addInnerThought(response.inner_thoughts);
@@ -1115,14 +1126,14 @@
           // 在最后一条消息下面添加进度显示
           this.addProgressIndicator(progressChange, response.progress_reason);
 
-          if (!isReplay && newProgress >= this.config.objective.max_progress) {
+          if (!isReplay && this.gameState.progress >= this.config.objective.max_progress) {
             this.handleObjectiveAchieved();
           }
         } // Helper function to extract all response fields using regex
         extractResponseFields(text) {
           const fields = {
             message: "",
-            progress_percentage: null,
+            progress_change: null,
             progress_reason: "",
             inner_thoughts: "",
           };
@@ -1132,13 +1143,11 @@
           const messageMatch = messageRegex.exec(text);
           if (messageMatch) {
             fields.message = messageMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
-          }
-
-          // Extract progress_percentage field
-          const progressPercentageRegex = /"progress_percentage"\s*:\s*(\d+)/;
-          const progressPercentageMatch = progressPercentageRegex.exec(text);
-          if (progressPercentageMatch) {
-            fields.progress_percentage = parseInt(progressPercentageMatch[1]);
+          } // Extract progress_change field
+          const progressChangeRegex = /"progress_change"\s*:\s*(-?\d+)/;
+          const progressChangeMatch = progressChangeRegex.exec(text);
+          if (progressChangeMatch) {
+            fields.progress_change = parseInt(progressChangeMatch[1]);
           }
 
           // Extract progress_reason field
@@ -1235,7 +1244,7 @@
                     const fields = this.extractResponseFields(finalText);
                     jsonResponse = {
                       message: fields.message || finalText,
-                      progress_percentage: fields.progress_percentage !== null ? fields.progress_percentage : 0,
+                      progress_change: fields.progress_change !== null ? fields.progress_change : 0,
                       progress_reason: fields.progress_reason || "积极交流",
                       inner_thoughts: fields.inner_thoughts || "正在思考",
                     };
@@ -1982,14 +1991,14 @@
             if (msg.role === "assistant" && msg.raw_response) {
               try {
                 const parsedResponse = JSON.parse(msg.raw_response);
-                if (parsedResponse.progress_percentage !== undefined) {
-                  progress = parsedResponse.progress_percentage;
+                if (parsedResponse.progress_change !== undefined) {
+                  progress += parsedResponse.progress_change;
                 }
               } catch (e) {
                 // 如果解析失败，尝试用正则提取
                 const fields = this.extractResponseFields(msg.raw_response);
-                if (fields.progress_percentage !== null) {
-                  progress = fields.progress_percentage;
+                if (fields.progress_change !== null) {
+                  progress += fields.progress_change;
                 }
               }
             }
@@ -2098,7 +2107,7 @@
               const fields = this.extractResponseFields(rawResponse);
               parsedResponse = {
                 message: fields.message || rawResponse,
-                progress_percentage: fields.progress_percentage !== null ? fields.progress_percentage : this.gameState.progress,
+                progress_change: fields.progress_change !== null ? fields.progress_change : 0,
                 progress_reason: fields.progress_reason || "会话恢复",
                 inner_thoughts: fields.inner_thoughts || "",
               };
