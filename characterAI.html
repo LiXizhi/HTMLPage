@@ -92,8 +92,8 @@
             background: rgba(86, 60, 233, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -103,6 +103,7 @@
             margin-left: 8px;
             align-self: flex-end;
             flex-shrink: 0;
+            font-size: 16px;
         }
 
         .audio-btn:hover {
@@ -370,7 +371,7 @@
             border: 3px solid #667eea;
             margin-bottom: 15px;
             max-width: 400px;
-            max-height: 300px;
+            max-height: 400px;
         }
 
         .character-video-message {
@@ -680,6 +681,13 @@
                         this.config.objective.wikiword) {
                         iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
                     }
+                    if (tool.id === 'xiaomai')
+                    {
+                        let url = window.location.href;
+                        url = url.split('?')[0];
+                        url = url.replace('characterAI', 'characterAI_xiaomai');
+                        iframeUrl = `${url}?token=`;
+                    }
 
                     // 如果URL以token=结尾，则自动添加SDK token
                     if (iframeUrl.endsWith('token=') && sdk && sdk.token) {
@@ -743,8 +751,7 @@
         const sdk = new KeepworkSDK({
             timeout: 30000
         });
-        console.log(`Keepwork SDK initialized token: ${sdk.token}`);
-
+        
         // Initialize AI Chat Session
         let aiChatSession;
 
@@ -778,10 +785,13 @@
                 };
                 this.initEventListeners();
                 this.loadDefaultConfig();
-                let urlObjective = new URLSearchParams(window.location.search).get('objective');
+            }
+            start(){
+                let urlObjective = game.urlObjective || (new URLSearchParams(window.location.search).get('objective'));
                 if (urlObjective) {
                     this.loadConfigByObjective(urlObjective);
                 }
+                console.log(`Keepwork SDK initialized token: ${sdk.token}`);
                 this.initializeGame();
             }
             initEventListeners() {
@@ -819,6 +829,7 @@
                 this.config.character.age = 8;
                 this.config.character.role = "AI宠物";
                 this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
+                this.config.character.chat_background = null; 
                 this.config.objective.title = objective;
                 this.config.objective.description = `通过耐心的交流解决, 解决问题: ${objective}`;
                 this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
@@ -869,10 +880,10 @@
                 };
                 this.config.videoActions = {
                     "期待": {
-                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4.mp4"
+                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4"
                     },
                     "高兴": {
-                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4.mp4"
+                        url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4"
                     }
                 };
             }
@@ -883,6 +894,7 @@
                         age: 17,
                         gender: "male",
                         role: "高二学生",
+                        chat_background: null,
                         description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！"
                     },
                     objective: {
@@ -935,6 +947,38 @@
                     }
                 };
             }
+            
+            changeChatBackground(background) {
+                const chatContainer = document.getElementById('chat-container');
+                if (!chatContainer) return;
+                
+                if (background) {
+                    // If background is a URL (image)
+                    if (background.startsWith('http') || background.startsWith('data:') || background.startsWith('blob:')) {
+                        chatContainer.style.backgroundImage = `url(${background})`;
+                        chatContainer.style.backgroundSize = 'cover';
+                        chatContainer.style.backgroundPosition = 'center';
+                        chatContainer.style.backgroundRepeat = 'no-repeat';
+                        chatContainer.style.backgroundColor = ''; // Clear solid color
+                    }
+                    // If background is a gradient or solid color
+                    else if (background.includes('gradient') || background.startsWith('#') || background.startsWith('rgb') || background.startsWith('hsl')) {
+                        chatContainer.style.background = background;
+                        chatContainer.style.backgroundImage = ''; // Clear image
+                    }
+                    // If background is a CSS color name
+                    else {
+                        chatContainer.style.backgroundColor = background;
+                        chatContainer.style.backgroundImage = ''; // Clear image
+                    }
+                } else {
+                    // Reset to default if no background is specified
+                    chatContainer.style.background = '';
+                    chatContainer.style.backgroundImage = '';
+                    chatContainer.style.backgroundColor = '';
+                }
+            }
+            
             initializeGame() {
                 if (!this.config) return;
 
@@ -1004,6 +1048,8 @@
                 if (this.elements.chatContainer.children.length === 1) {
                     this.checkAndPlayVideoAction(this.config.initial?.message);
                 }
+                // 设置聊天背景
+                this.changeChatBackground(this.config?.character?.chat_background);
             }
 
             updateQuickReplies() {
@@ -1022,7 +1068,7 @@
                     });
                     container.appendChild(button);
                 });
-            } 
+            }
             async sendMessage() {
                 const message = this.elements.userInput.value.trim();
                 if (!message || this.gameState.isObjectiveAchieved) return;
@@ -1036,9 +1082,9 @@
                 this.gameState.chatHistory.push({ role: 'user', content: message });
 
                 this.addTypingIndicator();
-                this.updateLLMStatus('正在连接AI...'); 
+                this.updateLLMStatus('正在连接AI...');
                 try {
-                    const { parsedResponse, rawResponse } = await this.callLLM(message); 
+                    const { parsedResponse, rawResponse } = await this.callLLM(message);
                     if (parsedResponse && rawResponse) {
                         // 存储原始响应到聊天历史中
                         this.gameState.chatHistory.push({
@@ -1123,13 +1169,13 @@
                 }
 
                 return fields;
-            } 
+            }
             updateStreamingStatus(fields) {
                 // 只在流式传输过程中临时更新内心想法区域的状态
                 if (fields.inner_thoughts) {
                     // 可以在这里添加临时的流式显示效果，如果需要的话
                 }
-            } 
+            }
             async callLLM(userMessage) {
                 if (!aiChatSession) {
                     throw new Error('AI聊天会话未初始化');
@@ -1225,7 +1271,7 @@
                 } catch (error) {
                     throw error;
                 }
-            } 
+            }
             addMessage(message, isUser = false) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `flex items-start space-x-2 ${isUser ? 'justify-end' : ''}`;
@@ -1280,8 +1326,7 @@
                         break;
                     }
                 }
-            }
-            playVideoAction(actionKey, messageText) {
+            } playVideoAction(actionKey, messageText) {
                 const videoConfig = this.config.videoActions[actionKey];
                 if (!videoConfig) return;
 
@@ -1300,13 +1345,28 @@
                 // 播放视频
                 this.loadAndPlayVideo(canvas, videoConfig.url);
 
-                // 绑定返回按钮事件
-                const handleBackClick = () => {
+                // 关闭覆盖层的函数
+                const closeOverlay = () => {
                     overlay.classList.remove('show');
                     backBtn.removeEventListener('click', handleBackClick);
+                    overlay.removeEventListener('click', handleOverlayClick);
+                };
+
+                // 绑定返回按钮事件
+                const handleBackClick = () => {
+                    closeOverlay();
                 };
                 backBtn.addEventListener('click', handleBackClick);
-            }            
+
+                // 绑定覆盖层点击事件（点击任意位置关闭）
+                const handleOverlayClick = (e) => {
+                    // 只有点击覆盖层本身才关闭，不包括内容容器
+                    if (e.target === overlay) {
+                        closeOverlay();
+                    }
+                };
+                overlay.addEventListener('click', handleOverlayClick);
+            }
             async loadAndPlayVideo(canvas, videoUrl) {
                 try {
                     if (!canvas) {
@@ -1533,6 +1593,8 @@
                     audioBtn.title = '播放语音';
                     audioBtn.innerHTML = '🔊';
                     audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
+                    
+                    // 将按钮添加到最外层 div 的最后，与 addMessage 方法保持一致
                     messageDiv.appendChild(audioBtn);
                     this.checkAndPlayVideoAction(messageText);
                 }
@@ -1626,6 +1688,7 @@
                     type: 'gameFinished',
                     data: {
                         score: this.gameState.progress,
+                        earnedPoints: this.gameState.progress + this.gameState.chatHistory.length * 10,
                         characterName: this.config?.character?.name || '角色',
                         totalMessages: this.gameState.chatHistory.length,
                         finalProgress: this.gameState.progress
@@ -1764,7 +1827,7 @@
                 if (this.elements.chatContainer.children.length === 1) {
                     this.checkAndPlayVideoAction(this.config.initial?.message);
                 }
-            }            
+            }
             saveCurrentSessionToHistory() {
                 // 如果没有session ID、没有聊天记录或进度为0，则不保存
                 if (!this.currentSessionId || this.gameState.chatHistory.length === 0 || this.gameState.progress === 0) {
@@ -1853,7 +1916,7 @@
                 }
 
                 return progress;
-            }            
+            }
             async loadSession(sessionId) {
                 try {
                     const sessionsKey = this.getSessionsStorageKey();
@@ -2019,54 +2082,15 @@
         }
         const aiToolbox = new AIToolboxManager();
         window.aiToolbox = aiToolbox;
-        const game = new LLMCharacterGame();
-
+        const game = new LLMCharacterGame();        // Promise-based location response handler with timeout
+        
         // Window message handling for host communication
         window.addEventListener('message', function (e) {
             switch (e.data.type) {
                 case 'setGameConfig':
                     // Update game config on the fly
                     if (e.data.data) {
-                        try {
-                            // If it's a string, try to parse as JSON, otherwise use as markdown/text
-                            let newConfig;
-                            if (typeof e.data.data === 'string') {
-                                try {
-                                    newConfig = JSON.parse(e.data.data);
-                                } catch (jsonError) {
-                                    // If not JSON, treat as markdown/text and merge with default config
-                                    console.log('Config data is not JSON, treating as text description');
-                                    newConfig = {
-                                        character: {
-                                            ...game.config.character,
-                                            description: e.data.data
-                                        }
-                                    };
-                                }
-                            } else {
-                                newConfig = e.data.data;
-                            }
-
-                            // Merge with existing config
-                            game.config = {
-                                ...game.config,
-                                ...newConfig,
-                                character: {
-                                    ...game.config.character,
-                                    ...(newConfig.character || {})
-                                },
-                                objective: {
-                                    ...game.config.objective,
-                                    ...(newConfig.objective || {})
-                                }
-                            };
-
-                            // Reinitialize game with new config
-                            game.initializeGame();
-                            console.log('Game config updated:', game.config);
-                        } catch (error) {
-                            console.error('Failed to update game config:', error);
-                        }
+                        // not supported
                     }
                     break;
                 case 'getGameStats':
@@ -2085,9 +2109,59 @@
             }
         });
 
-        // Send game loaded event
         window.parent.postMessage({ type: 'gameLoaded' }, '*');
 
+        // Wait for several response with 200ms timeout, then start game
+        function checkStartGame(timeoutMs = 200){
+            let gameStarted = false;
+            const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    if (!gameStarted) {
+                        resolve(null);
+                    }
+                }, timeoutMs);
+                let locationReceived = false;
+                let miniGameProxyReceived = false;
+                const messageHandler = function (e) {
+                    if (e.data.type === "locationResponse") {
+                        locationReceived = true;
+                        const searchPath = e.data.search;
+                        if (searchPath) {
+                            const params = new URLSearchParams(searchPath);
+                            const objective = params.get('objective');
+                            if (objective) {
+                                game.urlObjective = objective;
+                            }
+                        }
+                    }
+                    else if(e.data.type === "miniGameProxyDataResponse"){
+                        miniGameProxyReceived = true;
+                        sdk.token = e.data?.keepworkToken;
+                    }
+                    if(locationReceived && miniGameProxyReceived){
+                        window.removeEventListener('message', messageHandler);
+                        clearTimeout(timeout);
+                        resolve(e.data);
+                    }
+                };
+                window.addEventListener('message', messageHandler);
+                window.parent.postMessage({ type: 'getLocation' }, '*');
+                window.parent.postMessage({ type: 'getMiniGameProxyData' }, '*');
+            });
+            
+            waitForMinigameProxyWithTimeout.then(() => {
+                if (!gameStarted) {
+                    gameStarted = true;
+                    game.start();
+                }
+            }).catch((error) => {
+                if (!gameStarted) {
+                    gameStarted = true;
+                    game.start();
+                }
+            });
+        }
+        checkStartGame();
     </script>
 </body>
 

@@ -1,0 +1,2421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的超棒假期计划</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        body {
+            font-family: 'Comic Neue', cursive;
+        }
+
+        .activity-list {
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+
+        .time-plan-area {
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+
+        .activity-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .activity-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .time-slot {
+            min-height: 120px;
+            transition: background-color 0.3s ease;
+        }
+
+        .time-slot.drag-over {
+            background-color: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .bounce {
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            20%,
+            50%,
+            80%,
+            100% {
+                transform: translateY(0);
+            }
+
+            40% {
+                transform: translateY(-10px);
+            }
+
+            60% {
+                transform: translateY(-5px);
+            }
+        }
+
+        .star {
+            animation: twinkle 2s infinite;
+        }
+
+        @keyframes twinkle {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .completed-task {
+            opacity: 0.7;
+            text-decoration: line-through;
+        }
+
+        .time-exceeded {
+            border-color: #ef4444 !important;
+            background-color: #fef2f2 !important;
+        }
+
+        .time-warning {
+            border-color: #f59e0b !important;
+            background-color: #fffbeb !important;
+        }
+
+        .diy-activity {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .diy-input {
+            background: transparent;
+            border: 1px dashed rgba(255, 255, 255, 0.5);
+            color: white;
+        }
+
+        .diy-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .drag-placeholder {
+            background-color: #e5e7eb;
+            border: 2px dashed #9ca3af;
+            min-height: 60px;
+            border-radius: 8px;
+        }
+
+        .dragging {
+            opacity: 0.5;
+        }
+
+        .drop-zone {
+            height: 20px;
+            margin: 4px 0;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            background-color: transparent;
+            border: 1px dashed transparent;
+        }
+
+        .drop-zone.drag-over {
+            height: 40px;
+            background-color: #3b82f6;
+            opacity: 0.8;
+            border: 2px dashed #1d4ed8;
+        }
+
+        /* Make the entire activity item wrapper act as a drop zone when dragging */
+        .dragging~.activity-item-wrapper,
+        .activity-item-wrapper:hover .drop-zone {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+
+        /* Increase sensitivity for empty drop zones */
+        .drop-zone-empty {
+            min-height: 60px;
+            padding: 8px;
+        }
+
+        .drop-zone-empty {
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            padding: 16px;
+            margin: 8px 0;
+        }
+
+        .drop-zone-empty.drag-over {
+            background-color: #dbeafe;
+            border-color: #3b82f6;
+            border-style: solid;
+            min-height: 100px;
+        }
+
+        .activity-item-wrapper {
+            position: relative;
+        }
+
+        /* Visual feedback when dragging */
+        body.dragging-active .drop-zone {
+            border: 1px dashed #9ca3af;
+            background-color: rgba(156, 163, 175, 0.1);
+        }
+
+        body.dragging-active .time-slot {
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+
+        /* Improve hover states for better UX */
+        .activity-item-wrapper:hover .drop-zone {
+            opacity: 0.6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+
+        /* 作息时间设置样式 */
+        input[type="time"] {
+            font-family: 'Comic Neue', cursive;
+            font-size: 14px;
+        }
+
+        input[type="time"]:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .schedule-message {
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100 min-h-screen p-4">
+    <div class="max-w-6xl mx-auto">
+        <!-- 模板管理区 -->
+        <div class="bg-white rounded-xl p-4 mb-4 shadow-lg">
+            <div class="flex items-center justify-center space-x-4 flex-wrap">
+                <span class="text-lg font-bold text-blue-600">📋 我的计划:</span>
+                <div class="relative flex">
+                    <input type="text" id="templateCombobox" placeholder="选择或输入模板名称"
+                        class="px-3 py-2 border-2 border-blue-300 rounded-l-lg min-w-48 flex-1"
+                        onchange="handleTemplateSelect()" oninput="handleTemplateInput()" />
+                    <button type="button" id="templateDropdownBtn"
+                        class="px-3 py-2 border-2 border-l-0 border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-r-lg"
+                        onclick="toggleTemplateDropdown()">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
+                            </path>
+                        </svg>
+                    </button>
+                    <div id="templateDropdown"
+                        class="absolute top-full left-0 w-full bg-white border-2 border-blue-300 rounded-lg shadow-lg z-10 hidden max-h-48 overflow-y-auto">
+                        <!-- 模板选项将通过JavaScript动态生成 -->
+                    </div>
+                </div>
+                <button onclick="saveCurrentTemplate()"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                    💾 保存
+                </button>
+                <button onclick="deleteCurrentTemplate()"
+                    class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">
+                    🗑️ 删除
+                </button>
+                <button onclick="completePlan()"
+                    class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
+                    ✅ 完成计划
+                </button>
+            </div>
+
+
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-6" style="height: calc(100vh - 180px);">
+            <!-- 活动选择区 -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl p-6 shadow-lg h-full flex flex-col">
+                    <h2 class="text-2xl font-bold text-center text-purple-600 mb-4">🎈 选择活动</h2>
+                    <div class="activity-list flex-1">
+                        <div class="grid grid-cols-1 gap-3" id="activities">
+                            <!-- 活动卡片将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 时间计划区 -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-xl p-6 shadow-lg h-full flex flex-col">
+                    <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                        <h2 class="text-2xl font-bold text-purple-600">⏰ 我的一天计划</h2>
+                        <div class="flex space-x-4 text-sm">
+                            <div>
+                                <span class="text-lg">⭐ 完成: </span>
+                                <span id="score" class="text-xl font-bold text-yellow-500">0</span>
+                                <span> / </span>
+                                <span id="total" class="text-xl font-bold text-gray-500">0</span>
+                            </div>
+                            <div>
+                                <span class="text-lg">⏰ 总计: </span>
+                                <span id="totalPlannedTime" class="text-xl font-bold text-blue-500">0分钟</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="time-plan-area flex-1">
+                        <div class="space-y-4" id="timeSlots">
+                            <!-- 时间段将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 奖励展示区 -->
+        <div id="rewards" class="mt-4 text-center hidden">
+            <div class="bg-yellow-100 border-4 border-yellow-400 rounded-xl p-4">
+                <h3 class="text-xl font-bold text-yellow-600 mb-2">🎉 太棒了！</h3>
+                <p class="text-yellow-700">你完成了今天的计划！获得了一颗星星 ⭐</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game communication variables
+        let game_config = null;
+        let maxScore = 0; // 记录最高分数
+        let difficulty = 1; // 默认难度
+        let gameStarted = false;
+        let gameLoaded = false;
+
+        // 游戏通信系统
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data; // 这是markdown或文本字符串
+                    // 更新游戏配置逻辑
+                    if (game_config) {
+                        try {
+                            const config = JSON.parse(game_config);
+                            if (config.difficulty) {
+                                difficulty = Math.max(1, Math.min(3, parseInt(config.difficulty)));
+                            }
+                            showSuccessMessage(`游戏配置已更新！难度等级: ${difficulty}`);
+                        } catch (error) {
+                            // 如果不是JSON格式，当作普通文本处理
+                            console.log('Game config received:', game_config);
+                        }
+                    }
+                    break;
+                case 'getGameStats':
+                    // 返回当前游戏统计信息，永远返回最高分数
+                    const currentAnalysis = analyzePlan();
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: Math.max(maxScore, currentAnalysis.score), // 取最高分
+                            difficulty: difficulty,
+                            currentScore: currentAnalysis.score,
+                            maxScore: maxScore,
+                            grade: currentAnalysis.grade,
+                            timeUtilization: currentAnalysis.timeUtilization
+                        }
+                    }, '*');
+                    break;
+            }
+        });
+
+        // 初始化游戏
+        function initializeGame() {
+            // 加载最高分数
+            const savedMaxScore = localStorage.getItem('schedule_maker_max_score');
+            if (savedMaxScore) {
+                maxScore = parseInt(savedMaxScore) || 0;
+            }
+
+            // 发送游戏加载完成消息
+            if (!gameLoaded) {
+                gameLoaded = true;
+                window.parent.postMessage({ type: 'gameLoaded' }, '*');
+            }
+        }
+
+        // 开始游戏
+        function startGame() {
+            if (!gameStarted) {
+                gameStarted = true;
+                window.parent.postMessage({ type: 'gameStarted' }, '*');
+                showSuccessMessage('游戏开始！开始制定你的时间计划吧！');
+            }
+        }
+
+        // 活动数据 - 增加默认时长（分钟）
+        const activities = [
+            { id: 'study', name: '📚 学习时间', emoji: '📚', color: 'bg-blue-100 border-blue-300', defaultDuration: 60 },
+            { id: 'read', name: '📖 阅读', emoji: '📖', color: 'bg-green-100 border-green-300', defaultDuration: 30 },
+            { id: 'exercise', name: '🏃 运动', emoji: '🏃', color: 'bg-red-100 border-red-300', defaultDuration: 45 },
+            { id: 'play', name: '🎮 游戏', emoji: '🎮', color: 'bg-purple-100 border-purple-300', defaultDuration: 60 },
+            { id: 'art', name: '🎨 画画手工', emoji: '🎨', color: 'bg-pink-100 border-pink-300', defaultDuration: 45 },
+            { id: 'music', name: '🎵 音乐', emoji: '🎵', color: 'bg-yellow-100 border-yellow-300', defaultDuration: 30 },
+            { id: 'help', name: '🏠 帮忙做家务', emoji: '🏠', color: 'bg-orange-100 border-orange-300', defaultDuration: 30 },
+            { id: 'outdoor', name: '🌳 户外活动', emoji: '🌳', color: 'bg-teal-100 border-teal-300', defaultDuration: 60 },
+            { id: 'friend', name: '👫 和朋友玩', emoji: '👫', color: 'bg-indigo-100 border-indigo-300', defaultDuration: 30 },
+            { id: 'rest', name: '😴 休息', emoji: '😴', color: 'bg-gray-100 border-gray-300', defaultDuration: 30 },
+            { id: 'meal', name: '🍽️ 吃饭', emoji: '🍽️', color: 'bg-amber-100 border-amber-300', defaultDuration: 30 },
+            { id: 'create', name: '✨ 自由创作', emoji: '✨', color: 'bg-violet-100 border-violet-300', defaultDuration: 45 }
+        ];
+
+        let customActivities = []; // 存储自定义活动
+
+        // 时间段配置
+        let timeSlotConfig = {
+            morning: { name: '🌅 上午', maxHours: 3, start: '09:00', end: '12:00' },
+            afternoon: { name: '☀️ 下午', maxHours: 3, start: '14:00', end: '17:00' },
+            evening: { name: '🌙 晚上', maxHours: 2, start: '19:00', end: '24:00' }
+        };
+
+        let currentPlan = {};
+        let completedTasks = {};
+        let activityDurations = {}; // 存储每个活动实例的时长
+        let templates = {}; // 存储计划模板
+        let currentTemplate = null; // 当前选中的模板名称
+
+        // 作息时间配置
+        let scheduleSettings = {
+            wakeUpTime: '07:00',
+            bedTime: '22:00'
+        };
+
+        // 调整活动时间（新增函数，支持+/-5分钟步进）
+        function adjustActivityTime(slotId, instanceId, adjustment) {
+            const activityItem = currentPlan[slotId]?.find(item => item.instanceId === instanceId);
+            if (!activityItem) return;
+
+            const newDuration = activityItem.duration + adjustment;
+
+            // 确保时间不少于5分钟，不超过120分钟
+            if (newDuration < 5) {
+                showWarningMessage('活动时间不能少于5分钟！');
+                return;
+            }
+            if (newDuration > 120) {
+                showWarningMessage('活动时间不能超过120分钟！');
+                return;
+            }
+
+            // 只有在增加时间时才检查是否超过限制
+            if (adjustment > 0) {
+                // 计算其他活动的总时长
+                const otherActivitiesTime = currentPlan[slotId]
+                    .filter(item => item.instanceId !== instanceId)
+                    .reduce((total, item) => total + item.duration, 0);
+
+                const maxTime = timeSlotConfig[slotId].maxHours * 60;
+
+                if (otherActivitiesTime + newDuration > maxTime) {
+                    showWarningMessage(`时间超限！${timeSlotConfig[slotId].name}最多${maxTime}分钟，其他活动已用${otherActivitiesTime}分钟。`);
+                    return;
+                }
+            }
+
+            // 更新时长
+            activityItem.duration = newDuration;
+            if (!activityDurations[slotId]) {
+                activityDurations[slotId] = {};
+            }
+            activityDurations[slotId][instanceId] = newDuration;
+
+            updateSlotAll(slotId);
+            autoSaveTemplate();
+        }
+
+        // 生成时长选项
+        function generateDurationOptions(selectedValue = 30) {
+            let options = '';
+            for (let minutes = 10; minutes <= 120; minutes += 10) {
+                const selected = minutes === selectedValue ? 'selected' : '';
+                options += `<option value="${minutes}" ${selected}>${minutes}分钟</option>`;
+            }
+            return options;
+        }
+
+        // 初始化页面
+        function initializePage() {
+            // 加载作息时间设置
+            loadScheduleSettings();
+
+            // 初始化模板系统（不创建默认模板）
+            initializeDefaultTemplates();
+
+            // 加载模板
+            loadTemplates();
+
+            // 加载自定义活动
+            loadCustomActivities();
+
+            // 生成活动卡片
+            generateActivityCards();
+
+            // 生成时间段
+            generateTimeSlots();
+
+            // 初始化时间显示
+            Object.keys(timeSlotConfig).forEach(slotId => {
+                updateTimeUsed(slotId);
+            });
+
+            // 初始化总计划时间
+            updateTotalPlannedTime();
+
+            // 自动加载模板或提示用户创建新模板
+            autoLoadTemplate();
+
+            // 初始化游戏通信系统
+            initializeGame();
+        }
+
+        // 生成活动卡片
+        function generateActivityCards() {
+            const container = document.getElementById('activities');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            // 所有活动（预设 + 自定义）
+            const allActivities = [...activities, ...customActivities];
+
+            allActivities.forEach(activity => {
+                const card = document.createElement('div');
+                card.className = `activity-card ${activity.color} border-2 rounded-lg p-3 cursor-pointer select-none`;
+                card.draggable = true;
+                card.dataset.activityId = activity.id;
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3 flex-1">
+                            <div class="text-3xl">${activity.emoji}</div>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xl font-bold">${activity.name.replace(activity.emoji + ' ', '')}</span>
+                                    <span class="text-xl font-bold text-blue-600">${activity.defaultDuration}分钟</span>
+                                </div>
+                            </div>
+                        </div>
+                        ${activity.custom ? `<button onclick="removeCustomActivity('${activity.id}')" class="text-red-500 hover:text-red-700 text-lg ml-2">✕</button>` : ''}
+                    </div>
+                `;
+
+                // Add drag event listeners
+                card.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', activity.id);
+                    card.classList.add('opacity-50');
+                });
+
+                card.addEventListener('dragend', (e) => {
+                    card.classList.remove('opacity-50');
+                });
+
+                container.appendChild(card);
+            });
+
+            // 添加DIY卡片
+            const diyCard = document.createElement('div');
+            diyCard.className = 'diy-activity border-2 rounded-lg p-3 cursor-pointer select-none';
+            diyCard.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <div class="text-3xl">✨</div>
+                    <div class="flex-1">
+                        <input type="text" placeholder="自定义活动名称" 
+                               class="diy-input w-full text-lg font-bold bg-transparent border-none outline-none"
+                               onkeypress="handleDiyInput(event, this)" />
+                        <div class="text-sm mt-1 opacity-70">按回车添加</div>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(diyCard);
+        }
+
+        // 生成时间段
+        function generateTimeSlots() {
+            const container = document.getElementById('timeSlots');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            Object.keys(timeSlotConfig).forEach(slotId => {
+                const config = timeSlotConfig[slotId];
+                const slotDiv = document.createElement('div');
+                slotDiv.className = 'time-slot border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50';
+                slotDiv.dataset.timeSlot = slotId;
+                slotDiv.setAttribute('data-time-slot', slotId);
+
+                // 为上午时间段添加起床时间设置，为晚上时间段添加睡觉时间设置
+                let timeSettingHTML = '';
+                if (slotId === 'morning') {
+                    timeSettingHTML = `
+                        <div class="flex items-center space-x-2 text-sm">
+                            <span class="text-green-600 font-medium">🌅 起床:</span>
+                            <input type="time" id="wakeUpTime" value="${scheduleSettings.wakeUpTime}" 
+                                   class="px-2 py-1 border border-green-300 rounded text-xs"
+                                   onchange="updateSchedule()" />
+                        </div>
+                    `;
+                } else if (slotId === 'evening') {
+                    timeSettingHTML = `
+                        <div class="flex items-center space-x-2 text-sm">
+                            <span class="text-purple-600 font-medium">🌙 睡觉:</span>
+                            <input type="time" id="bedTime" value="${scheduleSettings.bedTime}" 
+                                   class="px-2 py-1 border border-purple-300 rounded text-xs"
+                                   onchange="updateSchedule()" />
+                        </div>
+                    `;
+                }
+
+                slotDiv.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center space-x-4">
+                            <h3 class="text-xl font-bold text-gray-700">${config.name} (${config.start}-${config.end})</h3>
+                            ${timeSettingHTML}
+                        </div>
+                        <div class="text-lg">
+                            <span class="font-bold">时间: </span>
+                            <span id="timeUsed-${slotId}" class="text-blue-600 font-bold">0</span>
+                            <span class="text-gray-500"> / ${config.maxHours * 60} 分钟</span>
+                        </div>
+                    </div>
+                    <div class="planned-activities space-y-2" data-slot="${slotId}">
+                        <p class="text-gray-500 text-sm">拖拽活动到这里</p>
+                    </div>
+                `;
+
+                // Add drag and drop event listeners
+                slotDiv.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    slotDiv.classList.add('drag-over');
+                });
+
+                slotDiv.addEventListener('dragleave', (e) => {
+                    // Only remove drag-over if we're actually leaving the slot
+                    if (!slotDiv.contains(e.relatedTarget)) {
+                        slotDiv.classList.remove('drag-over');
+                    }
+                });
+
+                slotDiv.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    slotDiv.classList.remove('drag-over');
+
+                    const activityId = e.dataTransfer.getData('text/plain');
+
+                    // Check if it's a move operation or a new activity
+                    try {
+                        const dragData = JSON.parse(activityId);
+                        if (dragData.type === 'move') {
+                            // This is handled by dropAtPosition function
+                            return;
+                        }
+                    } catch (error) {
+                        // This is a new activity from the left panel
+                        addActivityToSlot(slotId, activityId);
+                    }
+                });
+
+                container.appendChild(slotDiv);
+            });
+        }
+
+        // 添加活动到时间段
+        function addActivityToSlot(slotId, activityId) {
+            const allActivities = getAllActivities();
+            const activity = allActivities.find(a => a.id === activityId);
+            if (!activity) return;
+
+            if (!currentPlan[slotId]) {
+                currentPlan[slotId] = [];
+            }
+
+            // 创建一个唯一的活动实例ID
+            const instanceId = `${slotId}_${activityId}_${Date.now()}`;
+
+            // 检查时间限制
+            const currentUsed = calculateTimeUsed(slotId);
+            const maxTime = timeSlotConfig[slotId].maxHours * 60;
+
+            if (currentUsed + activity.defaultDuration > maxTime) {
+                showWarningMessage(`时间不够了！${timeSlotConfig[slotId].name}最多只能安排${maxTime}分钟，当前已用${currentUsed}分钟。`);
+                return;
+            }
+
+            currentPlan[slotId].push({
+                activityId: activityId,
+                instanceId: instanceId,
+                duration: activity.defaultDuration
+            });
+
+            if (!activityDurations[slotId]) {
+                activityDurations[slotId] = {};
+            }
+            activityDurations[slotId][instanceId] = activity.defaultDuration;
+
+            // 触发游戏开始事件（只在第一次添加活动时）
+            startGame();
+
+            updateSlotAll(slotId);
+            autoSaveTemplate();
+        }
+
+        // 计算时间段已使用时间
+        function calculateTimeUsed(slotId) {
+            const activities = currentPlan[slotId] || [];
+            return activities.reduce((total, activityItem) => total + activityItem.duration, 0);
+        }
+
+        // 更新时间使用显示
+        function updateTimeUsed(slotId) {
+            const used = calculateTimeUsed(slotId);
+            const maxTime = timeSlotConfig[slotId].maxHours * 60;
+            const element = document.getElementById(`timeUsed-${slotId}`);
+            const slotElement = document.querySelector(`[data-time-slot="${slotId}"]`);
+
+            if (element) {
+                element.textContent = used;
+
+                // 根据使用情况设置颜色
+                if (used > maxTime) {
+                    element.className = 'text-red-600 font-bold';
+                    if (slotElement) slotElement.classList.add('time-exceeded');
+                } else if (used > maxTime * 0.8) {
+                    element.className = 'text-orange-600 font-semibold';
+                    if (slotElement) {
+                        slotElement.classList.remove('time-exceeded');
+                        slotElement.classList.add('time-warning');
+                    }
+                } else {
+                    element.className = 'text-blue-600';
+                    if (slotElement) {
+                        slotElement.classList.remove('time-exceeded', 'time-warning');
+                    }
+                }
+            }
+        }
+
+        // 更新活动时长
+        function updateActivityDuration(slotId, instanceId, newDuration) {
+            newDuration = parseInt(newDuration);
+
+            // 查找活动项
+            const activityItem = currentPlan[slotId]?.find(item => item.instanceId === instanceId);
+            if (!activityItem) return;
+
+            // 计算其他活动的总时长
+            const otherActivitiesTime = currentPlan[slotId]
+                .filter(item => item.instanceId !== instanceId)
+                .reduce((total, item) => total + item.duration, 0);
+
+            const maxTime = timeSlotConfig[slotId].maxHours * 60;
+
+            if (otherActivitiesTime + newDuration > maxTime) {
+                showWarningMessage(`时间超限！${timeSlotConfig[slotId].name}最多${maxTime}分钟，其他活动已用${otherActivitiesTime}分钟。`);
+                // 恢复原值
+                updateSlotDisplay(slotId);
+                return;
+            }
+
+            // 更新时长
+            activityItem.duration = newDuration;
+            if (!activityDurations[slotId]) {
+                activityDurations[slotId] = {};
+            }
+            activityDurations[slotId][instanceId] = newDuration;
+
+            updateTimeUsed(slotId);
+            updateTotalPlannedTime();
+            autoSaveTemplate();
+        }
+
+        // 更新时间段显示
+        function updateSlotDisplay(slotId) {
+            const container = document.querySelector(`[data-slot="${slotId}"]`);
+            if (!container) return;
+
+            const activities = currentPlan[slotId] || [];
+
+            if (activities.length === 0) {
+                container.innerHTML = '<div class="drop-zone drop-zone-empty" data-slot="' + slotId + '" data-position="empty" style="min-height: 80px; display: flex; align-items: center; justify-content: center;"><p class="text-gray-500 text-sm">拖拽活动到这里</p></div>';
+                // Add event listeners for the empty drop zone
+                const emptyDropZone = container.querySelector('.drop-zone-empty');
+                addDropZoneEventListeners(emptyDropZone);
+                return;
+            }
+
+            let htmlContent = `<div class="drop-zone drop-zone-top" data-slot="${slotId}" data-position="before-first" style="height: 20px; margin: 8px 0;"></div>`;
+
+            htmlContent += activities.map((activityItem, index) => {
+                const allActivities = getAllActivities();
+                const activity = allActivities.find(a => a.id === activityItem.activityId);
+                if (!activity) return '';
+
+                const isCompleted = completedTasks[slotId]?.includes(activityItem.instanceId);
+                const startTime = calculateActivityStartTime(slotId, index);
+                const endTime = calculateActivityEndTime(slotId, index);
+
+                return `
+                    <div class="activity-item-wrapper" style="margin: 4px 0;">
+                        <div class="flex items-center justify-between bg-white rounded-lg p-3 ${isCompleted ? 'completed-task' : ''}" draggable="true" data-instance-id="${activityItem.instanceId}" data-slot-id="${slotId}">
+                            <div class="flex items-center space-x-3 flex-1">
+                                <span class="text-2xl">${activity.emoji}</span>
+                                <div class="flex-1">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="text-xl font-bold">${activity.name.replace(activity.emoji + ' ', '')}</span>
+                                            <span class="text-sm text-gray-600 font-medium">⏰ ${startTime} - ${endTime}</span>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <button onclick="adjustActivityTime('${slotId}', '${activityItem.instanceId}', -5)"
+                                                    class="bg-red-500 hover:bg-red-600 text-white font-bold w-8 h-8 rounded-full text-sm">
+                                                −
+                                            </button>
+                                            <span class="text-lg font-semibold text-blue-600">${activityItem.duration}分</span>
+                                            <button onclick="adjustActivityTime('${slotId}', '${activityItem.instanceId}', 5)"
+                                                    class="bg-green-500 hover:bg-green-600 text-white font-bold w-8 h-8 rounded-full text-sm">
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex space-x-1">
+                                <button onclick="toggleComplete('${slotId}', '${activityItem.instanceId}')" 
+                                        class="text-lg ${isCompleted ? 'text-green-500' : 'text-gray-400'} hover:text-green-600 ml-3">
+                                    ${isCompleted ? '✅' : '⭕'}
+                                </button>
+                                <button onclick="removeActivity('${slotId}', '${activityItem.instanceId}')" 
+                                        class="text-red-500 hover:text-red-700 text-lg ml-2">
+                                    ❌
+                                </button>
+                            </div>
+                        </div>
+                        <div class="drop-zone drop-zone-bottom" data-slot="${slotId}" data-position="after-${activityItem.instanceId}" style="height: 20px; margin: 8px 0;"></div>
+                    </div>
+                `;
+            }).filter(item => item !== '').join('');
+
+            container.innerHTML = htmlContent;
+
+            // Add event listeners to all drop zones and draggable items
+            addDropZoneEventListeners(container.querySelector('.drop-zone-top'));
+
+            container.querySelectorAll('.drop-zone-bottom').forEach(dropZone => {
+                addDropZoneEventListeners(dropZone);
+            });
+
+            container.querySelectorAll('[draggable="true"]').forEach(draggableItem => {
+                addDraggableEventListeners(draggableItem);
+            });
+        }
+
+        // Add event listeners to drop zones
+        function addDropZoneEventListeners(dropZone) {
+            if (!dropZone) return;
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+                // Also highlight the parent time slot
+                const timeSlot = dropZone.closest('.time-slot');
+                if (timeSlot) timeSlot.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                // Only remove drag-over if we're actually leaving the drop zone
+                if (!dropZone.contains(e.relatedTarget)) {
+                    dropZone.classList.remove('drag-over');
+                    // Remove time slot highlight if no other drop zones are active
+                    const timeSlot = dropZone.closest('.time-slot');
+                    if (timeSlot && !timeSlot.querySelector('.drop-zone.drag-over')) {
+                        timeSlot.classList.remove('drag-over');
+                    }
+                }
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                // Remove time slot highlight
+                const timeSlot = dropZone.closest('.time-slot');
+                if (timeSlot) timeSlot.classList.remove('drag-over');
+                dropAtPosition(e);
+            });
+        }
+
+        // Add event listeners to draggable items
+        function addDraggableEventListeners(draggableItem) {
+            if (!draggableItem) return;
+
+            draggableItem.addEventListener('dragstart', (e) => {
+                const slotId = e.target.dataset.slotId;
+                const instanceId = e.target.dataset.instanceId;
+                dragStart(e, slotId, instanceId);
+            });
+
+            draggableItem.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+                // Clean up any remaining drag-over classes
+                document.querySelectorAll('.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+            });
+        }
+
+        // 切换完成状态
+        function toggleComplete(slotId, instanceId) {
+            if (!completedTasks[slotId]) {
+                completedTasks[slotId] = [];
+            }
+
+            const index = completedTasks[slotId].indexOf(instanceId);
+            if (index > -1) {
+                completedTasks[slotId].splice(index, 1);
+            } else {
+                completedTasks[slotId].push(instanceId);
+            }
+
+            updateSlotDisplay(slotId);
+            updateScore();
+            autoSaveTemplate();
+
+            // 检查是否全部完成
+            if (isAllCompleted()) {
+                showRewards();
+            }
+        }
+
+        // 移除活动
+        function removeActivity(slotId, instanceId) {
+            if (currentPlan[slotId]) {
+                const index = currentPlan[slotId].findIndex(item => item.instanceId === instanceId);
+                if (index > -1) {
+                    currentPlan[slotId].splice(index, 1);
+                }
+            }
+
+            if (completedTasks[slotId]) {
+                const index = completedTasks[slotId].indexOf(instanceId);
+                if (index > -1) {
+                    completedTasks[slotId].splice(index, 1);
+                }
+            }
+
+            if (activityDurations[slotId]) {
+                delete activityDurations[slotId][instanceId];
+            }
+
+            updateSlotAll(slotId);
+            autoSaveTemplate();
+        }
+
+        // 将分钟转换为小时和分钟的格式
+        function formatDuration(minutes) {
+            if (minutes < 60) {
+                return `${minutes}分钟`;
+            }
+
+            const hours = Math.floor(minutes / 60);
+            const remainingMinutes = minutes % 60;
+
+            if (remainingMinutes === 0) {
+                return `${hours}小时`;
+            } else {
+                return `${hours}小时${remainingMinutes}分钟`;
+            }
+        }
+
+        // 更新总计划时间
+        function updateTotalPlannedTime() {
+            let totalPlanned = 0;
+
+            Object.keys(currentPlan).forEach(slotId => {
+                const activities = currentPlan[slotId] || [];
+                totalPlanned += activities.reduce((total, item) => total + item.duration, 0);
+            });
+
+            const element = document.getElementById('totalPlannedTime');
+            if (element) {
+                element.textContent = formatDuration(totalPlanned);
+            }
+        }
+
+        // 更新分数
+        function updateScore() {
+            let totalTasks = 0;
+            let completedCount = 0;
+
+            Object.keys(currentPlan).forEach(slotId => {
+                totalTasks += currentPlan[slotId].length;
+                if (completedTasks[slotId]) {
+                    completedCount += completedTasks[slotId].length;
+                }
+            });
+
+            document.getElementById('score').textContent = completedCount;
+            document.getElementById('total').textContent = totalTasks;
+        }
+
+        // 检查是否全部完成
+        function isAllCompleted() {
+            let totalTasks = 0;
+            let completedCount = 0;
+
+            Object.keys(currentPlan).forEach(slotId => {
+                totalTasks += currentPlan[slotId].length;
+                if (completedTasks[slotId]) {
+                    completedCount += completedTasks[slotId].length;
+                }
+            });
+
+            return totalTasks > 0 && completedCount === totalTasks;
+        }
+
+        // 显示奖励
+        function showRewards() {
+            const rewardsDiv = document.getElementById('rewards');
+            rewardsDiv.classList.remove('hidden');
+            rewardsDiv.classList.add('bounce');
+
+            setTimeout(() => {
+                rewardsDiv.classList.remove('bounce');
+            }, 3000);
+        }
+
+        // 初始化模板（创建默认的"周末计划"模板）
+        function initializeDefaultTemplates() {
+            const saved = localStorage.getItem('planTemplates');
+            let savedTemplates = saved ? JSON.parse(saved) : {};
+
+            // 如果没有任何模板，创建默认的"周末计划"模板
+            if (Object.keys(savedTemplates).length === 0) {
+                const defaultTemplate = {
+                    plan: {
+                        morning: [
+                            { activityId: 'study', instanceId: 'morning_study_default', duration: 60 },
+                            { activityId: 'read', instanceId: 'morning_read_default', duration: 30 },
+                            { activityId: 'exercise', instanceId: 'morning_exercise_default', duration: 30 }
+                        ],
+                        afternoon: [
+                            { activityId: 'meal', instanceId: 'afternoon_meal_default', duration: 30 },
+                            { activityId: 'play', instanceId: 'afternoon_play_default', duration: 60 },
+                            { activityId: 'outdoor', instanceId: 'afternoon_outdoor_default', duration: 60 }
+                        ],
+                        evening: [
+                            { activityId: 'art', instanceId: 'evening_art_default', duration: 45 },
+                            { activityId: 'music', instanceId: 'evening_music_default', duration: 30 },
+                            { activityId: 'rest', instanceId: 'evening_rest_default', duration: 30 }
+                        ]
+                    },
+                    durations: {
+                        morning: {
+                            'morning_study_default': 60,
+                            'morning_read_default': 30,
+                            'morning_exercise_default': 30
+                        },
+                        afternoon: {
+                            'afternoon_meal_default': 30,
+                            'afternoon_play_default': 60,
+                            'afternoon_outdoor_default': 60
+                        },
+                        evening: {
+                            'evening_art_default': 45,
+                            'evening_music_default': 30,
+                            'evening_rest_default': 30
+                        }
+                    },
+                    completed: {},
+                    scheduleSettings: {
+                        wakeUpTime: '07:00',
+                        bedTime: '22:00'
+                    },
+                    customActivities: []
+                };
+
+                savedTemplates['周末计划'] = defaultTemplate;
+                localStorage.setItem('planTemplates', JSON.stringify(savedTemplates));
+            }
+
+            templates = savedTemplates;
+        }
+
+        // 加载模板列表
+        function loadTemplates() {
+            const saved = localStorage.getItem('planTemplates');
+            if (saved) {
+                templates = JSON.parse(saved);
+            }
+            updateTemplateSelect();
+        }
+
+        // 更新模板下拉列表
+        function updateTemplateSelect() {
+            const dropdown = document.getElementById('templateDropdown');
+            if (!dropdown) {
+                console.error('templateDropdown element not found');
+                return;
+            }
+
+            dropdown.innerHTML = '';
+
+            // 调试信息
+            console.log('Templates available:', Object.keys(templates));
+
+            // 只添加用户自定义的模板选项
+            Object.keys(templates).forEach(templateName => {
+                const option = document.createElement('div');
+                option.className = 'px-3 py-2 hover:bg-blue-100 cursor-pointer border-b border-gray-100 last:border-b-0';
+                option.textContent = templateName;
+                option.onclick = () => selectTemplate(templateName);
+                dropdown.appendChild(option);
+                console.log('Added template option:', templateName);
+            });
+
+            // 如果没有模板，显示提示
+            if (Object.keys(templates).length === 0) {
+                const emptyOption = document.createElement('div');
+                emptyOption.className = 'px-3 py-2 text-gray-500 text-center';
+                emptyOption.textContent = '暂无模板，请先创建模板';
+                dropdown.appendChild(emptyOption);
+            }
+
+            console.log('Total options added:', dropdown.children.length);
+        }
+
+        // 切换模板下拉菜单
+        function toggleTemplateDropdown() {
+            const dropdown = document.getElementById('templateDropdown');
+            if (!dropdown) return;
+
+            if (dropdown.classList.contains('hidden')) {
+                dropdown.classList.remove('hidden');
+                // 点击外部关闭下拉菜单
+                setTimeout(() => {
+                    document.addEventListener('click', closeDropdownOnClickOutside);
+                }, 0);
+            } else {
+                dropdown.classList.add('hidden');
+                document.removeEventListener('click', closeDropdownOnClickOutside);
+            }
+        }
+
+        // 选择模板
+        function selectTemplate(templateName) {
+            document.getElementById('templateCombobox').value = templateName;
+            document.getElementById('templateDropdown').classList.add('hidden');
+            document.removeEventListener('click', closeDropdownOnClickOutside);
+            handleTemplateSelect();
+        }
+
+        // 点击外部关闭下拉菜单
+        function closeDropdownOnClickOutside(event) {
+            const dropdown = document.getElementById('templateDropdown');
+            const button = document.getElementById('templateDropdownBtn');
+            const input = document.getElementById('templateCombobox');
+
+            if (!dropdown.contains(event.target) &&
+                !button.contains(event.target) &&
+                !input.contains(event.target)) {
+                dropdown.classList.add('hidden');
+                document.removeEventListener('click', closeDropdownOnClickOutside);
+            }
+        }
+
+        // 处理模板选择
+        function handleTemplateSelect() {
+            const templateName = document.getElementById('templateCombobox').value.trim();
+            if (!templateName || templateName === currentTemplate) return;
+
+            if (currentTemplate && Object.keys(currentPlan).length > 0) {
+                autoSaveTemplate();
+            }
+
+            currentTemplate = templateName;
+            loadTemplateData(templateName);
+            showSuccessMessage(`模板 "${templateName}" 加载成功！`);
+        }
+
+        // 处理模板输入
+        function handleTemplateInput() {
+            // 实时搜索功能可以在这里添加
+        }
+
+        // 显示警告消息
+        // 通用消息显示函数
+        function showMessage(message, type = 'success') {
+            const messageDiv = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' :
+                type === 'warning' ? 'bg-yellow-100 border-yellow-400 text-yellow-700' :
+                    type === 'error' ? 'bg-red-100 border-red-400 text-red-700' :
+                        'bg-blue-100 border-blue-400 text-blue-700';
+
+            const iconMap = {
+                success: '✅',
+                warning: '⚠️',
+                error: '❌',
+                info: 'ℹ️'
+            };
+
+            messageDiv.className = `fixed top-4 right-4 ${bgColor} border-l-4 p-4 rounded shadow-lg z-50 schedule-message`;
+            messageDiv.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <span class="text-lg">${iconMap[type] || iconMap.info}</span>
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-lg hover:opacity-70">×</button>
+                </div>
+            `;
+
+            document.body.appendChild(messageDiv);
+
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 3000);
+        }
+
+        // 显示警告消息
+        function showWarningMessage(message) {
+            showMessage(message, 'warning');
+        }
+
+        // 显示成功消息
+        function showSuccessMessage(message) {
+            showMessage(message, 'success');
+        }
+
+        // 显示错误消息
+        function showErrorMessage(message) {
+            showMessage(message, 'error');
+        }
+
+        // 保存当前模板
+        function saveCurrentTemplate() {
+            const templateName = document.getElementById('templateCombobox').value.trim();
+            if (!templateName) {
+                showWarningMessage('请输入模板名称！');
+                return;
+            }
+            if (templates[templateName] && templateName !== currentTemplate) {
+                showOverwriteConfirmation(templateName);
+                return;
+            }
+            saveTemplateData(templateName);
+        }
+
+        // 删除当前模板
+        function deleteCurrentTemplate() {
+            const templateName = document.getElementById('templateCombobox').value.trim();
+            if (!templateName) {
+                showWarningMessage('请选择要删除的模板！');
+                return;
+            }
+            showDeleteConfirmation(templateName);
+        }
+
+        // 保存模板数据
+        function saveTemplateData(templateName) {
+            currentTemplate = templateName;
+            templates[templateName] = {
+                plan: JSON.parse(JSON.stringify(currentPlan)),
+                durations: JSON.parse(JSON.stringify(activityDurations)),
+                completed: JSON.parse(JSON.stringify(completedTasks)),
+                scheduleSettings: JSON.parse(JSON.stringify(scheduleSettings)),
+                customActivities: JSON.parse(JSON.stringify(customActivities))
+            };
+            localStorage.setItem('planTemplates', JSON.stringify(templates));
+            updateTemplateSelect();
+            document.getElementById('templateCombobox').value = templateName;
+            showSuccessMessage(`模板 "${templateName}" 保存成功！`);
+        }
+
+        // 显示覆盖确认对话框
+        function showOverwriteConfirmation(templateName) {
+            if (confirm(`模板 "${templateName}" 已存在，是否覆盖？`)) {
+                saveTemplateData(templateName);
+            }
+        }
+
+        // 自定义活动处理
+        function handleDiyInput(event, input) {
+            if (event.key === 'Enter') {
+                const activityName = input.value.trim();
+                if (activityName) {
+                    addCustomActivity(activityName);
+                    input.value = '';
+                }
+            }
+        }
+
+        // 添加自定义活动
+        function addCustomActivity(name) {
+            const id = 'custom_' + Date.now();
+            const newActivity = {
+                id: id,
+                name: name,
+                emoji: '✨',
+                color: 'bg-violet-100 border-violet-300',
+                defaultDuration: 30,
+                custom: true
+            };
+
+            customActivities.push(newActivity);
+            saveCustomActivities();
+            generateActivityCards();
+            showSuccessMessage(`自定义活动 "${name}" 添加成功！`);
+        }
+
+        // 加载自定义活动
+        function loadCustomActivities() {
+            const saved = localStorage.getItem('customActivities');
+            if (saved) {
+                try {
+                    customActivities = JSON.parse(saved);
+                } catch (error) {
+                    console.error('Failed to load custom activities:', error);
+                    customActivities = [];
+                }
+            } else {
+                customActivities = [];
+            }
+        }
+
+        // 删除自定义活动
+        function removeCustomActivity(activityId) {
+            customActivities = customActivities.filter(activity => activity.id !== activityId);
+            saveCustomActivities();
+            generateActivityCards();
+            showSuccessMessage('自定义活动删除成功！');
+        }
+
+        // 保存自定义活动到localStorage
+        function saveCustomActivities() {
+            localStorage.setItem('customActivities', JSON.stringify(customActivities));
+        }
+
+        // 加载作息时间设置
+        function loadScheduleSettings() {
+            const saved = localStorage.getItem('scheduleSettings');
+            if (saved) {
+                scheduleSettings = JSON.parse(saved);
+            }
+        }
+
+        // 获取所有活动（预设 + 自定义）
+        function getAllActivities() {
+            return [...activities, ...customActivities];
+        }
+
+        // 更新作息时间
+        function updateSchedule() {
+            const wakeUpInput = document.getElementById('wakeUpTime');
+            const bedTimeInput = document.getElementById('bedTime');
+
+            if (wakeUpInput) {
+                scheduleSettings.wakeUpTime = wakeUpInput.value;
+            }
+            if (bedTimeInput) {
+                scheduleSettings.bedTime = bedTimeInput.value;
+            }
+
+            localStorage.setItem('scheduleSettings', JSON.stringify(scheduleSettings));
+            autoSaveTemplate();
+            showSuccessMessage('作息时间更新成功！');
+        }
+
+        // 计算活动开始时间
+        function calculateActivityStartTime(slotId, index) {
+            const config = timeSlotConfig[slotId];
+            const startHour = parseInt(config.start.split(':')[0]);
+            const startMinute = parseInt(config.start.split(':')[1]);
+
+            let totalMinutes = startHour * 60 + startMinute;
+
+            const activities = currentPlan[slotId] || [];
+            for (let i = 0; i < index; i++) {
+                totalMinutes += activities[i].duration;
+            }
+
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        // 计算活动结束时间
+        function calculateActivityEndTime(slotId, index) {
+            const config = timeSlotConfig[slotId];
+            const startHour = parseInt(config.start.split(':')[0]);
+            const startMinute = parseInt(config.start.split(':')[1]);
+
+            let totalMinutes = startHour * 60 + startMinute;
+
+            const activities = currentPlan[slotId] || [];
+            for (let i = 0; i <= index; i++) {
+                totalMinutes += activities[i].duration;
+            }
+
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        // 通用弹窗关闭函数
+        function closeModal() {
+            const modal = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // 取消覆盖
+        function cancelOverwrite() {
+            closeModal();
+        }
+
+        // 确认覆盖
+        function confirmOverwrite(templateName) {
+            closeModal();
+            saveTemplateData(templateName);
+        }
+
+        // 加载模板
+        function loadTemplate() {
+            const templateName = document.getElementById('templateCombobox').value;
+            if (!templateName) return;
+
+            if (templateName === currentTemplate) return; // 已经是当前模板
+
+            // 自动保存当前进度（如果有的话）
+            if (currentTemplate && Object.keys(currentPlan).length > 0) {
+                autoSaveTemplate();
+            }
+
+            currentTemplate = templateName;
+            loadTemplateData(templateName);
+
+            // 显示成功提示
+            showSuccessMessage(`模板 "${templateName}" 加载成功！`);
+        }
+
+        // 删除模板
+        function deleteTemplate() {
+            const templateName = document.getElementById('templateCombobox').value;
+            if (!templateName) {
+                // 显示提示但不用alert
+                document.getElementById('templateCombobox').style.borderColor = '#ef4444';
+                setTimeout(() => {
+                    document.getElementById('templateCombobox').style.borderColor = '';
+                }, 2000);
+                return;
+            }
+
+            // 显示删除确认对话框
+            showDeleteConfirmation(templateName);
+        }
+
+        // 显示删除确认对话框
+        function showDeleteConfirmation(templateName) {
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            confirmDiv.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-lg">
+                    <div class="text-center">
+                        <div class="text-4xl mb-3">🗑️</div>
+                        <h3 class="text-lg font-bold text-gray-800 mb-2">确认删除</h3>
+                        <p class="text-gray-600 mb-4">确定要删除模板 "${templateName}" 吗？</p>
+                        <div class="flex space-x-3 justify-center">
+                            <button onclick="cancelDelete()" 
+                                    class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg font-medium">
+                                取消
+                            </button>
+                            <button onclick="confirmDelete('${templateName}')" 
+                                    class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium">
+                                删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(confirmDiv);
+        }
+
+        // 取消删除
+        function cancelDelete() {
+            closeModal();
+        }
+
+        // 确认删除
+        function confirmDelete(templateName) {
+            closeModal();
+
+            delete templates[templateName];
+            localStorage.setItem('planTemplates', JSON.stringify(templates));
+
+            // 切换到第一个可用模板
+            const remainingTemplates = Object.keys(templates);
+            if (remainingTemplates.length > 0) {
+                currentTemplate = remainingTemplates[0];
+                updateTemplateSelect();
+                document.getElementById('templateCombobox').value = currentTemplate;
+                loadTemplateData(currentTemplate);
+            }
+
+            // 显示成功提示
+            showSuccessMessage(`模板 "${templateName}" 删除成功！`);
+        }
+
+        // 自动保存模板
+        function autoSaveTemplate() {
+            if (currentTemplate) {
+                templates[currentTemplate] = {
+                    plan: JSON.parse(JSON.stringify(currentPlan)),
+                    durations: JSON.parse(JSON.stringify(activityDurations)),
+                    completed: JSON.parse(JSON.stringify(completedTasks)),
+                    customActivities: JSON.parse(JSON.stringify(customActivities)),
+                    scheduleSettings: JSON.parse(JSON.stringify(scheduleSettings))
+                };
+
+                localStorage.setItem('planTemplates', JSON.stringify(templates));
+                // 保存当前使用的模板名称
+                localStorage.setItem('currentTemplate', currentTemplate);
+                // 更新下拉列表以确保新模板显示
+                updateTemplateSelect();
+            }
+        }
+
+        // 自动加载模板
+        function autoLoadTemplate() {
+            // 首先尝试加载上次使用的模板
+            const lastUsedTemplate = localStorage.getItem('currentTemplate');
+
+            if (lastUsedTemplate && templates[lastUsedTemplate]) {
+                currentTemplate = lastUsedTemplate;
+                document.getElementById('templateCombobox').value = lastUsedTemplate;
+                loadTemplateData(lastUsedTemplate);
+            } else if (templates['周末计划']) {
+                // 优先加载默认的"周末计划"模板
+                currentTemplate = '周末计划';
+                document.getElementById('templateCombobox').value = '周末计划';
+                loadTemplateData('周末计划');
+            } else if (Object.keys(templates).length > 0) {
+                // 如果没有周末计划，加载第一个可用模板
+                const firstTemplate = Object.keys(templates)[0];
+                currentTemplate = firstTemplate;
+                document.getElementById('templateCombobox').value = firstTemplate;
+                loadTemplateData(firstTemplate);
+            } else {
+                // 没有任何模板，提示用户创建第一个模板
+                currentTemplate = null;
+                document.getElementById('templateCombobox').value = '';
+                showWarningMessage('欢迎使用计划制定器！请先创建您的第一个计划模板：在上方输入框中输入模板名称，安排好活动后点击"保存模板"按钮。');
+            }
+        }
+
+        // 加载模板数据
+        function loadTemplateData(templateName) {
+            const template = templates[templateName];
+            if (!template) return;
+
+            // 加载模板数据
+            currentPlan = JSON.parse(JSON.stringify(template.plan || {}));
+            activityDurations = JSON.parse(JSON.stringify(template.durations || {}));
+            completedTasks = JSON.parse(JSON.stringify(template.completed || {}));
+
+            // 加载作息时间设置
+            if (template.scheduleSettings) {
+                scheduleSettings = JSON.parse(JSON.stringify(template.scheduleSettings));
+                document.getElementById('wakeUpTime').value = scheduleSettings.wakeUpTime;
+                document.getElementById('bedTime').value = scheduleSettings.bedTime;
+                updateTimeSlotConfig();
+            }
+
+            // 加载自定义活动
+            if (template.customActivities) {
+                customActivities = JSON.parse(JSON.stringify(template.customActivities));
+                saveCustomActivities();
+                generateActivityCards();
+            }
+
+            // 重新生成时间段
+            generateTimeSlots();
+
+            // 更新显示
+            Object.keys(timeSlotConfig).forEach(slotId => {
+                updateSlotDisplay(slotId);
+                updateTimeUsed(slotId);
+            });
+
+            updateScore();
+            updateTotalPlannedTime();
+            document.getElementById('rewards').classList.add('hidden');
+        }
+
+        // 每日打卡功能（当前版本暂未实现对应的HTML元素）
+        function dailyCheckIn() {
+            const date = new Date().toISOString().split('T')[0];
+
+            // 加载打卡记录
+            let checkInRecord = {};
+            const saved = localStorage.getItem('dailyCheckIn');
+            if (saved) {
+                checkInRecord = JSON.parse(saved);
+            }
+
+            // 检查是否已经打卡
+            if (checkInRecord[date]) {
+                showSuccessMessage(`${date} 已经打卡过了！打卡时间: ${checkInRecord[date].time}，心情: ${checkInRecord[date].mood}`);
+                return;
+            }
+
+            // 显示打卡对话框
+            showCheckInDialog(date, checkInRecord);
+        }
+
+        // 显示打卡对话框
+        function showCheckInDialog(date, checkInRecord) {
+            const dialogDiv = document.createElement('div');
+            dialogDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialogDiv.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-lg">
+                    <div class="text-center">
+                        <div class="text-4xl mb-3">🌟</div>
+                        <h3 class="text-lg font-bold text-gray-800 mb-2">今日打卡</h3>
+                        <p class="text-gray-600 mb-4">今天的心情怎么样？</p>
+                        <input type="text" id="moodInput" placeholder="输入表情符号或描述" value="😊"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 text-center">
+                        <div class="flex space-x-3 justify-center">
+                            <button onclick="cancelCheckIn()" 
+                                    class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg font-medium">
+                                取消
+                            </button>
+                            <button onclick="confirmCheckIn('${date}')" 
+                                    class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium">
+                                打卡
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dialogDiv);
+
+            // 聚焦到输入框
+            setTimeout(() => {
+                const input = document.getElementById('moodInput');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }, 100);
+        }
+
+        // 取消打卡
+        function cancelCheckIn() {
+            closeModal();
+        }
+
+        // 确认打卡
+        function confirmCheckIn(date) {
+            const mood = document.getElementById('moodInput')?.value || '😊';
+
+            // 加载打卡记录
+            let checkInRecord = {};
+            const saved = localStorage.getItem('dailyCheckIn');
+            if (saved) {
+                checkInRecord = JSON.parse(saved);
+            }
+
+            const checkInTime = new Date().toLocaleString();
+            checkInRecord[date] = {
+                time: checkInTime,
+                mood: mood,
+                plannedTasks: Object.keys(currentPlan).reduce((total, slotId) =>
+                    total + (currentPlan[slotId] || []).length, 0),
+                completedTasks: Object.keys(completedTasks).reduce((total, slotId) =>
+                    total + (completedTasks[slotId] || []).length, 0)
+            };
+
+            localStorage.setItem('dailyCheckIn', JSON.stringify(checkInRecord));
+
+            // 关闭对话框
+            cancelCheckIn();
+
+            // 显示成功消息
+            showSuccessMessage(`🎉 打卡成功！心情: ${mood}，计划任务: ${checkInRecord[date].plannedTasks}，完成任务: ${checkInRecord[date].completedTasks}`);
+        }
+
+        // 更新打卡按钮状态（当前版本暂未实现对应的HTML元素）
+        function updateCheckInButton() {
+            // 功能暂时保留，等待UI实现
+            return;
+        }
+
+        // 显示打卡历史（当前版本暂未实现对应的HTML元素）
+        function showCheckInHistory() {
+            const saved = localStorage.getItem('dailyCheckIn');
+            const history = saved ? JSON.parse(saved) : {};
+
+            if (Object.keys(history).length === 0) {
+                showWarningMessage('还没有打卡记录呢！');
+                return;
+            }
+
+            // 显示历史记录对话框
+            const sortedDates = Object.keys(history).sort().reverse();
+            let historyHTML = '<div class="max-h-80 overflow-y-auto">';
+
+            sortedDates.slice(0, 10).forEach(date => { // 只显示最近10条
+                const record = history[date];
+                const completionRate = record.plannedTasks > 0 ?
+                    Math.round((record.completedTasks / record.plannedTasks) * 100) : 0;
+
+                historyHTML += `
+                    <div class="border-b border-gray-200 py-3">
+                        <div class="font-semibold text-gray-800">${date}</div>
+                        <div class="text-sm text-gray-600">
+                            心情: ${record.mood} | 完成率: ${completionRate}%<br>
+                            任务: ${record.completedTasks}/${record.plannedTasks}
+                        </div>
+                    </div>
+                `;
+            });
+
+            historyHTML += '</div>';
+
+            const dialogDiv = document.createElement('div');
+            dialogDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialogDiv.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-md mx-4 shadow-lg">
+                    <div class="text-center mb-4">
+                        <div class="text-3xl mb-2">📋</div>
+                        <h3 class="text-lg font-bold text-gray-800">打卡历史记录</h3>
+                    </div>
+                    ${historyHTML}
+                    <div class="mt-4 text-center">
+                        <button onclick="closeCheckInModal()" 
+                                class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium">
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dialogDiv);
+        }
+
+        // 关闭打卡历史弹窗（当前版本暂未实现对应的HTML元素）
+        function closeCheckInModal() {
+            const dialogDiv = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (dialogDiv) {
+                dialogDiv.remove();
+            }
+        }
+
+        // 让activities变量全局可访问
+        window.activities = activities;
+
+        // 页面加载完成后初始化
+        initializePage();
+
+        // 清理拖拽样式的辅助函数
+        function clearDragStyles() {
+            document.querySelectorAll('.dragging').forEach(el => {
+                el.classList.remove('dragging');
+            });
+            document.querySelectorAll('.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+        }
+
+        // 拖拽开始
+        function dragStart(e, slotId, instanceId) {
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                slotId: slotId,
+                instanceId: instanceId,
+                type: 'move'
+            }));
+            e.target.classList.add('dragging');
+        }
+
+        // 拖拽放置到指定位置
+        function dropAtPosition(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const data = e.dataTransfer.getData('text/plain');
+            let dragData;
+
+            try {
+                dragData = JSON.parse(data);
+            } catch {
+                // If it's not a move operation, it might be a new activity from the left panel
+                const activityId = data;
+                const targetSlotId = e.target.dataset.slot;
+                if (targetSlotId && activityId) {
+                    addActivityToSlot(targetSlotId, activityId);
+                }
+                return;
+            }
+
+            if (dragData.type !== 'move') return;
+
+            const { slotId: sourceSlotId, instanceId: sourceInstanceId } = dragData;
+            const targetSlotId = e.target.dataset.slot;
+            const position = e.target.dataset.position;
+
+            // 移除拖拽样式
+            clearDragStyles();
+
+            if (!position || !targetSlotId) return;
+
+            // 找到源活动
+            const sourceActivity = currentPlan[sourceSlotId]?.find(item => item.instanceId === sourceInstanceId);
+            if (!sourceActivity) return;
+
+            // 如果拖拽到不同时间段
+            if (sourceSlotId !== targetSlotId) {
+                // 检查目标时间段是否有足够空间
+                const targetUsed = calculateTimeUsed(targetSlotId);
+                const maxTime = timeSlotConfig[targetSlotId].maxHours * 60;
+
+                if (targetUsed + sourceActivity.duration > maxTime) {
+                    showWarningMessage(`时间不够了！${timeSlotConfig[targetSlotId].name}最多只能安排${maxTime}分钟，当前已用${targetUsed}分钟。`);
+                    return;
+                }
+
+                // 从源时间段移除
+                const sourceIndex = currentPlan[sourceSlotId].findIndex(item => item.instanceId === sourceInstanceId);
+                if (sourceIndex >= 0) {
+                    currentPlan[sourceSlotId].splice(sourceIndex, 1);
+                }
+
+                // 清理源时间段的时长记录
+                if (activityDurations[sourceSlotId]) {
+                    delete activityDurations[sourceSlotId][sourceInstanceId];
+                }
+
+                // 添加到目标时间段
+                if (!currentPlan[targetSlotId]) {
+                    currentPlan[targetSlotId] = [];
+                }
+
+                // 确定插入位置
+                let insertIndex = 0;
+                if (position === 'empty') {
+                    insertIndex = 0;
+                } else if (position === 'before-first') {
+                    insertIndex = 0;
+                } else if (position.startsWith('before-')) {
+                    const targetInstanceId = position.replace('before-', '');
+                    insertIndex = currentPlan[targetSlotId].findIndex(item => item.instanceId === targetInstanceId);
+                    if (insertIndex === -1) insertIndex = 0;
+                } else if (position.startsWith('after-')) {
+                    const targetInstanceId = position.replace('after-', '');
+                    insertIndex = currentPlan[targetSlotId].findIndex(item => item.instanceId === targetInstanceId);
+                    if (insertIndex === -1) {
+                        insertIndex = currentPlan[targetSlotId].length;
+                    } else {
+                        insertIndex += 1;
+                    }
+                }
+
+                currentPlan[targetSlotId].splice(insertIndex, 0, sourceActivity);
+
+                // 更新活动时长记录
+                if (!activityDurations[targetSlotId]) {
+                    activityDurations[targetSlotId] = {};
+                }
+                activityDurations[targetSlotId][sourceInstanceId] = sourceActivity.duration;
+
+                // 更新显示
+                updateSlotDisplay(sourceSlotId);
+                updateSlotDisplay(targetSlotId);
+                updateTimeUsed(sourceSlotId);
+                updateTimeUsed(targetSlotId);
+            } else {
+                // 同一时间段内重新排序
+                const activities = currentPlan[sourceSlotId];
+                const sourceIndex = activities.findIndex(item => item.instanceId === sourceInstanceId);
+
+                if (sourceIndex >= 0) {
+                    // 移除源元素
+                    const [movedActivity] = activities.splice(sourceIndex, 1);
+
+                    // 确定新的插入位置
+                    let insertIndex = 0;
+                    if (position === 'empty') {
+                        insertIndex = 0;
+                    } else if (position === 'before-first') {
+                        insertIndex = 0;
+                    } else if (position.startsWith('before-')) {
+                        const targetInstanceId = position.replace('before-', '');
+                        insertIndex = activities.findIndex(item => item.instanceId === targetInstanceId);
+                        if (insertIndex === -1) insertIndex = 0;
+                    } else if (position.startsWith('after-')) {
+                        const targetInstanceId = position.replace('after-', '');
+                        insertIndex = activities.findIndex(item => item.instanceId === targetInstanceId);
+                        if (insertIndex === -1) {
+                            insertIndex = activities.length;
+                        } else {
+                            insertIndex += 1;
+                        }
+                    }
+
+                    // 插入到新位置
+                    activities.splice(insertIndex, 0, movedActivity);
+
+                    updateSlotDisplay(sourceSlotId);
+                }
+            }
+
+            updateTotalPlannedTime();
+            autoSaveTemplate();
+        }
+
+        // 拖拽放置
+        function dropActivity(e, targetSlotId, targetInstanceId) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const data = e.dataTransfer.getData('text/plain');
+            let dragData;
+
+            try {
+                dragData = JSON.parse(data);
+            } catch {
+                // 如果不是移动操作，可能是从左侧拖拽的活动
+                return;
+            }
+
+            if (dragData.type !== 'move') return;
+
+            const { slotId: sourceSlotId, instanceId: sourceInstanceId } = dragData;
+
+            // 移除拖拽样式
+            clearDragStyles();
+
+            // 如果是同一个元素，不执行操作
+            if (sourceSlotId === targetSlotId && sourceInstanceId === targetInstanceId) {
+                return;
+            }
+
+            // 找到源活动
+            const sourceActivity = currentPlan[sourceSlotId]?.find(item => item.instanceId === sourceInstanceId);
+            if (!sourceActivity) return;
+
+            // 如果拖拽到不同时间段
+            if (sourceSlotId !== targetSlotId) {
+                // 检查目标时间段是否有足够空间
+                const targetUsed = calculateTimeUsed(targetSlotId);
+                const maxTime = timeSlotConfig[targetSlotId].maxHours * 60;
+
+                if (targetUsed + sourceActivity.duration > maxTime) {
+                    showWarningMessage(`时间不够了！${timeSlotConfig[targetSlotId].name}最多只能安排${maxTime}分钟，当前已用${targetUsed}分钟。`);
+                    return;
+                }
+
+                // 从源时间段移除
+                removeActivity(sourceSlotId, sourceInstanceId);
+
+                // 添加到目标时间段
+                if (!currentPlan[targetSlotId]) {
+                    currentPlan[targetSlotId] = [];
+                }
+
+                // 找到目标位置
+                const targetIndex = currentPlan[targetSlotId].findIndex(item => item.instanceId === targetInstanceId);
+                if (targetIndex >= 0) {
+                    currentPlan[targetSlotId].splice(targetIndex, 0, sourceActivity);
+                } else {
+                    currentPlan[targetSlotId].push(sourceActivity);
+                }
+
+                // 更新活动时长记录
+                if (!activityDurations[targetSlotId]) {
+                    activityDurations[targetSlotId] = {};
+                }
+                activityDurations[targetSlotId][sourceInstanceId] = sourceActivity.duration;
+
+                // 清理源时间段的时长记录
+                if (activityDurations[sourceSlotId]) {
+                    delete activityDurations[sourceSlotId][sourceInstanceId];
+                }
+
+                // 更新显示
+                updateSlotDisplay(sourceSlotId);
+                updateSlotDisplay(targetSlotId);
+                updateTimeUsed(sourceSlotId);
+                updateTimeUsed(targetSlotId);
+            } else {
+                // 同一时间段内重新排序
+                const activities = currentPlan[sourceSlotId];
+                const sourceIndex = activities.findIndex(item => item.instanceId === sourceInstanceId);
+                const targetIndex = activities.findIndex(item => item.instanceId === targetInstanceId);
+
+                if (sourceIndex >= 0 && targetIndex >= 0 && sourceIndex !== targetIndex) {
+                    // 移除源元素
+                    const [movedActivity] = activities.splice(sourceIndex, 1);
+                    // 插入到目标位置
+                    const newTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+                    activities.splice(newTargetIndex, 0, movedActivity);
+
+                    updateSlotDisplay(sourceSlotId);
+                }
+            }
+
+            updateTotalPlannedTime();
+            autoSaveTemplate();
+        }
+
+        // 作息时间相关函数
+
+        // 更新作息时间设置
+        function updateSchedule() {
+            const wakeUpTime = document.getElementById('wakeUpTime')?.value || scheduleSettings.wakeUpTime;
+            const bedTime = document.getElementById('bedTime')?.value || scheduleSettings.bedTime;
+
+            scheduleSettings.wakeUpTime = wakeUpTime;
+            scheduleSettings.bedTime = bedTime;
+
+            // 保存到localStorage
+            localStorage.setItem('scheduleSettings', JSON.stringify(scheduleSettings));
+
+            // 更新时间段配置
+            updateTimeSlotConfig();
+
+            // 重新生成时间段显示
+            generateTimeSlots();
+
+            // 更新所有时间段的显示（这会重新计算开始时间）
+            Object.keys(timeSlotConfig).forEach(slotId => {
+                updateSlotDisplay(slotId);
+                updateTimeUsed(slotId);
+            });
+
+            // 自动保存当前模板
+            autoSaveTemplate();
+
+            showScheduleUpdateMessage();
+        }
+
+        // 显示作息时间更新提示
+        function showScheduleUpdateMessage() {
+            const wakeUpTime = scheduleSettings.wakeUpTime;
+            const bedTime = scheduleSettings.bedTime;
+
+            // 计算睡眠时长
+            const wakeUpMinutes = parseInt(wakeUpTime.split(':')[0]) * 60 + parseInt(wakeUpTime.split(':')[1]);
+            const bedMinutes = parseInt(bedTime.split(':')[0]) * 60 + parseInt(bedTime.split(':')[1]);
+            let sleepDuration;
+
+            if (bedMinutes > wakeUpMinutes) {
+                // 同一天睡觉（比如早上7点起床，晚上10点睡觉）
+                sleepDuration = (24 * 60 - bedMinutes) + wakeUpMinutes;
+            } else {
+                // 跨天睡觉（比如晚上11点睡觉，第二天早上7点起床）
+                sleepDuration = wakeUpMinutes - bedMinutes;
+            }
+
+            const sleepHours = Math.floor(sleepDuration / 60);
+            const sleepMinutesLeft = sleepDuration % 60;
+
+            // 创建临时提示元素
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'fixed top-4 right-4 bg-green-100 border-2 border-green-400 rounded-lg p-4 shadow-lg z-50 schedule-message';
+            messageDiv.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">⏰</span>
+                    <div>
+                        <div class="font-bold text-green-700">作息时间已更新！</div>
+                        <div class="text-sm text-green-600">
+                            起床: ${wakeUpTime} | 睡觉: ${bedTime}<br>
+                            睡眠时长: ${sleepHours}小时${sleepMinutesLeft}分钟
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(messageDiv);
+
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+        }
+
+        // 根据作息时间更新时间段配置
+        function updateTimeSlotConfig() {
+            const wakeUpTime = scheduleSettings.wakeUpTime;
+            const bedTime = scheduleSettings.bedTime;
+
+            // 解析时间
+            const wakeUpHour = parseInt(wakeUpTime.split(':')[0]);
+            const wakeUpMinute = parseInt(wakeUpTime.split(':')[1]);
+            const bedHour = parseInt(bedTime.split(':')[0]);
+            const bedMinute = parseInt(bedTime.split(':')[1]);
+
+            // 计算各时间段
+            const morningStart = wakeUpTime;
+            const morningEndHour = Math.min(wakeUpHour + 4, 12); // 最多到中午12点
+            const morningEnd = `${morningEndHour.toString().padStart(2, '0')}:00`;
+
+            const afternoonStart = morningEndHour < 12 ? morningEnd : '12:00';
+            const afternoonEndHour = Math.min(parseInt(afternoonStart.split(':')[0]) + 5, 18); // 最多到晚上6点
+            const afternoonEnd = `${afternoonEndHour.toString().padStart(2, '0')}:00`;
+
+            const eveningStart = afternoonEndHour < 18 ? afternoonEnd : '18:00';
+            const eveningEnd = bedTime;
+
+            // 更新配置
+            timeSlotConfig.morning.start = morningStart;
+            timeSlotConfig.morning.end = morningEnd;
+            timeSlotConfig.afternoon.start = afternoonStart;
+            timeSlotConfig.afternoon.end = afternoonEnd;
+            timeSlotConfig.evening.start = eveningStart;
+            timeSlotConfig.evening.end = eveningEnd;
+
+            // 重新生成时间段
+            generateTimeSlots();
+        }
+
+        // 更新时间段的所有相关显示
+        function updateSlotAll(slotId) {
+            updateSlotDisplay(slotId);
+            updateTimeUsed(slotId);
+            updateTotalPlannedTime();
+            updateScore();
+        }
+
+        // 更新多个时间段的所有相关显示
+        function updateMultipleSlotsAll(...slotIds) {
+            slotIds.forEach(slotId => {
+                updateSlotDisplay(slotId);
+                updateTimeUsed(slotId);
+            });
+            updateTotalPlannedTime();
+            updateScore();
+        }
+
+        // 完成计划功能
+        function completePlan() {
+            const analysis = analyzePlan();
+            showPlanAnalysis(analysis);
+        }
+
+        // 分析计划完整性
+        function analyzePlan() {
+            let totalPlannedTime = 0;
+            let totalStudyTime = 0;
+            let totalPlayTime = 0;
+            let totalAvailableTime = 0;
+
+            // 计算每个时间段的数据
+            Object.keys(timeSlotConfig).forEach(slotId => {
+                const config = timeSlotConfig[slotId];
+                const maxTime = config.maxHours * 60;
+                const usedTime = calculateTimeUsed(slotId);
+
+                totalAvailableTime += maxTime;
+                totalPlannedTime += usedTime;
+
+                // 计算学习和娱乐时间
+                const activities = currentPlan[slotId] || [];
+                activities.forEach(activityItem => {
+                    const allActivities = getAllActivities();
+                    const activity = allActivities.find(a => a.id === activityItem.activityId);
+                    if (activity) {
+                        // 学习相关活动
+                        if (['study', 'read'].includes(activity.id)) {
+                            totalStudyTime += activityItem.duration;
+                        }
+                        // 娱乐相关活动
+                        if (['play', 'music', 'art', 'outdoor', 'friend'].includes(activity.id)) {
+                            totalPlayTime += activityItem.duration;
+                        }
+                    }
+                });
+            });
+
+            // 计算占用率
+            const timeUtilization = (totalPlannedTime / totalAvailableTime) * 100;
+
+            // 计算学习娱乐比例
+            const totalLearningPlayTime = totalStudyTime + totalPlayTime;
+            const studyRatio = totalLearningPlayTime > 0 ? totalStudyTime / totalLearningPlayTime : 0;
+            const playRatio = totalLearningPlayTime > 0 ? totalPlayTime / totalLearningPlayTime : 0;
+
+            // 计算分数
+            let score = 0;
+            let feedback = [];
+
+            // 时间利用率评分 (40分)
+            if (timeUtilization >= 90) {
+                score += 40;
+                feedback.push("✅ 时间安排很充实，利用率达到" + timeUtilization.toFixed(1) + "%");
+            } else if (timeUtilization >= 70) {
+                score += 30;
+                feedback.push("⚠️ 时间安排还不错，利用率" + timeUtilization.toFixed(1) + "%，可以再充实一些");
+            } else {
+                score += 20;
+                feedback.push("❌ 时间安排有些松散，利用率只有" + timeUtilization.toFixed(1) + "%，建议增加更多活动");
+            }
+
+            // 学习娱乐平衡评分 (40分)
+            if (studyRatio >= 0.2) { // 学习时间占比超过20%
+                score += 40;
+                feedback.push("✅ 学习娱乐搭配合理，学习占比" + (studyRatio * 100).toFixed(1) + "%");
+            } else if (studyRatio >= 0.1) {
+                score += 25;
+                feedback.push("⚠️ 学习时间稍少，占比" + (studyRatio * 100).toFixed(1) + "%，建议增加一些学习时间");
+            } else {
+                score += 10;
+                feedback.push("❌ 学习时间太少了，占比只有" + (studyRatio * 100).toFixed(1) + "%，建议多安排一些学习活动");
+            }
+
+            // 完整性评分 (20分)
+            const hasAllTimeSlots = Object.keys(timeSlotConfig).every(slotId =>
+                currentPlan[slotId] && currentPlan[slotId].length > 0
+            );
+
+            if (hasAllTimeSlots) {
+                score += 20;
+                feedback.push("✅ 一天的计划很完整，上午、下午、晚上都有安排");
+            } else {
+                score += 10;
+                feedback.push("⚠️ 有些时间段没有安排活动，建议完善计划");
+            }
+
+            // 等级评定
+            let grade = '';
+            let gradeColor = '';
+            if (score >= 90) {
+                grade = '优秀';
+                gradeColor = 'text-green-600';
+            } else if (score >= 80) {
+                grade = '良好';
+                gradeColor = 'text-blue-600';
+            } else if (score >= 70) {
+                grade = '及格';
+                gradeColor = 'text-yellow-600';
+            } else {
+                grade = '需要改进';
+                gradeColor = 'text-red-600';
+            }
+
+            return {
+                score,
+                grade,
+                gradeColor,
+                timeUtilization,
+                studyRatio,
+                playRatio,
+                totalStudyTime,
+                totalPlayTime,
+                totalPlannedTime,
+                totalAvailableTime,
+                feedback
+            };
+        }
+
+        // 显示计划分析结果
+        function showPlanAnalysis(analysis) {
+            const modalDiv = document.createElement('div');
+            modalDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modalDiv.innerHTML = `
+                <div class="bg-white rounded-xl p-8 max-w-2xl max-h-screen overflow-y-auto mx-4 shadow-2xl">
+                    <div class="text-center mb-6">
+                        <h2 class="text-3xl font-bold text-purple-600 mb-2">🎯 计划完成度分析</h2>
+                        <div class="text-6xl ${analysis.gradeColor} font-bold mb-2">${analysis.score}分</div>
+                        <div class="text-2xl ${analysis.gradeColor} font-semibold">${analysis.grade}</div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-blue-50 rounded-lg p-4 text-center">
+                            <div class="text-2xl font-bold text-blue-600">${analysis.timeUtilization.toFixed(1)}%</div>
+                            <div class="text-sm text-blue-500">时间利用率</div>
+                        </div>
+                        <div class="bg-green-50 rounded-lg p-4 text-center">
+                            <div class="text-2xl font-bold text-green-600">${(analysis.studyRatio * 100).toFixed(1)}%</div>
+                            <div class="text-sm text-green-500">学习时间占比</div>
+                        </div>
+                        <div class="bg-purple-50 rounded-lg p-4 text-center">
+                            <div class="text-2xl font-bold text-purple-600">${formatDuration(analysis.totalStudyTime)}</div>
+                            <div class="text-sm text-purple-500">学习时间</div>
+                        </div>
+                        <div class="bg-pink-50 rounded-lg p-4 text-center">
+                            <div class="text-2xl font-bold text-pink-600">${formatDuration(analysis.totalPlayTime)}</div>
+                            <div class="text-sm text-pink-500">娱乐时间</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-lg font-bold text-gray-700 mb-3">📋 详细反馈</h3>
+                        <div class="space-y-2">
+                            ${analysis.feedback.map(fb => `
+                                <div class="bg-gray-50 rounded-lg p-3 text-sm">${fb}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    ${analysis.score >= 80 ? `
+                        <div class="bg-green-100 border-2 border-green-400 rounded-lg p-4 mb-6">
+                            <h3 class="text-lg font-bold text-green-700 mb-2">🎉 恭喜你！</h3>
+                            <p class="text-green-600">这是一个很好的计划！坚持执行，可以拍照或打印出来作为提醒。</p>
+                        </div>
+                    ` : `
+                        <div class="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-4 mb-6">
+                            <h3 class="text-lg font-bold text-yellow-700 mb-2">💡 建议</h3>
+                            <p class="text-yellow-600">
+                                ${analysis.studyRatio < 0.2 ? '可以考虑增加一些学习时间，让计划更加平衡。' : ''}
+                                ${analysis.timeUtilization < 90 ? '可以安排更多有意义的活动，充分利用时间。' : ''}
+                            </p>
+                        </div>
+                    `}
+                    
+                    <div class="flex justify-center space-x-4">
+                        <button onclick="closePlanAnalysis()" 
+                                class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg">
+                            关闭
+                        </button>
+                        <button onclick="submitPlan()" 
+                                class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg">
+                            提交计划
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modalDiv);
+
+            // 点击背景关闭
+            modalDiv.addEventListener('click', (e) => {
+                if (e.target === modalDiv) {
+                    closePlanAnalysis();
+                }
+            });
+        }
+
+        // 关闭计划分析弹窗
+        function closePlanAnalysis() {
+            const modal = document.querySelector('.fixed.inset-0.bg-black.bg-opacity-50');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // 生成打印内容
+        function generatePrintContent(templateName) {
+            let content = `
+                <div class="header">
+                    <h1>📅 ${templateName}</h1>
+                    <p>制定时间: ${new Date().toLocaleDateString()}</p>
+                </div>
+            `;
+
+            Object.keys(timeSlotConfig).forEach(slotId => {
+                const config = timeSlotConfig[slotId];
+                const activities = currentPlan[slotId] || [];
+
+                content += `
+                    <div class="time-slot">
+                        <h3>${config.name} (${config.start}-${config.end})</h3>
+                `;
+
+                if (activities.length > 0) {
+                    activities.forEach((activityItem, index) => {
+                        const allActivities = getAllActivities();
+                        const activity = allActivities.find(a => a.id === activityItem.activityId);
+                        if (activity) {
+                            const startTime = calculateActivityStartTime(slotId, index);
+                            const endTime = calculateActivityEndTime(slotId, index);
+                            content += `
+                                <div class="activity">
+                                    <strong>${activity.emoji} ${activity.name.replace(activity.emoji + ' ', '')}</strong>
+                                    <span style="float: right;">${startTime} - ${endTime} (${activityItem.duration}分钟)</span>
+                                </div>
+                            `;
+                        }
+                    });
+                } else {
+                    content += '<div class="activity">暂无安排</div>';
+                }
+
+                content += '</div>';
+            });
+
+            content += `
+                <div class="footer">
+                    <p>💪 坚持执行计划，养成良好习惯！</p>
+                </div>
+            `;
+
+            return content;
+        }
+        
+        function submitPlan() {
+            // 计算最终分数
+            const analysis = analyzePlan();
+            const currentScore = analysis.score;
+            
+            // 更新最高分数
+            if (currentScore > maxScore) {
+                maxScore = currentScore;
+                // 保存最高分数到localStorage
+                localStorage.setItem('schedule_maker_max_score', maxScore.toString());
+            }
+            
+            // 发送游戏完成消息
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: {
+                    score: maxScore, // 总是返回最高分数
+                    currentScore: currentScore,
+                    difficulty: difficulty,
+                    grade: analysis.grade,
+                    timeUtilization: analysis.timeUtilization
+                }
+            }, '*');
+            
+            // 关闭分析弹窗
+            closePlanAnalysis();
+            
+            // 显示提交成功消息
+            showSuccessMessage(`计划已提交！当前得分: ${currentScore}分，历史最高分: ${maxScore}分`);
+        }
+
+    </script>
+</body>
+
+</html>

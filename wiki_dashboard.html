@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抱抱龙成长百科</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.2"></script>
+    <style>
+        body {
+            height: 100vh;
+            overflow: hidden;
+        }
+        .main-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            max-width: none;
+            width: 100%;
+        }
+        .columns-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            overflow: hidden;
+            width: 100%;
+        }
+        .column {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .column-content {
+            flex: 1;
+            overflow-y: auto;
+            max-height: none;
+        }
+        .progress-section {
+            flex-shrink: 0;
+        }
+
+        /* 拖拽样式 */
+        .question-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .question-card.dragging {
+            transform: rotate(5deg) scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            opacity: 0.8;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .drop-zone {
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        
+        .drop-zone.drag-over {
+            background-color: rgba(147, 197, 253, 0.2) !important;
+            border-color: #3b82f6 !important;
+            border-style: dashed !important;
+        }
+        
+        .drop-zone.invalid-drop {
+            background-color: rgba(248, 113, 113, 0.2) !important;
+            border-color: #ef4444 !important;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100">
+    <!-- Main Content -->
+    <div class="main-container w-full px-2">
+        <!-- Header -->
+        <div class="progress-section p-3 mb-2 mt-2">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-bold text-gray-800">💬 抱抱龙成长百科</h3>
+                <div class="flex items-center space-x-4">
+                    <!-- help section -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Question Categories -->
+        <div class="columns-container">
+            <!-- Unexplored Questions -->
+            <div class="column bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">🔍</span>
+                        <h3 class="text-xl font-bold text-gray-800">待探索</h3>
+                        <span class="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm" id="unexplored-count">0</span>
+                    </div>
+                    <button id="refresh-questions-btn" class="bg-gradient-to-r from-purple-400 to-blue-500 text-white px-3 py-1 rounded-lg text-base font-bold hover:shadow-lg transition-all">
+                        换一换
+                    </button>
+                </div>
+                <div class="column-content space-y-3" id="unexplored-questions">
+                    <!-- Questions will be populated here -->
+                </div>
+            </div>
+
+            <!-- In Progress Questions -->
+            <div class="column bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center mb-4">
+                    <span class="text-2xl mr-3">⚡</span>
+                    <h3 class="text-xl font-bold text-gray-800">进行中</h3>
+                    <span class="ml-auto bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-sm" id="progress-count">0</span>
+                </div>
+                <div class="column-content space-y-3" id="progress-questions">
+                    <!-- Questions will be populated here -->
+                </div>
+            </div>
+
+            <!-- Completed Questions -->
+            <div class="column bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center mb-4">
+                    <span class="text-2xl mr-3">✅</span>
+                    <h3 class="text-xl font-bold text-gray-800">已完成</h3>
+                    <span class="ml-auto bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm" id="completed-count">0</span>
+                </div>
+                <div class="column-content space-y-3" id="completed-questions">
+                    <!-- Questions will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Question Details -->
+    <div id="question-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-4">
+                        🐲
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-6" id="modal-question">问题标题</h3>
+                    <div class="flex space-x-4">
+                        <button id="start-learning" class="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 px-6 rounded-xl font-bold hover:shadow-lg transition-all">
+                            开始对话 🚀
+                        </button>
+                        <button id="close-modal" class="flex-1 bg-gray-300 text-gray-700 py-3 px-6 rounded-xl font-bold hover:bg-gray-400 transition-all">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize SDK
+        const sdk = new KeepworkSDK({
+            timeout: 30000
+        });
+        console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+
+        // Global variables
+        let allQuestions = [];
+        let currentPeriodQuestions = [];
+        let wikiWordToQuestionMap = new Map(); // Map from wikiword to question object
+        let progress_wikiwords = []; // Global array for progress wiki words
+        let completed_wikiwords = []; // Global array for completed wiki words
+        const QUESTIONS_PER_PERIOD = 10;
+
+        // Question data source in markdown format
+        const questionsMarkdown = `
+# 自然科学类
+- 为什么天空是蓝色的？(光散射)
+- 恐龙为什么会灭绝？(恐龙)
+- 植物怎么制造氧气？(光合作用)
+- 为什么会下雨？(降水)
+
+# 动物世界类
+- 企鹅为什么不会冷？(企鹅)
+- 蝴蝶是怎么变出来的？(变态发育)
+- 为什么猫咪总是用舌头洗脸？(猫咪)
+- 鸟儿为什么会飞？(飞行原理)
+
+# 宇宙探索类
+- 月亮为什么有时圆有时弯？(月相)
+- 星星为什么会发光？(恒星)
+- 地球为什么是圆的？(地球形状)
+- 太阳系有多少颗行星？(太阳系)
+
+# 人体奥秘类
+- 为什么我们要睡觉？(睡眠)
+- 心脏为什么会跳动？(心脏)
+- 为什么会做梦？(梦境)
+- 眼睛是怎么看见东西的？(视觉)
+        `;
+
+        // Parse markdown to extract questions
+        function parseQuestions(markdown) {
+            const lines = markdown.trim().split('\n');
+            const questions = [];
+            let currentCategory = '';
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.startsWith('# ')) {
+                    currentCategory = line.substring(2);
+                } else if (line.startsWith('- ')) {
+                    const fullText = line.substring(2);
+                    
+                    // Extract wiki words in brackets
+                    const wikiWordMatch = fullText.match(/\(([^)]+)\)$/);
+                    let question = fullText;
+                    let wikiWord = null;
+                    
+                    if (wikiWordMatch) {
+                        // Remove the wiki word from the question
+                        question = fullText.replace(/\s*\([^)]+\)$/, '');
+                        wikiWord = wikiWordMatch[1];
+                    }
+                    
+                    questions.push({
+                        id: `q_${questions.length + 1}`,
+                        question,
+                        category: currentCategory,
+                        wikiWord: wikiWord,
+                        status: 'unexplored'
+                    });
+                }
+            }
+            
+            return questions;
+        }
+
+        // Build map from wikiword to question object for quick lookup
+        function buildWikiWordMap(questions) {
+            wikiWordToQuestionMap.clear();
+            for (const question of questions) {
+                if (question.wikiWord && !wikiWordToQuestionMap.has(question.wikiWord)) {
+                    // Use the first question that matches this wikiword (in case of duplicates)
+                    wikiWordToQuestionMap.set(question.wikiWord, question);
+                }
+            }
+        }
+
+        // Load questions from SDK personal page store or use default
+        async function loadQuestions() {
+            const questions = parseQuestions(questionsMarkdown);
+            // Build wikiword map first for efficient lookup
+            buildWikiWordMap(questions);
+            // Apply saved progress/completion status from new format
+            await loadProgressData(questions);
+            return questions;
+        }
+
+        
+        async function loadProgressData(questions) {
+            try {
+                const progressData = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
+                
+                if (progressData) {
+                    let data = progressData;
+                    
+                    // Handle case where data might be a string (serialized format)
+                    if (typeof data === 'string') {
+                        console.log('Data received as string, attempting to parse...');
+                        try {
+                            // Try to parse as JSON first
+                            data = JSON.parse(data);
+                        } catch (jsonError) {
+                            console.warn('Data is not valid JSON, skipping string data');
+                            return;
+                        }
+                    }
+                    
+                    // Ensure data is an object and has the expected structure
+                    if (!data || typeof data !== 'object') {
+                        console.warn('Invalid data structure received:', data);
+                        return;
+                    }
+                    
+                    // Apply completed status
+                    if (Array.isArray(data.completed_wikiwords) && Array.isArray(data.completed_times)) {
+                        completed_wikiwords = [...data.completed_wikiwords]; // Store in global array
+                        data.completed_wikiwords.forEach((wikiword, index) => {
+                            const question = wikiWordToQuestionMap.get(wikiword);
+                            if (question) {
+                                question.status = 'completed';
+                                question.completedTime = data.completed_times[index];
+                            }
+                        });
+                    }
+                    
+                    // Apply in-progress status
+                    if (Array.isArray(data.inprogress_wikiwords) && Array.isArray(data.inprogress_times)) {
+                        progress_wikiwords = [...data.inprogress_wikiwords]; // Store in global array
+                        data.inprogress_wikiwords.forEach((wikiword, index) => {
+                            const question = wikiWordToQuestionMap.get(wikiword);
+                            if (question) {
+                                question.status = 'progress';
+                                question.progressTime = data.inprogress_times[index];
+                            }
+                        });
+                    }
+                    
+                    // Load current period questions
+                    if (Array.isArray(data.currentperiod_wikiwords) && Array.isArray(data.currentperiod_times)) {
+                        currentPeriodQuestions = [];
+                        data.currentperiod_wikiwords.forEach((wikiword, index) => {
+                            const question = wikiWordToQuestionMap.get(wikiword);
+                            if (question) {
+                                currentPeriodQuestions.push(question);
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading progress data:', error);
+            }
+        }
+
+        // Save progress and completion data in new format
+        async function saveProgressData(bForceFlush = false) {
+            try {
+                const currentperiod_wikiwords = [];
+                const currentperiod_times = [];
+                
+                // Collect completed questions from global array
+                const completed_wikiwords_data = [];
+                const completed_times_data = [];
+                completed_wikiwords.forEach(wikiword => {
+                    const question = wikiWordToQuestionMap.get(wikiword);
+                    if (question) {
+                        completed_wikiwords_data.push(wikiword);
+                        completed_times_data.push(question.completedTime || getCurrentDateCode());
+                    }
+                });
+                
+                // Collect in-progress questions from global array
+                const inprogress_wikiwords_data = [];
+                const inprogress_times_data = [];
+                progress_wikiwords.forEach(wikiword => {
+                    const question = wikiWordToQuestionMap.get(wikiword);
+                    if (question) {
+                        inprogress_wikiwords_data.push(wikiword);
+                        inprogress_times_data.push(question.progressTime || getCurrentDateCode());
+                    }
+                });
+                
+                // Collect current period questions
+                currentPeriodQuestions.forEach(q => {
+                    if (q.wikiWord) {
+                        currentperiod_wikiwords.push(q.wikiWord);
+                        currentperiod_times.push(getCurrentDateCode());
+                    }
+                });
+                
+                const data = {
+                    completed_wikiwords: completed_wikiwords_data,
+                    completed_times: completed_times_data,
+                    inprogress_wikiwords: inprogress_wikiwords_data,
+                    inprogress_times: inprogress_times_data,
+                    currentperiod_wikiwords,
+                    currentperiod_times
+                };
+                
+                // Defensive checks to ensure data consistency
+                if (completed_wikiwords_data.length !== completed_times_data.length) {
+                    console.error('Mismatch in completed arrays');
+                    const minLength = Math.min(completed_wikiwords_data.length, completed_times_data.length);
+                    data.completed_wikiwords = completed_wikiwords_data.slice(0, minLength);
+                    data.completed_times = completed_times_data.slice(0, minLength);
+                }
+                
+                if (inprogress_wikiwords_data.length !== inprogress_times_data.length) {
+                    console.error('Mismatch in progress arrays');
+                    console.error('inprogress_wikiwords:', inprogress_wikiwords_data);
+                    console.error('inprogress_times:', inprogress_times_data);
+                    const minLength = Math.min(inprogress_wikiwords_data.length, inprogress_times_data.length);
+                    data.inprogress_wikiwords = inprogress_wikiwords_data.slice(0, minLength);
+                    data.inprogress_times = inprogress_times_data.slice(0, minLength);
+                }
+                
+                if (currentperiod_wikiwords.length !== currentperiod_times.length) {
+                    console.error('Mismatch in current period arrays');
+                    const minLength = Math.min(currentperiod_wikiwords.length, currentperiod_times.length);
+                    data.currentperiod_wikiwords = currentperiod_wikiwords.slice(0, minLength);
+                    data.currentperiod_times = currentperiod_times.slice(0, minLength);
+                }
+                
+                await sdk.personalPageStore.savePageData("maisi_dragon_wiki", "discussion-progress-data", data, bForceFlush);
+            } catch (error) {
+                console.error('Error saving progress data:', error);
+            }
+        }
+
+        // Get current date in YYMMDD format
+        function getCurrentDateCode() {
+            const now = new Date();
+            const year = now.getFullYear().toString().slice(-2);
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            return parseInt(year + month + day);
+        }
+
+        // Format date from YYMMDD to user-friendly Chinese format
+        function formatDateConcise(dateCode) {
+            if (!dateCode) return '';
+            
+            const dateStr = dateCode.toString();
+            if (dateStr.length !== 6) return dateStr;
+            
+            // Parse the date code (YYMMDD format)
+            const year = parseInt('20' + dateStr.substring(0, 2));
+            const month = parseInt(dateStr.substring(2, 4));
+            const day = parseInt(dateStr.substring(4, 6));
+            
+            const targetDate = new Date(year, month - 1, day);
+            const today = new Date();
+            
+            // Reset time to compare only dates
+            today.setHours(0, 0, 0, 0);
+            targetDate.setHours(0, 0, 0, 0);
+            
+            const diffTime = today.getTime() - targetDate.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) {
+                return '今天';
+            } else if (diffDays === 1) {
+                return '昨天';
+            } else if (diffDays > 1 && diffDays <= 30) {
+                return `${diffDays}天前`;
+            } else if (diffDays > 30 && year === today.getFullYear()) {
+                return `${month}月${day}日`;
+            } else {
+                const shortYear = year.toString().slice(-2);
+                return `${shortYear}年${month}月${day}日`;
+            }
+        }
+
+        // Generate random questions for current period
+        function generateCurrentPeriodQuestions() {
+            // Get available questions
+            const availableQuestions = allQuestions.filter(q => q.status === 'unexplored');
+            
+            // Randomly select questions
+            const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
+            const newQuestions = shuffled.slice(0, QUESTIONS_PER_PERIOD);
+            
+            // Set current period questions (keep references to same objects)
+            currentPeriodQuestions = newQuestions;
+            saveProgressData();
+        }
+
+
+
+        // Create question card element
+        function createQuestionCard(question) {
+            const card = document.createElement('div');
+            card.className = 'bg-gradient-to-r from-white to-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all cursor-pointer hover:border-purple-300 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50';
+            
+            // Create the bottom section with category and wiki word
+            let bottomSection = `<span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${question.category}</span>`;
+            
+            if (question.wikiWord) {
+                bottomSection += `<span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full ml-2">${question.wikiWord}</span>`;
+            }
+            
+            // Add date display for in-progress and completed questions
+            let dateSection = '';
+            if (question.status === 'progress' && question.progressTime) {
+                dateSection = `<span class="text-xs text-orange-600 font-medium">${formatDateConcise(question.progressTime)}</span>`;
+            } else if (question.status === 'completed' && question.completedTime) {
+                dateSection = `<span class="text-xs text-green-600 font-medium">${formatDateConcise(question.completedTime)}</span>`;
+            }
+            
+            card.innerHTML = `
+                <h4 class="font-bold text-gray-800 mb-3">${question.question}</h4>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        ${bottomSection}
+                    </div>
+                    ${dateSection ? `<div class="flex items-center">${dateSection}</div>` : ''}
+                </div>
+            `;
+            
+            card.addEventListener('click', () => showQuestionModal(question));
+            return card;
+        }
+
+
+
+        // Get status icon
+        function getStatusIcon(status) {
+            switch (status) {
+                case 'unexplored': return '🔍';
+                case 'progress': return '⚡';
+                case 'completed': return '✅';
+                default: return '❓';
+            }
+        }
+
+        // Show question modal
+        function showQuestionModal(question) {
+            document.getElementById('modal-question').textContent = question.question;
+            document.getElementById('question-modal').classList.remove('hidden');
+            
+            const startButton = document.getElementById('start-learning');
+            startButton.onclick = () => startLearning(question);
+        }
+
+        // Start learning process
+        function startLearning(question) {
+            console.log('Starting learning for question:', {
+                id: question.id, 
+                question: question.question, 
+                wikiWord: question.wikiWord,
+                status: question.status
+            });
+            
+            // Update question status to progress in both all questions and current period
+            const allQuestionsIndex = allQuestions.findIndex(q => q.id === question.id);
+            if (allQuestionsIndex !== -1) {
+                allQuestions[allQuestionsIndex].status = 'progress';
+                allQuestions[allQuestionsIndex].progressTime = getCurrentDateCode();
+                console.log('Updated question in allQuestions:', {
+                    id: allQuestions[allQuestionsIndex].id,
+                    wikiWord: allQuestions[allQuestionsIndex].wikiWord,
+                    status: allQuestions[allQuestionsIndex].status,
+                    progressTime: allQuestions[allQuestionsIndex].progressTime
+                });
+            }
+            
+            const currentIndex = currentPeriodQuestions.findIndex(q => q.id === question.id);
+            if (currentIndex !== -1) {
+                currentPeriodQuestions[currentIndex].status = 'progress';
+                currentPeriodQuestions[currentIndex].progressTime = getCurrentDateCode();
+                console.log('Updated question in currentPeriodQuestions:', {
+                    id: currentPeriodQuestions[currentIndex].id,
+                    wikiWord: currentPeriodQuestions[currentIndex].wikiWord,
+                    status: currentPeriodQuestions[currentIndex].status,
+                    progressTime: currentPeriodQuestions[currentIndex].progressTime
+                });
+            }
+            
+            // Update global progress_wikiwords array
+            if (question.wikiWord && !progress_wikiwords.includes(question.wikiWord)) {
+                progress_wikiwords.push(question.wikiWord);
+            }
+            
+            saveProgressData(true);
+            
+            // Close modal
+            document.getElementById('question-modal').classList.add('hidden');
+            
+            // Simulate opening external page
+            // remove ? in question.question when passing to URL
+            let objective = question.question.replace(/\?/g, '');
+            if (question.wikiWord) {
+                objective += ` (${question.wikiWord})`;
+            }
+            // replace current href's wiki_dashboard with characterAI. 
+            let url = window.location.href;
+            url = url.split('?')[0];
+            url = url.replace('wiki_dashboard', 'characterAI');
+            window.location.href = `${url}?objective=${encodeURIComponent(objective)}`;
+            
+            // Refresh the display
+            renderQuestions();
+        }
+
+        // Complete a question (for simulation)
+        function completeQuestion(questionId) {
+            const allQuestionsIndex = allQuestions.findIndex(q => q.id === questionId);
+            if (allQuestionsIndex !== -1) {
+                allQuestions[allQuestionsIndex].status = 'completed';
+                allQuestions[allQuestionsIndex].completedTime = getCurrentDateCode();
+                // Remove progress time when completed
+                delete allQuestions[allQuestionsIndex].progressTime;
+                
+                // Update global arrays
+                const wikiWord = allQuestions[allQuestionsIndex].wikiWord;
+                if (wikiWord) {
+                    // Remove from progress array if exists
+                    const progressIndex = progress_wikiwords.indexOf(wikiWord);
+                    if (progressIndex > -1) {
+                        progress_wikiwords.splice(progressIndex, 1);
+                    }
+                    // Add to completed array if not exists
+                    if (!completed_wikiwords.includes(wikiWord)) {
+                        completed_wikiwords.push(wikiWord);
+                    }
+                }
+            }
+            
+            const currentIndex = currentPeriodQuestions.findIndex(q => q.id === questionId);
+            if (currentIndex !== -1) {
+                currentPeriodQuestions[currentIndex].status = 'completed';
+                currentPeriodQuestions[currentIndex].completedTime = getCurrentDateCode();
+                // Remove progress time when completed
+                delete currentPeriodQuestions[currentIndex].progressTime;
+            }
+            
+            saveProgressData();
+            renderQuestions();
+        }
+
+        // Render questions in their respective categories
+        function renderQuestions() {
+            const unexploredContainer = document.getElementById('unexplored-questions');
+            const progressContainer = document.getElementById('progress-questions');
+            const completedContainer = document.getElementById('completed-questions');
+            
+            // Clear containers
+            unexploredContainer.innerHTML = '';
+            progressContainer.innerHTML = '';
+            completedContainer.innerHTML = '';
+            
+            // Filter current period questions by status for unexplored (only current period)
+            const unexplored = currentPeriodQuestions.filter(q => q.status === 'unexplored');
+            
+            // Get progress questions from global progress_wikiwords array
+            const progress = progress_wikiwords.map(wikiword => wikiWordToQuestionMap.get(wikiword)).filter(q => q);
+            
+            // Get completed questions from global completed_wikiwords array
+            const completed = completed_wikiwords.map(wikiword => wikiWordToQuestionMap.get(wikiword)).filter(q => q);
+            
+            // Render questions
+            unexplored.forEach(q => unexploredContainer.appendChild(createQuestionCard(q)));
+            progress.forEach(q => progressContainer.appendChild(createQuestionCard(q)));
+            completed.forEach(q => completedContainer.appendChild(createQuestionCard(q)));
+            
+            // Update counters
+            document.getElementById('unexplored-count').textContent = unexplored.length;
+            document.getElementById('progress-count').textContent = progress.length;
+            document.getElementById('completed-count').textContent = completed.length;
+        }
+
+        // Close modal functionality
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('question-modal').classList.add('hidden');
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('question-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'question-modal') {
+                document.getElementById('question-modal').classList.add('hidden');
+            }
+        });
+
+        // Refresh questions button
+        document.getElementById('refresh-questions-btn').addEventListener('click', () => {
+            generateCurrentPeriodQuestions();
+            renderQuestions();
+        });
+
+        // Demo function to mark random questions as completed (for demonstration)
+        function simulateCompletion() {
+            const progressQuestions = allQuestions.filter(q => q.status === 'progress');
+            if (progressQuestions.length > 0) {
+                const randomQuestion = progressQuestions[Math.floor(Math.random() * progressQuestions.length)];
+                completeQuestion(randomQuestion.id);
+            }
+        }
+
+        // Debug function to view serialized data
+        async function viewSerializedData() {
+            const data = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
+            if (data) {
+                console.log('Serialized Progress Data:', data);
+                console.log('Completed:', data.completed_wikiwords?.map((word, i) => `${word}: ${data.completed_times?.[i]}`));
+                console.log('In Progress:', data.inprogress_wikiwords?.map((word, i) => `${word}: ${data.inprogress_times?.[i]}`));
+            } else {
+                console.log('No serialized data found');
+            }
+        }
+
+        // Cleanup function to fix data consistency issues
+        async function cleanupProgressData() {
+            console.log('Starting data cleanup...');
+            
+            // Check all questions for missing wikiWords
+            const questionsWithoutWikiWords = allQuestions.filter(q => !q.wikiWord);
+            if (questionsWithoutWikiWords.length > 0) {
+                console.error('Questions without wikiWords found:', questionsWithoutWikiWords);
+            }
+            
+            // Check for progress questions without wikiWords
+            const progressQuestionsWithoutWikiWords = allQuestions.filter(q => q.status === 'progress' && !q.wikiWord);
+            if (progressQuestionsWithoutWikiWords.length > 0) {
+                console.error('Progress questions without wikiWords found:', progressQuestionsWithoutWikiWords);
+                // Reset their status to unexplored
+                progressQuestionsWithoutWikiWords.forEach(q => {
+                    q.status = 'unexplored';
+                    delete q.progressTime;
+                });
+                console.log('Reset corrupted progress questions to unexplored');
+            }
+            
+            // Force save clean data
+            await saveProgressData(true);
+            console.log('Data cleanup completed');
+        }
+
+        // Add keyboard shortcut for demo completion (press 'C' key)
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'c' && e.ctrlKey) {
+                e.preventDefault();
+                simulateCompletion();
+            }
+            // Press 'V' to view serialized data
+            if (e.key.toLowerCase() === 'v' && e.ctrlKey) {
+                e.preventDefault();
+                viewSerializedData();
+            }
+        });
+
+        // Initialize the app
+        async function initializeApp() {
+            // Load all questions
+            allQuestions = await loadQuestions();
+            
+            // Build wikiword to question map for quick lookup
+            buildWikiWordMap(allQuestions);
+            
+            // If no current period questions, generate them
+            if (currentPeriodQuestions.length === 0) {
+                generateCurrentPeriodQuestions();
+            }
+            
+            // Render the interface
+            renderQuestions();
+        }
+        
+         window.parent.postMessage({ type: 'gameLoaded' }, '*');
+
+        // Wait for several response with 200ms timeout, then start game
+        function checkStartGame(timeoutMs = 200){
+            let gameStarted = false;
+            const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    if (!gameStarted) {
+                        resolve(null);
+                    }
+                }, timeoutMs);
+                let miniGameProxyReceived = false;
+                const messageHandler = function (e) {
+                    if(e.data.type === "miniGameProxyDataResponse"){
+                        miniGameProxyReceived = true;
+                        sdk.token = e.data?.keepworkToken;
+                    }
+                    if(miniGameProxyReceived){
+                        miniGameProxyReceived = false;
+                        window.removeEventListener('message', messageHandler);
+                        clearTimeout(timeout);
+                        resolve(e.data);
+                    }
+                };
+                window.addEventListener('message', messageHandler);
+                window.parent.postMessage({ type: 'getLocation' }, '*');
+                window.parent.postMessage({ type: 'getMiniGameProxyData' }, '*');
+            });
+            
+            waitForMinigameProxyWithTimeout.then(async () => {
+                if (!gameStarted) {
+                    gameStarted = true;
+                    await initializeApp();
+                }
+            }).catch(async (error) => {
+                if (!gameStarted) {
+                    gameStarted = true;
+                    await initializeApp();
+                }
+            });
+        }
+        checkStartGame();
+    </script>
+</body>
+</html>
