@@ -415,7 +415,6 @@
           transform: scale(1);
         }
       }
-
     </style>
   </head>
 
@@ -775,10 +774,10 @@
           this.initEventListeners();
           this.loadDefaultConfig();
         }
-        start() {
+        async start() {
           let urlObjective = game.urlObjective || new URLSearchParams(window.location.search).get("objective");
           if (urlObjective) {
-            this.loadConfigByObjective(urlObjective);
+            await this.loadConfigByObjective(urlObjective);
           }
           console.log(`Keepwork SDK initialized token: ${sdk.token}`);
           this.initializeGame();
@@ -801,7 +800,7 @@
           });
         }
         // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
-        loadConfigByObjective(objective) {
+        async loadConfigByObjective(objective) {
           if (!objective) {
             console.error("Objective is required to load config.");
             return;
@@ -815,7 +814,7 @@
           this.config.objective.wikiword = wikiword;
 
           this.config.character.name = "抱抱龙";
-          this.config.character.age = 8;
+          this.config.character.age = 7;
           this.config.character.role = "宠物";
           this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
           this.config.character.chat_background = null;
@@ -867,15 +866,85 @@
             description: `你成功帮助${this.config.character.name}解决了问题：${objective}！`,
             icon: "🎉",
           };
-          this.config.videoActions = {
-            期待: {
-              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
-            },
-            高兴: {
-              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4",
-            },
-          };
+          await this.setVideoActionsByCharacter();
         }
+        
+        // Set video actions based on character name and age
+        async setVideoActionsByCharacter() {
+          if (!this.config || !this.config.character) return;
+
+          const characterName = this.config.character.name;
+          let characterAge = this.config.character.age || 0;
+
+          // Only set video actions for "抱抱龙" character
+          if (characterName !== "抱抱龙") {
+            this.config.videoActions = {};
+            return;
+          }
+
+          // Initialize video actions object
+          this.config.videoActions = {};
+
+          try {
+            let stage = (await sdk.personalPageStore.loadPageData("maisi_userinfo", "dragon.stage")) || "kid";
+            console.log("Loaded dragon stage:", stage);
+            if (stage === "egg" || stage === "baby") {
+              characterAge = 0;
+            } else if (stage === "adult") {
+              characterAge = 10;
+            } else {
+              characterAge = 7;
+            }
+          } catch (error) {
+            console.error("Error loading dragon stage:", error);
+          }
+
+          // Dragon egg videos (>= 0 years)
+          if (characterAge < 4) {
+            this.config.videoActions["看着你"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_watching.mp4",
+            };
+            this.config.videoActions["期待"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_small.mp4",
+            };
+            this.config.videoActions["思考"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_thinking.mp4",
+            };
+            this.config.videoActions["说话"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_talk.mp4",
+            };
+            this.config.videoActions["难过"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_sad.mp4",
+            };
+          } else if (characterAge <= 7) {
+            this.config.videoActions["期待"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            };
+            this.config.videoActions["高兴"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4",
+            };
+            this.config.videoActions["难过"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_sad.mp4",
+            };
+            this.config.videoActions["说话"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_talk.mp4",
+            };
+          } else {
+            this.config.videoActions["期待"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_happy.mp4",
+            };
+            this.config.videoActions["高兴"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_happpy2.mp4",
+            };
+            this.config.videoActions["难过"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_sad1.mp4",
+            };
+            this.config.videoActions["说话"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_talking.mp4",
+            };
+          }
+        }
+
         loadDefaultConfig() {
           this.config = {
             character: {
@@ -930,6 +999,7 @@
               icon: "🎉",
             },
           };
+          this.setVideoActionsByCharacter();
         }
 
         changeChatBackground(background) {
@@ -944,7 +1014,7 @@
               chatContainer.style.backgroundPosition = "center";
               chatContainer.style.backgroundRepeat = "no-repeat";
               chatContainer.style.backgroundColor = ""; // Clear solid color
-            }            // If background is a gradient or solid color
+            } // If background is a gradient or solid color
             else if (background.includes("gradient") || background.startsWith("#") || background.startsWith("rgb") || background.startsWith("hsl")) {
               // For gradients, use backgroundImage; for solid colors, use backgroundColor
               if (background.includes("gradient")) {
@@ -2178,9 +2248,9 @@
 
       // Wait for several response with 200ms timeout, then start game
       function checkStartGame(timeoutMs) {
-        if( !timeoutMs ) {
-            const urlParams = new URLSearchParams(window.location.search);
-            timeoutMs = (urlParams.get("parent") === "miniGameProxy") ? 3000 : 200;
+        if (!timeoutMs) {
+          const urlParams = new URLSearchParams(window.location.search);
+          timeoutMs = urlParams.get("parent") === "miniGameProxy" ? 3000 : 200;
         }
         let gameStarted = false;
         const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
