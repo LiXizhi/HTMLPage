@@ -227,7 +227,6 @@
         gap: 2px;
         margin-bottom: 2px;
       }
-
       .key {
         background: white;
         border: 1px solid #cbd5e1;
@@ -239,6 +238,13 @@
         transition: all 0.2s ease;
         font-size: clamp(0.8rem, 2.5vw, 1rem);
         touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
       }
 
       .key:hover {
@@ -327,10 +333,40 @@
         transition: all 0.2s ease;
         display: none;
       }
-
       .rules-float-btn:hover {
         transform: scale(1.1);
         background: white;
+      }
+      .keyboard-toggle-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 80px;
+        width: auto;
+        min-width: 80px;
+        height: 50px;
+        border-radius: 25px;
+        background: rgba(255, 255, 255, 0.9);
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        font-size: 0.8rem;
+        z-index: 100;
+        transition: all 0.2s ease;
+        display: none;
+        padding: 0 12px;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+
+      .keyboard-toggle-btn:hover {
+        transform: scale(1.1);
+        background: white;
+      }
+
+      .keyboard-toggle-btn.active {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
       }
 
       @media (max-height: 600px) {
@@ -620,9 +656,10 @@
         <button class="btn btn-secondary" id="resetBtn">🔄 重新开始</button>
       </div>
     </div>
-
     <!-- 悬浮规则按钮 -->
     <button id="rulesFloatBtn" class="rules-float-btn" title="查看游戏规则">❓</button>
+    <!-- 虚拟键盘切换按钮 -->
+    <button id="keyboardToggleBtn" class="keyboard-toggle-btn" title="显示/隐藏虚拟键盘">⌨️ 虚拟键盘</button>
 
     <script>
       // 游戏统计和消息通信
@@ -630,11 +667,14 @@
       let highestScore = 0;
       let gameStarted = false;
 
-      // 规则弹窗控制
-      const rulesModal = document.getElementById("rulesModal");
+      // 规则弹窗控制      const rulesModal = document.getElementById("rulesModal");
       const closeRulesBtn = document.getElementById("closeRules");
       const startGameFromRulesBtn = document.getElementById("startGameFromRules");
       const rulesFloatBtn = document.getElementById("rulesFloatBtn");
+      const keyboardToggleBtn = document.getElementById("keyboardToggleBtn");
+
+      // 虚拟键盘显示状态
+      let isKeyboardVisible = true;
 
       // 显示规则弹窗
       function showRules() {
@@ -649,19 +689,60 @@
           rulesModal.style.display = "none";
           rulesModal.classList.remove("hide");
         }, 300);
-      }
-
-      // 从规则弹窗开始游戏
+      } // 从规则弹窗开始游戏
       function startGameFromRules() {
         hideRules();
         setTimeout(() => {
           new TypingGame().startGame();
           rulesFloatBtn.style.display = "block";
+          keyboardToggleBtn.style.display = "block";
         }, 300);
+      } // 切换虚拟键盘显示/隐藏
+      function toggleVirtualKeyboard() {
+        const virtualKeyboard = document.getElementById("virtualKeyboard");
+        const inputArea = document.getElementById("inputArea");
+
+        // 如果textarea有焦点，强制显示虚拟键盘，不允许隐藏
+        if (document.activeElement === inputArea) {
+          isKeyboardVisible = true;
+          virtualKeyboard.style.display = "block";
+          keyboardToggleBtn.classList.add("active");
+          keyboardToggleBtn.title = "输入时虚拟键盘保持显示";
+          return;
+        }
+
+        // 只有在textarea没有焦点时才允许切换
+        isKeyboardVisible = !isKeyboardVisible;
+
+        if (isKeyboardVisible) {
+          virtualKeyboard.style.display = "block";
+          keyboardToggleBtn.classList.add("active");
+          keyboardToggleBtn.title = "隐藏虚拟键盘";
+        } else {
+          virtualKeyboard.style.display = "none";
+          keyboardToggleBtn.classList.remove("active");
+          keyboardToggleBtn.title = "显示虚拟键盘";
+        }
       } // 事件监听
       closeRulesBtn.addEventListener("click", hideRules);
       startGameFromRulesBtn.addEventListener("click", startGameFromRules);
       rulesFloatBtn.addEventListener("click", showRules);
+      keyboardToggleBtn.addEventListener("click", toggleVirtualKeyboard);
+
+      // 添加textarea焦点事件监听器
+      const inputArea = document.getElementById("inputArea");
+      inputArea.addEventListener("focus", function () {
+        const virtualKeyboard = document.getElementById("virtualKeyboard");
+        isKeyboardVisible = true;
+        virtualKeyboard.style.display = "block";
+        keyboardToggleBtn.classList.add("active");
+        keyboardToggleBtn.title = "输入时虚拟键盘保持显示";
+      });
+
+      inputArea.addEventListener("blur", function () {
+        // 失去焦点时，恢复按钮的正常功能
+        keyboardToggleBtn.title = isKeyboardVisible ? "隐藏虚拟键盘" : "显示虚拟键盘";
+      });
 
       // 全局Enter键监听 - 在规则弹窗中也可以按Enter开始游戏
       document.addEventListener("keydown", function (e) {
@@ -904,32 +985,54 @@
             setTimeout(() => this.handleOrientationChange(), 100);
           });
         }
-
         setupVirtualKeyboard() {
           document.querySelectorAll(".key").forEach((key) => {
-            key.addEventListener("click", () => {
+            key.addEventListener("click", (e) => {
+              e.preventDefault();
               const keyValue = key.dataset.key;
+              console.log("Virtual key clicked:", keyValue); // 调试信息
               this.handleVirtualKey(keyValue);
             });
 
-            // 触摸反馈
+            // 触摸事件处理
             key.addEventListener("touchstart", (e) => {
               e.preventDefault();
               key.style.background = "#cbd5e1";
+              key.style.transform = "scale(0.95)";
             });
 
-            key.addEventListener("touchend", () => {
+            key.addEventListener("touchend", (e) => {
+              e.preventDefault();
+              const keyValue = key.dataset.key;
+              console.log("Virtual key touched:", keyValue); // 调试信息
+              this.handleVirtualKey(keyValue);
+
               setTimeout(() => {
                 key.style.background = "";
+                key.style.transform = "";
+              }, 150);
+            });
+
+            // 防止双重触发
+            key.addEventListener("touchcancel", () => {
+              setTimeout(() => {
+                key.style.background = "";
+                key.style.transform = "";
               }, 150);
             });
           });
         }
         handleVirtualKey(key) {
-          if (!this.isGameRunning) return;
-
           const inputArea = this.elements.inputArea;
           const currentValue = inputArea.value;
+
+          // 如果游戏未开始，只允许Enter键来开始游戏
+          if (!this.isGameRunning) {
+            if (key === "Enter" && !this.elements.startBtn.disabled) {
+              this.startGame();
+            }
+            return;
+          }
 
           if (key === "Backspace") {
             if (currentValue.length > 0) {
@@ -974,10 +1077,21 @@
           this.resetCurrentSentenceStats();
           this.displayText();
           this.startTimer();
-
           this.elements.inputArea.disabled = false;
           this.elements.inputArea.focus();
-          this.elements.startBtn.disabled = true;
+          this.elements.startBtn.disabled = true; // 显示虚拟键盘切换按钮
+          const keyboardToggleBtn = document.getElementById("keyboardToggleBtn");
+          if (keyboardToggleBtn) {
+            keyboardToggleBtn.style.display = "block";
+            // 根据当前虚拟键盘状态设置按钮样式
+            const virtualKeyboard = document.getElementById("virtualKeyboard");
+            const isVisible = virtualKeyboard && virtualKeyboard.style.display !== "none";
+            if (isVisible) {
+              keyboardToggleBtn.classList.add("active");
+            } else {
+              keyboardToggleBtn.classList.remove("active");
+            }
+          }
         }
         selectRandomText() {
           const currentLevel = this.levels[this.currentLevel];
@@ -1179,7 +1293,7 @@
           this.elements.inputArea.value = "";
           this.elements.inputArea.disabled = true;
           this.elements.startBtn.disabled = false;
-          this.elements.sampleText.innerHTML = "点击开始练习按钮开始游戏";
+          this.elements.sampleText.innerHTML = "点击开始练习按钮或按Enter键开始游戏";
 
           // Reset both current sentence and level stats
           this.resetStats();
