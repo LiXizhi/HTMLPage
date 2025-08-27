@@ -144,7 +144,6 @@
         display: flex;
         flex-direction: column;
       }
-
       .sample-text {
         font-size: clamp(1rem, 3vw, 1.5rem);
         line-height: 1.6;
@@ -154,6 +153,12 @@
         background: white;
         border-radius: 8px;
         border: 2px solid #e2e8f0;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      .sample-text::-webkit-scrollbar {
+        display: none;
       }
 
       .char {
@@ -346,13 +351,13 @@
         background: none;
         border-radius: 10px;
       }
-
       .level-selector {
         display: flex;
         align-items: center;
         gap: 0.5rem;
         margin-bottom: 0;
         flex: 0 0 auto;
+        min-width: 200px;
       }
 
       .level-dropdown {
@@ -379,15 +384,14 @@
         gap: 0.5rem;
         font-size: clamp(0.8rem, 2vw, 0.9rem);
         color: #4a5568;
-      }
-
-      /* 统计面板样式 */
+      } /* 统计面板样式 */
       .stats-panel {
         display: flex;
         gap: 1rem;
         margin-bottom: 0;
-        flex: 1;
+        flex: 0 0 auto;
         justify-content: flex-end;
+        min-width: 200px;
       }
 
       .stat-item {
@@ -428,7 +432,6 @@
         justify-content: center;
         animation: slideUp 0.3s ease-out;
       }
-
       .progress-content {
         background: white;
         border-radius: 20px;
@@ -437,6 +440,45 @@
         text-align: center;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
         margin: 1rem;
+      } /* 积分进度条样式 */
+      .points-progress-container {
+        flex: 1;
+        margin-left: 1rem;
+        margin-right: 1rem;
+        display: flex;
+        align-items: center;
+        min-width: 300px;
+        position: relative;
+      }
+
+      .points-progress-bar {
+        width: 100%;
+        height: 20px;
+        background: #e2e8f0;
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+        border: 2px solid #667eea;
+      }
+
+      .points-progress-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 8px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+
+      .points-progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+        color: white;
+        font-weight: bold;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        z-index: 10;
       }
     </style>
   </head>
@@ -448,7 +490,7 @@
           <h2 style="font-size: 1.5rem; font-weight: bold; color: #667eea">⌨️ 游戏规则</h2>
           <button id="closeRules" style="font-size: 1.5rem; background: none; border: none; cursor: pointer">&times;</button>
         </div>
-        <div style="space-y: 1rem">
+        <div>
           <div style="display: flex; align-items: center; margin-bottom: 0.8rem">
             <span style="font-size: 1.5rem; margin-right: 0.8rem">📝</span>
             <span>根据显示的文本内容进行打字练习</span>
@@ -500,8 +542,11 @@
             <option value="8">Level 9: 高级挑战</option>
             <option value="9">Level 10: 大师级别</option>
           </select>
-          <div class="level-info">
-            <span id="levelProgress">0/3</span>
+          <div class="points-progress-container">
+            <div class="points-progress-bar">
+              <div class="points-progress-fill" id="pointsProgressFill"></div>
+              <div class="points-progress-text" id="pointsProgressText">0</div>
+            </div>
           </div>
         </div>
 
@@ -518,10 +563,6 @@
           <div class="stat-item">
             <div class="stat-label">⏱️ 时间</div>
             <div class="stat-value" id="timeUsed">0</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">📊 进度</div>
-            <div class="stat-value" id="progress">0%</div>
           </div>
         </div>
       </div>
@@ -617,12 +658,22 @@
           new TypingGame().startGame();
           rulesFloatBtn.style.display = "block";
         }, 300);
-      }
-
-      // 事件监听
+      } // 事件监听
       closeRulesBtn.addEventListener("click", hideRules);
       startGameFromRulesBtn.addEventListener("click", startGameFromRules);
       rulesFloatBtn.addEventListener("click", showRules);
+
+      // 全局Enter键监听 - 在规则弹窗中也可以按Enter开始游戏
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          // 如果规则弹窗显示，按Enter开始游戏
+          if (rulesModal.style.display === "flex") {
+            e.preventDefault();
+            startGameFromRules();
+          }
+        }
+      });
+
       window.addEventListener("message", function (e) {
         switch (e.data.type) {
           case "setGameConfig":
@@ -671,60 +722,62 @@
           // Level-wide statistics (accumulate across all sentences in a level)
           this.levelStartTime = 0;
           this.levelCorrectChars = 0;
-          this.levelTotalChars = 0;          // 关卡系统，使用 markdown 格式定义
+          this.levelTotalChars = 0;
+          // 积分系统
+          this.totalPoints = 0; // 总积分// 关卡系统，使用 markdown 格式定义
           this.levelsMarkdown = `# 基础字母
-abc def ghi
-jkl mno pqr
-stu vwx yz
+      abc def ghi
+      jkl mno pqr
+      stu vwx yz
 
-# 常用单词
-the and you that
-have for not with
-this but his from
+      # 常用单词
+      the and you that
+      have for not with
+      this but his from
 
-# 短句练习
-I am happy today.
-The cat is sleeping.
-She likes to read books.
+      # 短句练习
+      I am happy today.
+      The cat is sleeping.
+      She likes to read books.
 
-# 中等句子
-Technology has changed our daily lives.
-Learning new skills requires practice and patience.
-The weather is beautiful this morning.
+      # 中等句子
+      Technology has changed our daily lives.
+      Learning new skills requires practice and patience.
+      The weather is beautiful this morning.
 
-# 长句挑战
-The quick brown fox jumps over the lazy dog near the river.
-Modern computers can process millions of calculations per second.
-Education is the most powerful weapon which you can use to change the world.
+      # 长句挑战
+      The quick brown fox jumps over the lazy dog near the river.
+      Modern computers can process millions of calculations per second.
+      Education is the most powerful weapon which you can use to change the world.
 
-# 技术词汇
-JavaScript programming language enables interactive web development.
-Artificial intelligence algorithms analyze data patterns efficiently.
-Cloud computing infrastructure provides scalable storage solutions.
+      # 技术词汇
+      JavaScript programming language enables interactive web development.
+      Artificial intelligence algorithms analyze data patterns efficiently.
+      Cloud computing infrastructure provides scalable storage solutions.
 
-# 复杂文本
-The rapid advancement of artificial intelligence is transforming various industries worldwide.
-Sustainable development requires balancing economic growth with environmental protection measures.
-Cybersecurity threats continue to evolve as digital transformation accelerates globally.
+      # 复杂文本
+      The rapid advancement of artificial intelligence is transforming various industries worldwide.
+      Sustainable development requires balancing economic growth with environmental protection measures.
+      Cybersecurity threats continue to evolve as digital transformation accelerates globally.
 
-# 专业术语
-Quantum computing represents a paradigm shift in computational capabilities and processing power.
-Blockchain technology enables decentralized systems with cryptographic security and transparency.
-Machine learning algorithms utilize neural networks for pattern recognition and data analysis.
+      # 专业术语
+      Quantum computing represents a paradigm shift in computational capabilities and processing power.
+      Blockchain technology enables decentralized systems with cryptographic security and transparency.
+      Machine learning algorithms utilize neural networks for pattern recognition and data analysis.
 
-# 高级挑战
-The intersection of biotechnology and nanotechnology promises unprecedented innovations in medicine.
-Cryptocurrency and decentralized finance are disrupting traditional banking systems worldwide.
-Augmented reality applications are revolutionizing education and professional training methods.
+      # 高级挑战
+      The intersection of biotechnology and nanotechnology promises unprecedented innovations in medicine.
+      Cryptocurrency and decentralized finance are disrupting traditional banking systems worldwide.
+      Augmented reality applications are revolutionizing education and professional training methods.
 
-# 大师级别
-Quantum entanglement demonstrates non-local correlations between particles across vast distances in space.
-Neuromorphic computing architectures mimic biological neural networks for energy-efficient processing.
-Bioengineered organisms could potentially address climate change through carbon sequestration mechanisms.`;          // 解析 markdown 文本为 levels 数组
+      # 大师级别
+      Quantum entanglement demonstrates non-local correlations between particles across vast distances in space.
+      Neuromorphic computing architectures mimic biological neural networks for energy-efficient processing.
+      Bioengineered organisms could potentially address climate change through carbon sequestration mechanisms.`; // 解析 markdown 文本为 levels 数组
           this.levels = this.parseMarkdownLevels(this.levelsMarkdown);
-          
+
           // 调试输出：验证解析结果
-          console.log('解析的关卡数据:', this.levels);
+          console.log("解析的关卡数据:", this.levels);
 
           this.initializeElements();
           this.setupEventListeners();
@@ -736,35 +789,35 @@ Bioengineered organisms could potentially address climate change through carbon 
         // 解析 markdown 格式的关卡数据
         parseMarkdownLevels(markdown) {
           const levels = [];
-          const lines = markdown.split('\n');
+          const lines = markdown.split("\n");
           let currentLevel = null;
-          
+
           for (let line of lines) {
             line = line.trim();
-            
+
             // 检查是否是标题行（以 # 开头）
-            if (line.startsWith('# ')) {
+            if (line.startsWith("# ")) {
               // 如果之前有关卡，先保存
               if (currentLevel) {
                 levels.push(currentLevel);
               }
-              
+
               // 创建新关卡
               currentLevel = {
                 title: line.substring(2).trim(),
-                texts: []
+                texts: [],
               };
             } else if (line.length > 0 && currentLevel) {
               // 非空行且有当前关卡，添加到文本数组
               currentLevel.texts.push(line);
             }
           }
-          
+
           // 添加最后一个关卡
           if (currentLevel) {
             levels.push(currentLevel);
           }
-          
+
           return levels;
         }
 
@@ -773,28 +826,25 @@ Bioengineered organisms could potentially address climate change through carbon 
           this.levelsMarkdown = markdown;
           this.levels = this.parseMarkdownLevels(markdown);
           this.updateLevelDropdown();
-          console.log('关卡数据已更新:', this.levels);
+          console.log("关卡数据已更新:", this.levels);
         }
 
         // 更新关卡下拉菜单
         updateLevelDropdown() {
           const levelSelector = this.elements.levelSelector;
-          levelSelector.innerHTML = '';
-          
+          levelSelector.innerHTML = "";
+
           this.levels.forEach((level, index) => {
-            const option = document.createElement('option');
+            const option = document.createElement("option");
             option.value = index;
             option.textContent = `Level ${index + 1}: ${level.title}`;
             levelSelector.appendChild(option);
-          });
-          
-          // 重置到第一关
+          }); // 重置到第一关
           this.currentLevel = 0;
           this.currentTextIndex = 0;
           levelSelector.value = 0;
-          this.updateLevelProgress();
+          this.updatePointsProgress();
         }
-
         initializeElements() {
           this.elements = {
             sampleText: document.getElementById("sampleText"),
@@ -802,27 +852,30 @@ Bioengineered organisms could potentially address climate change through carbon 
             wpm: document.getElementById("wpm"),
             accuracy: document.getElementById("accuracy"),
             timeUsed: document.getElementById("timeUsed"),
-            progress: document.getElementById("progress"),
             startBtn: document.getElementById("startBtn"),
             resetBtn: document.getElementById("resetBtn"),
             virtualKeyboard: document.getElementById("virtualKeyboard"),
             levelSelector: document.getElementById("levelSelector"),
-            levelProgress: document.getElementById("levelProgress"),
+            pointsProgressFill: document.getElementById("pointsProgressFill"),
+            pointsProgressText: document.getElementById("pointsProgressText"),
             progressModal: document.getElementById("progressModal"),
             continueBtn: document.getElementById("continueBtn"),
             stayBtn: document.getElementById("stayBtn"),
             progressStats: document.getElementById("progressStats"),
           };
 
-          this.updateLevelProgress();
+          this.updatePointsProgress();
         }
         setupEventListeners() {
           this.elements.startBtn.addEventListener("click", () => this.startGame());
-          this.elements.resetBtn.addEventListener("click", () => this.resetGame()); // 关卡选择
+          this.elements.resetBtn.addEventListener("click", () => this.resetGame());
           this.elements.levelSelector.addEventListener("change", (e) => {
             this.currentLevel = parseInt(e.target.value);
             this.currentTextIndex = 0;
-            this.updateLevelProgress();
+            // Reset level stats when changing levels
+            this.levelCorrectChars = 0;
+            this.levelTotalChars = 0;
+            this.updatePointsProgress();
             this.resetGame();
           });
 
@@ -833,6 +886,15 @@ Bioengineered organisms could potentially address climate change through carbon 
           // 输入监听
           this.elements.inputArea.addEventListener("input", (e) => this.handleInput(e));
           this.elements.inputArea.addEventListener("keydown", (e) => this.handleKeyDown(e));
+
+          // 全局Enter键监听 - 用于开始游戏
+          document.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !this.isGameRunning && !this.elements.startBtn.disabled) {
+              // 只有在游戏未开始且开始按钮可用时才响应Enter键
+              e.preventDefault();
+              this.startGame();
+            }
+          });
 
           // 虚拟键盘
           this.setupVirtualKeyboard();
@@ -920,7 +982,8 @@ Bioengineered organisms could potentially address climate change through carbon 
         selectRandomText() {
           const currentLevel = this.levels[this.currentLevel];
           this.sampleText = currentLevel.texts[this.currentTextIndex];
-        }        displayText() {
+        }
+        displayText() {
           const chars = this.sampleText.split("");
           let html = chars
             .map((char, index) => {
@@ -939,6 +1002,33 @@ Bioengineered organisms could potentially address climate change through carbon 
           html += `<span class="${enterClassName}">⏎</span>`;
 
           this.elements.sampleText.innerHTML = html;
+
+          // 自动滚动到当前输入位置
+          this.scrollToCurrentPosition();
+        }
+
+        scrollToCurrentPosition() {
+          const sampleTextElement = this.elements.sampleText;
+          const currentCharElement = sampleTextElement.querySelector(".char.current");
+
+          if (currentCharElement) {
+            const containerRect = sampleTextElement.getBoundingClientRect();
+            const charRect = currentCharElement.getBoundingClientRect();
+
+            // 计算字符相对于容器的位置
+            const charRelativeLeft = charRect.left - containerRect.left + sampleTextElement.scrollLeft;
+            const charWidth = charRect.width;
+            const containerWidth = containerRect.width;
+
+            // 如果当前字符超出了可视区域的右边界，向右滚动
+            if (charRelativeLeft + charWidth > sampleTextElement.scrollLeft + containerWidth) {
+              sampleTextElement.scrollLeft = charRelativeLeft + charWidth - containerWidth + 20; // 留20px的边距
+            }
+            // 如果当前字符超出了可视区域的左边界，向左滚动
+            else if (charRelativeLeft < sampleTextElement.scrollLeft) {
+              sampleTextElement.scrollLeft = Math.max(0, charRelativeLeft - 20); // 留20px的边距
+            }
+          }
         }
         handleInput() {
           if (!this.isGameRunning) return;
@@ -947,10 +1037,8 @@ Bioengineered organisms could potentially address climate change through carbon 
           this.currentIndex = input.length;
 
           this.displayText();
-          this.updateStats();
-
-          // 检查是否完成当前文本
-          if (input.length === this.sampleText.length && input === this.sampleText) {
+          this.updateStats(); // 检查是否完成当前文本
+          if (input.length === this.sampleText.length && input.toLowerCase() === this.sampleText.toLowerCase()) {
             // 文本输入完成，等待回车键
             this.textCompleted = true;
           } else {
@@ -971,18 +1059,16 @@ Bioengineered organisms could potentially address climate change through carbon 
             this.gameCompleted();
           }
         }
-
         isCharCorrect(index) {
           const input = this.elements.inputArea.value;
-          return input[index] === this.sampleText[index];
+          return input[index].toLowerCase() === this.sampleText[index].toLowerCase();
         }
         updateStats() {
           const input = this.elements.inputArea.value;
           this.totalChars = input.length;
           this.correctChars = 0;
-
           for (let i = 0; i < Math.min(input.length, this.sampleText.length); i++) {
-            if (input[i] === this.sampleText[i]) {
+            if (input[i].toLowerCase() === this.sampleText[i].toLowerCase()) {
               this.correctChars++;
             }
           }
@@ -998,20 +1084,12 @@ Bioengineered organisms could potentially address climate change through carbon 
           // 计算准确率 (based on level-wide stats)
           const accuracy = totalLevelChars > 0 ? Math.round((totalLevelCorrectChars / totalLevelChars) * 100) : 100;
 
-          // 计算当前句子的进度
-          const progress = Math.round((this.currentIndex / this.sampleText.length) * 100);
-
-          // 计算关卡整体进度
-          const currentLevel = this.levels[this.currentLevel];
-          const sentenceProgress = this.currentTextIndex / currentLevel.texts.length;
-          const currentSentenceProgress = progress / 100 / currentLevel.texts.length;
-          const totalProgress = Math.round((sentenceProgress + currentSentenceProgress) * 100);
-
           this.elements.wpm.textContent = wpm;
           this.elements.accuracy.textContent = accuracy + "%";
-          this.elements.progress.textContent = totalProgress + "%";
-        }
 
+          // 更新积分进度条
+          this.updatePointsProgress();
+        }
         resetCurrentSentenceStats() {
           this.currentIndex = 0;
           this.correctChars = 0;
@@ -1022,9 +1100,6 @@ Bioengineered organisms could potentially address climate change through carbon 
           if (this.currentTextIndex === 0) {
             this.elements.timeUsed.textContent = "0s";
           }
-
-          // Reset progress for new sentence
-          this.elements.progress.textContent = "0%";
         }
         startTimer() {
           this.startTime = Date.now();
@@ -1044,41 +1119,16 @@ Bioengineered organisms could potentially address climate change through carbon 
           this.levelCorrectChars += this.correctChars;
           this.levelTotalChars += this.totalChars;
 
+          // 积分制：每个正确字符得1分
+          this.totalPoints += this.correctChars;
+
           const timeInMinutes = (Date.now() - this.startTime) / 60000;
-          const wmp = Math.round(this.correctChars / 5 / timeInMinutes);
+          const wpm = Math.round(this.correctChars / 5 / timeInMinutes);
           const accuracy = Math.round((this.correctChars / this.totalChars) * 100);
 
-          // 计算基于关卡的分数标准
-          const levelStandards = {
-            0: { minWPM: 10, maxWPM: 25 }, // 基础字母
-            1: { minWPM: 15, maxWPM: 30 }, // 常用单词
-            2: { minWPM: 20, maxWPM: 35 }, // 短句练习
-            3: { minWPM: 25, maxWPM: 40 }, // 中等句子
-            4: { minWPM: 30, maxWPM: 45 }, // 长句挑战
-            5: { minWPM: 35, maxWPM: 50 }, // 技术词汇
-            6: { minWPM: 40, maxWPM: 55 }, // 复杂文本
-            7: { minWPM: 45, maxWPM: 60 }, // 专业术语
-            8: { minWPM: 50, maxWPM: 65 }, // 高级挑战
-            9: { minWPM: 55, maxWPM: 70 }, // 大师级别
-          };
-
-          const standard = levelStandards[this.currentLevel] || { minWPM: 20, maxWPM: 40 }; // WPM得分（满分50分）
-          let wmpScore = 0;
-          if (wmp >= standard.maxWPM) {
-            wmpScore = 50;
-          } else if (wmp >= standard.minWPM) {
-            wmpScore = 25 + ((wmp - standard.minWPM) / (standard.maxWPM - standard.minWPM)) * 25;
-          } else {
-            wmpScore = Math.max(0, (wmp / standard.minWPM) * 25);
-          }
-
-          // 准确率得分（满分50分）
-          const accuracyScore = (accuracy / 100) * 50;
-          // 综合百分制得分
-          const score = Math.round(wmpScore + accuracyScore);
-
-          if (score > highestScore) {
-            highestScore = score;
+          // 使用积分更新最高分
+          if (this.totalPoints > highestScore) {
+            highestScore = this.totalPoints;
           }
 
           // 发送游戏完成消息
@@ -1086,9 +1136,8 @@ Bioengineered organisms could potentially address climate change through carbon 
             {
               type: "gameFinished",
               data: {
-                score: score,
-                highestScore: highestScore,
-                wpm: wmp,
+                earnedPoints: this.levelCorrectChars,
+                wpm: wpm,
                 accuracy: accuracy,
                 difficulty: this.currentLevel + 1,
               },
@@ -1099,13 +1148,12 @@ Bioengineered organisms could potentially address climate change through carbon 
           // 移动到下一个文本或下一关卡
           this.currentTextIndex++;
           const currentLevel = this.levels[this.currentLevel];
-
           if (this.currentTextIndex >= currentLevel.texts.length) {
             // 当前关卡的所有文本都完成了，显示关卡完成弹窗
-            this.showProgressModal({ wpm: wmp, accuracy, score });
+            this.showProgressModal({ wpm, accuracy });
           } else {
             // 还有更多文本，自动开始下一个句子
-            this.updateLevelProgress();
+            this.updatePointsProgress();
             // 清空输入区域
             this.elements.inputArea.value = "";
             this.textCompleted = false;
@@ -1115,7 +1163,6 @@ Bioengineered organisms could potentially address climate change through carbon 
             }, 500);
           }
         }
-
         resetStats() {
           this.currentIndex = 0;
           this.correctChars = 0;
@@ -1123,7 +1170,6 @@ Bioengineered organisms could potentially address climate change through carbon 
           this.elements.wpm.textContent = "0";
           this.elements.accuracy.textContent = "100%";
           this.elements.timeUsed.textContent = "0s";
-          this.elements.progress.textContent = "0%";
         }
         resetGame() {
           this.isGameRunning = false;
@@ -1139,6 +1185,9 @@ Bioengineered organisms could potentially address climate change through carbon 
           this.resetStats();
           this.levelCorrectChars = 0;
           this.levelTotalChars = 0;
+
+          // Reset progress bar
+          this.updatePointsProgress();
         }
         getDifficulty() {
           return this.currentLevel + 1;
@@ -1150,11 +1199,23 @@ Bioengineered organisms could potentially address climate change through carbon 
             console.log("自定义文本已加载");
           }
         }
-
-        updateLevelProgress() {
+        updatePointsProgress() {
           const currentLevel = this.levels[this.currentLevel];
-          const totalTexts = currentLevel.texts.length;
-          this.elements.levelProgress.textContent = `${this.currentTextIndex}/${totalTexts}`;
+
+          // Calculate total characters in current level
+          let totalChars = 0;
+          for (let text of currentLevel.texts) {
+            totalChars += text.length;
+          }
+
+          // Calculate current earned points (correct characters)
+          // Only include correctChars from current sentence if the game is running
+          const earnedPoints = this.levelCorrectChars + (this.isGameRunning ? this.correctChars : 0);
+
+          // Update progress bar
+          const percentage = totalChars > 0 ? (earnedPoints / totalChars) * 100 : 0;
+          this.elements.pointsProgressFill.style.width = Math.min(percentage, 100) + "%";
+          this.elements.pointsProgressText.textContent = `${earnedPoints}`;
         }
         continueToNextLevel() {
           this.hideProgressModal();
@@ -1162,7 +1223,10 @@ Bioengineered organisms could potentially address climate change through carbon 
             this.currentLevel++;
             this.currentTextIndex = 0;
             this.elements.levelSelector.value = this.currentLevel;
-            this.updateLevelProgress();
+            // Reset level stats for the new level
+            this.levelCorrectChars = 0;
+            this.levelTotalChars = 0;
+            this.updatePointsProgress();
             // Reset everything for the new level
             this.resetGame();
           } else {
@@ -1173,17 +1237,21 @@ Bioengineered organisms could potentially address climate change through carbon 
         stayCurrentLevel() {
           this.hideProgressModal();
           this.currentTextIndex = 0;
-          this.updateLevelProgress();
+          // Reset level stats when staying at current level
+          this.levelCorrectChars = 0;
+          this.levelTotalChars = 0;
+          this.updatePointsProgress();
           this.resetGame();
         }
-
         showProgressModal(stats) {
-          const { wpm, accuracy, score } = stats;
+          const { wpm, accuracy } = stats;
+          const currentLevel = this.levels[this.currentLevel];
+          const totalPoints = this.levelCorrectChars;
           this.elements.progressStats.innerHTML = `
-                    <div style="margin-bottom: 0.5rem;">⚡ 速度: ${wpm} WPM</div>
-                    <div style="margin-bottom: 0.5rem;">🎯 准确率: ${accuracy}%</div>
-                    <div style="margin-bottom: 0.5rem;">📊 得分: ${score}分</div>
-                `;
+                          <div style="margin-bottom: 0.5rem;">⚡ 速度: ${wpm} WPM</div>
+                          <div style="margin-bottom: 0.5rem;">🎯 准确率: ${accuracy}%</div>
+                          <div style="margin-bottom: 0.5rem;">📊 积分: ${totalPoints}分</div>
+                      `;
           this.elements.progressModal.style.display = "flex";
         }
 
