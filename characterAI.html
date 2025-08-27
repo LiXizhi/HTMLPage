@@ -21,9 +21,37 @@
         color: rgba(255, 255, 255, 0.8);
         font-style: italic;
       }
-
       .progress-bar {
         transition: width 0.5s ease-in-out;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .progress-bar:hover {
+        filter: brightness(1.1);
+        transform: scale(1.02);
+        transition: all 0.2s ease;
+      }
+
+      .progress-bar:active {
+        transform: scale(0.98);
+        filter: brightness(1.2);
+      }
+
+      .progress-bar.clicked {
+        animation: progressClick 0.3s ease;
+      }
+
+      @keyframes progressClick {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+        100% {
+          transform: scale(1);
+        }
       }
 
       .typing-indicator {
@@ -797,6 +825,37 @@
             } else if (e.target.value) {
               this.loadSession(e.target.value);
             }
+          }); // 进度条连续点击检测
+          this.progressClickCount = 0;
+          this.progressClickTimer = null;
+          this.elements.progressBar.addEventListener("click", () => {
+            this.progressClickCount++;
+
+            // 添加点击动画效果
+            this.elements.progressBar.classList.add("clicked");
+            setTimeout(() => {
+              this.elements.progressBar.classList.remove("clicked");
+            }, 300);
+
+            // 清除之前的计时器
+            if (this.progressClickTimer) {
+              clearTimeout(this.progressClickTimer);
+            }
+
+            // 设置2秒后重置点击计数
+            this.progressClickTimer = setTimeout(() => {
+              this.progressClickCount = 0;
+            }, 2000);
+
+            console.log(`进度条点击次数: ${this.progressClickCount}/5`);
+
+            // 如果连续点击5次且目标未达成，则自动触发目标达成
+            if (this.progressClickCount >= 5) {
+              this.progressClickCount = 0; // 重置计数
+              console.log("进度条连续点击5次，自动触发目标达成");
+              this.gameState.isObjectiveAchieved = false;
+              this.handleObjectiveAchieved();
+            }
           });
         }
         // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
@@ -868,7 +927,7 @@
           };
           await this.setVideoActionsByCharacter();
         }
-        
+
         // Set video actions based on character name and age
         async setVideoActionsByCharacter() {
           if (!this.config || !this.config.character) return;
@@ -1827,6 +1886,7 @@
                 characterName: this.config?.character?.name || "角色",
                 totalMessages: this.gameState.chatHistory.length,
                 finalProgress: this.gameState.progress,
+                isMaxDifficulty: true, // prevent selecting difficulty again
               },
             },
             "*"

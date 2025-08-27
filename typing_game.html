@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>打字训练游戏</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        font-family: "Arial", "Microsoft YaHei", sans-serif;
+      }
+
+      body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* 规则弹窗样式 */
+      .rules-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: slideUp 0.3s ease-out;
+      }
+
+      .rules-modal.hide {
+        animation: slideDown 0.3s ease-out;
+      }
+
+      .rules-content {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        max-width: 90vw;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        margin: 1rem;
+      }
+
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      @keyframes slideDown {
+        from {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+      }
+
+      .game-container {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        padding: 1rem;
+        margin: 0.5rem;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 1rem;
+        flex-shrink: 0;
+      }
+
+      .title {
+        font-size: clamp(1.5rem, 4vw, 2.5rem);
+        color: #4a5568;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .stats-panel {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-shrink: 0;
+      }
+
+      .stat-item {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 0.5rem;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+      }
+
+      .stat-label {
+        font-size: clamp(0.7rem, 2vw, 0.8rem);
+        opacity: 0.9;
+        margin-bottom: 0.25rem;
+      }
+
+      .stat-value {
+        font-size: clamp(1rem, 3vw, 1.2rem);
+        font-weight: bold;
+      }
+
+      .text-area {
+        flex: 1;
+        min-height: 0;
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .sample-text {
+        font-size: clamp(1rem, 3vw, 1.5rem);
+        line-height: 1.6;
+        color: #4a5568;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        border: 2px solid #e2e8f0;
+      }
+
+      .char {
+        position: relative;
+      }
+
+      .char.current {
+        background: #fbbf24;
+        animation: blink 1s infinite;
+      }
+
+      .char.correct {
+        background: #34d399;
+        color: white;
+      }
+      .char.incorrect {
+        background: #f87171;
+        color: white;
+      }
+
+      .char.enter-symbol {
+        background: #95a7a1;
+        color: white;
+        border-radius: 4px;
+        padding: 0 4px;
+        font-weight: bold;
+      }
+
+      @keyframes blink {
+        0%,
+        50% {
+          opacity: 1;
+        }
+        51%,
+        100% {
+          opacity: 0.3;
+        }
+      }
+
+      .input-area {
+        background: white;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        font-size: clamp(1rem, 3vw, 1.2rem);
+        outline: none;
+        transition: border-color 0.3s ease;
+        min-height: 60px;
+      }
+
+      .input-area:focus {
+        border-color: #667eea;
+      }
+
+      .virtual-keyboard {
+        background: #f1f5f9;
+        border-radius: 10px;
+        padding: 0.5rem;
+        margin-top: 1rem;
+        flex-shrink: 0;
+      }
+
+      .keyboard-row {
+        display: flex;
+        justify-content: center;
+        gap: 2px;
+        margin-bottom: 2px;
+      }
+
+      .key {
+        background: white;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        padding: 0.5rem;
+        min-width: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: clamp(0.8rem, 2.5vw, 1rem);
+        touch-action: manipulation;
+      }
+
+      .key:hover {
+        background: #e2e8f0;
+      }
+
+      .key:active {
+        background: #cbd5e1;
+        transform: scale(0.95);
+      }
+
+      .key.space {
+        flex: 1;
+        max-width: 300px;
+      }
+
+      .key.backspace {
+        min-width: 60px;
+        background: #fecaca;
+      }
+
+      .key.enter {
+        min-width: 60px;
+        background: #bbf7d0;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+        margin-top: 1rem;
+        flex-shrink: 0;
+      }
+
+      .btn {
+        padding: clamp(8px, 2vw, 12px) clamp(16px, 4vw, 24px);
+        border: none;
+        border-radius: 20px;
+        font-size: clamp(0.8rem, 2.5vw, 1rem);
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        touch-action: manipulation;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+      }
+
+      .btn-secondary {
+        background: linear-gradient(135deg, #a8edea, #fed6e3);
+        color: #4a5568;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .btn:active {
+        transform: translateY(0) scale(0.95);
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .rules-float-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.9);
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        font-size: 1.5rem;
+        z-index: 100;
+        transition: all 0.2s ease;
+        display: none;
+      }
+
+      .rules-float-btn:hover {
+        transform: scale(1.1);
+        background: white;
+      }
+
+      @media (max-height: 600px) {
+        .virtual-keyboard {
+          display: none; /* 横屏时隐藏虚拟键盘节省空间 */
+        }
+      }
+
+      /* 关卡和统计单行显示 */
+      .level-and-stats-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-shrink: 0;
+        padding: 0.5rem;
+        background: none;
+        border-radius: 10px;
+      }
+
+      .level-selector {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0;
+        flex: 0 0 auto;
+      }
+
+      .level-dropdown {
+        padding: 0.5rem 1rem;
+        border: 2px solid #667eea;
+        border-radius: 20px;
+        background: white;
+        color: #667eea;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: clamp(0.8rem, 2vw, 1rem);
+        outline: none;
+        min-width: 200px;
+      }
+
+      .level-dropdown:focus {
+        border-color: #764ba2;
+        box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+      }
+
+      .level-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        color: #4a5568;
+      }
+
+      /* 统计面板样式 */
+      .stats-panel {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 0;
+        flex: 1;
+        justify-content: flex-end;
+      }
+
+      .stat-item {
+        background: none;
+        box-shadow: none;
+        padding: 0;
+        border-radius: 0;
+        color: #4a5568;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: auto;
+      }
+
+      .stat-label {
+        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+        color: #666;
+        margin-bottom: 0.1rem;
+        opacity: 1;
+      }
+
+      .stat-value {
+        font-size: clamp(0.9rem, 2.5vw, 1rem);
+        font-weight: bold;
+        color: #333;
+      }
+
+      .progress-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        animation: slideUp 0.3s ease-out;
+      }
+
+      .progress-content {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        max-width: 90vw;
+        text-align: center;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        margin: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 游戏规则弹窗 -->
+    <div id="rulesModal" class="rules-modal">
+      <div class="rules-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem">
+          <h2 style="font-size: 1.5rem; font-weight: bold; color: #667eea">⌨️ 游戏规则</h2>
+          <button id="closeRules" style="font-size: 1.5rem; background: none; border: none; cursor: pointer">&times;</button>
+        </div>
+        <div style="space-y: 1rem">
+          <div style="display: flex; align-items: center; margin-bottom: 0.8rem">
+            <span style="font-size: 1.5rem; margin-right: 0.8rem">📝</span>
+            <span>根据显示的文本内容进行打字练习</span>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 0.8rem">
+            <span style="font-size: 1.5rem; margin-right: 0.8rem">⚡</span>
+            <span>尽可能快速和准确地输入</span>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 0.8rem">
+            <span style="font-size: 1.5rem; margin-right: 0.8rem">🎯</span>
+            <span>当前字符会高亮显示</span>
+          </div>
+          <div style="display: flex; align-items: center; margin-bottom: 0.8rem">
+            <span style="font-size: 1.5rem; margin-right: 0.8rem">📱</span>
+            <span>移动端可使用虚拟键盘</span>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 1.5rem">
+          <button id="startGameFromRules" class="btn btn-primary" style="font-size: 1.1rem; padding: 0.8rem 1.5rem">开始练习</button>
+        </div>
+      </div>
+    </div>
+    <!-- 关卡进度弹窗 -->
+    <div id="progressModal" class="progress-modal">
+      <div class="progress-content">
+        <div style="font-size: 2rem; margin-bottom: 1rem">🎉</div>
+        <h2 style="font-size: 1.5rem; font-weight: bold; color: #667eea; margin-bottom: 1rem">关卡完成！</h2>
+        <div id="progressStats" style="margin-bottom: 1.5rem; color: #4a5568"></div>
+        <div style="display: flex; gap: 1rem; justify-content: center">
+          <button id="continueBtn" class="btn btn-primary">继续下一关</button>
+          <button id="stayBtn" class="btn btn-secondary">留在当前关卡</button>
+        </div>
+      </div>
+    </div>
+    <div class="game-container">
+      <!-- 横屏时的关卡和统计合并行 -->
+      <div class="level-and-stats-row">
+        <!-- 关卡选择 -->
+        <div class="level-selector">
+          <select class="level-dropdown" id="levelSelector">
+            <option value="0">Level 1: 基础字母</option>
+            <option value="1">Level 2: 常用单词</option>
+            <option value="2">Level 3: 短句练习</option>
+            <option value="3">Level 4: 中等句子</option>
+            <option value="4">Level 5: 长句挑战</option>
+            <option value="5">Level 6: 技术词汇</option>
+            <option value="6">Level 7: 复杂文本</option>
+            <option value="7">Level 8: 专业术语</option>
+            <option value="8">Level 9: 高级挑战</option>
+            <option value="9">Level 10: 大师级别</option>
+          </select>
+          <div class="level-info">
+            <span id="levelProgress">0/3</span>
+          </div>
+        </div>
+
+        <!-- 统计面板 -->
+        <div class="stats-panel">
+          <div class="stat-item">
+            <div class="stat-label">⚡ 速度 (WPM)</div>
+            <div class="stat-value" id="wpm">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">🎯 准确率</div>
+            <div class="stat-value" id="accuracy">100%</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">⏱️ 时间</div>
+            <div class="stat-value" id="timeUsed">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">📊 进度</div>
+            <div class="stat-value" id="progress">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 文本显示和输入区域 -->
+      <div class="text-area">
+        <div class="sample-text" id="sampleText"></div>
+        <textarea class="input-area" id="inputArea" placeholder="在这里输入文本..." rows="1"></textarea>
+      </div>
+
+      <!-- 虚拟键盘 -->
+      <div class="virtual-keyboard" id="virtualKeyboard">
+        <div class="keyboard-row">
+          <div class="key" data-key="q">Q</div>
+          <div class="key" data-key="w">W</div>
+          <div class="key" data-key="e">E</div>
+          <div class="key" data-key="r">R</div>
+          <div class="key" data-key="t">T</div>
+          <div class="key" data-key="y">Y</div>
+          <div class="key" data-key="u">U</div>
+          <div class="key" data-key="i">I</div>
+          <div class="key" data-key="o">O</div>
+          <div class="key" data-key="p">P</div>
+        </div>
+        <div class="keyboard-row">
+          <div class="key" data-key="a">A</div>
+          <div class="key" data-key="s">S</div>
+          <div class="key" data-key="d">D</div>
+          <div class="key" data-key="f">F</div>
+          <div class="key" data-key="g">G</div>
+          <div class="key" data-key="h">H</div>
+          <div class="key" data-key="j">J</div>
+          <div class="key" data-key="k">K</div>
+          <div class="key" data-key="l">L</div>
+        </div>
+        <div class="keyboard-row">
+          <div class="key" data-key="z">Z</div>
+          <div class="key" data-key="x">X</div>
+          <div class="key" data-key="c">C</div>
+          <div class="key" data-key="v">V</div>
+          <div class="key" data-key="b">B</div>
+          <div class="key" data-key="n">N</div>
+          <div class="key" data-key="m">M</div>
+          <div class="key backspace" data-key="Backspace">⌫</div>
+        </div>
+        <div class="keyboard-row">
+          <div class="key space" data-key=" ">空格</div>
+          <div class="key enter" data-key="Enter">⏎</div>
+        </div>
+      </div>
+
+      <!-- 控制按钮 -->
+      <div class="controls">
+        <button class="btn btn-primary" id="startBtn">🎯 开始练习</button>
+        <button class="btn btn-secondary" id="resetBtn">🔄 重新开始</button>
+      </div>
+    </div>
+
+    <!-- 悬浮规则按钮 -->
+    <button id="rulesFloatBtn" class="rules-float-btn" title="查看游戏规则">❓</button>
+
+    <script>
+      // 游戏统计和消息通信
+      let game_config = "";
+      let highestScore = 0;
+      let gameStarted = false;
+
+      // 规则弹窗控制
+      const rulesModal = document.getElementById("rulesModal");
+      const closeRulesBtn = document.getElementById("closeRules");
+      const startGameFromRulesBtn = document.getElementById("startGameFromRules");
+      const rulesFloatBtn = document.getElementById("rulesFloatBtn");
+
+      // 显示规则弹窗
+      function showRules() {
+        rulesModal.style.display = "flex";
+        rulesModal.classList.remove("hide");
+      }
+
+      // 隐藏规则弹窗
+      function hideRules() {
+        rulesModal.classList.add("hide");
+        setTimeout(() => {
+          rulesModal.style.display = "none";
+          rulesModal.classList.remove("hide");
+        }, 300);
+      }
+
+      // 从规则弹窗开始游戏
+      function startGameFromRules() {
+        hideRules();
+        setTimeout(() => {
+          new TypingGame().startGame();
+          rulesFloatBtn.style.display = "block";
+        }, 300);
+      }
+
+      // 事件监听
+      closeRulesBtn.addEventListener("click", hideRules);
+      startGameFromRulesBtn.addEventListener("click", startGameFromRules);
+      rulesFloatBtn.addEventListener("click", showRules);
+      window.addEventListener("message", function (e) {
+        switch (e.data.type) {
+          case "setGameConfig":
+            game_config = e.data.data;
+            updateGameConfig(game_config);
+            break;
+          case "getGameStats":
+            window.parent.postMessage(
+              {
+                type: "gameStats",
+                data: {
+                  score: highestScore,
+                  difficulty: window.game ? window.game.getDifficulty() : 1,
+                },
+              },
+              "*"
+            );
+            break;
+        }
+      });
+      function updateGameConfig(config) {
+        try {
+          if (typeof config === "string" && config.trim()) {
+            const newConfig = JSON.parse(config);
+            if (newConfig.texts && window.game) {
+              window.game.setCustomTexts(newConfig.texts);
+            }
+          }
+        } catch (error) {
+          console.warn("解析游戏配置失败:", error);
+        }
+      }
+      class TypingGame {
+        constructor() {
+          this.currentLevel = 0;
+          this.currentTextIndex = 0;
+          this.sampleText = "";
+          this.currentIndex = 0;
+          this.correctChars = 0;
+          this.totalChars = 0;
+          this.startTime = 0;
+          this.isGameRunning = false;
+          this.timerInterval = null;
+          this.textCompleted = false;
+
+          // Level-wide statistics (accumulate across all sentences in a level)
+          this.levelStartTime = 0;
+          this.levelCorrectChars = 0;
+          this.levelTotalChars = 0;          // 关卡系统，使用 markdown 格式定义
+          this.levelsMarkdown = `# 基础字母
+abc def ghi
+jkl mno pqr
+stu vwx yz
+
+# 常用单词
+the and you that
+have for not with
+this but his from
+
+# 短句练习
+I am happy today.
+The cat is sleeping.
+She likes to read books.
+
+# 中等句子
+Technology has changed our daily lives.
+Learning new skills requires practice and patience.
+The weather is beautiful this morning.
+
+# 长句挑战
+The quick brown fox jumps over the lazy dog near the river.
+Modern computers can process millions of calculations per second.
+Education is the most powerful weapon which you can use to change the world.
+
+# 技术词汇
+JavaScript programming language enables interactive web development.
+Artificial intelligence algorithms analyze data patterns efficiently.
+Cloud computing infrastructure provides scalable storage solutions.
+
+# 复杂文本
+The rapid advancement of artificial intelligence is transforming various industries worldwide.
+Sustainable development requires balancing economic growth with environmental protection measures.
+Cybersecurity threats continue to evolve as digital transformation accelerates globally.
+
+# 专业术语
+Quantum computing represents a paradigm shift in computational capabilities and processing power.
+Blockchain technology enables decentralized systems with cryptographic security and transparency.
+Machine learning algorithms utilize neural networks for pattern recognition and data analysis.
+
+# 高级挑战
+The intersection of biotechnology and nanotechnology promises unprecedented innovations in medicine.
+Cryptocurrency and decentralized finance are disrupting traditional banking systems worldwide.
+Augmented reality applications are revolutionizing education and professional training methods.
+
+# 大师级别
+Quantum entanglement demonstrates non-local correlations between particles across vast distances in space.
+Neuromorphic computing architectures mimic biological neural networks for energy-efficient processing.
+Bioengineered organisms could potentially address climate change through carbon sequestration mechanisms.`;          // 解析 markdown 文本为 levels 数组
+          this.levels = this.parseMarkdownLevels(this.levelsMarkdown);
+          
+          // 调试输出：验证解析结果
+          console.log('解析的关卡数据:', this.levels);
+
+          this.initializeElements();
+          this.setupEventListeners();
+
+          // 存储到全局变量
+          window.game = this;
+        }
+
+        // 解析 markdown 格式的关卡数据
+        parseMarkdownLevels(markdown) {
+          const levels = [];
+          const lines = markdown.split('\n');
+          let currentLevel = null;
+          
+          for (let line of lines) {
+            line = line.trim();
+            
+            // 检查是否是标题行（以 # 开头）
+            if (line.startsWith('# ')) {
+              // 如果之前有关卡，先保存
+              if (currentLevel) {
+                levels.push(currentLevel);
+              }
+              
+              // 创建新关卡
+              currentLevel = {
+                title: line.substring(2).trim(),
+                texts: []
+              };
+            } else if (line.length > 0 && currentLevel) {
+              // 非空行且有当前关卡，添加到文本数组
+              currentLevel.texts.push(line);
+            }
+          }
+          
+          // 添加最后一个关卡
+          if (currentLevel) {
+            levels.push(currentLevel);
+          }
+          
+          return levels;
+        }
+
+        // 更新 markdown 格式的关卡数据
+        updateLevelsFromMarkdown(markdown) {
+          this.levelsMarkdown = markdown;
+          this.levels = this.parseMarkdownLevels(markdown);
+          this.updateLevelDropdown();
+          console.log('关卡数据已更新:', this.levels);
+        }
+
+        // 更新关卡下拉菜单
+        updateLevelDropdown() {
+          const levelSelector = this.elements.levelSelector;
+          levelSelector.innerHTML = '';
+          
+          this.levels.forEach((level, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = `Level ${index + 1}: ${level.title}`;
+            levelSelector.appendChild(option);
+          });
+          
+          // 重置到第一关
+          this.currentLevel = 0;
+          this.currentTextIndex = 0;
+          levelSelector.value = 0;
+          this.updateLevelProgress();
+        }
+
+        initializeElements() {
+          this.elements = {
+            sampleText: document.getElementById("sampleText"),
+            inputArea: document.getElementById("inputArea"),
+            wpm: document.getElementById("wpm"),
+            accuracy: document.getElementById("accuracy"),
+            timeUsed: document.getElementById("timeUsed"),
+            progress: document.getElementById("progress"),
+            startBtn: document.getElementById("startBtn"),
+            resetBtn: document.getElementById("resetBtn"),
+            virtualKeyboard: document.getElementById("virtualKeyboard"),
+            levelSelector: document.getElementById("levelSelector"),
+            levelProgress: document.getElementById("levelProgress"),
+            progressModal: document.getElementById("progressModal"),
+            continueBtn: document.getElementById("continueBtn"),
+            stayBtn: document.getElementById("stayBtn"),
+            progressStats: document.getElementById("progressStats"),
+          };
+
+          this.updateLevelProgress();
+        }
+        setupEventListeners() {
+          this.elements.startBtn.addEventListener("click", () => this.startGame());
+          this.elements.resetBtn.addEventListener("click", () => this.resetGame()); // 关卡选择
+          this.elements.levelSelector.addEventListener("change", (e) => {
+            this.currentLevel = parseInt(e.target.value);
+            this.currentTextIndex = 0;
+            this.updateLevelProgress();
+            this.resetGame();
+          });
+
+          // 关卡进度弹窗按钮
+          this.elements.continueBtn.addEventListener("click", () => this.continueToNextLevel());
+          this.elements.stayBtn.addEventListener("click", () => this.stayCurrentLevel());
+
+          // 输入监听
+          this.elements.inputArea.addEventListener("input", (e) => this.handleInput(e));
+          this.elements.inputArea.addEventListener("keydown", (e) => this.handleKeyDown(e));
+
+          // 虚拟键盘
+          this.setupVirtualKeyboard();
+
+          // 屏幕方向变化处理
+          window.addEventListener("orientationchange", () => {
+            setTimeout(() => this.handleOrientationChange(), 100);
+          });
+        }
+
+        setupVirtualKeyboard() {
+          document.querySelectorAll(".key").forEach((key) => {
+            key.addEventListener("click", () => {
+              const keyValue = key.dataset.key;
+              this.handleVirtualKey(keyValue);
+            });
+
+            // 触摸反馈
+            key.addEventListener("touchstart", (e) => {
+              e.preventDefault();
+              key.style.background = "#cbd5e1";
+            });
+
+            key.addEventListener("touchend", () => {
+              setTimeout(() => {
+                key.style.background = "";
+              }, 150);
+            });
+          });
+        }
+        handleVirtualKey(key) {
+          if (!this.isGameRunning) return;
+
+          const inputArea = this.elements.inputArea;
+          const currentValue = inputArea.value;
+
+          if (key === "Backspace") {
+            if (currentValue.length > 0) {
+              inputArea.value = currentValue.slice(0, -1);
+              this.currentIndex = Math.max(0, this.currentIndex - 1);
+              this.displayText();
+              this.updateStats();
+            }
+          } else if (key === "Enter") {
+            // 处理虚拟键盘的回车键 - 无论文本是否完成都前进到下一句
+            this.gameCompleted();
+          } else {
+            inputArea.value = currentValue + key;
+            this.handleInput();
+          }
+        }
+
+        handleOrientationChange() {
+          // 横屏时隐藏虚拟键盘节省空间
+          if (window.innerHeight < 600 && window.innerWidth > window.innerHeight) {
+            this.elements.virtualKeyboard.style.display = "none";
+          } else {
+            this.elements.virtualKeyboard.style.display = "block";
+          }
+        }
+        startGame() {
+          if (!gameStarted) {
+            window.parent.postMessage({ type: "gameStarted" }, "*");
+            gameStarted = true;
+          }
+
+          // If this is the first sentence in the level, initialize level stats
+          if (this.currentTextIndex === 0) {
+            this.levelStartTime = Date.now();
+            this.levelCorrectChars = 0;
+            this.levelTotalChars = 0;
+          }
+
+          this.isGameRunning = true;
+          this.textCompleted = false;
+          this.selectRandomText();
+          this.resetCurrentSentenceStats();
+          this.displayText();
+          this.startTimer();
+
+          this.elements.inputArea.disabled = false;
+          this.elements.inputArea.focus();
+          this.elements.startBtn.disabled = true;
+        }
+        selectRandomText() {
+          const currentLevel = this.levels[this.currentLevel];
+          this.sampleText = currentLevel.texts[this.currentTextIndex];
+        }        displayText() {
+          const chars = this.sampleText.split("");
+          let html = chars
+            .map((char, index) => {
+              let className = "char";
+              if (index === this.currentIndex) {
+                className += " current";
+              } else if (index < this.currentIndex) {
+                className += this.isCharCorrect(index) ? " correct" : " incorrect";
+              }
+              return `<span class="${className}">${char === " " ? "&nbsp;" : char}</span>`;
+            })
+            .join("");
+
+          // Add enter symbol at the end
+          const enterClassName = this.currentIndex === this.sampleText.length ? "char current enter-symbol" : "char enter-symbol";
+          html += `<span class="${enterClassName}">⏎</span>`;
+
+          this.elements.sampleText.innerHTML = html;
+        }
+        handleInput() {
+          if (!this.isGameRunning) return;
+
+          const input = this.elements.inputArea.value;
+          this.currentIndex = input.length;
+
+          this.displayText();
+          this.updateStats();
+
+          // 检查是否完成当前文本
+          if (input.length === this.sampleText.length && input === this.sampleText) {
+            // 文本输入完成，等待回车键
+            this.textCompleted = true;
+          } else {
+            this.textCompleted = false;
+          }
+        }
+        handleKeyDown(e) {
+          if (!this.isGameRunning) return;
+
+          // 阻止某些默认行为
+          if (e.key === "Tab") {
+            e.preventDefault();
+          }
+
+          // 检查是否按回车键 - 无论文本是否完成都前进到下一句
+          if (e.key === "Enter") {
+            e.preventDefault();
+            this.gameCompleted();
+          }
+        }
+
+        isCharCorrect(index) {
+          const input = this.elements.inputArea.value;
+          return input[index] === this.sampleText[index];
+        }
+        updateStats() {
+          const input = this.elements.inputArea.value;
+          this.totalChars = input.length;
+          this.correctChars = 0;
+
+          for (let i = 0; i < Math.min(input.length, this.sampleText.length); i++) {
+            if (input[i] === this.sampleText[i]) {
+              this.correctChars++;
+            }
+          }
+
+          // Calculate level-wide statistics for WPM and accuracy
+          const levelTimeInMinutes = (Date.now() - this.levelStartTime) / 60000;
+          const totalLevelCorrectChars = this.levelCorrectChars + this.correctChars;
+          const totalLevelChars = this.levelTotalChars + this.totalChars;
+
+          // 计算WPM (based on level-wide stats)
+          const wpm = levelTimeInMinutes > 0 ? Math.round(totalLevelCorrectChars / 5 / levelTimeInMinutes) : 0;
+
+          // 计算准确率 (based on level-wide stats)
+          const accuracy = totalLevelChars > 0 ? Math.round((totalLevelCorrectChars / totalLevelChars) * 100) : 100;
+
+          // 计算当前句子的进度
+          const progress = Math.round((this.currentIndex / this.sampleText.length) * 100);
+
+          // 计算关卡整体进度
+          const currentLevel = this.levels[this.currentLevel];
+          const sentenceProgress = this.currentTextIndex / currentLevel.texts.length;
+          const currentSentenceProgress = progress / 100 / currentLevel.texts.length;
+          const totalProgress = Math.round((sentenceProgress + currentSentenceProgress) * 100);
+
+          this.elements.wpm.textContent = wpm;
+          this.elements.accuracy.textContent = accuracy + "%";
+          this.elements.progress.textContent = totalProgress + "%";
+        }
+
+        resetCurrentSentenceStats() {
+          this.currentIndex = 0;
+          this.correctChars = 0;
+          this.totalChars = 0;
+
+          // Don't reset the WPM and accuracy display here since they should show level stats
+          // Only reset time if this is the first sentence
+          if (this.currentTextIndex === 0) {
+            this.elements.timeUsed.textContent = "0s";
+          }
+
+          // Reset progress for new sentence
+          this.elements.progress.textContent = "0%";
+        }
+        startTimer() {
+          this.startTime = Date.now();
+          this.timerInterval = setInterval(() => {
+            if (this.isGameRunning) {
+              // Calculate total time for the entire level
+              const totalElapsed = Math.round((Date.now() - this.levelStartTime) / 1000);
+              this.elements.timeUsed.textContent = totalElapsed + "s";
+            }
+          }, 1000);
+        }
+        gameCompleted() {
+          this.isGameRunning = false;
+          clearInterval(this.timerInterval);
+
+          // Add current sentence stats to level totals
+          this.levelCorrectChars += this.correctChars;
+          this.levelTotalChars += this.totalChars;
+
+          const timeInMinutes = (Date.now() - this.startTime) / 60000;
+          const wmp = Math.round(this.correctChars / 5 / timeInMinutes);
+          const accuracy = Math.round((this.correctChars / this.totalChars) * 100);
+
+          // 计算基于关卡的分数标准
+          const levelStandards = {
+            0: { minWPM: 10, maxWPM: 25 }, // 基础字母
+            1: { minWPM: 15, maxWPM: 30 }, // 常用单词
+            2: { minWPM: 20, maxWPM: 35 }, // 短句练习
+            3: { minWPM: 25, maxWPM: 40 }, // 中等句子
+            4: { minWPM: 30, maxWPM: 45 }, // 长句挑战
+            5: { minWPM: 35, maxWPM: 50 }, // 技术词汇
+            6: { minWPM: 40, maxWPM: 55 }, // 复杂文本
+            7: { minWPM: 45, maxWPM: 60 }, // 专业术语
+            8: { minWPM: 50, maxWPM: 65 }, // 高级挑战
+            9: { minWPM: 55, maxWPM: 70 }, // 大师级别
+          };
+
+          const standard = levelStandards[this.currentLevel] || { minWPM: 20, maxWPM: 40 }; // WPM得分（满分50分）
+          let wmpScore = 0;
+          if (wmp >= standard.maxWPM) {
+            wmpScore = 50;
+          } else if (wmp >= standard.minWPM) {
+            wmpScore = 25 + ((wmp - standard.minWPM) / (standard.maxWPM - standard.minWPM)) * 25;
+          } else {
+            wmpScore = Math.max(0, (wmp / standard.minWPM) * 25);
+          }
+
+          // 准确率得分（满分50分）
+          const accuracyScore = (accuracy / 100) * 50;
+          // 综合百分制得分
+          const score = Math.round(wmpScore + accuracyScore);
+
+          if (score > highestScore) {
+            highestScore = score;
+          }
+
+          // 发送游戏完成消息
+          window.parent.postMessage(
+            {
+              type: "gameFinished",
+              data: {
+                score: score,
+                highestScore: highestScore,
+                wpm: wmp,
+                accuracy: accuracy,
+                difficulty: this.currentLevel + 1,
+              },
+            },
+            "*"
+          );
+
+          // 移动到下一个文本或下一关卡
+          this.currentTextIndex++;
+          const currentLevel = this.levels[this.currentLevel];
+
+          if (this.currentTextIndex >= currentLevel.texts.length) {
+            // 当前关卡的所有文本都完成了，显示关卡完成弹窗
+            this.showProgressModal({ wpm: wmp, accuracy, score });
+          } else {
+            // 还有更多文本，自动开始下一个句子
+            this.updateLevelProgress();
+            // 清空输入区域
+            this.elements.inputArea.value = "";
+            this.textCompleted = false;
+            // 短暂延迟后自动开始下一个句子
+            setTimeout(() => {
+              this.startGame();
+            }, 500);
+          }
+        }
+
+        resetStats() {
+          this.currentIndex = 0;
+          this.correctChars = 0;
+          this.totalChars = 0;
+          this.elements.wpm.textContent = "0";
+          this.elements.accuracy.textContent = "100%";
+          this.elements.timeUsed.textContent = "0s";
+          this.elements.progress.textContent = "0%";
+        }
+        resetGame() {
+          this.isGameRunning = false;
+          this.textCompleted = false;
+          clearInterval(this.timerInterval);
+
+          this.elements.inputArea.value = "";
+          this.elements.inputArea.disabled = true;
+          this.elements.startBtn.disabled = false;
+          this.elements.sampleText.innerHTML = "点击开始练习按钮开始游戏";
+
+          // Reset both current sentence and level stats
+          this.resetStats();
+          this.levelCorrectChars = 0;
+          this.levelTotalChars = 0;
+        }
+        getDifficulty() {
+          return this.currentLevel + 1;
+        }
+
+        setCustomTexts(texts) {
+          if (texts && typeof texts === "object") {
+            this.texts = { ...this.texts, ...texts };
+            console.log("自定义文本已加载");
+          }
+        }
+
+        updateLevelProgress() {
+          const currentLevel = this.levels[this.currentLevel];
+          const totalTexts = currentLevel.texts.length;
+          this.elements.levelProgress.textContent = `${this.currentTextIndex}/${totalTexts}`;
+        }
+        continueToNextLevel() {
+          this.hideProgressModal();
+          if (this.currentLevel < this.levels.length - 1) {
+            this.currentLevel++;
+            this.currentTextIndex = 0;
+            this.elements.levelSelector.value = this.currentLevel;
+            this.updateLevelProgress();
+            // Reset everything for the new level
+            this.resetGame();
+          } else {
+            alert("🎉 恭喜！您已完成所有关卡！");
+            this.resetGame();
+          }
+        }
+        stayCurrentLevel() {
+          this.hideProgressModal();
+          this.currentTextIndex = 0;
+          this.updateLevelProgress();
+          this.resetGame();
+        }
+
+        showProgressModal(stats) {
+          const { wpm, accuracy, score } = stats;
+          this.elements.progressStats.innerHTML = `
+                    <div style="margin-bottom: 0.5rem;">⚡ 速度: ${wpm} WPM</div>
+                    <div style="margin-bottom: 0.5rem;">🎯 准确率: ${accuracy}%</div>
+                    <div style="margin-bottom: 0.5rem;">📊 得分: ${score}分</div>
+                `;
+          this.elements.progressModal.style.display = "flex";
+        }
+
+        hideProgressModal() {
+          this.elements.progressModal.style.display = "none";
+        }
+      }
+
+      window.parent.postMessage({ type: "gameLoaded" }, "*");
+      showRules();
+    </script>
+  </body>
+</html>
