@@ -693,25 +693,18 @@
       function startGameFromRules() {
         hideRules();
         setTimeout(() => {
-          new TypingGame().startGame();
+          window.game = new TypingGame();
+          window.game.startGame();
           rulesFloatBtn.style.display = "block";
           keyboardToggleBtn.style.display = "block";
         }, 300);
-      } // 切换虚拟键盘显示/隐藏
+      }
+
+      // 切换虚拟键盘显示/隐藏
       function toggleVirtualKeyboard() {
         const virtualKeyboard = document.getElementById("virtualKeyboard");
         const inputArea = document.getElementById("inputArea");
 
-        // 如果textarea有焦点，强制显示虚拟键盘，不允许隐藏
-        if (document.activeElement === inputArea) {
-          isKeyboardVisible = true;
-          virtualKeyboard.style.display = "block";
-          keyboardToggleBtn.classList.add("active");
-          keyboardToggleBtn.title = "输入时虚拟键盘保持显示";
-          return;
-        }
-
-        // 只有在textarea没有焦点时才允许切换
         isKeyboardVisible = !isKeyboardVisible;
 
         if (isKeyboardVisible) {
@@ -723,26 +716,18 @@
           keyboardToggleBtn.classList.remove("active");
           keyboardToggleBtn.title = "显示虚拟键盘";
         }
-      } // 事件监听
+      }
       closeRulesBtn.addEventListener("click", hideRules);
       startGameFromRulesBtn.addEventListener("click", startGameFromRules);
       rulesFloatBtn.addEventListener("click", showRules);
+      /*
+      keyboardToggleBtn.addEventListener("focus", function(event) {
+        const inputArea = document.getElementById("inputArea");
+        if(event.relatedTarget == inputArea) {
+          isKeyboardVisible = false;
+        }
+      });*/
       keyboardToggleBtn.addEventListener("click", toggleVirtualKeyboard);
-
-      // 添加textarea焦点事件监听器
-      const inputArea = document.getElementById("inputArea");
-      inputArea.addEventListener("focus", function () {
-        const virtualKeyboard = document.getElementById("virtualKeyboard");
-        isKeyboardVisible = true;
-        virtualKeyboard.style.display = "block";
-        keyboardToggleBtn.classList.add("active");
-        keyboardToggleBtn.title = "输入时虚拟键盘保持显示";
-      });
-
-      inputArea.addEventListener("blur", function () {
-        // 失去焦点时，恢复按钮的正常功能
-        keyboardToggleBtn.title = isKeyboardVisible ? "隐藏虚拟键盘" : "显示虚拟键盘";
-      });
 
       // 全局Enter键监听 - 在规则弹窗中也可以按Enter开始游戏
       document.addEventListener("keydown", function (e) {
@@ -772,6 +757,17 @@
               },
               "*"
             );
+            break;
+        case 'gameContinue':
+            if(window.game){
+                if (e.data.action === 'restart') {
+                    // 以当前难度重新开始游戏
+                    window.game.stayCurrentLevel();
+                } else if (e.data.action === 'challenge') {
+                    // 挑战更高难度
+                    window.game.continueToNextLevel();
+                }
+            }
             break;
         }
       });
@@ -1245,26 +1241,26 @@
             highestScore = this.totalPoints;
           }
 
-          // 发送游戏完成消息
-          window.parent.postMessage(
-            {
-              type: "gameFinished",
-              data: {
-                earnedPoints: this.levelCorrectChars,
-                wpm: wpm,
-                accuracy: accuracy,
-                difficulty: this.currentLevel + 1,
-              },
-            },
-            "*"
-          );
-
           // 移动到下一个文本或下一关卡
           this.currentTextIndex++;
           const currentLevel = this.levels[this.currentLevel];
           if (this.currentTextIndex >= currentLevel.texts.length) {
             // 当前关卡的所有文本都完成了，显示关卡完成弹窗
-            this.showProgressModal({ wpm, accuracy });
+            if (window.parent && window.parent != window) {
+              // 发送游戏完成消息
+              window?.parent.postMessage(
+                {
+                  type: "gameFinished",
+                  data: {
+                    earnedPoints: this.levelCorrectChars,
+                    wpm: wpm,
+                    accuracy: accuracy,
+                    difficulty: 1,
+                  },
+                },
+                "*"
+              );
+            } else this.showProgressModal({ wpm, accuracy });
           } else {
             // 还有更多文本，自动开始下一个句子
             this.updatePointsProgress();
@@ -1274,7 +1270,7 @@
             // 短暂延迟后自动开始下一个句子
             setTimeout(() => {
               this.startGame();
-            }, 500);
+            }, 50);
           }
         }
         resetStats() {
