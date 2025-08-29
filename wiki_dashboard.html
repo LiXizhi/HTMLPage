@@ -62,10 +62,41 @@
         border-color: #3b82f6 !important;
         border-style: dashed !important;
       }
-
       .drop-zone.invalid-drop {
         background-color: rgba(248, 113, 113, 0.2) !important;
         border-color: #ef4444 !important;
+      } /* 删除按钮样式 */
+      .delete-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 20px;
+        height: 20px;
+        background: none;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.8;
+        transition: all 0.2s ease;
+        z-index: 10;
+      }
+
+      .delete-btn:hover {
+        opacity: 1;
+        background: #9b9b9b;
+        transform: scale(1.1);
+      }
+
+      /* 确保问题卡片有相对定位 */
+      .question-card {
+        position: relative;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
     </style>
   </head>
@@ -264,6 +295,34 @@
         // Apply saved progress/completion status from new format
         await loadProgressData(questions);
         return questions;
+      } // Helper function to remove duplicates and sort by time (newest first)
+      function deduplicateAndSortByTime(wikiwords, times) {
+        if (!Array.isArray(wikiwords) || !Array.isArray(times) || wikiwords.length !== times.length) {
+          return { wikiwords: [], times: [] };
+        }
+
+        // Create array of objects for easier processing
+        const combined = wikiwords.map((wikiword, index) => ({
+          wikiword,
+          time: times[index],
+        }));
+
+        // Remove duplicates by keeping the latest time for each wikiword
+        const uniqueMap = new Map();
+        combined.forEach((item) => {
+          const existingTime = uniqueMap.get(item.wikiword);
+          if (!existingTime || item.time > existingTime) {
+            uniqueMap.set(item.wikiword, item.time);
+          }
+        });
+
+        // Convert back to arrays and sort by time (newest first)
+        const sortedEntries = Array.from(uniqueMap.entries()).sort((a, b) => b[1] - a[1]); // Sort by time descending
+
+        return {
+          wikiwords: sortedEntries.map((entry) => entry[0]),
+          times: sortedEntries.map((entry) => entry[1]),
+        };
       }
 
       async function loadProgressData(questions) {
@@ -291,47 +350,54 @@
               return;
             }
 
-            // Apply completed status
+            // Apply completed status with deduplication and sorting
             if (Array.isArray(data.completed_wikiwords) && Array.isArray(data.completed_times)) {
-              completed_wikiwords = [...data.completed_wikiwords]; // Store in global array
-              data.completed_wikiwords.forEach((wikiword, index) => {
+              const { wikiwords: dedupCompletedWords, times: dedupCompletedTimes } = deduplicateAndSortByTime(data.completed_wikiwords, data.completed_times);
+
+              completed_wikiwords = [...dedupCompletedWords]; // Store in global array
+              dedupCompletedWords.forEach((wikiword, index) => {
                 const question = wikiWordToQuestionMap.get(wikiword);
                 if (question) {
                   question.status = "completed";
-                  question.completedTime = data.completed_times[index];
+                  question.completedTime = dedupCompletedTimes[index];
                 }
               });
+              console.log(`Loaded ${completed_wikiwords.length} unique completed wikiwords, sorted by time`);
             }
 
-            // Apply in-progress status
+            // Apply in-progress status with deduplication and sorting
             if (Array.isArray(data.inprogress_wikiwords) && Array.isArray(data.inprogress_times)) {
-              progress_wikiwords = [...data.inprogress_wikiwords]; // Store in global array
-              data.inprogress_wikiwords.forEach((wikiword, index) => {
+              const { wikiwords: dedupProgressWords, times: dedupProgressTimes } = deduplicateAndSortByTime(data.inprogress_wikiwords, data.inprogress_times);
+
+              progress_wikiwords = [...dedupProgressWords]; // Store in global array
+              dedupProgressWords.forEach((wikiword, index) => {
                 const question = wikiWordToQuestionMap.get(wikiword);
                 if (question) {
                   question.status = "progress";
-                  question.progressTime = data.inprogress_times[index];
+                  question.progressTime = dedupProgressTimes[index];
                 }
               });
+              console.log(`Loaded ${progress_wikiwords.length} unique progress wikiwords, sorted by time`);
             }
 
-            // Load current period questions
+            // Load current period questions with deduplication and sorting
             if (Array.isArray(data.currentperiod_wikiwords) && Array.isArray(data.currentperiod_times)) {
+              const { wikiwords: dedupCurrentWords, times: dedupCurrentTimes } = deduplicateAndSortByTime(data.currentperiod_wikiwords, data.currentperiod_times);
+
               currentPeriodQuestions = [];
-              data.currentperiod_wikiwords.forEach((wikiword, index) => {
+              dedupCurrentWords.forEach((wikiword, index) => {
                 const question = wikiWordToQuestionMap.get(wikiword);
                 if (question) {
                   currentPeriodQuestions.push(question);
                 }
               });
+              console.log(`Loaded ${currentPeriodQuestions.length} unique current period questions, sorted by time`);
             }
           }
         } catch (error) {
           console.error("Error loading progress data:", error);
         }
-      }
-
-      // Save progress and completion data in new format
+      } // Save progress and completion data in new format
       async function saveProgressData(bForceFlush = false) {
         try {
           const currentperiod_wikiwords = [];
@@ -367,37 +433,47 @@
             }
           });
 
+          // Apply deduplication and sorting before saving
+          const { wikiwords: dedupCompletedWords, times: dedupCompletedTimes } = deduplicateAndSortByTime(completed_wikiwords_data, completed_times_data);
+
+          const { wikiwords: dedupProgressWords, times: dedupProgressTimes } = deduplicateAndSortByTime(inprogress_wikiwords_data, inprogress_times_data);
+
+          const { wikiwords: dedupCurrentWords, times: dedupCurrentTimes } = deduplicateAndSortByTime(currentperiod_wikiwords, currentperiod_times);
+
           const data = {
-            completed_wikiwords: completed_wikiwords_data,
-            completed_times: completed_times_data,
-            inprogress_wikiwords: inprogress_wikiwords_data,
-            inprogress_times: inprogress_times_data,
-            currentperiod_wikiwords,
-            currentperiod_times,
+            completed_wikiwords: dedupCompletedWords,
+            completed_times: dedupCompletedTimes,
+            inprogress_wikiwords: dedupProgressWords,
+            inprogress_times: dedupProgressTimes,
+            currentperiod_wikiwords: dedupCurrentWords,
+            currentperiod_times: dedupCurrentTimes,
           };
 
-          // Defensive checks to ensure data consistency
-          if (completed_wikiwords_data.length !== completed_times_data.length) {
-            console.error("Mismatch in completed arrays");
-            const minLength = Math.min(completed_wikiwords_data.length, completed_times_data.length);
-            data.completed_wikiwords = completed_wikiwords_data.slice(0, minLength);
-            data.completed_times = completed_times_data.slice(0, minLength);
+          // Log deduplication results
+          console.log(`Saving data - Completed: ${dedupCompletedWords.length} unique items, Progress: ${dedupProgressWords.length} unique items, Current: ${dedupCurrentWords.length} unique items`);
+
+          // Defensive checks to ensure data consistency (should not be needed after deduplication)
+          if (dedupCompletedWords.length !== dedupCompletedTimes.length) {
+            console.error("Mismatch in completed arrays after deduplication");
+            const minLength = Math.min(dedupCompletedWords.length, dedupCompletedTimes.length);
+            data.completed_wikiwords = dedupCompletedWords.slice(0, minLength);
+            data.completed_times = dedupCompletedTimes.slice(0, minLength);
           }
 
-          if (inprogress_wikiwords_data.length !== inprogress_times_data.length) {
-            console.error("Mismatch in progress arrays");
-            console.error("inprogress_wikiwords:", inprogress_wikiwords_data);
-            console.error("inprogress_times:", inprogress_times_data);
-            const minLength = Math.min(inprogress_wikiwords_data.length, inprogress_times_data.length);
-            data.inprogress_wikiwords = inprogress_wikiwords_data.slice(0, minLength);
-            data.inprogress_times = inprogress_times_data.slice(0, minLength);
+          if (dedupProgressWords.length !== dedupProgressTimes.length) {
+            console.error("Mismatch in progress arrays after deduplication");
+            console.error("inprogress_wikiwords:", dedupProgressWords);
+            console.error("inprogress_times:", dedupProgressTimes);
+            const minLength = Math.min(dedupProgressWords.length, dedupProgressTimes.length);
+            data.inprogress_wikiwords = dedupProgressWords.slice(0, minLength);
+            data.inprogress_times = dedupProgressTimes.slice(0, minLength);
           }
 
-          if (currentperiod_wikiwords.length !== currentperiod_times.length) {
-            console.error("Mismatch in current period arrays");
-            const minLength = Math.min(currentperiod_wikiwords.length, currentperiod_times.length);
-            data.currentperiod_wikiwords = currentperiod_wikiwords.slice(0, minLength);
-            data.currentperiod_times = currentperiod_times.slice(0, minLength);
+          if (dedupCurrentWords.length !== dedupCurrentTimes.length) {
+            console.error("Mismatch in current period arrays after deduplication");
+            const minLength = Math.min(dedupCurrentWords.length, dedupCurrentTimes.length);
+            data.currentperiod_wikiwords = dedupCurrentWords.slice(0, minLength);
+            data.currentperiod_times = dedupCurrentTimes.slice(0, minLength);
           }
 
           await sdk.personalPageStore.savePageData("maisi_dragon_wiki", "discussion-progress-data", data, bForceFlush);
@@ -503,13 +579,11 @@
         // Set current period questions (keep references to same objects)
         currentPeriodQuestions = newQuestions;
         saveProgressData();
-      }
-
-      // Create question card element
+      } // Create question card element
       function createQuestionCard(question) {
         const card = document.createElement("div");
         card.className =
-          "bg-gradient-to-r from-white to-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all cursor-pointer hover:border-purple-300 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50";
+          "question-card bg-gradient-to-r from-white to-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all cursor-pointer hover:border-purple-300 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50";
 
         // Create the bottom section with category and wiki word
         let bottomSection = `<span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${question.category}</span>`;
@@ -524,9 +598,14 @@
           dateSection = `<span class="text-xs text-orange-600 font-medium">${formatDateConcise(question.progressTime)}</span>`;
         } else if (question.status === "completed" && question.completedTime) {
           dateSection = `<span class="text-xs text-green-600 font-medium">${formatDateConcise(question.completedTime)}</span>`;
+        } // Add delete button for progress tasks
+        let deleteButton = "";
+        if (question.status === "progress") {
+          deleteButton = `<button class="delete-btn" onclick="event.stopPropagation(); deleteProgressTask('${question.wikiWord || question.id}')">🗑️</button>`;
         }
 
         card.innerHTML = `
+                ${deleteButton}
                 <h4 class="font-bold text-gray-800 mb-3">${question.question}</h4>
                 <div class="flex items-center justify-between">
                     <div class="flex items-center">
@@ -621,7 +700,7 @@
         urlParams.set("objective", objective);
         url = `${url}?${urlParams.toString()}`;
 
-        window.location.href = url;
+        window.location.replace(url);
 
         // Refresh the display
         renderQuestions();
@@ -657,6 +736,43 @@
           currentPeriodQuestions[currentIndex].completedTime = getCurrentDateCode();
           // Remove progress time when completed
           delete currentPeriodQuestions[currentIndex].progressTime;
+        }
+        saveProgressData();
+        renderQuestions();
+      }
+
+      // Delete a progress task
+      function deleteProgressTask(identifier) {
+        // Find the question by wikiWord or id
+        const allQuestionsIndex = allQuestions.findIndex((q) => q.wikiWord === identifier || q.id === identifier);
+        if (allQuestionsIndex !== -1) {
+          // Reset the question to unexplored status
+          allQuestions[allQuestionsIndex].status = "unexplored";
+          delete allQuestions[allQuestionsIndex].progressTime;
+          delete allQuestions[allQuestionsIndex].completedTime;
+
+          // Update global arrays
+          const wikiWord = allQuestions[allQuestionsIndex].wikiWord;
+          if (wikiWord) {
+            // Remove from progress array if exists
+            const progressIndex = progress_wikiwords.indexOf(wikiWord);
+            if (progressIndex > -1) {
+              progress_wikiwords.splice(progressIndex, 1);
+            }
+            // Remove from completed array if exists
+            const completedIndex = completed_wikiwords.indexOf(wikiWord);
+            if (completedIndex > -1) {
+              completed_wikiwords.splice(completedIndex, 1);
+            }
+          }
+        }
+
+        // Also update in current period questions
+        const currentIndex = currentPeriodQuestions.findIndex((q) => q.wikiWord === identifier || q.id === identifier);
+        if (currentIndex !== -1) {
+          currentPeriodQuestions[currentIndex].status = "unexplored";
+          delete currentPeriodQuestions[currentIndex].progressTime;
+          delete currentPeriodQuestions[currentIndex].completedTime;
         }
 
         saveProgressData();
