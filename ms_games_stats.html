@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>训练统计</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/chart.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <style>
+      /* Custom styles that can't be easily replicated with Tailwind */
+      .filter-btn.active {
+        background: linear-gradient(45deg, #ff6b6b, #feca57);
+      }
+
+      .filter-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .game-card:hover {
+        transform: translateY(-5px);
+      }
+
+      .game-icon {
+        background: linear-gradient(45deg, #ff6b6b, #feca57);
+      }
+
+      .stat-item {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      }
+
+      .summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      .detail-item {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      .modal {
+        backdrop-filter: blur(5px);
+      }
+
+      .modal-content {
+        display: flex;
+        flex-direction: column;
+        max-height: 90vh;
+      }
+
+      #modalContent::-webkit-scrollbar {
+        display: none;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+        min-width: 0;
+      }
+
+      .detail-item {
+        color: white;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        text-align: center;
+      }
+
+      .detail-label {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin-bottom: 0.25rem;
+      }
+
+      .detail-value {
+        font-size: 1.25rem;
+        font-weight: bold;
+      }
+
+      .difficulty-section {
+        margin-top: 2rem;
+      }
+
+      .difficulty-title {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #374151;
+        margin-bottom: 1rem;
+        text-align: center;
+      }
+
+      .difficulty-card {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+      }
+
+      .difficulty-header {
+        font-size: 1.125rem;
+        font-weight: bold;
+        color: #f59e0b;
+        margin-bottom: 1rem;
+        text-align: center;
+      }
+
+      .difficulty-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1rem;
+      }
+
+      .difficulty-stat {
+        text-align: center;
+        padding: 0.75rem;
+        background: #f3f4f6;
+        border-radius: 0.5rem;
+      }
+
+      .difficulty-stat-label {
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-bottom: 0.25rem;
+      }
+
+      .difficulty-stat-value {
+        font-size: 1rem;
+        font-weight: bold;
+        color: #374151;
+      }
+
+      /* Progress bar styles */
+      .progress-bar {
+        transition: width 0.3s ease;
+      }
+
+      .progress-container {
+        background: #e5e7eb;
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+
+      /* Chart container styles */
+      .chart-container {
+        position: relative;
+        cursor: grab;
+      }
+
+      .chart-container:active {
+        cursor: grabbing;
+      }
+
+      /* Smooth scrolling for chart area */
+      .overflow-x-auto {
+        scroll-behavior: smooth;
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 #f1f5f9;
+      }
+
+      .overflow-x-auto::-webkit-scrollbar {
+        height: 8px;
+      }
+
+      .overflow-x-auto::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 4px;
+      }
+
+      .overflow-x-auto::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+
+      .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-gray-800" style="font-family: 'Microsoft YaHei', '微软雅黑', Arial, sans-serif">
+    <div class="w-full min-h-screen bg-white overflow-hidden">
+      <div class="time-filter bg-gray-50 p-5 border-b border-gray-200">
+        <div class="filter-buttons flex justify-center gap-4 flex-wrap">
+          <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium" data-period="today">今日</button>
+          <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium active" data-period="week">最近7天</button>
+          <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium" data-period="month">最近30天</button>
+          <button class="filter-btn px-5 py-2 bg-gray-500 text-white rounded-full cursor-pointer transition-all duration-300 text-sm font-medium" data-period="all">全部历史</button>
+        </div>
+      </div>
+
+      <div class="stats-container p-8 md:p-5">
+        <div id="summary-section"></div>
+        <div id="chart-section"></div>
+      </div>
+    </div>
+
+    <!-- 模态框 -->
+    <div id="gameModal" class="modal hidden fixed z-50 left-0 top-0 w-full h-full bg-black bg-opacity-50">
+      <div class="modal-content bg-white my-8 mx-auto p-8 rounded-2xl w-11/12 max-w-4xl shadow-2xl">
+        <div class="modal-header flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-100">
+          <div class="modal-title text-2xl font-bold text-gray-700 flex items-center gap-3">
+            <div class="game-icon w-8 h-8 rounded-full flex items-center justify-center text-white font-bold" id="modalGameIcon">G</div>
+            <span id="modalGameName">训练详情</span>
+          </div>
+          <span class="close text-gray-400 text-3xl font-bold cursor-pointer transition-colors duration-300 hover:text-gray-700">&times;</span>
+        </div>
+        <div id="modalContent" class="overflow-y-auto">
+          <!-- 详情内容将在这里动态加载 -->
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const game_config = {}
+      // 示例训练配置数据
+    //   const game_config = {
+    //     数字记忆: {
+    //       duration: [82, 80, 20, 95, 76, 88, 92, 85, 90, 78, 83, 87, 91, 79, 86],
+    //       difficulty: [3, 3, 1, 4, 2, 3, 4, 3, 4, 2, 3, 3, 4, 2, 3],
+    //       levels: [5, 10, 5, 12, 8, 9, 11, 8, 10, 7, 8, 9, 11, 6, 9],
+    //       points: [80, 75, 100, 120, 65, 85, 110, 88, 95, 70, 82, 90, 105, 68, 87],
+    //       totalPoints: 1320,
+    //       accuracy: [100, 80, 100, 90, 85, 95, 88, 92, 89, 87, 91, 93, 86, 85, 90],
+    //       time: [250806, 250806, 250801, 250805, 250804, 250803, 250802, 250800, 250799, 250798, 250795, 250790, 250785, 250780, 250777],
+    //     },
+    //     色彩位置记忆: {
+    //       duration: [45, 38, 52, 41, 49, 44, 50, 46, 43, 48],
+    //       difficulty: [2, 2, 3, 2, 3, 2, 3, 2, 2, 3],
+    //       levels: [6, 8, 7, 9, 8, 7, 9, 6, 7, 8],
+    //       points: [70, 85, 95, 75, 90, 72, 88, 74, 80, 92],
+    //       totalPoints: 821,
+    //       accuracy: [95, 88, 92, 85, 94, 89, 91, 87, 93, 96],
+    //       time: [250806, 250805, 250804, 250803, 250802, 250800, 250798, 250795, 250790, 250785],
+    //     },
+    //     听觉记忆: {
+    //       duration: [60, 55, 48, 62, 58, 53, 56, 59, 51, 57, 54, 61],
+    //       difficulty: [1, 2, 1, 2, 2, 1, 2, 2, 1, 2, 1, 2],
+    //       levels: [4, 7, 5, 8, 6, 5, 7, 8, 4, 7, 5, 8],
+    //       points: [60, 80, 55, 85, 70, 65, 78, 82, 58, 76, 62, 84],
+    //       totalPoints: 855,
+    //       accuracy: [90, 85, 92, 88, 86, 91, 89, 87, 93, 85, 88, 86],
+    //       time: [250806, 250805, 250804, 250803, 250802, 250801, 250799, 250798, 250795, 250790, 250785, 250780],
+    //     },
+    //     翻牌记忆: {
+    //       duration: [35, 42, 38, 40, 36, 41, 39, 37],
+    //       difficulty: [1, 1, 2, 2, 1, 2, 1, 2],
+    //       levels: [3, 4, 5, 6, 4, 5, 3, 5],
+    //       points: [45, 55, 70, 80, 50, 68, 48, 72],
+    //       totalPoints: 488,
+    //       accuracy: [100, 95, 88, 85, 98, 90, 96, 87],
+    //       time: [250806, 250805, 250804, 250803, 250800, 250798, 250795, 250790],
+    //     },
+    //     空间推理: {
+    //       duration: [65, 72, 58, 69, 61, 75, 68, 71, 64, 77, 59, 73],
+    //       difficulty: [2, 3, 2, 3, 2, 3, 3, 3, 2, 4, 2, 3],
+    //       levels: [6, 9, 5, 8, 7, 10, 8, 9, 6, 11, 5, 9],
+    //       points: [85, 95, 75, 90, 80, 100, 92, 98, 78, 110, 72, 96],
+    //       totalPoints: 1071,
+    //       accuracy: [92, 88, 95, 85, 90, 82, 89, 87, 94, 80, 96, 86],
+    //       time: [250806, 250805, 250804, 250803, 250802, 250801, 250800, 250799, 250798, 250795, 250790, 250785],
+    //     },
+    //     注意力集中: {
+    //       duration: [25, 28, 32, 24, 30, 26, 29, 31, 27, 33],
+    //       difficulty: [1, 1, 2, 1, 2, 1, 2, 2, 1, 2],
+    //       levels: [3, 4, 6, 3, 5, 4, 5, 6, 4, 7],
+    //       points: [40, 45, 65, 38, 58, 42, 55, 62, 46, 68],
+    //       totalPoints: 519,
+    //       accuracy: [98, 95, 90, 100, 88, 96, 92, 87, 97, 85],
+    //       time: [250806, 250805, 250804, 250803, 250802, 250801, 250800, 250799, 250798, 250795],
+    //     },
+    //     逻辑推理: {
+    //       duration: [90, 85, 102, 88, 95, 110, 92, 98, 86, 105, 89, 97, 93, 100],
+    //       difficulty: [2, 2, 3, 2, 3, 4, 3, 3, 2, 4, 2, 3, 3, 3],
+    //       levels: [7, 6, 9, 7, 8, 12, 8, 9, 6, 11, 7, 9, 8, 10],
+    //       points: [95, 88, 115, 92, 105, 130, 108, 112, 85, 125, 90, 110, 98, 120],
+    //       totalPoints: 1373,
+    //       accuracy: [85, 90, 78, 88, 82, 75, 80, 76, 92, 72, 89, 81, 84, 77],
+    //       time: [250806, 250805, 250804, 250803, 250802, 250801, 250800, 250799, 250798, 250795, 250790, 250785, 250780, 250777],
+    //     },
+    //     英语单词贪吃蛇: {
+    //       duration: [45, 52, 38, 48, 41, 56, 44, 50, 39, 53, 42, 49],
+    //       difficulty: [1, 2, 1, 2, 1, 2, 2, 2, 1, 3, 1, 2],
+    //       levels: [5, 7, 4, 6, 5, 8, 6, 7, 4, 9, 5, 7],
+    //       points: [65, 78, 52, 72, 58, 85, 68, 75, 55, 92, 62, 74],
+    //       totalPoints: 836,
+    //       accuracy: [94, 89, 97, 91, 95, 86, 90, 88, 96, 83, 93, 87],
+    //       time: [250806, 250805, 250804, 250803, 250802, 250801, 250800, 250799, 250798, 250795, 250790, 250785],
+    //     },
+    //     数独游戏: {
+    //       duration: [180, 165, 195, 172, 188, 160, 205, 175, 190, 158],
+    //       difficulty: [2, 2, 3, 2, 3, 1, 3, 2, 3, 1],
+    //       levels: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    //       points: [120, 110, 145, 125, 140, 95, 155, 130, 148, 88],
+    //       totalPoints: 1256,
+    //       accuracy: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+    //       time: [250806, 250805, 250804, 250803, 250802, 250801, 250800, 250799, 250798, 250795],
+    //     },
+    //   }
+
+      let currentPeriod = 'week'
+      let gameChart = null
+
+      function formatDate(dateNum) {
+        const dateStr = dateNum.toString()
+        if (dateStr.length === 6) {
+          const year = '20' + dateStr.substring(0, 2)
+          const month = dateStr.substring(2, 4)
+          const day = dateStr.substring(4, 6)
+          return `${year}-${month}-${day}`
+        }
+        return dateStr
+      }
+
+      function formatDuration(seconds) {
+        const minutes = Math.floor(seconds / 60)
+        const secs = seconds % 60
+        return minutes > 0 ? `${minutes}分${secs}秒` : `${secs}秒`
+      }
+
+      function filterDataByPeriod(gameData, period) {
+        // 获取当前当地时间
+        const now = new Date()
+        const today = parseInt(now.getFullYear().toString().slice(2, 4) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')) // 格式化为 YYMMDD
+        const weekAgoDate = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)
+        const weekAgo = parseInt(weekAgoDate.getFullYear().toString().slice(2, 4) + String(weekAgoDate.getMonth() + 1).padStart(2, '0') + String(weekAgoDate.getDate()).padStart(2, '0'))
+        const monthAgoDate = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000)
+        const monthAgo = parseInt(monthAgoDate.getFullYear().toString().slice(2, 4) + String(monthAgoDate.getMonth() + 1).padStart(2, '0') + String(monthAgoDate.getDate()).padStart(2, '0'))
+
+        const filteredData = {}
+
+        for (const [gameName, data] of Object.entries(gameData)) {
+          const indices = []
+
+          data.time.forEach((time, index) => {
+            if (period === 'today' && time === today) {
+              indices.push(index)
+            } else if (period === 'week' && time >= weekAgo) {
+              indices.push(index)
+            } else if (period === 'month' && time >= monthAgo) {
+              indices.push(index)
+            } else if (period === 'all') {
+              indices.push(index)
+            }
+          })
+
+          if (indices.length > 0) {
+            filteredData[gameName] = {
+              duration: indices.map(i => data.duration[i]),
+              difficulty: indices.map(i => data.difficulty[i]),
+              levels: indices.map(i => data.levels[i]),
+              points: indices.map(i => data.points[i]),
+              accuracy: indices.map(i => data.accuracy[i]),
+              time: indices.map(i => data.time[i]),
+              totalPoints: indices.reduce((sum, i) => sum + data.points[i], 0),
+            }
+          }
+        }
+
+        return filteredData
+      }
+
+      function calculateSummary(filteredData) {
+        let totalPoints = 0
+        let totalDuration = 0
+        let accuracySum = 0
+        let accuracyCount = 0
+
+        for (const data of Object.values(filteredData)) {
+          totalPoints += data.totalPoints
+          totalDuration += data.duration.reduce((sum, d) => sum + d, 0)
+          accuracySum += data.accuracy.reduce((sum, a) => sum + a, 0)
+          accuracyCount += data.accuracy.length
+        }
+
+        return {
+          totalPoints,
+          avgAccuracy: accuracyCount > 0 ? Math.round(accuracySum / accuracyCount) : 0,
+          totalDuration: Math.round(totalDuration / 60), // 转换为分钟
+        }
+      }
+
+      function renderSummary(summary) {
+        const summarySection = document.getElementById('summary-section')
+
+        summarySection.innerHTML = `
+                <div class="summary-card text-white rounded-xl p-5 text-center">
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-5">
+                        <div class="text-center">
+                            <div class="text-3xl font-bold mb-1">${summary.totalPoints}</div>
+                            <div class="text-sm opacity-90">总积分</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold mb-1">${summary.avgAccuracy}%</div>
+                            <div class="text-sm opacity-90">平均准确率</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold mb-1">${summary.totalDuration}</div>
+                            <div class="text-sm opacity-90">总训练时间(分钟)</div>
+                        </div>
+                    </div>
+                </div>
+            `
+      }
+
+      function renderChart(filteredData) {
+        const chartSection = document.getElementById('chart-section')
+
+        if (Object.keys(filteredData).length === 0) {
+          chartSection.innerHTML = '<div class="text-center py-12 text-gray-500 text-lg">📭 该时间段内暂无训练数据</div>'
+          return
+        }
+
+        // 计算每个训练的累计时长（分钟）
+        const gameStats = []
+        for (const [gameName, data] of Object.entries(filteredData)) {
+          const totalDuration = data.duration.reduce((sum, d) => sum + d, 0)
+          gameStats.push({
+            name: gameName,
+            duration: Math.round(totalDuration / 60), // 转换为分钟
+            rawData: data,
+          })
+        }
+
+        // 按时长从高到低排序
+        gameStats.sort((a, b) => b.duration - a.duration)
+
+        chartSection.innerHTML = `
+                <div class="bg-white rounded-xl p-6 shadow-sm">
+                    <div class="text-xl font-bold text-gray-700 mb-5 text-center">📊 训练累计时长统计 - 点击柱状图查看详情</div>
+                    <div class="relative overflow-x-auto">
+                        <div class="chart-container" style="min-width: ${Math.max(600, gameStats.length * 120)}px; height: 400px;">
+                            <canvas id="gameChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            `
+
+        const ctx = document.getElementById('gameChart').getContext('2d')
+
+        // 销毁之前的图表
+        if (gameChart) {
+          gameChart.destroy()
+        }
+
+        gameChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: gameStats.map(stat => stat.name),
+            datasets: [
+              {
+                label: '累计时长 (分钟)',
+                data: gameStats.map(stat => stat.duration),
+                backgroundColor: [
+                  'rgba(255, 99, 132, 0.8)',
+                  'rgba(54, 162, 235, 0.8)',
+                  'rgba(255, 205, 86, 0.8)',
+                  'rgba(75, 192, 192, 0.8)',
+                  'rgba(153, 102, 255, 0.8)',
+                  'rgba(255, 159, 64, 0.8)',
+                  'rgba(255, 99, 255, 0.8)',
+                  'rgba(99, 255, 132, 0.8)',
+                  'rgba(255, 192, 99, 0.8)',
+                ],
+                borderColor: [
+                  'rgba(255, 99, 132, 1)',
+                  'rgba(54, 162, 235, 1)',
+                  'rgba(255, 205, 86, 1)',
+                  'rgba(75, 192, 192, 1)',
+                  'rgba(153, 102, 255, 1)',
+                  'rgba(255, 159, 64, 1)',
+                  'rgba(255, 99, 255, 1)',
+                  'rgba(99, 255, 132, 1)',
+                  'rgba(255, 192, 99, 1)',
+                ],
+                borderWidth: 2,
+                borderRadius: 5,
+                borderSkipped: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              intersect: false,
+              mode: 'index',
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return `累计时长: ${context.parsed.y} 分钟\n点击查看详细数据`
+                  },
+                },
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: '累计时长 (分钟)',
+                  font: {
+                    size: 14,
+                    weight: 'bold',
+                  },
+                },
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.1)',
+                },
+              },
+              x: {
+                title: {
+                  display: false,
+                  text: '训练名称',
+                  font: {
+                    size: 14,
+                    weight: 'bold',
+                  },
+                },
+                ticks: {
+                  maxRotation: 45,
+                  minRotation: 0,
+                  autoSkip: false,
+                },
+                grid: {
+                  display: false,
+                },
+              },
+            },
+            onClick: (event, elements) => {
+              if (elements.length > 0) {
+                const index = elements[0].index
+                const gameName = gameStats[index].name
+                const gameData = gameStats[index].rawData
+                showGameModal(gameName, gameData)
+              }
+            },
+            onHover: (event, elements) => {
+              event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default'
+            },
+          },
+        })
+
+        // 添加双击重置滚动位置功能
+        const chartContainer = document.querySelector('.overflow-x-auto')
+        if (chartContainer) {
+          chartContainer.addEventListener('dblclick', function () {
+            this.scrollTo({
+              left: 0,
+              behavior: 'smooth',
+            })
+          })
+
+          // 添加鼠标滚轮水平滚动支持
+          chartContainer.addEventListener(
+            'wheel',
+            function (e) {
+              if (e.deltaY !== 0) {
+                e.preventDefault()
+                this.scrollLeft += e.deltaY
+              }
+            },
+            { passive: false }
+          )
+
+          // 添加触摸滑动支持
+          let startX = 0
+          let scrollLeft = 0
+          let isDown = false
+
+          chartContainer.addEventListener(
+            'touchstart',
+            function (e) {
+              startX = e.touches[0].pageX - this.offsetLeft
+              scrollLeft = this.scrollLeft
+              isDown = true
+            },
+            { passive: true }
+          )
+
+          chartContainer.addEventListener(
+            'touchmove',
+            function (e) {
+              if (!isDown) return
+              e.preventDefault()
+              const x = e.touches[0].pageX - this.offsetLeft
+              const walk = (x - startX) * 2 // 调整滑动灵敏度
+              this.scrollLeft = scrollLeft - walk
+            },
+            { passive: false }
+          )
+
+          chartContainer.addEventListener('touchend', function () {
+            isDown = false
+          })
+
+          // 添加鼠标拖拽滚动支持（用于PC设备）
+          chartContainer.addEventListener('mousedown', function (e) {
+            isDown = true
+            startX = e.pageX - this.offsetLeft
+            scrollLeft = this.scrollLeft
+            this.style.cursor = 'grabbing'
+          })
+
+          chartContainer.addEventListener('mouseleave', function () {
+            isDown = false
+            this.style.cursor = 'grab'
+          })
+
+          chartContainer.addEventListener('mouseup', function () {
+            isDown = false
+            this.style.cursor = 'grab'
+          })
+
+          chartContainer.addEventListener('mousemove', function (e) {
+            if (!isDown) return
+            e.preventDefault()
+            const x = e.pageX - this.offsetLeft
+            const walk = (x - startX) * 2
+            this.scrollLeft = scrollLeft - walk
+          })
+        }
+      }
+
+      function showGameModal(gameName, gameData) {
+        const modal = document.getElementById('gameModal')
+        const modalGameName = document.getElementById('modalGameName')
+        const modalGameIcon = document.getElementById('modalGameIcon')
+        const modalContent = document.getElementById('modalContent')
+
+        // Get period text for display
+        const periodTexts = {
+          today: '今日',
+          week: '最近7天',
+          month: '最近30天',
+          all: '全部历史',
+        }
+        const periodText = periodTexts[currentPeriod]
+
+        modalGameName.textContent = `${gameName} (${periodText})`
+        modalGameIcon.textContent = gameName.charAt(0)
+
+        // 计算总体统计
+        const totalPoints = gameData.totalPoints || gameData.points.reduce((sum, p) => sum + p, 0)
+        const totalDuration = gameData.duration.reduce((sum, d) => sum + d, 0)
+        const avgAccuracy = Math.round(gameData.accuracy.reduce((sum, a) => sum + a, 0) / gameData.accuracy.length)
+        const totalLevels = gameData.levels.reduce((sum, val) => sum + val, 0)
+        // console.log(`Showing modal for game: ${gameName}`, {
+        //     totalPoints,
+        //     totalDuration,
+        //     avgAccuracy,
+        //     totalLevels
+        // });
+
+        // 按难度分组统计
+        const difficultyStats = {}
+        gameData.difficulty.forEach((diff, index) => {
+          if (!difficultyStats[diff]) {
+            difficultyStats[diff] = {
+              duration: [],
+              levels: [],
+              accuracy: [],
+              points: [],
+            }
+          }
+          difficultyStats[diff].duration.push(gameData.duration[index])
+          difficultyStats[diff].levels.push(gameData.levels[index])
+          difficultyStats[diff].accuracy.push(gameData.accuracy[index])
+          difficultyStats[diff].points.push(gameData.points[index])
+        })
+
+        let difficultyHtml = ''
+        Object.entries(difficultyStats)
+          .sort(([a], [b]) => a - b)
+          .forEach(([difficulty, stats]) => {
+            // console.log(`Processing difficulty: ${difficulty}`, stats);
+            const diffTotalDuration = stats.duration.reduce((sum, d) => sum + d, 0)
+            const diffAvgAccuracy = Math.round(stats.accuracy.reduce((sum, a) => sum + a, 0) / stats.accuracy.length)
+            const diffTotalLevels = stats.levels.reduce((sum, val) => sum + val, 0)
+            const diffTotalPoints = stats.points.reduce((sum, p) => sum + p, 0)
+
+            difficultyHtml += `
+                    <div class="difficulty-card">
+                        <div class="difficulty-header">
+                            ${'★'.repeat(parseInt(difficulty))} 难度等级 ${difficulty}
+                        </div>
+                        <div class="difficulty-stats">
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">获得积分</div>
+                                <div class="difficulty-stat-value">${diffTotalPoints}</div>
+                            </div>
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">训练时长</div>
+                                <div class="difficulty-stat-value">${formatDuration(diffTotalDuration)}</div>
+                            </div>
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">平均准确率</div>
+                                <div class="difficulty-stat-value">
+                                    <div class="progress-container w-full h-2 mb-1">
+                                        <div class="progress-bar bg-green-500 h-2 rounded-full" style="width: ${diffAvgAccuracy}%"></div>
+                                    </div>
+                                    <span class="text-xs">${diffAvgAccuracy}%</span>
+                                </div>
+                            </div>
+                            <div class="difficulty-stat">
+                                <div class="difficulty-stat-label">完成关卡总数</div>
+                                <div class="difficulty-stat-value">${diffTotalLevels}</div>
+                            </div>
+                        </div>
+                    </div>
+                `
+          })
+
+        modalContent.innerHTML = `
+                <div class="detail-grid" style="grid-template-columns: repeat(4, 1fr); min-width: 0;">
+                    <div class="detail-item">
+                        <div class="detail-label">总积分</div>
+                        <div class="detail-value">${totalPoints}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">总时长</div>
+                        <div class="detail-value">${formatDuration(totalDuration)}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">平均准确率</div>
+                        <div class="detail-value">
+                            <span>${avgAccuracy}%</span>
+                            <div class="progress-container w-full h-3 mt-2">
+                                <div class="progress-bar bg-green-500 h-3 rounded-full" style="width: ${avgAccuracy}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">完成关卡总数</div>
+                        <div class="detail-value">${totalLevels}</div>
+                    </div>
+                </div>
+
+                <div class="difficulty-section hidden">
+                    <div class="difficulty-title">📈 不同难度下的详细统计</div>
+                    ${difficultyHtml}
+                </div>
+
+                <div class="mt-6 border-t pt-6">
+                    <h4 class="mb-4 text-xl font-bold text-gray-700">🎯 训练记录详情</h4>
+                    ${gameData.points
+                      .map(
+                        (point, index) => `
+                        <div class="bg-gray-50 p-3 rounded-lg mb-3 grid grid-cols-5 gap-3 text-lg">
+                            <div class="flex flex-col">
+                                <div class="text-gray-500 text-xl mb-1">日期</div>
+                                <div class="font-medium text-gray-700">${formatDate(gameData.time[index])}</div>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="text-gray-500 text-xl mb-1">时长</div>
+                                <div class="font-medium text-gray-700">${formatDuration(gameData.duration[index])}</div>
+                            </div>
+                            <div class="flex flex-col hidden">
+                                <div class="text-gray-500 text-xl mb-1">难度</div>
+                                <div class="font-medium text-gray-700">★ ${gameData.difficulty[index]}</div>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="text-gray-500 text-xl mb-1">完成关卡</div>
+                                <div class="font-medium text-gray-700">共${gameData.levels[index]}关</div>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="text-gray-500 text-xl mb-1">获得积分</div>
+                                <div class="font-medium text-gray-700">${point}</div>
+                            </div>
+                            <div class="flex flex-col">
+                                <div class="text-gray-500 text-xl mb-1">准确率</div>
+                                <div class="font-medium text-gray-700">${gameData.accuracy[index]}%</div>
+                            </div>
+                        </div>
+                    `
+                      )
+                      .join('')}
+                </div>
+            `
+
+        modal.style.display = 'block'
+        modal.classList.remove('hidden')
+      }
+
+      function updateDisplay() {
+        const filteredData = filterDataByPeriod(game_config, currentPeriod)
+        const summary = calculateSummary(filteredData)
+
+        renderSummary(summary)
+        renderChart(filteredData)
+      }
+
+      // gameName到中文名的映射表
+      const gameNameMapping = {
+        count_shapes: '寻宝大师',
+        visual_rotate_mem: '旋转宫殿',
+        audio_mem: '音乐记忆大师',
+        guess_cubes: '影子骑士',
+        sudoku: '数字战士',
+        maze_words_visual: '单词迷宫大冒险',
+        snake_words: '单词贪吃蛇',
+        stroop_color_word: '一心多用',
+        simon_says_compare: '西蒙说',
+        spatial_words_memo: '单词魔方',
+        dual_n_back: '脑力双轨战',
+        find_numbers: '数字复读机',
+        schulte_grid: '舒尔特方格',
+        water_split: '倒水游戏',
+        attention_focus: '一一对应',
+        graph_analogy: '图形找茬',
+        graphic_patterns: '逻辑拼图',
+        graph_abstract_thinking: '图形密码',
+        thinking_understanding: '谁想吃什么/心领神会',
+        thinking_understanding2: '心领神会',
+      }
+
+      function getGameStatsData(gameName, gameData) {
+        try {
+          const { duration, difficulty, levels, points, totalPoints, accuracy, time } = gameData[gameName]
+
+          if (!time) return null
+
+          // 构建返回数据格式
+          const statsData = {
+            duration: duration || [],
+            difficulty: difficulty || [],
+            levels: levels || [],
+            points: points || [],
+            totalPoints: Array.isArray(totalPoints) && totalPoints.length > 0 ? totalPoints[0] : 0, // 总积分取第一个值
+            accuracy: accuracy || [],
+            time: time || [],
+          }
+
+          // console.log(`Game stats loaded for ${gameName}:`, statsData)
+          return statsData
+        } catch (error) {
+          console.error('Failed to get game stats data:', error)
+          return null
+        }
+      }
+
+      async function initData() {
+        const urlParams = new URLSearchParams(window.location.search)
+        const maisiToken = urlParams.get('maisiToken')
+        const periodParam = urlParams.get('period')
+        
+        // 设置初始时间段
+        if (periodParam && ['today', 'week', 'month', 'all'].includes(periodParam)) {
+          currentPeriod = periodParam
+          // 更新按钮状态
+          document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active')
+            if (btn.dataset.period === periodParam) {
+              btn.classList.add('active')
+            }
+          })
+        }
+        
+        if (maisiToken) {
+            try {
+            await window.keepwork.loginWithMaisi(maisiToken)
+            } catch (error) {
+                console.error('Maisi login error:', error)
+            }  
+        }
+
+        try {
+          const data = await window.keepwork.personalPageStore.loadPageDataFromRemote('maisiAI')
+          if (data && data.miniGameFinishInfo) {
+            const gameNames = Object.keys(data.miniGameFinishInfo)
+            for (const gameName of gameNames) {
+              // 查找对应的中文名
+              const chineseName = gameNameMapping[gameName]
+              if (chineseName) {
+                const gameStatsData = getGameStatsData(gameName, data.miniGameFinishInfo)
+                if (gameStatsData) {
+                  game_config[chineseName] = gameStatsData
+                }
+              }
+            }
+          } else {
+            console.warn('No mini game finish info found in Maisi data')
+          }
+        } catch (error) {
+          console.error('Maisi login error:', error)
+        }
+        console.log('Game config initialized:', game_config)
+      }
+
+      async function initPage() {
+        await initData()
+
+        // 初始化显示
+        updateDisplay()
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+          btn.addEventListener('click', function () {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'))
+            this.classList.add('active')
+            currentPeriod = this.dataset.period
+            updateDisplay()
+          })
+        })
+
+        // 模态框事件
+        const modal = document.getElementById('gameModal')
+        const closeBtn = modal.querySelector('.close')
+
+        closeBtn.addEventListener('click', function () {
+          modal.style.display = 'none'
+          modal.classList.add('hidden')
+        })
+
+        window.addEventListener('click', function (event) {
+          if (event.target === modal) {
+            modal.style.display = 'none'
+            modal.classList.add('hidden')
+          }
+        })
+
+        // ESC键关闭模态框
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            modal.style.display = 'none'
+            modal.classList.add('hidden')
+          }
+        })
+      }
+      initPage()
+    </script>
+  </body>
+</html>

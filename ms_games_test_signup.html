@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>麦思测评报名</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.3"></script>
+    <style>
+      /* 横屏适配 */
+      @media (orientation: landscape) {
+        .landscape-container {
+          max-width: none;
+          display: flex;
+          align-items: stretch;
+          min-height: 100vh;
+          height: 100vh;
+          overflow: hidden;
+          padding: 0;
+          margin: 0;
+        }
+
+        .landscape-content {
+          display: flex;
+          gap: 0;
+          width: 100%;
+          height: 100vh;
+          max-width: none;
+          margin: 0;
+          overflow: hidden;
+        }
+
+        .landscape-left {
+          flex: 0 0 30%;
+          min-width: 0;
+          height: 100vh;
+          overflow-y: auto;
+          padding: 1rem;
+          box-sizing: border-box;
+        }
+
+        .landscape-right {
+          flex: 0 0 70%;
+          min-width: 0;
+          height: 100vh;
+          overflow: hidden;
+          padding: 1rem;
+          box-sizing: border-box;
+        }
+      }
+
+      /* 能力积分卡片样式 */
+      .ability-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .ability-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      }
+
+      /* 竖屏时保持原有布局 */
+      @media (orientation: portrait) {
+        .portrait-container {
+          max-width: 28rem;
+        }
+
+        #statsIframe {
+          width: 100% !important; /* 竖屏时使用全宽 */
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen overflow-hidden">
+    <div class="w-full landscape-container">
+      <div class="landscape-content">
+        <!-- 左侧：Header 和报名表单 -->
+        <div class="landscape-left">
+          <!-- Registration Form -->
+          <div class="bg-yellow-50 rounded-2xl shadow-xl p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-6 text-center">《麦思AI测评》报名表</h2>
+
+            <!-- 已报名信息显示区域 -->
+            <div id="registrationInfo" class="hidden">
+              <div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
+                <div class="flex items-start">
+                  <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                  <div class="flex-1">
+                    <h3 class="font-semibold text-green-800 mb-2">报名成功！</h3>
+                    <div class="text-sm text-green-700 space-y-1">
+                      <p><strong>姓名：</strong><span id="infoRealName"></span></p>
+                      <p><strong>出生日期：</strong><span id="infoBirthDate"></span></p>
+                      <p><strong>家长手机：</strong><span id="infoParentPhone"></span></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 测试注意事项 -->
+              <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <div class="flex items-start">
+                  <svg class="w-5 h-5 text-blue-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div>
+                    <h3 class="font-semibold text-blue-800 mb-2">测评注意事项</h3>
+                    <ul class="text-sm text-blue-700 space-y-1">
+                      <li>• 请直接进入测评室开始测评</li>
+                      <li>• 建议在安静中测评</li>
+                      <li>• 可分多天，多次完成（总时长大约1小时）</li>
+                      <li>• 如有技术问题，请及时联系客服协助</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 修改报名信息按钮 -->
+              <div class="w-full">
+                <button
+                  type="button"
+                  id="editRegistrationBtn"
+                  class="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-orange-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                >
+                  修改报名信息
+                </button>
+              </div>
+            </div>
+
+            <form id="registrationForm" class="space-y-4">
+              <!-- 真实姓名 -->
+              <div>
+                <label for="realName" class="block text-sm font-medium text-gray-700 mb-2"> 真实姓名 <span class="text-red-500">*</span> </label>
+                <input
+                  type="text"
+                  id="realName"
+                  name="realName"
+                  required
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  placeholder="请输入您的真实姓名"
+                />
+              </div>
+
+              <!-- 出生日期 -->
+              <div>
+                <label for="birthDate" class="block text-sm font-medium text-gray-700 mb-2"> 出生日期 <span class="text-red-500">*</span> </label>
+                <input
+                  type="date"
+                  id="birthDate"
+                  name="birthDate"
+                  required
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              <!-- 家长手机号 -->
+              <div>
+                <label for="parentPhone" class="block text-sm font-medium text-gray-700 mb-2"> 家长手机号 <span class="text-red-500">*</span> </label>
+                <input
+                  type="tel"
+                  id="parentPhone"
+                  name="parentPhone"
+                  required
+                  pattern="^1[3-9]\d{9}$"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  placeholder="请输入家长手机号码"
+                />
+              </div>
+
+              <!-- 报名按钮 -->
+              <div class="w-full">
+                <button
+                  type="submit"
+                  class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-indigo-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                >
+                  立即报名
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- 报名说明 -->
+          <div id="membershipNotice" class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <div class="flex items-start">
+              <svg class="w-5 h-5 text-amber-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"
+                ></path>
+              </svg>
+              <div>
+                <p class="text-amber-700 text-sm leading-relaxed">需要成为麦思会员才能报名。</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 功能按钮 -->
+          <div class="text-center space-y-3">
+            <div class="flex flex-col space-y-2">
+              <button
+                id="membershipBtn"
+                class="bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium text-sm px-4 py-2 rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-300 shadow-md hover:shadow-lg"
+                onclick="switchToMembership()"
+              >
+                成为会员
+              </button>
+              <button
+                id="statsBtn"
+                class="bg-gradient-to-r from-blue-500 to-cyan-600 text-white font-medium text-sm px-4 py-2 rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 shadow-md hover:shadow-lg"
+                onclick="switchToStats()"
+              >
+                查看我的训练数据
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧：能力积分展示 -->
+        <div class="landscape-right">
+          <iframe id="statsIframe" class="w-full h-full rounded-2xl shadow-xl border-0" style="min-height: 600px" frameborder="0" scrolling="auto"> </iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+      <div class="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full">
+        <div class="text-center">
+          <div class="w-16 h-16 bg-green-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+            <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-800 mb-2">报名成功！</h3>
+          <p class="text-gray-600 text-sm mb-4">您的报名信息已提交，请直接进入测评室。</p>
+          <button onclick="closeSuccessModal()" class="bg-indigo-500 text-white px-6 py-2 rounded-lg hover:bg-indigo-600 transition-colors">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-4 left-4 z-50 space-y-2"></div>
+
+    <script>
+      // Initialize SDK
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+
+      // Toast 系统
+      function showToast(message, type = "info", duration = 3000) {
+        const toastContainer = document.getElementById("toastContainer");
+
+        // 创建 toast 元素
+        const toast = document.createElement("div");
+        toast.className = `
+          transform transition-all duration-300 ease-in-out
+          max-w-sm w-80 bg-white shadow-lg rounded-lg pointer-events-auto
+          ring-1 ring-black ring-opacity-5 overflow-hidden
+          -translate-x-full opacity-0
+        `;
+
+        // 根据类型设置颜色
+        let iconSvg = "";
+        let colorClass = "";
+
+        switch (type) {
+          case "success":
+            colorClass = "text-green-500";
+            iconSvg = `
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+            `;
+            break;
+          case "error":
+            colorClass = "text-red-500";
+            iconSvg = `
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            `;
+            break;
+          case "warning":
+            colorClass = "text-yellow-500";
+            iconSvg = `
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"></path>
+              </svg>
+            `;
+            break;
+          default:
+            colorClass = "text-blue-500";
+            iconSvg = `
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            `;
+        }
+
+        toast.innerHTML = `
+          <div class="p-4">
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <div class="${colorClass}">
+                  ${iconSvg}
+                </div>
+              </div>
+              <div class="ml-3 w-0 flex-1 pt-0.5">
+                <p class="text-sm font-medium text-gray-900">${message}</p>
+              </div>
+              <div class="ml-4 flex-shrink-0 flex">
+                <button onclick="removeToast(this.parentElement.parentElement.parentElement)" class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        // 动画显示
+        setTimeout(() => {
+          toast.classList.remove("-translate-x-full", "opacity-0");
+          toast.classList.add("translate-x-0", "opacity-100");
+        }, 10);
+
+        // 自动隐藏
+        setTimeout(() => {
+          removeToast(toast);
+        }, duration);
+      }
+
+      function removeToast(toast) {
+        toast.classList.add("-translate-x-full", "opacity-0");
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+          }
+        }, 300);
+      }
+
+      // 加载保存的报名信息
+      async function loadRegistrationData() {
+        try {
+          const savedData = await sdk.personalPageStore.loadPageData("maisi_test", "registration-data");
+          if (savedData) {
+            console.log("加载已保存的报名信息:", savedData);
+
+            // 检查是否已成功提交过
+            if (savedData.hasSubmitForm) {
+              showRegistrationInfo(savedData);
+            } else {
+              // 只是草稿，填充表单数据
+              fillFormData(savedData);
+            }
+          }
+        } catch (error) {
+          console.error("加载报名信息失败:", error);
+        }
+      }
+
+      // 显示已报名信息
+      function showRegistrationInfo(data) {
+        // 填充信息显示区域
+        document.getElementById("infoRealName").textContent = data.realName || "";
+        document.getElementById("infoBirthDate").textContent = data.birthDate || "";
+        document.getElementById("infoParentPhone").textContent = data.parentPhone || "";
+
+        // 显示已报名信息区域，隐藏表单
+        document.getElementById("registrationInfo").classList.remove("hidden");
+        document.getElementById("registrationForm").classList.add("hidden");
+        
+        // 隐藏会员提示
+        document.getElementById("membershipNotice").classList.add("hidden");
+        
+        // 绑定修改按钮事件（移除之前的事件监听器以避免重复绑定）
+        const editBtn = document.getElementById("editRegistrationBtn");
+        editBtn.replaceWith(editBtn.cloneNode(true)); // 移除所有事件监听器
+        document.getElementById("editRegistrationBtn").addEventListener("click", function() {
+          editRegistrationInfo(data);
+        });
+      }
+
+      // 填充表单数据（草稿状态）
+      function fillFormData(data) {
+        if (data.realName) {
+          document.getElementById("realName").value = data.realName;
+        }
+        if (data.birthDate) {
+          document.getElementById("birthDate").value = data.birthDate;
+        }
+        if (data.parentPhone) {
+          document.getElementById("parentPhone").value = data.parentPhone;
+        }
+      }
+
+      // 编辑报名信息
+      function editRegistrationInfo(data) {
+        // 隐藏已报名信息区域，显示表单
+        document.getElementById("registrationInfo").classList.add("hidden");
+        document.getElementById("registrationForm").classList.remove("hidden");
+        
+        // 显示会员提示
+        document.getElementById("membershipNotice").classList.remove("hidden");
+        
+        // 填充表单数据
+        fillFormData(data);
+      }
+
+      // 保存报名信息
+      async function saveRegistrationData(data) {
+        try {
+          await sdk.personalPageStore.savePageData("maisi_test", "registration-data", data, true);
+          console.log("报名信息已保存:", data);
+          return true;
+        } catch (error) {
+          console.error("保存报名信息失败:", error);
+          showToast("保存失败，请重试！", "error");
+          return false;
+        }
+      }
+
+      // 保存草稿（不包含已提交标记）
+      async function saveDraftData() {
+        const formData = new FormData(document.getElementById("registrationForm"));
+        const data = {
+          realName: formData.get("realName"),
+          birthDate: formData.get("birthDate"),
+          parentPhone: formData.get("parentPhone"),
+          hasSubmitForm: false, // 草稿状态
+        };
+
+        try {
+          await sdk.personalPageStore.savePageData("maisi_test", "registration-data", data, true);
+          console.log("草稿已保存:", data);
+        } catch (error) {
+          console.error("保存草稿失败:", error);
+        }
+      }
+
+      // 检查用户会员状态
+      async function checkMembershipStatus() {
+        try {
+          // 这里应该调用实际的会员状态检查API
+          // 示例：const memberStatus = await sdk.checkMembership();
+          // 暂时返回false，表示需要成为会员
+          return true;
+        } catch (error) {
+          console.error("检查会员状态失败:", error);
+          return false;
+        }
+      }
+
+      // 表单提交处理
+      document.getElementById("registrationForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+        const data = {
+          realName: formData.get("realName"),
+          birthDate: formData.get("birthDate"),
+          parentPhone: formData.get("parentPhone"),
+          registrationTime: Date.now(),
+          hasSubmitForm: true, // 标记为已成功提交
+        };
+
+        try {
+          // 检查会员状态
+          const isMember = await checkMembershipStatus();
+          if (!isMember) {
+            showToast("需要成为麦思会员才能报名，请先开通会员！", "warning", 4000);
+            return;
+          }
+
+          // 保存报名信息（包含已提交标记）
+          const saveSuccess = await saveRegistrationData(data);
+          if (!saveSuccess) {
+            return; // 保存失败，停止后续操作
+          }
+
+          // 会员用户报名成功
+          showToast("报名信息已提交成功！", "success");
+          showSuccessModal();
+          
+          // 显示已报名信息
+          showRegistrationInfo(data);
+        } catch (error) {
+          console.error("提交报名失败:", error);
+          showToast("提交失败，请重试！", "error");
+        }
+      });
+
+      function showSuccessModal() {
+        const modal = document.getElementById("successModal");
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      }
+
+      function closeSuccessModal() {
+        const modal = document.getElementById("successModal");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      }
+
+      function showMembershipInfo() {
+        showToast("会员权益：参与专业能力测评、获得详细测评报告、享受个性化学习建议、优先参与新测评项目。请联系客服了解更多详情！", "info", 5000);
+      }
+
+      // 通用页面切换函数
+      function switchToPage(targetPage, buttonState, additionalUrlParams) {
+        const iframe = document.getElementById("statsIframe");
+        const currentUrl = window.location.href;
+        let newUrl = currentUrl.replace("ms_games_test_signup", targetPage);
+
+        // Remove existing query parameters from newUrl since we'll rebuild them
+        newUrl = newUrl.split("?")[0];
+
+        // Forward all existing URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+
+        // Replace or add token parameter if sdk.token is available
+        if (sdk.token) {
+          urlParams.set("token", sdk.token);
+        }
+
+        // Add additional URL parameters if provided
+        if (additionalUrlParams && typeof additionalUrlParams === "object") {
+          for (const [key, value] of Object.entries(additionalUrlParams)) {
+            urlParams.set(key, value);
+          }
+        }
+
+        // Construct final URL with all parameters
+        const separator = newUrl.includes("?") ? "&" : "?";
+        if (urlParams.toString()) {
+          newUrl += `${separator}${urlParams.toString()}`;
+        }
+
+        iframe.src = newUrl;
+
+        // 更新按钮状态
+        updateButtonStates(buttonState);
+      }
+
+      // 切换到会员页面
+      function switchToMembership() {
+        switchToPage("game_activity_vip", "membership");
+      }
+
+      // 切换到训练数据页面
+      function switchToStats() {
+        switchToPage("ms_games_stats", "stats", { period: "all" });
+      }
+
+      // 更新按钮状态
+      function updateButtonStates(activeButton) {
+        const membershipBtn = document.getElementById("membershipBtn");
+        const statsBtn = document.getElementById("statsBtn");
+
+        // 重置所有按钮样式
+        membershipBtn.classList.remove("ring-2", "ring-purple-300", "ring-offset-2");
+        statsBtn.classList.remove("ring-2", "ring-blue-300", "ring-offset-2");
+
+        // 为活跃按钮添加高亮样式
+        if (activeButton === "membership") {
+          membershipBtn.classList.add("ring-2", "ring-purple-300", "ring-offset-2");
+        } else if (activeButton === "stats") {
+          statsBtn.classList.add("ring-2", "ring-blue-300", "ring-offset-2");
+        }
+      }
+
+      // 设置日期输入框的最大值为今天
+      document.getElementById("birthDate").max = new Date().toISOString().split("T")[0];
+
+      // 发送游戏加载完成消息
+
+      function initializeApp() {
+        loadRegistrationData();
+        switchToStats();
+        
+        // 添加表单输入自动保存草稿功能
+        const formInputs = document.querySelectorAll('#registrationForm input');
+        let saveTimeout;
+        
+        formInputs.forEach(input => {
+          input.addEventListener('input', function() {
+            // 防抖：延迟1秒后保存，如果1秒内再次输入则重新计时
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+              saveDraftData();
+            }, 1000);
+          });
+        });
+        
+        window.parent.postMessage({ type: "gameLoaded" }, "*");
+      }
+
+      // 游戏启动检查
+      function checkStartGame(timeoutMs) {
+        if (!timeoutMs) {
+          timeoutMs = 5000; // 默认5秒超时
+        }
+
+        let gameStarted = false;
+        const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
+          if (window.parent === window) {
+            reject(new Error("不在iframe中"));
+            return;
+          }
+          // 请求游戏代理数据
+          window.parent.postMessage({ type: "getMiniGameProxyData" }, "*");
+
+          // 监听来自父窗口的消息
+          const messageHandler = (event) => {
+            if (event.data && event.data.type === "miniGameProxyData") {
+              gameStarted = true;
+              sdk.token = event.data?.keepworkToken;
+              window.removeEventListener("message", messageHandler);
+              resolve(event.data);
+            }
+          };
+
+          window.addEventListener("message", messageHandler);
+
+          // 设置超时
+          setTimeout(() => {
+            if (!gameStarted) {
+              window.removeEventListener("message", messageHandler);
+              reject(new Error("Timeout waiting for game proxy data"));
+            }
+          }, timeoutMs);
+        });
+
+        waitForMinigameProxyWithTimeout
+          .then((proxyData) => {
+            if (!gameStarted) {
+              gameStarted = true;
+              initializeApp();
+            }
+          })
+          .catch((error) => {
+            if (!gameStarted) {
+              gameStarted = true;
+              initializeApp();
+            }
+          });
+      }
+
+      // 启动游戏检查
+      checkStartGame();
+    </script>
+  </body>
+</html>
