@@ -21,9 +21,37 @@
         color: rgba(255, 255, 255, 0.8);
         font-style: italic;
       }
-
       .progress-bar {
         transition: width 0.5s ease-in-out;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .progress-bar:hover {
+        filter: brightness(1.1);
+        transform: scale(1.02);
+        transition: all 0.2s ease;
+      }
+
+      .progress-bar:active {
+        transform: scale(0.98);
+        filter: brightness(1.2);
+      }
+
+      .progress-bar.clicked {
+        animation: progressClick 0.3s ease;
+      }
+
+      @keyframes progressClick {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+        100% {
+          transform: scale(1);
+        }
       }
 
       .typing-indicator {
@@ -59,7 +87,6 @@
         font-weight: bold;
         animation: cursor-blink 1s infinite;
       }
-
       @keyframes streaming-pulse {
         0%,
         100% {
@@ -81,6 +108,94 @@
         100% {
           opacity: 0;
         }
+      }
+
+      /* 进度条刻度标尺样式 */
+      .progress-container {
+        position: relative;
+      }
+
+      .progress-markers {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }      .progress-marker {
+        position: absolute;
+        top: -5px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: auto;
+        z-index: 10;
+      }
+
+      .progress-marker-triangle {
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 6px solid #6b7280;
+        margin-bottom: 2px;
+        transition: border-top-color 0.2s ease;
+      }      
+      .progress-marker-text {
+        font-size: 10px;
+        color: #6b7280;
+        font-weight: 500;
+        white-space: nowrap;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 2px 4px;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+
+      .progress-marker:hover .progress-marker-triangle {
+        border-top-color: #374151;
+      }
+
+      .progress-marker:hover .progress-marker-text {
+        background: rgba(255, 255, 255, 1);
+        color: #374151;
+        transform: scale(1.05);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      }
+
+      /* 增强tooltip样式 */
+      .progress-marker[title]:hover:after {
+        content: attr(title);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        white-space: nowrap;
+        z-index: 1000;
+        margin-bottom: 5px;
+        pointer-events: none;
+      }
+
+      .progress-marker[title]:hover:before {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 4px solid transparent;
+        border-top-color: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        margin-bottom: 1px;
+        pointer-events: none;
       }
 
       /* 语音播放按钮样式 */
@@ -438,8 +553,11 @@
               <span id="objective-title" class="text-sm font-medium text-gray-700">进度</span>
               <span class="text-sm text-gray-500" id="progress-text">0/100</span>
             </div>
-            <div class="w-full bg-gray-200 rounded-full h-3">
+            <div class="w-full bg-gray-200 rounded-full h-3 progress-container">
               <div class="bg-gradient-to-r from-green-400 to-blue-500 h-3 rounded-full progress-bar" id="progress-bar" style="width: 0%"></div>
+              <div class="progress-markers" id="progress-markers">
+                <!-- 进度标尺将在这里动态生成 -->
+              </div>
             </div>
           </div>
         </div>
@@ -743,14 +861,47 @@
       // Initialize AI Chat Session
       let aiChatSession;
 
-      class LLMCharacterGame {
-        constructor() {
+      class LLMCharacterGame {        constructor() {
           this.config = null;
           this.gameState = {
             progress: 0,
             chatHistory: [],
             isObjectiveAchieved: false,
+            hasCommitted: false, // 跟踪是否已经发送过gameCommit消息
           };
+          
+          // 全局earnedPoints变量，只在真实对话返回且progress增大时增加
+          this.earnedPoints = 0;// 进度条刻度标尺配置
+          this.progressMarkers = [
+            {
+              percent: 25,
+              text: "探索",
+              tooltip: "开始探索问题",
+              textColor: "#f59e0b", // 橙色文字
+              backgroundColor: "rgba(245, 158, 11, 0.1)", // 淡橙色背景
+            },
+            {
+              percent: 50,
+              text: "理解",
+              tooltip: "理解问题本质",
+              textColor: "#3b82f6", // 蓝色文字
+              backgroundColor: "rgba(59, 130, 246, 0.1)", // 淡蓝色背景
+            },
+            {
+              percent: 80,
+              text: "完成",
+              tooltip: "基本完成目标",
+              textColor: "#059669", // 绿色文字
+              backgroundColor: "rgba(5, 150, 105, 0.1)", // 淡绿色背景
+            },
+            {
+              percent: 100,
+              text: "圆满",
+              tooltip: "目标圆满达成",
+              textColor: "#dc2626", // 红色文字
+              backgroundColor: "rgba(220, 38, 38, 0.1)", // 淡红色背景
+            },
+          ];
 
           // Session管理
           this.currentSessionId = null;
@@ -770,6 +921,7 @@
             llmStatus: document.getElementById("llm-status"),
             resetChatBtn: document.getElementById("reset-chat-btn"),
             historyDropdown: document.getElementById("history-dropdown"),
+            progressMarkers: document.getElementById("progress-markers"),
           };
           this.initEventListeners();
           this.loadDefaultConfig();
@@ -787,10 +939,10 @@
           this.elements.sendBtn.addEventListener("click", () => this.sendMessage());
           this.elements.userInput.addEventListener("keypress", (e) => {
             if (e.key === "Enter") this.sendMessage();
-          });
-
-          // 重置对话按钮
-          this.elements.resetChatBtn.addEventListener("click", () => this.resetChat()); // 聊天历史下拉菜单
+          });          // 重置对话按钮
+          this.elements.resetChatBtn.addEventListener("click", () => this.resetChat()); 
+          
+          // 聊天历史下拉菜单
           this.elements.historyDropdown.addEventListener("change", (e) => {
             if (e.target.value === "clearHistory") {
               this.clearAllHistory();
@@ -868,7 +1020,7 @@
           };
           await this.setVideoActionsByCharacter();
         }
-        
+
         // Set video actions based on character name and age
         async setVideoActionsByCharacter() {
           if (!this.config || !this.config.character) return;
@@ -1041,12 +1193,13 @@
           document.getElementById("character-description").textContent = this.config.character?.description || "";
           document.getElementById("objective-title").textContent = this.config.objective?.title || "目标进度";
           document.getElementById("chat-title").textContent = `与${this.config.character?.name || "角色"}对话`;
-          document.getElementById("chat-description").textContent = this.config.objective?.description || "";
-
-          // 重置游戏状态
+          document.getElementById("chat-description").textContent = this.config.objective?.description || "";          // 重置游戏状态
           this.gameState.progress = this.config.initial?.progress || 0;
           this.gameState.chatHistory = [];
           this.gameState.isObjectiveAchieved = false;
+          
+          // 重置earnedPoints
+          this.earnedPoints = 0;
 
           // 清空聊天区域
           this.elements.chatContainer.innerHTML = "";
@@ -1095,10 +1248,12 @@
           // if there is only one message (initial), play video animation
           if (this.elements.chatContainer.children.length === 1) {
             this.checkAndPlayVideoAction(this.config.initial?.message);
-          }
-          // 设置聊天背景
+          } // 设置聊天背景
           this.changeChatBackground(this.config?.character?.chat_background);
           this.saveProgress(this.config?.objective?.wikiword, false);
+
+          // 渲染进度条刻度标尺
+          this.renderProgressMarkers();
         }
 
         updateQuickReplies() {
@@ -1117,7 +1272,108 @@
             });
             container.appendChild(button);
           });
+        }        renderProgressMarkers() {
+          if (!this.elements.progressMarkers) return;
+
+          // 清空现有标尺
+          this.elements.progressMarkers.innerHTML = "";
+
+          // 渲染每个标尺
+          this.progressMarkers.forEach((marker) => {
+            const markerElement = document.createElement("div");
+            markerElement.className = "progress-marker";
+            markerElement.style.left = `${marker.percent}%`;
+            
+            // 设置tooltip - 使用title属性
+            markerElement.title = marker.tooltip || "";
+
+            // 创建三角形元素并应用颜色
+            const triangleElement = document.createElement("div");
+            triangleElement.className = "progress-marker-triangle";
+            if (marker.textColor) {
+              triangleElement.style.borderTopColor = marker.textColor;
+            }
+
+            // 创建文本元素并应用颜色
+            const textElement = document.createElement("div");
+            textElement.className = "progress-marker-text";
+            textElement.textContent = marker.text;
+            textElement.style.cursor = "pointer";
+            if (marker.textColor) {
+              textElement.style.color = marker.textColor;
+            }
+            if (marker.backgroundColor) {
+              textElement.style.backgroundColor = marker.backgroundColor;
+            }
+
+            // 添加点击事件到文本元素 - 连续点击5次才跳转到对应进度（作弊功能）
+            textElement.addEventListener("click", (e) => {
+              e.stopPropagation();
+              
+              // 初始化或重置点击计数器
+              if (!this.markerClickCounts) {
+                this.markerClickCounts = {};
+                this.markerClickTimers = {};
+              }
+              
+              const markerId = `${marker.percent}_${marker.text}`;
+              
+              // 增加点击计数
+              this.markerClickCounts[markerId] = (this.markerClickCounts[markerId] || 0) + 1;
+              
+              // 添加点击动画效果
+              textElement.style.transform = "scale(1.2)";
+              setTimeout(() => {
+                textElement.style.transform = "scale(1)";
+              }, 150);
+              
+              // 清除之前的计时器
+              if (this.markerClickTimers[markerId]) {
+                clearTimeout(this.markerClickTimers[markerId]);
+              }
+              
+              // 设置2秒后重置点击计数
+              this.markerClickTimers[markerId] = setTimeout(() => {
+                this.markerClickCounts[markerId] = 0;
+              }, 2000);
+              
+              console.log(`点击标尺：${marker.text} (${marker.percent}%) - 第${this.markerClickCounts[markerId]}次`);
+              
+              // 如果连续点击5次，则执行跳转
+              if (this.markerClickCounts[markerId] >= 5) {
+                this.markerClickCounts[markerId] = 0; // 重置计数
+                console.log(`标尺连续点击5次，执行跳转到${marker.text}阶段`);
+                  // 如果目标未达成，则跳转到该进度
+                if (!this.gameState.isObjectiveAchieved) {
+                  this.updateProgressToValue(marker.percent, `作弊跳转到${marker.text}阶段`);
+                  this.updateLLMStatus(`🎮 作弊模式：已跳转到${marker.text}阶段 (${marker.percent}%)`);
+                  
+                  
+                  // 如果跳转到100%，触发完成
+                  if (marker.percent >= 100) {
+                    this.handleObjectiveAchieved();
+                  }
+                  else if (marker.percent >= 80) {
+                    // 如果跳转到80%以上但没有到100%，触发基本完成
+                    this.handleBasicCompletion();
+                  }
+                  
+                } else {
+                  this.updateLLMStatus("目标已完成");
+                }
+              } else {
+                // 显示当前点击次数提示
+                this.updateLLMStatus(`${marker.text}: ${this.markerClickCounts[markerId]}/5 次点击`);
+              }
+            });
+
+            markerElement.appendChild(triangleElement);
+            markerElement.appendChild(textElement);
+
+            this.elements.progressMarkers.appendChild(markerElement);
+          });
         }
+
         async sendMessage() {
           let message = this.elements.userInput.value.trim();
           if (!message) return;
@@ -1161,13 +1417,29 @@
             // 自动保存聊天历史
             this.autoSaveHistory();
           }
-        } // 应用LLM响应的UI效果
+        }        // 应用LLM响应的UI效果
         applyLLMResponse(response, isReplay = false) {
           // 计算进度变化值
           const progressChange = response.progress_change || 0;
+          
+          // 记录当前进度，用于判断是否增加
+          const oldProgress = this.gameState.progress;
 
           // 更新进度
           this.updateProgress(progressChange, response.progress_reason);
+          
+          // 只有在真实对话返回（非重播）且进度确实增加时才增加earnedPoints
+          if (!isReplay && progressChange > 0 && this.gameState.progress > oldProgress) {
+            const actualProgressIncrease = this.gameState.progress - oldProgress;
+            const pointsToAdd = 5 + actualProgressIncrease;
+            this.earnedPoints += pointsToAdd;
+            console.log(`进度增加 ${actualProgressIncrease}，获得 ${pointsToAdd} 积分，当前总积分: ${this.earnedPoints}`);
+          }
+
+          // 检查是否首次超过80%但没有到100%
+          if (!isReplay && !this.gameState.hasCommitted && this.gameState.progress >= 80 && this.gameState.progress < this.config.objective.max_progress) {
+            this.handleBasicCompletion();
+          }
 
           if (response.inner_thoughts) {
             this.addInnerThought(response.inner_thoughts);
@@ -1179,7 +1451,7 @@
           if (!isReplay && this.gameState.progress >= this.config.objective.max_progress) {
             this.handleObjectiveAchieved();
           }
-        } // Helper function to extract all response fields using regex
+        }// Helper function to extract all response fields using regex
         extractResponseFields(text) {
           const fields = {
             message: "",
@@ -1809,28 +2081,71 @@
             console.log(`Successfully saved progress for ${wikiWord}`);
           } catch (error) {
             console.error("Error saving progress:", error);
-          }
+          }        }
+        
+        handleBasicCompletion() {
+          if (this.gameState.hasCommitted) return;
+          this.gameState.hasCommitted = true;
+
+          // Send game commit event to host with same data as gameFinished
+          window.parent.postMessage(
+            {
+              type: "gameCommit",
+              data: {
+                score: this.gameState.progress,
+                earnedPoints: this.earnedPoints,
+                characterName: this.config?.character?.name || "角色",
+                totalMessages: this.gameState.chatHistory.length,
+                finalProgress: this.gameState.progress,
+                isMaxDifficulty: true, // prevent selecting difficulty again
+              },
+            },
+            "*"
+          );
+          
+          // 发送完gameCommit后立即清零earnedPoints
+          this.earnedPoints = 0;
+
+          setTimeout(() => {
+            const congratsDiv = document.createElement("div");
+            congratsDiv.className = "bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mt-4";
+
+            congratsDiv.innerHTML = `
+                              <div class="flex items-center">
+                                  <span class="text-2xl mr-2">🎯</span>
+                                  <div>
+                                      <strong>任务基本完成！</strong><br>
+                                      <span class="text-sm">你已经成功帮助${this.config.character?.name || "角色"}解决了大部分问题！继续努力！</span>
+                                  </div>
+                              </div>
+                          `;
+            this.elements.chatContainer.appendChild(congratsDiv);
+            this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+          }, 1000);
         }
+        
         handleObjectiveAchieved() {
           if (this.gameState.isObjectiveAchieved) return;
           this.gameState.isObjectiveAchieved = true;
 
-          this.saveProgress(this.config?.objective?.wikiword, true);
-
-          // Send game finished event to host
+          this.saveProgress(this.config?.objective?.wikiword, true);          // Send game finished event to host
           window.parent.postMessage(
             {
               type: "gameFinished",
               data: {
                 score: this.gameState.progress,
-                earnedPoints: this.gameState.progress + this.gameState.chatHistory.length * 10,
+                earnedPoints: this.earnedPoints,
                 characterName: this.config?.character?.name || "角色",
                 totalMessages: this.gameState.chatHistory.length,
                 finalProgress: this.gameState.progress,
+                isMaxDifficulty: true, // prevent selecting difficulty again
               },
             },
             "*"
           );
+          
+          // 发送完gameFinished后立即清零earnedPoints
+          this.earnedPoints = 0;
 
           setTimeout(() => {
             const congratsDiv = document.createElement("div");
@@ -1932,14 +2247,16 @@
           }
 
           // 清空当前session ID，确保创建新session
-          this.currentSessionId = null;
-
-          // 重置游戏状态
+          this.currentSessionId = null;          // 重置游戏状态
           this.gameState = {
             progress: 0,
             chatHistory: [],
             isObjectiveAchieved: false,
+            hasCommitted: false,
           };
+          
+          // 重置earnedPoints
+          this.earnedPoints = 0;
 
           // 创建新的session
           this.createNewSession();
@@ -2067,21 +2384,23 @@
             // 保存当前session（如果有聊天记录且进度大于0的话）
             if (this.gameState.chatHistory.length > 0 && this.gameState.progress > 0) {
               this.saveCurrentSessionToHistory();
-            }
-
-            // 重置状态
+            }            // 重置状态
             this.currentSessionId = session.id;
             this.gameState = {
               progress: 0,
               chatHistory: [],
               isObjectiveAchieved: false,
             };
-
-            // 清空UI
+            // earnedPoints不会在loadSession中重置，保持当前值
             this.elements.chatContainer.innerHTML = "";
             this.elements.innerThoughts.innerHTML = "";
             this.elements.progressBar.style.width = "0%";
             this.elements.progressText.textContent = "0/100";
+
+            // 添加初始消息
+            if (this.config.initial?.message) {
+              this.addMessage(this.config.initial.message, false);
+            }
 
             // 处理聊天历史：如果最后一条是用户消息，则放到输入框中
             let chatHistoryToReplay = [...session.chatHistory];
