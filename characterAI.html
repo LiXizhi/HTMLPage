@@ -569,7 +569,12 @@
             <div class="thoughts-content" id="thoughts-content">
               <!-- 想法内容将在这里显示 -->
             </div>
-          </div>
+          </div>        </div>
+
+        <!-- AI声明和举报 -->
+        <div class="flex-shrink-0 mt-4 text-center text-xs text-gray-400">
+          对话内容由AI生成. 
+          <a href="#" id="report-link" class="text-blue-400 hover:text-blue-600 underline ml-1">【举报】</a>
         </div>
 
         <!-- LLM响应状态 -->
@@ -682,7 +687,8 @@
           icon: "✨",
           url: "https://xinghuo.xfyun.cn/desk",
           width: 30, // 30% 宽度
-        },
+        },        
+        /*
         {
           id: "kimi",
           name: "Kimi",
@@ -690,7 +696,15 @@
           url: "https://www.kimi.com/",
           width: 30, // 30% 宽度
         },
-      ]; // AI工具箱管理器
+        */
+        {
+          id: "report",
+          name: "举报",
+          icon: "🚨",
+          url: "user_report",
+          width: 30, // 100% 宽度，覆盖模式
+        },
+      ];// AI工具箱管理器
       class AIToolboxManager {
         constructor() {
           this.currentTool = null;
@@ -782,7 +796,7 @@
 
           if (!iframe) {
             // 创建新的iframe
-            iframe = document.createElement("iframe"); // 特殊处理百度百科，如果有wikiword则使用特定URL
+            iframe = document.createElement("iframe");            // 特殊处理百度百科，如果有wikiword则使用特定URL
             let iframeUrl = tool.url;
             if (tool.id === "baike" && this.config && this.config.objective && this.config.objective.wikiword) {
               iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
@@ -791,6 +805,12 @@
               let url = window.location.href;
               url = url.split("?")[0];
               url = url.replace("characterAI", "characterAI_xiaomai");
+              iframeUrl = `${url}?token=`;
+            }
+            else if (tool.id === "report") {
+              let url = window.location.href;
+              url = url.split("?")[0]; // 移除查询参数
+              url = url.replace("characterAI", "user_report");
               iframeUrl = `${url}?token=`;
             }
 
@@ -941,8 +961,7 @@
             if (e.key === "Enter") this.sendMessage();
           });          // 重置对话按钮
           this.elements.resetChatBtn.addEventListener("click", () => this.resetChat()); 
-          
-          // 聊天历史下拉菜单
+            // 聊天历史下拉菜单
           this.elements.historyDropdown.addEventListener("change", (e) => {
             if (e.target.value === "clearHistory") {
               this.clearAllHistory();
@@ -950,6 +969,18 @@
               this.loadSession(e.target.value);
             }
           });
+
+          // 举报链接事件监听器
+          const reportLink = document.getElementById("report-link");
+          if (reportLink) {
+            reportLink.addEventListener("click", (e) => {
+              e.preventDefault();
+              // 使用AI工具箱管理器打开举报页面
+              if (window.aiToolbox) {
+                window.aiToolbox.openTool("report");
+              }
+            });
+          }
         }
         // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
         async loadConfigByObjective(objective) {
