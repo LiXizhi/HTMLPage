@@ -1,1028 +1,1076 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>麦思星球任务编辑器</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.3"></script>
     <style>
-        /* Toast 样式 */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+      /* Toast 样式 */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
 
-        .toast {
-            padding: 12px 16px;
-            border-radius: 8px;
-            color: white;
-            min-width: 250px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            transform: translateX(100%);
-            opacity: 0;
-            transition: all 0.3s ease-in-out;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+      .toast {
+        padding: 12px 16px;
+        border-radius: 8px;
+        color: white;
+        min-width: 250px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transform: translateX(100%);
+        opacity: 0;
+        transition: all 0.3s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
 
-        .toast.show {
-            transform: translateX(0);
-            opacity: 1;
-        }
+      .toast.show {
+        transform: translateX(0);
+        opacity: 1;
+      }
 
-        .toast.success {
-            background-color: #10b981;
-        }
+      .toast.success {
+        background-color: #10b981;
+      }
 
-        .toast.error {
-            background-color: #ef4444;
-        }
+      .toast.error {
+        background-color: #ef4444;
+      }
 
-        .toast.info {
-            background-color: #3b82f6;
-        }
+      .toast.info {
+        background-color: #3b82f6;
+      }
 
-        .toast-close {
-            cursor: pointer;
-            font-weight: bold;
-            margin-left: 10px;
-        }
+      .toast-close {
+        cursor: pointer;
+        font-weight: bold;
+        margin-left: 10px;
+      }
     </style>
-</head>
+  </head>
 
-<body class="bg-gray-100 min-h-screen">
+  <body class="bg-gray-100 min-h-screen">
     <!-- Toast 容器 -->
     <div id="toast-container" class="toast-container"></div>
 
     <!-- 确认对话框 Modal -->
     <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
-        <div class="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-xl">
-            <h3 id="confirm-title" class="text-lg font-semibold mb-4">确认操作</h3>
-            <p id="confirm-message" class="text-gray-600 mb-6">确定要执行此操作吗？</p>
-            <div class="flex space-x-3 justify-end">
-                <button id="confirm-cancel" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">
-                    取消
-                </button>
-                <button id="confirm-ok" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-                    确定
-                </button>
-            </div>
+      <div class="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-xl">
+        <h3 id="confirm-title" class="text-lg font-semibold mb-4">确认操作</h3>
+        <p id="confirm-message" class="text-gray-600 mb-6">确定要执行此操作吗？</p>
+        <div class="flex space-x-3 justify-end">
+          <button id="confirm-cancel" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">取消</button>
+          <button id="confirm-ok" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">确定</button>
         </div>
+      </div>
     </div>
 
     <div class="container mx-auto px-4 py-4">
-        <h1 class="text-xl font-bold text-center mb-4 text-blue-600">麦思星球任务编辑器</h1>
-        <div class="grid grid-cols-1 xl:grid-cols-3 lg:grid-cols-2 gap-6">
-            <!-- 左侧：任务列表 -->
-            <div class="lg:col-span-1">
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold">任务列表</h2>
-                    </div>
-                    <div id="taskList" class="space-y-2 max-h-96 overflow-y-auto">
-                        <!-- 任务列表项将在这里显示 -->
-                    </div>
-                </div>
-            </div> <!-- 中间：任务编辑表单 -->
-            <div class="lg:col-span-1">
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h2 class="text-xl font-semibold mb-2">任务编辑</h2>
-                    <form id="taskForm" class="space-y-4">
-                        <div class="flex space-x-2 mb-4">
-                            <button type="submit"
-                                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex-1">
-                                添加任务
-                            </button>
-                            <button type="button" id="updateBtn"
-                                class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex-1"
-                                style="display:none;">
-                                更新任务
-                            </button>
-                            <button type="button" id="newTaskBtn"
-                                class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 flex-1"
-                                style="display:none;">
-                                新增任务
-                            </button>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">ID <span
-                                        class="text-red-500">*</span></label>
-                                <input type="number" id="taskId" class="w-full border rounded px-3 py-2" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">任务名称 <span
-                                        class="text-red-500">*</span></label>
-                                <input type="text" id="taskName" class="w-full border rounded px-3 py-2" required>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">接受NPC <span
-                                        class="text-gray-400">(可选)</span></label>
-                                <div class="relative">
-                                    <input type="text" id="acceptNpc" list="npcList"
-                                        class="w-full border rounded px-3 py-2">
-                                    <datalist id="npcList">
-                                        <!-- NPC选项将在这里动态生成 -->
-                                    </datalist>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">提交NPC <span
-                                        class="text-gray-400">(可选)</span></label>
-                                <div class="relative">
-                                    <input type="text" id="commitNpc" list="npcList2"
-                                        class="w-full border rounded px-3 py-2">
-                                    <datalist id="npcList2">
-                                        <!-- NPC选项将在这里动态生成 -->
-                                    </datalist>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">任务类型 <span
-                                        class="text-gray-400">(可选)</span></label>
-                                <select id="taskType" class="w-full border rounded px-3 py-2">
-                                    <option value="main">主线任务</option>
-                                    <option value="training">训练任务</option>
-                                    <option value="feed">喂食任务</option>
-                                    <option value="home">家园任务</option>
-                                </select>
-                            </div>
-                            <div class="flex items-end space-x-4">
-                                <label class="flex items-center">
-                                    <input type="checkbox" id="autoAccept" class="mr-2">
-                                    <span class="text-sm">自动接受</span>
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" id="standalone" class="mr-2">
-                                    <span class="text-sm">独立任务</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1">任务描述 <span
-                                    class="text-gray-400">(可选)</span></label>
-                            <textarea id="taskDesc" rows="2" class="w-full border rounded px-3 py-2"></textarea>
-                        </div>
-                        <div class="space-y-3">
-                            <h3 class="font-semibold text-gray-700">接受对话 <span class="text-gray-400">(可选)</span></h3>
-                            <textarea id="acceptDialogText" placeholder="对话文本" rows="3"
-                                class="w-full border rounded px-3 py-2 resize-none"
-                                style="word-wrap: break-word;"></textarea>
-                            <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="acceptDialogAction" placeholder="动作 (可选)"
-                                    class="w-full border rounded px-3 py-2">
-                                <input type="text" id="acceptDialogUrl" placeholder="URL (可选)"
-                                    class="w-full border rounded px-3 py-2">
-                            </div>
-                        </div>
-                        <div class="space-y-3">
-                            <h3 class="font-semibold text-gray-700">进度对话 <span class="text-gray-400">(可选)</span></h3>
-                            <textarea id="progressDialogText" placeholder="进度对话文本" rows="3"
-                                class="w-full border rounded px-3 py-2 resize-none"
-                                style="word-wrap: break-word;"></textarea>
-                            <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="progressDialogAction" placeholder="动作 (可选)"
-                                    class="w-full border rounded px-3 py-2">
-                                <input type="text" id="progressDialogUrl" placeholder="URL (可选)"
-                                    class="w-full border rounded px-3 py-2">
-                            </div>
-                        </div>
-                        <div class="space-y-3">
-                            <h3 class="font-semibold text-gray-700">完成对话 <span class="text-gray-400">(可选)</span></h3>
-                            <textarea id="commitDialogText" placeholder="完成对话文本" rows="3"
-                                class="w-full border rounded px-3 py-2 resize-none"
-                                style="word-wrap: break-word;"></textarea>
-                            <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="commitDialogAction" placeholder="动作 (可选)"
-                                    class="w-full border rounded px-3 py-2">
-                                <input type="text" id="commitDialogUrl" placeholder="URL (可选)"
-                                    class="w-full border rounded px-3 py-2">
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>            <!-- 右侧：导入导出 -->
-            <div class="xl:col-span-1 lg:col-span-2">
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h2 class="text-xl font-semibold mb-4">文本编辑区 (NPL Table)</h2>
-                    <div class="">
-                        <div>
-                            <div class="mt-2 space-x-2 mb-1">
-                                <button id="saveBtn"
-                                    class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-                                    保存 (Ctrl+S)
-                                </button>
-                                <button id="copyBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                                    复制
-                                </button>
-                            </div>
-                            <textarea id="luaTableData" rows="30" placeholder="支持Lua Table格式的导入和导出...&#10;所有字段（包括未知字段）都会被保留"
-                                class="w-full border rounded px-3 py-2 font-mono text-sm"></textarea>
-
-                        </div>
-                    </div>
-                    <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p class="text-sm text-blue-700">
-                            <strong>字段保留说明：</strong>导入数据时，所有字段（包括未知字段）都会被保留。编辑任务时，表单外的字段不会丢失。
-                        </p>
-                    </div>
-                </div>
+      <h1 class="text-xl font-bold text-center mb-4 text-blue-600">麦思星球任务编辑器</h1>
+      <div class="grid grid-cols-1 xl:grid-cols-3 lg:grid-cols-2 gap-6">
+        <!-- 左侧：任务列表 -->
+        <div class="lg:col-span-1">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-xl font-semibold">任务列表</h2>
             </div>
+            <div id="taskList" class="space-y-2 max-h-96 overflow-y-auto">
+              <!-- 任务列表项将在这里显示 -->
+            </div>
+          </div>
         </div>
+        <!-- 中间：任务编辑表单 -->
+        <div class="lg:col-span-1">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-2">任务编辑</h2>
+            <form id="taskForm" class="space-y-4">
+              <div class="flex space-x-2 mb-4">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex-1">添加任务</button>
+                <button type="button" id="updateBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex-1" style="display: none">更新任务</button>
+                <button type="button" id="newTaskBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 flex-1" style="display: none">新增任务</button>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-1">ID <span class="text-red-500">*</span></label>
+                  <input type="number" id="taskId" class="w-full border rounded px-3 py-2" required />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1">任务名称 <span class="text-red-500">*</span></label>
+                  <input type="text" id="taskName" class="w-full border rounded px-3 py-2" required />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">任务标题 <span class="text-gray-400">*</span></label>
+                <input type="text" id="taskTitle" class="w-full border rounded px-3 py-2" required />
+              </div>
+              <div class="grid grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-1">接受NPC <span class="text-gray-400">(可选)</span></label>
+                  <div class="relative">
+                    <input type="text" id="acceptNpc" list="npcList" class="w-full border rounded px-3 py-2" />
+                    <datalist id="npcList">
+                      <!-- NPC选项将在这里动态生成 -->
+                    </datalist>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1">进度NPC <span class="text-gray-400">(可选)</span></label>
+                  <div class="relative">
+                    <input type="text" id="progressNpc" list="npcList3" class="w-full border rounded px-3 py-2" />
+                    <datalist id="npcList3">
+                      <!-- NPC选项将在这里动态生成 -->
+                    </datalist>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-1">提交NPC <span class="text-gray-400">(可选)</span></label>
+                  <div class="relative">
+                    <input type="text" id="commitNpc" list="npcList2" class="w-full border rounded px-3 py-2" />
+                    <datalist id="npcList2">
+                      <!-- NPC选项将在这里动态生成 -->
+                    </datalist>
+                  </div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-1">任务类型 <span class="text-gray-400">(可选)</span></label>
+                  <select id="taskType" class="w-full border rounded px-3 py-2">
+                    <option value="main">主线任务</option>
+                    <option value="training">训练任务</option>
+                    <option value="feed">喂食任务</option>
+                    <option value="home">家园任务</option>
+                  </select>
+                </div>
+                <div class="flex items-end space-x-4">
+                  <label class="flex items-center">
+                    <input type="checkbox" id="autoAccept" class="mr-2" />
+                    <span class="text-sm">自动接受</span>
+                  </label>
+                  <label class="flex items-center">
+                    <input type="checkbox" id="standalone" class="mr-2" />
+                    <span class="text-sm">独立任务</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">任务描述 <span class="text-gray-400">(可选)</span></label>
+                <textarea id="taskDesc" rows="2" class="w-full border rounded px-3 py-2"></textarea>
+              </div>
+              <div class="space-y-3">
+                <h3 class="font-semibold text-gray-700">接受对话 <span class="text-gray-400">(可选)</span></h3>
+                <textarea id="acceptDialogText" placeholder="对话文本" rows="3" class="w-full border rounded px-3 py-2 resize-none" style="word-wrap: break-word"></textarea>
+                <div class="grid grid-cols-3 gap-2">
+                  <input type="text" id="acceptDialogAction" placeholder="动作 (可选)" class="w-full border rounded px-3 py-2" />
+                  <input type="text" id="acceptDialogUrl" placeholder="URL (可选)" class="w-full border rounded px-3 py-2" />
+                </div>
+              </div>
+              <div class="space-y-3">
+                <h3 class="font-semibold text-gray-700">进度对话 <span class="text-gray-400">(可选)</span></h3>
+                <textarea id="progressDialogText" placeholder="进度对话文本" rows="3" class="w-full border rounded px-3 py-2 resize-none" style="word-wrap: break-word"></textarea>
+                <div class="grid grid-cols-3 gap-2">
+                  <input type="text" id="progressDialogAction" placeholder="动作 (可选)" class="w-full border rounded px-3 py-2" />
+                  <input type="text" id="progressDialogUrl" placeholder="URL (可选)" class="w-full border rounded px-3 py-2" />
+                </div>
+              </div>
+              <div class="space-y-3">
+                <h3 class="font-semibold text-gray-700">完成对话 <span class="text-gray-400">(可选)</span></h3>
+                <textarea id="commitDialogText" placeholder="完成对话文本" rows="3" class="w-full border rounded px-3 py-2 resize-none" style="word-wrap: break-word"></textarea>
+                <div class="grid grid-cols-3 gap-2">
+                  <input type="text" id="commitDialogAction" placeholder="动作 (可选)" class="w-full border rounded px-3 py-2" />
+                  <input type="text" id="commitDialogUrl" placeholder="URL (可选)" class="w-full border rounded px-3 py-2" />
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+        <!-- 右侧：导入导出 -->
+        <div class="xl:col-span-1 lg:col-span-2">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">文本编辑区 (NPL Table)</h2>
+            <div class="">
+              <div>
+                <div class="mt-2 space-x-2 mb-1">
+                  <button id="saveBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">保存 (Ctrl+S)</button>
+                  <button id="copyBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">复制</button>
+                </div>
+                <textarea
+                  id="luaTableData"
+                  rows="30"
+                  placeholder="支持Lua Table格式的导入和导出...&#10;所有字段（包括未知字段）都会被保留"
+                  class="w-full border rounded px-3 py-2 font-mono text-sm"
+                ></textarea>
+              </div>
+            </div>
+            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p class="text-sm text-blue-700"><strong>字段保留说明：</strong>导入数据时，所有字段（包括未知字段）都会被保留。编辑任务时，表单外的字段不会丢失。</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <script>
-        let tasks = [];
-        let editingIndex = -1;
-        let formChanged = false;
+      // Initialize SDK
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+      let tasks = [];
+      let editingIndex = -1;
+      let formChanged = false;
 
-        // Toast 通知系统
-        class Toast {
-            static show(message, type = 'info', duration = 3000) {
-                const container = document.getElementById('toast-container');
-                const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
+      // Toast 通知系统
+      class Toast {
+        static show(message, type = "info", duration = 3000) {
+          const container = document.getElementById("toast-container");
+          const toast = document.createElement("div");
+          toast.className = `toast ${type}`;
 
-                toast.innerHTML = `
-                    <span>${message}</span>
-                    <span class="toast-close" onclick="this.parentElement.remove()">×</span>
-                `;
+          toast.innerHTML = `
+                            <span>${message}</span>
+                            <span class="toast-close" onclick="this.parentElement.remove()">×</span>
+                        `;
 
-                container.appendChild(toast);
+          container.appendChild(toast);
 
-                // 显示动画
-                setTimeout(() => {
-                    toast.classList.add('show');
-                }, 10);
+          // 显示动画
+          setTimeout(() => {
+            toast.classList.add("show");
+          }, 10);
 
-                // 自动消失
-                if (duration > 0) {
-                    setTimeout(() => {
-                        toast.classList.remove('show');
-                        setTimeout(() => {
-                            if (toast.parentElement) {
-                                toast.remove();
-                            }
-                        }, 300);
-                    }, duration);
+          // 自动消失
+          if (duration > 0) {
+            setTimeout(() => {
+              toast.classList.remove("show");
+              setTimeout(() => {
+                if (toast.parentElement) {
+                  toast.remove();
                 }
-            }
-
-            static success(message, duration = 3000) {
-                this.show(message, 'success', duration);
-            }
-
-            static error(message, duration = 5000) {
-                this.show(message, 'error', duration);
-            }
-
-            static info(message, duration = 3000) {
-                this.show(message, 'info', duration);
-            }
+              }, 300);
+            }, duration);
+          }
         }
 
-        class LuaTableConverter {
-            // JSON对象转Lua Table字符串
-            static jsonToLuaTable(obj, indent = 0) {
-                const spaces = '    '.repeat(indent);
-                const nextSpaces = '    '.repeat(indent + 1);
-
-                if (Array.isArray(obj)) {
-                    if (obj.length === 0) return '{}';
-
-                    let result = '{\n';
-                    obj.forEach((item, index) => {
-                        result += nextSpaces + this.jsonToLuaTable(item, indent + 1);
-                        if (index < obj.length - 1) result += ',';
-                        result += '\n';
-                    });
-                    result += spaces + '}';
-                    return result;
-                }
-
-                if (typeof obj === 'object' && obj !== null) {
-                    const keys = Object.keys(obj);
-                    if (keys.length === 0) return '{}';
-
-                    let result = '{\n';
-                    keys.forEach((key, index) => {
-                        const value = obj[key];
-                        const formattedKey = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key) ? key : `["${key}"]`;
-                        result += nextSpaces + formattedKey + ' = ' + this.jsonToLuaTable(value, indent + 1);
-                        if (index < keys.length - 1) result += ',';
-                        result += '\n';
-                    });
-                    result += spaces + '}';
-                    return result;
-                }
-
-                if (typeof obj === 'string') {
-                    return `"${obj.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-                }
-
-                if (typeof obj === 'boolean') {
-                    return obj.toString();
-                }
-
-                if (typeof obj === 'number') {
-                    return obj.toString();
-                }
-
-                return 'nil';
-            }
-
-            // Lua Table字符串转JSON对象 - 改进版本
-            static luaTableToJson(luaStr) {
-                try {
-                    return this.parseLuaTable(luaStr.trim());
-                } catch (e) {
-                    throw new Error('无法解析Lua Table格式: ' + e.message);
-                }
-            }
-
-            // 更强大的Lua Table解析器
-            static parseLuaTable(str) {
-                // 移除所有注释
-                str = str.replace(/--.*$/gm, '');
-
-                // 移除多余的空白字符
-                str = str.replace(/\s+/g, ' ').trim();
-
-                // 如果不是以 { 开头，尝试包装
-                if (!str.startsWith('{')) {
-                    str = '{' + str + '}';
-                }
-
-                let pos = 0;
-
-                function parseValue() {
-                    skipWhitespace();
-
-                    if (pos >= str.length) {
-                        throw new Error('意外的字符串结束');
-                    }
-
-                    const char = str[pos];
-
-                    if (char === '{') {
-                        return parseTable();
-                    } else if (char === '"' || char === "'") {
-                        return parseString();
-                    } else if (char === 't' && str.substr(pos, 4) === 'true') {
-                        pos += 4;
-                        return true;
-                    } else if (char === 'f' && str.substr(pos, 5) === 'false') {
-                        pos += 5;
-                        return false;
-                    } else if (char === 'n' && str.substr(pos, 3) === 'nil') {
-                        pos += 3;
-                        return null;
-                    } else if (char === '-' || (char >= '0' && char <= '9')) {
-                        return parseNumber();
-                    } else {
-                        throw new Error(`意外的字符: ${char} 在位置 ${pos}`);
-                    }
-                }
-
-                function parseTable() {
-                    skipWhitespace();
-                    if (str[pos] !== '{') {
-                        throw new Error('期望 "{"');
-                    }
-                    pos++;
-
-                    const result = {};
-                    let arrayIndex = 1;
-                    let isArray = true;
-
-                    skipWhitespace();
-
-                    if (str[pos] === '}') {
-                        pos++;
-                        return {};
-                    }
-
-                    while (pos < str.length) {
-                        skipWhitespace();
-
-                        if (str[pos] === '}') {
-                            pos++;
-                            break;
-                        }
-
-                        let key, value;
-
-                        // 检查是否有显式的键
-                        const savedPos = pos;
-                        try {
-                            // 尝试解析键
-                            if (str[pos] === '[') {
-                                // [key] = value 格式
-                                pos++; // 跳过 [
-                                key = parseValue();
-                                skipWhitespace();
-                                if (str[pos] !== ']') {
-                                    throw new Error('期望 "]"');
-                                }
-                                pos++; // 跳过 ]
-                                skipWhitespace();
-                                if (str[pos] !== '=') {
-                                    throw new Error('期望 "="');
-                                }
-                                pos++; // 跳过 =
-                                value = parseValue();
-                                isArray = false;
-                            } else {
-                                // 尝试查找标识符和等号
-                                const match = str.substr(pos).match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
-                                if (match) {
-                                    // key = value 格式
-                                    key = match[1];
-                                    pos += match[0].length;
-                                    value = parseValue();
-                                    isArray = false;
-                                } else {
-                                    // 数组元素
-                                    key = arrayIndex++;
-                                    value = parseValue();
-                                }
-                            }
-                        } catch (e) {
-                            // 回退并作为数组元素处理
-                            pos = savedPos;
-                            key = arrayIndex++;
-                            value = parseValue();
-                        }
-
-                        result[key] = value;
-
-                        skipWhitespace();
-
-                        if (str[pos] === ',') {
-                            pos++;
-                        } else if (str[pos] === '}') {
-                            // 继续循环，将在下次迭代中处理
-                        } else {
-                            throw new Error(`期望 "," 或 "}" 在位置 ${pos}`);
-                        }
-                    }
-
-                    // 如果是纯数组，转换为真正的数组
-                    if (isArray && Object.keys(result).every(k => /^\d+$/.test(k))) {
-                        const arr = [];
-                        Object.keys(result).sort((a, b) => parseInt(a) - parseInt(b)).forEach(k => {
-                            arr[parseInt(k) - 1] = result[k];
-                        });
-                        return arr;
-                    }
-
-                    return result;
-                }
-
-                function parseString() {
-                    const quote = str[pos];
-                    pos++; // 跳过开始引号
-
-                    let result = '';
-                    let escaped = false;
-
-                    while (pos < str.length) {
-                        const char = str[pos];
-
-                        if (escaped) {
-                            switch (char) {
-                                case 'n': result += '\n'; break;
-                                case 't': result += '\t'; break;
-                                case 'r': result += '\r'; break;
-                                case '\\': result += '\\'; break;
-                                case '"': result += '"'; break;
-                                case "'": result += "'"; break;
-                                default: result += char; break;
-                            }
-                            escaped = false;
-                        } else if (char === '\\') {
-                            escaped = true;
-                        } else if (char === quote) {
-                            pos++; // 跳过结束引号
-                            return result;
-                        } else {
-                            result += char;
-                        }
-
-                        pos++;
-                    }
-
-                    throw new Error('未终结的字符串');
-                }
-
-                function parseNumber() {
-                    let numStr = '';
-
-                    if (str[pos] === '-') {
-                        numStr += '-';
-                        pos++;
-                    }
-
-                    while (pos < str.length && /[0-9.]/.test(str[pos])) {
-                        numStr += str[pos];
-                        pos++;
-                    }
-
-                    const num = parseFloat(numStr);
-                    if (isNaN(num)) {
-                        throw new Error(`无效的数字: ${numStr}`);
-                    }
-
-                    return num;
-                }
-
-                function skipWhitespace() {
-                    while (pos < str.length && /\s/.test(str[pos])) {
-                        pos++;
-                    }
-                }
-
-                return parseValue();
-            }
+        static success(message, duration = 3000) {
+          this.show(message, "success", duration);
         }
 
-        // 显示确认对话框
-        function showConfirm(message, onConfirm, onCancel = null) {
-            const modal = document.getElementById('confirm-modal');
-            const messageEl = document.getElementById('confirm-message');
-            const confirmBtn = document.getElementById('confirm-ok');
-            const cancelBtn = document.getElementById('confirm-cancel');
+        static error(message, duration = 5000) {
+          this.show(message, "error", duration);
+        }
 
-            messageEl.textContent = message;
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+        static info(message, duration = 3000) {
+          this.show(message, "info", duration);
+        }
+      }
 
-            // 清除之前的事件监听器
-            const newConfirmBtn = confirmBtn.cloneNode(true);
-            const newCancelBtn = cancelBtn.cloneNode(true);
-            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+      class LuaTableConverter {
+        // JSON对象转Lua Table字符串
+        static jsonToLuaTable(obj, indent = 0) {
+          const spaces = "    ".repeat(indent);
+          const nextSpaces = "    ".repeat(indent + 1);
 
-            // 添加新的事件监听器
-            newConfirmBtn.addEventListener('click', () => {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-                if (onConfirm) onConfirm();
+          if (Array.isArray(obj)) {
+            if (obj.length === 0) return "{}";
+
+            let result = "{\n";
+            obj.forEach((item, index) => {
+              result += nextSpaces + this.jsonToLuaTable(item, indent + 1);
+              if (index < obj.length - 1) result += ",";
+              result += "\n";
             });
+            result += spaces + "}";
+            return result;
+          }
 
-            newCancelBtn.addEventListener('click', () => {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-                if (onCancel) onCancel();
+          if (typeof obj === "object" && obj !== null) {
+            const keys = Object.keys(obj);
+            if (keys.length === 0) return "{}";
+
+            let result = "{\n";
+            keys.forEach((key, index) => {
+              const value = obj[key];
+              const formattedKey = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key) ? key : `["${key}"]`;
+              result += nextSpaces + formattedKey + " = " + this.jsonToLuaTable(value, indent + 1);
+              if (index < keys.length - 1) result += ",";
+              result += "\n";
             });
+            result += spaces + "}";
+            return result;
+          }
 
-            // ESC键关闭
-            const escHandler = (e) => {
-                if (e.key === 'Escape') {
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex');
-                    if (onCancel) onCancel();
-                    document.removeEventListener('keydown', escHandler);
-                }
-            };
-            document.addEventListener('keydown', escHandler);
+          if (typeof obj === "string") {
+            return `"${obj.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+          }
+
+          if (typeof obj === "boolean") {
+            return obj.toString();
+          }
+
+          if (typeof obj === "number") {
+            return obj.toString();
+          }
+
+          return "nil";
         }
 
-        // 监听表单改变
-        function trackFormChanges() {
-            const formInputs = document.querySelectorAll('#taskForm input, #taskForm textarea, #taskForm select');
-            formInputs.forEach(input => {
-                input.addEventListener('input', () => {
-                    formChanged = true;
-                });
-                input.addEventListener('change', () => {
-                    formChanged = true;
-                });
-            });
+        // Lua Table字符串转JSON对象 - 改进版本
+        static luaTableToJson(luaStr) {
+          try {
+            return this.parseLuaTable(luaStr.trim());
+          } catch (e) {
+            throw new Error("无法解析Lua Table格式: " + e.message);
+          }
         }
 
-        // 获取所有唯一的NPC名字
-        function getAllNpcNames() {
-            const npcSet = new Set();
-            tasks.forEach(task => {
-                if (task.accept_npc) npcSet.add(task.accept_npc);
-                if (task.commit_npc) npcSet.add(task.commit_npc);
-            });
-            return Array.from(npcSet).sort();
-        }
+        // 更强大的Lua Table解析器
+        static parseLuaTable(str) {
+          // 移除所有注释
+          str = str.replace(/--.*$/gm, "");
 
-        // 更新NPC下拉列表
-        function updateNpcDropdowns() {
-            const npcNames = getAllNpcNames();
-            const npcList1 = document.getElementById('npcList');
-            const npcList2 = document.getElementById('npcList2');
+          // 移除多余的空白字符
+          str = str.replace(/\s+/g, " ").trim();
 
-            // 清空现有选项
-            npcList1.innerHTML = '';
-            npcList2.innerHTML = '';
+          // 如果不是以 { 开头，尝试包装
+          if (!str.startsWith("{")) {
+            str = "{" + str + "}";
+          }
 
-            // 添加NPC选项
-            npcNames.forEach(npc => {
-                const option1 = document.createElement('option');
-                option1.value = npc;
-                npcList1.appendChild(option1);
+          let pos = 0;
 
-                const option2 = document.createElement('option');
-                option2.value = npc;
-                npcList2.appendChild(option2);
-            });
-        }
+          function parseValue() {
+            skipWhitespace();
 
-        // 获取下一个任务ID
-        function getNextTaskId() {
-            if (tasks.length === 0) {
-                return 1;
-            }
-            const maxId = Math.max(...tasks.map(task => task.id));
-            return maxId + 1;
-        }        // 自动填充任务ID
-        function autoFillTaskId() {
-            const taskIdInput = document.getElementById('taskId');
-            if (!taskIdInput.value || editingIndex === -1) {
-                taskIdInput.value = getNextTaskId();
-            }
-        }        // 选择任务（点击任务列表项时调用）
-        function selectTask(index) {
-            // 如果表单有未保存的更改，询问用户
-            if (formChanged) {
-                showConfirm('当前内容已修改，是否要保存？', () => {
-                    // 保存当前任务
-                    document.getElementById('taskForm').dispatchEvent(new Event('submit'));
-                    // 切换到选中的任务
-                    editTask(index);
-                    formChanged = false;
-                }, () => {
-                    // 直接切换，不保存
-                    editTask(index);
-                    formChanged = false;
-                });
-                return;
+            if (pos >= str.length) {
+              throw new Error("意外的字符串结束");
             }
 
-            // 切换到选中的任务
-            editTask(index);
-            formChanged = false;
-        } document.getElementById('taskForm').addEventListener('submit', function (e) {
-            e.preventDefault();
+            const char = str[pos];
 
-            // 验证必填字段
-            const taskId = document.getElementById('taskId').value.trim();
-            const taskName = document.getElementById('taskName').value.trim();
-
-            if (!taskId) {
-                Toast.error('请输入任务ID');
-                document.getElementById('taskId').focus();
-                return;
-            }
-
-            if (!taskName) {
-                Toast.error('请输入任务名称');
-                document.getElementById('taskName').focus();
-                return;
-            }
-
-            const task = getFormData();
-
-            if (editingIndex >= 0) {
-                const taskId = task.id;
-                tasks[editingIndex] = task;
-
-                // 排序和保存
-                sortTasks();
-                saveTasks();
-
-                // 重新找到更新后的任务索引（因为排序可能改变了位置）
-                editingIndex = tasks.findIndex(t => t.id === taskId);
-
-                renderTaskList();
-                updateNpcDropdowns();
-                exportToLuaTable();
-                formChanged = false;
-                Toast.success('任务更新成功！');
+            if (char === "{") {
+              return parseTable();
+            } else if (char === '"' || char === "'") {
+              return parseString();
+            } else if (char === "t" && str.substr(pos, 4) === "true") {
+              pos += 4;
+              return true;
+            } else if (char === "f" && str.substr(pos, 5) === "false") {
+              pos += 5;
+              return false;
+            } else if (char === "n" && str.substr(pos, 3) === "nil") {
+              pos += 3;
+              return null;
+            } else if (char === "-" || (char >= "0" && char <= "9")) {
+              return parseNumber();
             } else {
-                tasks.push(task);
-                editingIndex = -1;
-                toggleEditMode(false);
-
-                sortTasks();
-                saveTasks();
-                renderTaskList();
-                updateNpcDropdowns();
-                exportToLuaTable();
-                resetForm();
-                formChanged = false;
-                Toast.success('任务添加成功！');
+              throw new Error(`意外的字符: ${char} 在位置 ${pos}`);
             }
+          }
+
+          function parseTable() {
+            skipWhitespace();
+            if (str[pos] !== "{") {
+              throw new Error('期望 "{"');
+            }
+            pos++;
+
+            const result = {};
+            let arrayIndex = 1;
+            let isArray = true;
+
+            skipWhitespace();
+
+            if (str[pos] === "}") {
+              pos++;
+              return {};
+            }
+
+            while (pos < str.length) {
+              skipWhitespace();
+
+              if (str[pos] === "}") {
+                pos++;
+                break;
+              }
+
+              let key, value;
+
+              // 检查是否有显式的键
+              const savedPos = pos;
+              try {
+                // 尝试解析键
+                if (str[pos] === "[") {
+                  // [key] = value 格式
+                  pos++; // 跳过 [
+                  key = parseValue();
+                  skipWhitespace();
+                  if (str[pos] !== "]") {
+                    throw new Error('期望 "]"');
+                  }
+                  pos++; // 跳过 ]
+                  skipWhitespace();
+                  if (str[pos] !== "=") {
+                    throw new Error('期望 "="');
+                  }
+                  pos++; // 跳过 =
+                  value = parseValue();
+                  isArray = false;
+                } else {
+                  // 尝试查找标识符和等号
+                  const match = str.substr(pos).match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
+                  if (match) {
+                    // key = value 格式
+                    key = match[1];
+                    pos += match[0].length;
+                    value = parseValue();
+                    isArray = false;
+                  } else {
+                    // 数组元素
+                    key = arrayIndex++;
+                    value = parseValue();
+                  }
+                }
+              } catch (e) {
+                // 回退并作为数组元素处理
+                pos = savedPos;
+                key = arrayIndex++;
+                value = parseValue();
+              }
+
+              result[key] = value;
+
+              skipWhitespace();
+
+              if (str[pos] === ",") {
+                pos++;
+              } else if (str[pos] === "}") {
+                // 继续循环，将在下次迭代中处理
+              } else {
+                throw new Error(`期望 "," 或 "}" 在位置 ${pos}`);
+              }
+            }
+
+            // 如果是纯数组，转换为真正的数组
+            if (isArray && Object.keys(result).every((k) => /^\d+$/.test(k))) {
+              const arr = [];
+              Object.keys(result)
+                .sort((a, b) => parseInt(a) - parseInt(b))
+                .forEach((k) => {
+                  arr[parseInt(k) - 1] = result[k];
+                });
+              return arr;
+            }
+
+            return result;
+          }
+
+          function parseString() {
+            const quote = str[pos];
+            pos++; // 跳过开始引号
+
+            let result = "";
+            let escaped = false;
+
+            while (pos < str.length) {
+              const char = str[pos];
+
+              if (escaped) {
+                switch (char) {
+                  case "n":
+                    result += "\n";
+                    break;
+                  case "t":
+                    result += "\t";
+                    break;
+                  case "r":
+                    result += "\r";
+                    break;
+                  case "\\":
+                    result += "\\";
+                    break;
+                  case '"':
+                    result += '"';
+                    break;
+                  case "'":
+                    result += "'";
+                    break;
+                  default:
+                    result += char;
+                    break;
+                }
+                escaped = false;
+              } else if (char === "\\") {
+                escaped = true;
+              } else if (char === quote) {
+                pos++; // 跳过结束引号
+                return result;
+              } else {
+                result += char;
+              }
+
+              pos++;
+            }
+
+            throw new Error("未终结的字符串");
+          }
+
+          function parseNumber() {
+            let numStr = "";
+
+            if (str[pos] === "-") {
+              numStr += "-";
+              pos++;
+            }
+
+            while (pos < str.length && /[0-9.]/.test(str[pos])) {
+              numStr += str[pos];
+              pos++;
+            }
+
+            const num = parseFloat(numStr);
+            if (isNaN(num)) {
+              throw new Error(`无效的数字: ${numStr}`);
+            }
+
+            return num;
+          }
+
+          function skipWhitespace() {
+            while (pos < str.length && /\s/.test(str[pos])) {
+              pos++;
+            }
+          }
+
+          return parseValue();
+        }
+      }
+
+      // 显示确认对话框
+      function showConfirm(message, onConfirm, onCancel = null) {
+        const modal = document.getElementById("confirm-modal");
+        const messageEl = document.getElementById("confirm-message");
+        const confirmBtn = document.getElementById("confirm-ok");
+        const cancelBtn = document.getElementById("confirm-cancel");
+
+        messageEl.textContent = message;
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+
+        // 清除之前的事件监听器
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+        // 添加新的事件监听器
+        newConfirmBtn.addEventListener("click", () => {
+          modal.classList.add("hidden");
+          modal.classList.remove("flex");
+          if (onConfirm) onConfirm();
         });
 
-        // 更新按钮处理
-        document.getElementById('updateBtn').addEventListener('click', function () {
-            document.getElementById('taskForm').dispatchEvent(new Event('submit'));
-        });        // 取消按钮处理 -> 改为新增任务（复制当前任务）
-        document.getElementById('newTaskBtn').addEventListener('click', function () {
-            // 获取当前表单数据
-            const currentData = getFormData();
+        newCancelBtn.addEventListener("click", () => {
+          modal.classList.add("hidden");
+          modal.classList.remove("flex");
+          if (onCancel) onCancel();
+        });
 
-            // 生成新的ID
-            const newId = getNextTaskId();
+        // ESC键关闭
+        const escHandler = (e) => {
+          if (e.key === "Escape") {
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+            if (onCancel) onCancel();
+            document.removeEventListener("keydown", escHandler);
+          }
+        };
+        document.addEventListener("keydown", escHandler);
+      }
 
-            // 重置编辑状态
+      // 监听表单改变
+      function trackFormChanges() {
+        const formInputs = document.querySelectorAll("#taskForm input, #taskForm textarea, #taskForm select");
+        formInputs.forEach((input) => {
+          input.addEventListener("input", () => {
+            formChanged = true;
+          });
+          input.addEventListener("change", () => {
+            formChanged = true;
+          });
+        });
+      }
+
+      // 获取所有唯一的NPC名字
+      function getAllNpcNames() {
+        const npcSet = new Set();
+        tasks.forEach((task) => {
+          if (task.accept_npc) npcSet.add(task.accept_npc);
+          if (task.commit_npc) npcSet.add(task.commit_npc);
+        });
+        return Array.from(npcSet).sort();
+      }
+
+      // 更新NPC下拉列表
+      function updateNpcDropdowns() {
+        const npcNames = getAllNpcNames();
+        const npcList1 = document.getElementById("npcList");
+        const npcList2 = document.getElementById("npcList2");
+
+        // 清空现有选项
+        npcList1.innerHTML = "";
+        npcList2.innerHTML = "";
+
+        // 添加NPC选项
+        npcNames.forEach((npc) => {
+          const option1 = document.createElement("option");
+          option1.value = npc;
+          npcList1.appendChild(option1);
+
+          const option2 = document.createElement("option");
+          option2.value = npc;
+          npcList2.appendChild(option2);
+        });
+      }
+
+      // 获取下一个任务ID
+      function getNextTaskId() {
+        if (tasks.length === 0) {
+          return 1;
+        }
+        const maxId = Math.max(...tasks.map((task) => task.id));
+        return maxId + 1;
+      } // 自动填充任务ID
+      function autoFillTaskId() {
+        const taskIdInput = document.getElementById("taskId");
+        if (!taskIdInput.value || editingIndex === -1) {
+          taskIdInput.value = getNextTaskId();
+        }
+      } // 选择任务（点击任务列表项时调用）
+      function selectTask(index) {
+        // 如果表单有未保存的更改，询问用户
+        if (formChanged) {
+          showConfirm(
+            "当前内容已修改，是否要保存？",
+            () => {
+              // 保存当前任务
+              document.getElementById("taskForm").dispatchEvent(new Event("submit"));
+              // 切换到选中的任务
+              editTask(index);
+              formChanged = false;
+            },
+            () => {
+              // 直接切换，不保存
+              editTask(index);
+              formChanged = false;
+            }
+          );
+          return;
+        }
+
+        // 切换到选中的任务
+        editTask(index);
+        formChanged = false;
+      }
+      document.getElementById("taskForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        // 验证必填字段
+        const taskId = document.getElementById("taskId").value.trim();
+        const taskName = document.getElementById("taskName").value.trim();
+        const taskTitle = document.getElementById("taskTitle").value.trim();
+
+        if (!taskId) {
+          Toast.error("请输入任务ID");
+          document.getElementById("taskId").focus();
+          return;
+        }
+
+        if (!taskName) {
+          Toast.error("请输入任务名称");
+          document.getElementById("taskName").focus();
+          return;
+        }
+
+        if (!taskTitle) {
+          Toast.error("请输入任务标题");
+          document.getElementById("taskTitle").focus();
+          return;
+        }
+
+        const task = getFormData();
+
+        if (editingIndex >= 0) {
+          const taskId = task.id;
+          tasks[editingIndex] = task;
+
+          // 排序和保存
+          sortTasks();
+          saveTasks();
+
+          // 重新找到更新后的任务索引（因为排序可能改变了位置）
+          editingIndex = tasks.findIndex((t) => t.id === taskId);
+
+          renderTaskList();
+          updateNpcDropdowns();
+          exportToLuaTable();
+          formChanged = false;
+          Toast.success("任务更新成功！");
+        } else {
+          tasks.push(task);
+          editingIndex = -1;
+          toggleEditMode(false);
+
+          sortTasks();
+          saveTasks();
+          renderTaskList();
+          updateNpcDropdowns();
+          exportToLuaTable();
+          resetForm();
+          formChanged = false;
+          Toast.success("任务添加成功！");
+        }
+      });
+
+      // 更新按钮处理
+      document.getElementById("updateBtn").addEventListener("click", function () {
+        document.getElementById("taskForm").dispatchEvent(new Event("submit"));
+      }); // 取消按钮处理 -> 改为新增任务（复制当前任务）
+      document.getElementById("newTaskBtn").addEventListener("click", function () {
+        // 获取当前表单数据
+        const currentData = getFormData();
+
+        // 生成新的ID
+        const newId = getNextTaskId();
+
+        // 重置编辑状态
+        editingIndex = -1;
+        toggleEditMode(false);
+
+        // 填充表单，但使用新的ID
+        fillForm(currentData);
+        document.getElementById("taskId").value = newId;
+
+        // 重置表单改变状态
+        formChanged = false;
+      }); // 保存按钮处理
+      document.getElementById("saveBtn").addEventListener("click", function () {
+        saveToLuaTable();
+      });
+
+      // 复制按钮处理
+      document.getElementById("copyBtn").addEventListener("click", function () {
+        const output = document.getElementById("luaTableData");
+        output.select();
+        document.execCommand("copy");
+        Toast.success("已复制到剪贴板！");
+      }); // 获取表单数据
+      function getFormData() {
+        // 获取基础表单数据
+        const formData = {
+          id: parseInt(document.getElementById("taskId").value),
+          name: document.getElementById("taskName").value,
+          title: document.getElementById("taskTitle").value,
+          accept_npc: document.getElementById("acceptNpc").value || "",
+          progress_npc: document.getElementById("progressNpc").value || "",
+          commit_npc: document.getElementById("commitNpc").value || "",
+          type: document.getElementById("taskType").value,
+          desc: document.getElementById("taskDesc").value || "",
+          autoAccept: document.getElementById("autoAccept").checked,
+          standalone: document.getElementById("standalone").checked,
+          accept_dialog: {
+            text: document.getElementById("acceptDialogText").value || "",
+            url: document.getElementById("acceptDialogUrl").value || "",
+            action: document.getElementById("acceptDialogAction").value || "",
+          },
+          progress_dialog: {
+            text: document.getElementById("progressDialogText").value || "",
+            action: document.getElementById("progressDialogAction").value || "",
+            url: document.getElementById("progressDialogUrl").value || "",
+          },
+          commit_dialog: {
+            text: document.getElementById("commitDialogText").value || "",
+            url: document.getElementById("commitDialogUrl").value || "",
+            action: document.getElementById("commitDialogAction").value || "",
+          },
+        };
+
+        // 如果正在编辑现有任务，保留原始任务中的未知字段
+        if (editingIndex >= 0 && tasks[editingIndex]) {
+          const originalTask = tasks[editingIndex];
+          // 遍历原始任务的所有属性，保留不在表单中的字段
+          for (const [key, value] of Object.entries(originalTask)) {
+            if (!(key in formData)) {
+              formData[key] = value;
+            }
+          }
+
+          // 特别处理对话对象，保留其中的未知字段
+          ["accept_dialog", "progress_dialog", "commit_dialog"].forEach((dialogKey) => {
+            if (originalTask[dialogKey] && typeof originalTask[dialogKey] === "object") {
+              for (const [subKey, subValue] of Object.entries(originalTask[dialogKey])) {
+                if (!(subKey in formData[dialogKey])) {
+                  formData[dialogKey][subKey] = subValue;
+                }
+              }
+            }
+          });
+        }
+
+        return formData;
+      }
+      function fillForm(task) {
+        // 安全地填充表单字段，处理undefined值
+        document.getElementById("taskId").value = task.id || "";
+        document.getElementById("taskName").value = task.name || "";
+        document.getElementById("taskTitle").value = task.title || "";
+        document.getElementById("acceptNpc").value = task.accept_npc || "";
+        document.getElementById("progressNpc").value = task.progress_npc || "";
+        document.getElementById("commitNpc").value = task.commit_npc || "";
+        document.getElementById("taskType").value = task.type || "main";
+        document.getElementById("taskDesc").value = task.desc || "";
+        document.getElementById("autoAccept").checked = Boolean(task.autoAccept);
+        document.getElementById("standalone").checked = Boolean(task.standalone);
+
+        // 安全地处理对话对象
+        const acceptDialog = task.accept_dialog || {};
+        document.getElementById("acceptDialogText").value = acceptDialog.text || "";
+        document.getElementById("acceptDialogUrl").value = acceptDialog.url || "";
+        document.getElementById("acceptDialogAction").value = acceptDialog.action || "";
+
+        const progressDialog = task.progress_dialog || {};
+        document.getElementById("progressDialogText").value = progressDialog.text || "";
+        document.getElementById("progressDialogAction").value = progressDialog.action || "";
+        document.getElementById("progressDialogUrl").value = progressDialog.url || "";
+
+        const commitDialog = task.commit_dialog || {};
+        document.getElementById("commitDialogText").value = commitDialog.text || "";
+        document.getElementById("commitDialogUrl").value = commitDialog.url || "";
+        document.getElementById("commitDialogAction").value = commitDialog.action || "";
+      } // 重置表单
+      function resetForm() {
+        document.getElementById("taskForm").reset();
+        autoFillTaskId();
+      } // 切换编辑模式
+      function toggleEditMode(isEdit) {
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const updateBtn = document.getElementById("updateBtn");
+        const newTaskBtn = document.getElementById("newTaskBtn");
+
+        if (isEdit) {
+          submitBtn.style.display = "none";
+          updateBtn.style.display = "block";
+          newTaskBtn.style.display = "block";
+        } else {
+          submitBtn.style.display = "block";
+          updateBtn.style.display = "none";
+          newTaskBtn.style.display = "none";
+        }
+      }
+
+      // 按ID排序任务
+      function sortTasks() {
+        tasks.sort((a, b) => a.id - b.id);
+      } // 渲染任务列表
+      function renderTaskList() {
+        const taskList = document.getElementById("taskList");
+        taskList.innerHTML = "";
+
+        if (tasks.length === 0) {
+          taskList.innerHTML = '<p class="text-gray-500 text-center py-4">暂无任务</p>';
+          return;
+        }
+        tasks.forEach((task, index) => {
+          const taskItem = document.createElement("div");
+          // 如果是当前编辑的任务，添加选中样式
+          const isSelected = editingIndex === index;
+          taskItem.className = `border rounded p-3 cursor-pointer ${isSelected ? "bg-blue-100 border-blue-300" : "bg-gray-50 hover:bg-gray-100"}`;
+
+          // 计算未知字段数量（不在表单中的字段）
+          const knownFields = new Set(["id", "name", "accept_npc", "commit_npc", "type", "desc", "autoAccept", "standalone", "accept_dialog", "progress_dialog", "commit_dialog"]);
+          const unknownFields = Object.keys(task).filter((key) => !knownFields.has(key));
+          const unknownFieldsIndicator = unknownFields.length > 0 ? ` <span class="text-xs text-orange-600">(+${unknownFields.length}字段)</span>` : "";
+
+          taskItem.innerHTML = `
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1" onclick="selectTask(${index})">
+                                    <h4 class="font-semibold ${isSelected ? "text-blue-700" : ""}">${task.id || "N/A"}. ${task.name || "未命名任务"}${unknownFieldsIndicator}</h4>
+                                    <p class="text-sm ${isSelected ? "text-blue-600" : "text-gray-600"} mt-1">${task.desc || "无描述"}</p>
+                                    ${unknownFields.length > 0 ? `<p class="text-xs text-orange-500 mt-1">额外字段: ${unknownFields.join(", ")}</p>` : ""}
+                                </div>
+                                <div class="flex space-x-2 ml-4">
+                                    <button onclick="deleteTask(${index})" class="text-red-500 hover:text-red-700 text-sm">
+                                        删除
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+          taskList.appendChild(taskItem);
+        });
+      }
+
+      // 编辑任务
+      function editTask(index) {
+        editingIndex = index;
+        fillForm(tasks[index]);
+        toggleEditMode(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } // 删除任务
+      function deleteTask(index) {
+        showConfirm("确定要删除这个任务吗？", () => {
+          tasks.splice(index, 1);
+          saveTasks();
+          renderTaskList();
+          updateNpcDropdowns();
+          exportToLuaTable();
+          // 如果正在编辑被删除的任务，取消编辑
+          if (editingIndex === index) {
             editingIndex = -1;
             toggleEditMode(false);
-
-            // 填充表单，但使用新的ID
-            fillForm(currentData);
-            document.getElementById('taskId').value = newId;
-
-            // 重置表单改变状态
-            formChanged = false;
-        });        // 保存按钮处理
-        document.getElementById('saveBtn').addEventListener('click', function () {
-            saveToLuaTable();
+            resetForm();
+          } else if (editingIndex > index) {
+            editingIndex--;
+          }
+          Toast.success("任务删除成功！");
         });
+      } // 保存Lua Table数据到任务数组
+      function saveToLuaTable() {
+        const luaTableData = document.getElementById("luaTableData").value.trim();
+        if (luaTableData) {
+          try {
+            const importedTasks = LuaTableConverter.luaTableToJson(luaTableData);
 
-        // 复制按钮处理
-        document.getElementById('copyBtn').addEventListener('click', function () {
-            const output = document.getElementById('luaTableData');
-            output.select();
-            document.execCommand('copy');
-            Toast.success('已复制到剪贴板！');
-        });        // 获取表单数据
-        function getFormData() {
-            // 获取基础表单数据
-            const formData = {
-                id: parseInt(document.getElementById('taskId').value),
-                name: document.getElementById('taskName').value,
-                accept_npc: document.getElementById('acceptNpc').value || '',
-                commit_npc: document.getElementById('commitNpc').value || '',
-                type: document.getElementById('taskType').value,
-                desc: document.getElementById('taskDesc').value || '',
-                autoAccept: document.getElementById('autoAccept').checked,
-                standalone: document.getElementById('standalone').checked,
-                accept_dialog: {
-                    text: document.getElementById('acceptDialogText').value || '',
-                    url: document.getElementById('acceptDialogUrl').value || '',
-                    action: document.getElementById('acceptDialogAction').value || ''
-                },
-                progress_dialog: {
-                    text: document.getElementById('progressDialogText').value || '',
-                    action: document.getElementById('progressDialogAction').value || '',
-                    url: document.getElementById('progressDialogUrl').value || ''
-                },
-                commit_dialog: {
-                    text: document.getElementById('commitDialogText').value || '',
-                    url: document.getElementById('commitDialogUrl').value || '',
-                    action: document.getElementById('commitDialogAction').value || ''
-                }
-            };
-
-            // 如果正在编辑现有任务，保留原始任务中的未知字段
-            if (editingIndex >= 0 && tasks[editingIndex]) {
-                const originalTask = tasks[editingIndex];
-                // 遍历原始任务的所有属性，保留不在表单中的字段
-                for (const [key, value] of Object.entries(originalTask)) {
-                    if (!(key in formData)) {
-                        formData[key] = value;
-                    }
-                }
-                
-                // 特别处理对话对象，保留其中的未知字段
-                ['accept_dialog', 'progress_dialog', 'commit_dialog'].forEach(dialogKey => {
-                    if (originalTask[dialogKey] && typeof originalTask[dialogKey] === 'object') {
-                        for (const [subKey, subValue] of Object.entries(originalTask[dialogKey])) {
-                            if (!(subKey in formData[dialogKey])) {
-                                formData[dialogKey][subKey] = subValue;
-                            }
-                        }
-                    }
-                });
+            // 处理空对象或空数组的情况
+            if (importedTasks === null || (typeof importedTasks === "object" && Object.keys(importedTasks).length === 0) || (Array.isArray(importedTasks) && importedTasks.length === 0)) {
+              // 清空任务列表
+              tasks = [];
+              saveTasks();
+              renderTaskList();
+              updateNpcDropdowns();
+              exportToLuaTable();
+              Toast.success("保存成功！任务列表已清空。");
+              return;
             }
 
-            return formData;
-        }        function fillForm(task) {
-            // 安全地填充表单字段，处理undefined值
-            document.getElementById('taskId').value = task.id || '';
-            document.getElementById('taskName').value = task.name || '';
-            document.getElementById('acceptNpc').value = task.accept_npc || '';
-            document.getElementById('commitNpc').value = task.commit_npc || '';
-            document.getElementById('taskType').value = task.type || 'main';
-            document.getElementById('taskDesc').value = task.desc || '';
-            document.getElementById('autoAccept').checked = Boolean(task.autoAccept);
-            document.getElementById('standalone').checked = Boolean(task.standalone);
-            
-            // 安全地处理对话对象
-            const acceptDialog = task.accept_dialog || {};
-            document.getElementById('acceptDialogText').value = acceptDialog.text || '';
-            document.getElementById('acceptDialogUrl').value = acceptDialog.url || '';
-            document.getElementById('acceptDialogAction').value = acceptDialog.action || '';
-            
-            const progressDialog = task.progress_dialog || {};
-            document.getElementById('progressDialogText').value = progressDialog.text || '';
-            document.getElementById('progressDialogAction').value = progressDialog.action || '';
-            document.getElementById('progressDialogUrl').value = progressDialog.url || '';
-            
-            const commitDialog = task.commit_dialog || {};
-            document.getElementById('commitDialogText').value = commitDialog.text || '';
-            document.getElementById('commitDialogUrl').value = commitDialog.url || '';
-            document.getElementById('commitDialogAction').value = commitDialog.action || '';
-        }// 重置表单
-        function resetForm() {
-            document.getElementById('taskForm').reset();
-            autoFillTaskId();
-        }        // 切换编辑模式
-        function toggleEditMode(isEdit) {
-            const submitBtn = document.querySelector('button[type="submit"]');
-            const updateBtn = document.getElementById('updateBtn');
-            const newTaskBtn = document.getElementById('newTaskBtn');
+            if (Array.isArray(importedTasks)) {
+              // 直接使用导入的数据，保留所有字段（包括未知字段）
+              tasks = importedTasks.map((task) => {
+                // 确保每个任务至少有必要的字段
+                return {
+                  id: task.id || 0,
+                  name: task.name || "",
+                  ...task, // 使用展开操作符保留所有原始字段
+                };
+              });
 
-            if (isEdit) {
-                submitBtn.style.display = 'none';
-                updateBtn.style.display = 'block';
-                newTaskBtn.style.display = 'block';
+              sortTasks();
+              saveTasks();
+              renderTaskList();
+              updateNpcDropdowns();
+              exportToLuaTable();
+              Toast.success("保存成功！所有字段已保留。");
             } else {
-                submitBtn.style.display = 'block';
-                updateBtn.style.display = 'none';
-                newTaskBtn.style.display = 'none';
+              Toast.error("格式错误：必须是任务数组");
             }
+          } catch (e) {
+            Toast.error("Lua Table格式错误：" + e.message);
+          }
+        } else {
+          Toast.error("请输入要保存的数据");
+        }
+      }
+
+      function exportToLuaTable() {
+        const output = document.getElementById("luaTableData");
+
+        if (tasks.length === 0) {
+          output.value = "-- 暂无任务数据\n{}";
+          return;
         }
 
-        // 按ID排序任务
-        function sortTasks() {
-            tasks.sort((a, b) => a.id - b.id);
-        }        // 渲染任务列表
-        function renderTaskList() {
-            const taskList = document.getElementById('taskList');
-            taskList.innerHTML = '';
+        // 使用通用转换器
+        const luaTable = LuaTableConverter.jsonToLuaTable(tasks);
+        output.value = luaTable;
+      }
 
-            if (tasks.length === 0) {
-                taskList.innerHTML = '<p class="text-gray-500 text-center py-4">暂无任务</p>';
-                return;
-            }
-            tasks.forEach((task, index) => {
-                const taskItem = document.createElement('div');
-                // 如果是当前编辑的任务，添加选中样式
-                const isSelected = editingIndex === index;
-                taskItem.className = `border rounded p-3 cursor-pointer ${isSelected ? 'bg-blue-100 border-blue-300' : 'bg-gray-50 hover:bg-gray-100'}`;
-                
-                // 计算未知字段数量（不在表单中的字段）
-                const knownFields = new Set(['id', 'name', 'accept_npc', 'commit_npc', 'type', 'desc', 'autoAccept', 'standalone', 'accept_dialog', 'progress_dialog', 'commit_dialog']);
-                const unknownFields = Object.keys(task).filter(key => !knownFields.has(key));
-                const unknownFieldsIndicator = unknownFields.length > 0 ? ` <span class="text-xs text-orange-600">(+${unknownFields.length}字段)</span>` : '';
-                
-                taskItem.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div class="flex-1" onclick="selectTask(${index})">
-                            <h4 class="font-semibold ${isSelected ? 'text-blue-700' : ''}">${task.id || 'N/A'}. ${task.name || '未命名任务'}${unknownFieldsIndicator}</h4>
-                            <p class="text-sm ${isSelected ? 'text-blue-600' : 'text-gray-600'} mt-1">${task.desc || '无描述'}</p>
-                            ${unknownFields.length > 0 ? `<p class="text-xs text-orange-500 mt-1">额外字段: ${unknownFields.join(', ')}</p>` : ''}
-                        </div>
-                        <div class="flex space-x-2 ml-4">
-                            <button onclick="deleteTask(${index})" class="text-red-500 hover:text-red-700 text-sm">
-                                删除
-                            </button>
-                        </div>
-                    </div>
-                `;
-                taskList.appendChild(taskItem);
-            });
+      // 保存任务到localStorage
+      function saveTasks() {
+        localStorage.setItem("maisi_tasks", JSON.stringify(tasks));
+      }
+
+      // 从localStorage加载任务
+      function loadTasks() {
+        const savedTasks = localStorage.getItem("maisi_tasks");
+        if (savedTasks) {
+          try {
+            tasks = JSON.parse(savedTasks);
+            sortTasks();
+          } catch (e) {
+            console.error("加载任务数据失败:", e);
+            tasks = [];
+          }
+        }
+      }      
+      // 从远程URL加载任务数据
+      async function loadTasksFromUrl() {
+        try {
+          // 检查是否在本地文件系统中运行
+          if (window.location.protocol === "file:") {
+            Toast.info("检测到本地文件环境，跳过远程数据加载。请使用HTTP服务器运行此页面以启用远程数据加载功能。");
+            return false;
+          }
+
+          const luaContent = await sdk.getRawPage("maisi/maisi/design/tools/task_data_main");
+
+          // 解析Lua格式的table
+          const parsedTasks = LuaTableConverter.luaTableToJson(luaContent);
+
+          if (Array.isArray(parsedTasks) && parsedTasks.length > 0) {
+            tasks = parsedTasks;
+            sortTasks();
+            saveTasks(); // 保存到localStorage
+            Toast.success(`成功加载 ${tasks.length} 个任务`);
+            return true;
+          } else {
+            throw new Error("解析的数据不是有效的任务数组");
+          }
+        } catch (error) {
+          console.error("从URL加载任务失败:", error);
+          Toast.error(`加载任务失败: ${error.message}`);
+          return false;
+        }
+      }
+
+      async function init() {
+        // 首先尝试从URL加载任务数据
+        const urlLoadSuccess = await loadTasksFromUrl();
+
+        // 如果URL加载失败，则从localStorage加载
+        if (!urlLoadSuccess) {
+          loadTasks();
         }
 
-        // 编辑任务
-        function editTask(index) {
-            editingIndex = index;
-            fillForm(tasks[index]);
-            toggleEditMode(true);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }        // 删除任务
-        function deleteTask(index) {
-            showConfirm('确定要删除这个任务吗？', () => {
-                tasks.splice(index, 1);
-                saveTasks();
-                renderTaskList();
-                updateNpcDropdowns();
-                exportToLuaTable();
-                // 如果正在编辑被删除的任务，取消编辑
-                if (editingIndex === index) {
-                    editingIndex = -1;
-                    toggleEditMode(false);
-                    resetForm();
-                } else if (editingIndex > index) {
-                    editingIndex--;
-                }
-                Toast.success('任务删除成功！');
-            });
-        }        // 保存Lua Table数据到任务数组
-        function saveToLuaTable() {
-            const luaTableData = document.getElementById('luaTableData').value.trim();
-            if (luaTableData) {
-                try {
-                    const importedTasks = LuaTableConverter.luaTableToJson(luaTableData);
+        renderTaskList();
+        updateNpcDropdowns();
+        exportToLuaTable();
+        trackFormChanges();
+        autoFillTaskId();
 
-                    // 处理空对象或空数组的情况
-                    if (importedTasks === null ||
-                        (typeof importedTasks === 'object' && Object.keys(importedTasks).length === 0) ||
-                        (Array.isArray(importedTasks) && importedTasks.length === 0)) {
-                        // 清空任务列表
-                        tasks = [];
-                        saveTasks();
-                        renderTaskList();
-                        updateNpcDropdowns();
-                        exportToLuaTable();
-                        Toast.success('保存成功！任务列表已清空。');
-                        return;
-                    }
-
-                    if (Array.isArray(importedTasks)) {
-                        // 直接使用导入的数据，保留所有字段（包括未知字段）
-                        tasks = importedTasks.map(task => {
-                            // 确保每个任务至少有必要的字段
-                            return {
-                                id: task.id || 0,
-                                name: task.name || '',
-                                ...task // 使用展开操作符保留所有原始字段
-                            };
-                        });
-                        
-                        sortTasks();
-                        saveTasks();
-                        renderTaskList();
-                        updateNpcDropdowns();
-                        exportToLuaTable();
-                        Toast.success('保存成功！所有字段已保留。');
-                    } else {
-                        Toast.error('格式错误：必须是任务数组');
-                    }
-                } catch (e) {
-                    Toast.error('Lua Table格式错误：' + e.message);
-                }
-            } else {
-                Toast.error('请输入要保存的数据');
-            }
-        }
-
-        function exportToLuaTable() {
-            const output = document.getElementById('luaTableData');
-
-            if (tasks.length === 0) {
-                output.value = '-- 暂无任务数据\n{}';
-                return;
-            }
-
-            // 使用通用转换器
-            const luaTable = LuaTableConverter.jsonToLuaTable(tasks);
-            output.value = luaTable;
-        }
-
-        // 保存任务到localStorage
-        function saveTasks() {
-            localStorage.setItem('maisi_tasks', JSON.stringify(tasks));
-        }
-
-        // 从localStorage加载任务
-        function loadTasks() {
-            const savedTasks = localStorage.getItem('maisi_tasks');
-            if (savedTasks) {
-                try {
-                    tasks = JSON.parse(savedTasks);
-                    sortTasks();
-                } catch (e) {
-                    console.error('加载任务数据失败:', e);
-                    tasks = [];
-                }
-            }
-        } function init() {
-            loadTasks();
-            renderTaskList();
-            updateNpcDropdowns();
-            exportToLuaTable();
-            trackFormChanges();
-            autoFillTaskId();
-
-            // 添加Ctrl+S快捷键支持
-            document.addEventListener('keydown', function (e) {
-                if (e.ctrlKey && e.key === 's') {
-                    e.preventDefault();
-                    saveToLuaTable();
-                }
-            });
-        }
-        init();
+        // 添加Ctrl+S快捷键支持
+        document.addEventListener("keydown", function (e) {
+          if (e.ctrlKey && e.key === "s") {
+            e.preventDefault();
+            saveToLuaTable();
+          }
+        });
+      }
+      init();
     </script>
-</body>
-
+  </body>
 </html>
