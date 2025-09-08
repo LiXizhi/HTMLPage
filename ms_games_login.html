@@ -512,6 +512,69 @@
       .user-setting-modal.show {
         transform: translateY(0);
       }
+
+      /* Developer panel styles */
+      .dev-panel {
+        position: fixed;
+        top: 0;
+        right: -200px;
+        width: 200px;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        padding: 20px;
+        transition: right 0.3s ease;
+        z-index: 10000;
+        font-size: 14px;
+        overflow-y: auto;
+      }
+
+      .dev-panel.show {
+        right: 0;
+      }
+
+      .dev-panel h3 {
+        margin: 0 0 20px 0;
+        font-size: 16px;
+        color: #00ff00;
+        text-align: center;
+      }
+
+      .dev-option {
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .dev-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+
+      .dev-option label {
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 1.2;
+      }
+
+      .dev-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 0;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
     </style>
   </head>
 
@@ -523,7 +586,7 @@
         <button type="button" class="switch-btn active" id="usernameLoginBtn" onclick="switchToUsernameLogin()">🔑账号密码登录</button>
       </div>
       <div class="header">
-        <div class="icon">
+        <div id="maisiIcon" class="icon">
           <img src="https://cdn.keepwork.com/update61/assetdownload/update/texture/aries/creator/keepwork/minigame/logo.png.p,ba44b8275f4bdb7e6dacebc939b2ac13,33659" alt="麦思星球" />
         </div>
         <div class="game-title" id="gameTitle"></div>
@@ -679,7 +742,86 @@
       <iframe id="user_setting_iframe" src="" style="width: 100%; height: 100vh; border: none; background: white"></iframe>
     </div>
 
+    <!-- Developer Panel -->
+    <div id="devPanel" class="dev-panel">
+      <button class="dev-close" onclick="hideDevPanel()">&times;</button>
+      <h3>开发者选项</h3>
+      <div class="dev-option">
+        <input type="checkbox" id="useMaisiDev" onchange="toggleMaisiDevServer(this.checked)">
+        <label for="useMaisiDev">使用maisi Dev服务</label>
+      </div>
+      <div class="dev-option">
+        <input type="checkbox" id="showDevContent" onchange="toggleShowDevContent(this.checked)">
+        <label for="showDevContent">显示Dev内容</label>
+      </div>
+    </div>
+
     <script>
+      // Developer Mode functionality
+      let maisiIconClickCount = 0;
+      let clickTimer = null;
+      let devOptions = {
+        isUseMaisiDevServer: false,
+        isShowDevContent: false
+      };
+
+      // Initialize developer mode click handler
+      function initDevMode() {
+        const maisiIcon = document.getElementById('maisiIcon');
+        if (maisiIcon) {
+          maisiIcon.addEventListener('click', handleMaisiIconClick);
+        }
+      }
+
+      function handleMaisiIconClick() {
+        maisiIconClickCount++;
+        
+        // Reset counter after 3 seconds if not reaching 5 clicks
+        if (clickTimer) {
+          clearTimeout(clickTimer);
+        }
+        
+        clickTimer = setTimeout(() => {
+          maisiIconClickCount = 0;
+        }, 3000);
+
+        // Show dev panel after 5 clicks
+        if (maisiIconClickCount >= 5) {
+          showDevPanel();
+          maisiIconClickCount = 0;
+          clearTimeout(clickTimer);
+        }
+      }
+
+      function showDevPanel() {
+        const devPanel = document.getElementById('devPanel');
+        if (devPanel) {
+          devPanel.classList.add('show');
+          isDevModeActive = true;
+          // Set default values when dev panel is first shown
+          devOptions.isShowDevContent = true;
+          document.getElementById('showDevContent').checked = true;
+        }
+      }
+
+      function hideDevPanel() {
+        const devPanel = document.getElementById('devPanel');
+        if (devPanel) {
+          devPanel.classList.remove('show');
+          isDevModeActive = false;
+        }
+      }
+
+      function toggleMaisiDevServer(isEnabled) {
+        devOptions.isUseMaisiDevServer = isEnabled;
+        console.log('Maisi Dev服务:', isEnabled ? '已启用' : '已禁用');
+      }
+
+      function toggleShowDevContent(isEnabled) {
+        devOptions.isShowDevContent = isEnabled;
+        console.log('显示Dev内容:', isEnabled ? '已启用' : '已禁用');
+      }
+
       // 修改API客户端，自动添加Authorization头
       class ApiClient {
         constructor(baseUrl = "") {
@@ -1173,6 +1315,9 @@
       // 页面加载时初始化游戏标题和检查登录状态
       checkLoginStatus();
 
+      // Initialize developer mode
+      initDevMode();
+      
       // Markdown转HTML的简单实现
       function markdownToHtml(markdown) {
         if (!markdown) return "";
@@ -1314,6 +1459,7 @@
                 "/oauth/getMaisiToken",
                 {
                   phone: userInfo?.phone || "",
+                  from: devOptions.isUseMaisiDevServer ? "dev" : "prod",
                 },
                 header
               );
@@ -1355,6 +1501,12 @@
           url.searchParams.set("token", accessToken);
         } else {
           url.searchParams.set("gameName", loginGameName || "ms_games");
+        }
+        if(devOptions.isShowDevContent) {
+          url.searchParams.set("dev", "true");
+        }
+        if(devOptions.isUseMaisiDevServer) {
+          url.searchParams.set("isUseMaisiDevServer", "true");
         }
 
         await window.parentKeepwork.call("setToken", accessToken);
@@ -1712,7 +1864,8 @@
                   const response3 = await api.post(
                     "/oauth/getMaisiToken",
                     {
-                      phone,
+                      phone: phone,
+                      from: devOptions.isUseMaisiDevServer ? "dev" : "prod",
                     },
                     header
                   );
@@ -1837,6 +1990,7 @@
                   "/oauth/getMaisiToken",
                   {
                     phone: response2.cellphone,
+                    from: devOptions.isUseMaisiDevServer ? "dev" : "prod",
                   },
                   header
                 );
@@ -1860,7 +2014,7 @@
             }
 
             // 检查实名认证状态
-            if (!response2.realname || response2.realname.trim() === "") {
+            if (!(devOptions.isUseMaisiDevServer || devOptions.isShowDevContent) && (!response2.realname || response2.realname.trim() === "")) {
               // 未实名，显示实名认证窗口
               showRealnameModal();
             } else {

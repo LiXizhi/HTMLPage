@@ -4,119 +4,136 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>3D水分类益智游戏</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script src="https://cdn.keepwork.com/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.keepwork.com/npm/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
     <style>
-      body {
-        margin: 0;
-        padding: 0;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        font-family: Arial, sans-serif;
-        overflow: hidden;
+      /* Enforce landscape mode layout */
+      @media screen and (orientation: portrait) and (max-width: 1024px) {
+        body::before {
+          content: "请将设备横向使用以获得最佳游戏体验 / Please rotate your device to landscape mode for the best gaming experience";
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.9);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          font-size: 18px;
+          font-weight: bold;
+          z-index: 9999;
+          padding: 20px;
+          box-sizing: border-box;
+        }
       }
 
-      #gameContainer {
-        position: relative;
-        width: 100vw;
-        height: 100vh;
+      /* Minimum width enforcement */
+      @media screen and (max-width: 800px) {
+        #gameContainer {
+          min-width: 800px;
+        }
       }
 
-      #ui {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        color: white;
-        z-index: 100;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 15px;
-        border-radius: 10px;
+      /* Ensure sidebar maintains fixed width */
+      #leftSidebar {
+        flex-shrink: 0;
+        min-width: 320px;
+        max-width: 320px;
       }
 
-      #instructions {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        color: white;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 15px;
-        border-radius: 10px;
-        font-size: 14px;
-        max-width: 250px;
-      }
-
-      #winMessage {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.8);
-        color: white;
-        padding: 30px;
-        border-radius: 20px;
-        font-size: 24px;
-        text-align: center;
-        display: none;
-        z-index: 200;
-      }
-
-      button {
-        background: #4caf50;
-        border: none;
-        color: white;
-        padding: 10px 20px;
-        margin-top: 15px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 16px;
-      }
-
-      button:hover {
-        background: #45a049;
-      }
-
-      #debug {
-        position: absolute;
-        bottom: 20px;
-        left: 20px;
-        color: white;
-        background: rgba(0, 0, 0, 0.7);
-        padding: 10px;
-        border-radius: 5px;
-        font-size: 12px;
-        z-index: 100;
+      /* Ensure game area takes remaining space */
+      #gameArea {
+        min-width: 480px;
       }
     </style>
   </head>
-  <body>
-    <div id="gameContainer">
-      <div id="ui">
-        <h2>3D水分类益智游戏</h2>
-        <p>移动次数: <span id="moveCounter">0</span></p>
-        <p id="status">点击试管进行选择</p>
-        <button onclick="resetGame()">重新开始</button>
+  <body class="m-0 p-0 bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-700 font-sans overflow-hidden">
+    <div id="gameContainer" class="flex w-screen h-screen">
+      <!-- Left sidebar for 2D UI -->
+      <div id="leftSidebar" class="w-80 h-full bg-black bg-opacity-60 backdrop-blur-sm p-6 text-white z-[100] flex flex-col">
+        <!-- Game Controls -->
+        <div id="ui" class="mb-6">
+          <h2 class="text-xl font-bold mb-4 text-yellow-300">游戏控制</h2>
+          <div class="mb-4">
+            <label for="difficultySelect" class="block text-sm font-medium text-gray-200 mb-2">难度等级:</label>
+            <select
+              id="difficultySelect"
+              onchange="onDifficultyChange()"
+              class="w-full bg-gray-700 text-white text-sm rounded-lg px-3 py-2 border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="0" selected>1级 - 新手 (5试管,3颜色,2空管)</option>
+              <option value="1">2级 - 简单 (6试管,4颜色,2空管)</option>
+              <option value="2">3级 - 初级 (8试管,5颜色,3空管)</option>
+              <option value="3">4级 - 容易 (9试管,6颜色,3空管)</option>
+              <option value="4">5级 - 普通 (11试管,7颜色,4空管)</option>
+              <option value="5">6级 - 中等 (12试管,8颜色,4空管)</option>
+              <option value="6">7级 - 中级 (14试管,9颜色,5空管)</option>
+              <option value="7">8级 - 进阶 (15试管,10颜色,5空管)</option>
+              <option value="8">9级 - 困难 (17试管,11颜色,6空管)</option>
+              <option value="9">10级 - 专家 (18试管,12颜色,6空管)</option>
+              <option value="10">11级 - 大师 (20试管,13颜色,7空管)</option>
+              <option value="11">12级 - 传奇 (21试管,14颜色,7空管)</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <p class="text-sm">移动次数: <span id="moveCounter" class="font-semibold text-yellow-300 text-lg">0</span></p>
+          </div>
+          <button onclick="resetGame()" class="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 ease-in-out shadow-lg hover:shadow-xl">
+            重新开始
+          </button>
+        </div>
+
+        <!-- Game Instructions -->
+        <div id="instructions" class="mb-6">
+          <h3 class="text-lg font-semibold mb-3 text-yellow-300">游戏规则:</h3>
+          <ul class="space-y-2 text-gray-200 text-sm">
+            <li class="flex items-center">
+              <span class="w-2 h-2 bg-blue-400 rounded-full mr-3 flex-shrink-0"></span>
+              拖拽旋转视角
+            </li>
+            <li class="flex items-center">
+              <span class="w-2 h-2 bg-blue-400 rounded-full mr-3 flex-shrink-0"></span>
+              点击试管选择
+            </li>
+            <li class="flex items-center">
+              <span class="w-2 h-2 bg-blue-400 rounded-full mr-3 flex-shrink-0"></span>
+              点击另一试管倾倒液体
+            </li>
+            <li class="flex items-center">
+              <span class="w-2 h-2 bg-blue-400 rounded-full mr-3 flex-shrink-0"></span>
+              相同颜色才能倾倒
+            </li>
+            <li class="flex items-center">
+              <span class="w-2 h-2 bg-blue-400 rounded-full mr-3 flex-shrink-0"></span>
+              将所有颜色分类到不同试管中
+            </li>
+          </ul>
+        </div>
       </div>
 
-      <div id="instructions">
-        <h3>游戏规则:</h3>
-        <ul>
-          <li>拖拽旋转视角</li>
-          <li>点击试管选择</li>
-          <li>点击另一试管倾倒液体</li>
-          <li>相同颜色才能倾倒</li>
-          <li>将所有颜色分类到不同试管中</li>
-        </ul>
+      <!-- Right area for 3D game -->
+      <div id="gameArea" class="flex-1 h-full relative">
+        <!-- 3D canvas will be inserted here -->
       </div>
 
-      <div id="winMessage">
-        <h2>🎉 恭喜您！🎉</h2>
-        <p>您成功完成了益智游戏！</p>
-        <button onclick="resetGame()">再玩一次</button>
-      </div>
-
-      <div id="debug">
-        <div>已选择: <span id="selectedInfo">无</span></div>
-        <div>上次操作: <span id="actionInfo">-</span></div>
+      <!-- Win Message - centered over entire screen -->
+      <div
+        id="winMessage"
+        class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-90 text-white p-8 rounded-3xl text-2xl text-center hidden z-[200] backdrop-blur-lg border border-gray-600 shadow-2xl"
+      >
+        <h2 class="text-4xl font-bold mb-4 text-yellow-400">🎉 恭喜您！🎉</h2>
+        <p class="text-lg mb-6 text-gray-200">您成功完成了益智游戏！</p>
+        <button
+          onclick="resetGame()"
+          class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl transform hover:scale-105"
+        >
+          再玩一次
+        </button>
       </div>
     </div>
 
@@ -129,10 +146,36 @@
       let isMouseDown = false;
       let mouseStart = { x: 0, y: 0 };
       let cameraRotation = { x: 0, y: 0 };
-      let cameraRadius = 0; // Store the initial radius
+      let cameraRadius = 0; // Store the initial radius      let isDragOperation = false; // Track if current mouse interaction is a drag
+      // Game state tracking
+      let gameLoaded = false;
+      let isGameFinished = false;
+      let gameStartTime = 0;
+      let gameStarted = false;
+      let bestScore = parseInt(localStorage.getItem("waterSplitBestScore") || "0");
+      let game_config = "";
 
       // Game configuration
-      const TUBE_COUNT = 12;
+      const DIFFICULTY_CONFIGS = [
+        { level: 1, name: "新手", tubeCount: 5, colorCount: 3, emptyTubes: 2 },
+        { level: 2, name: "简单", tubeCount: 6, colorCount: 4, emptyTubes: 2 },
+        { level: 3, name: "初级", tubeCount: 8, colorCount: 5, emptyTubes: 3 },
+        { level: 4, name: "容易", tubeCount: 9, colorCount: 6, emptyTubes: 3 },
+        { level: 5, name: "普通", tubeCount: 11, colorCount: 7, emptyTubes: 4 },
+        { level: 6, name: "中等", tubeCount: 12, colorCount: 8, emptyTubes: 4 },
+        { level: 7, name: "中级", tubeCount: 14, colorCount: 9, emptyTubes: 5 },
+        { level: 8, name: "进阶", tubeCount: 15, colorCount: 10, emptyTubes: 5 },
+        { level: 9, name: "困难", tubeCount: 17, colorCount: 11, emptyTubes: 6 },
+        { level: 10, name: "专家", tubeCount: 18, colorCount: 12, emptyTubes: 6 },
+        { level: 11, name: "大师", tubeCount: 20, colorCount: 13, emptyTubes: 7 },
+        { level: 12, name: "传奇", tubeCount: 21, colorCount: 14, emptyTubes: 7 },
+      ];
+
+      let currentDifficulty = 1;
+      let TUBE_COUNT = DIFFICULTY_CONFIGS[currentDifficulty].tubeCount;
+      let COLOR_COUNT = DIFFICULTY_CONFIGS[currentDifficulty].colorCount;
+      let EMPTY_TUBES = DIFFICULTY_CONFIGS[currentDifficulty].emptyTubes;
+
       const COLORS = [
         0xff0000, // Red
         0x00ff00, // Green
@@ -144,9 +187,48 @@
         0xff0088, // Pink
         0x88ff00, // Lime
         0x0088ff, // Light Blue
+        0xff4444, // Light Red
+        0x44ff44, // Light Green
+        0x4444ff, // Light Blue 2
+        0xffff44, // Light Yellow
+        0xff8844, // Light Orange
+        0x8844ff, // Light Purple
+        0x44ffff, // Light Cyan
+        0xff4488, // Light Pink
       ];
-
       const TUBE_CAPACITY = 4;
+
+      // Message listener for external communication
+      window.addEventListener("message", function (e) {
+        switch (e.data.type) {
+          case "setGameConfig":
+            game_config = e.data.data; // this is markdown or text string
+            console.log("Game config updated:", game_config);
+            break;
+          case "gameContinue":
+            if (isGameFinished) {
+              // If game is finished, restart the game
+              resetGame();
+            }
+            break;
+          case "getGameStats":
+            window.parent.postMessage(
+              {
+                type: "gameStats",
+                data: {
+                  score: bestScore, // Always return the best score
+                  difficulty: currentDifficulty + 1, // Return 1-based difficulty level
+                  difficultyName: DIFFICULTY_CONFIGS[currentDifficulty].name,
+                  moves: moves,
+                  tubeCount: TUBE_COUNT,
+                  colorCount: COLOR_COUNT,
+                },
+              },
+              "*"
+            );
+            break;
+        }
+      });
 
       // Initialize the game
       init();
@@ -156,20 +238,28 @@
         // Scene setup
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x2c3e50);
-
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // Calculate the game area size (full width minus sidebar width)
+        const gameAreaWidth = window.innerWidth - 320; // 320px is the sidebar width (w-80 = 20rem = 320px)
+        const gameAreaHeight = window.innerHeight;
+
+        renderer.setSize(gameAreaWidth, gameAreaHeight);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.setClearColor(0x2c3e50);
-        document.getElementById("gameContainer").appendChild(renderer.domElement);
+
+        // Append to the game area instead of the main container
+        document.getElementById("gameArea").appendChild(renderer.domElement);
+
+        // Update camera aspect ratio for the game area
+        camera.aspect = gameAreaWidth / gameAreaHeight;
+        camera.updateProjectionMatrix();
 
         // Manual camera controls
-        setupCameraControls();
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        setupCameraControls(); // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.9); // Increased from 0.6 to 0.9
         scene.add(ambientLight);
 
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -179,23 +269,31 @@
         directionalLight.shadow.mapSize.height = 2048;
         scene.add(directionalLight);
 
+        // Add second directional light from the opposite side to illuminate the back
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.7);
+        directionalLight2.position.set(-10, 8, -5);
+        scene.add(directionalLight2);
+
         const pointLight = new THREE.PointLight(0xffffff, 0.5, 100);
         pointLight.position.set(0, 10, 0);
-        scene.add(pointLight);        // Raycaster for mouse interaction
+        scene.add(pointLight); // Raycaster for mouse interaction
         raycaster = new THREE.Raycaster();
-        mouse = new THREE.Vector2();
-
-        // Camera position and initial rotation
+        mouse = new THREE.Vector2(); // Camera position and initial rotation
         // Use consistent lookAt point for both initialization and drag operations
         const lookAtPoint = new THREE.Vector3(0, 2, 0);
-        camera.position.set(0, 8, 12);
+        // Adjust camera distance based on tube count for better view
+        const baseCameraDistance = 6;
+        const distanceMultiplier = Math.max(1, Math.sqrt(TUBE_COUNT / 12));
+        const cameraDistance = baseCameraDistance * distanceMultiplier;
+
+        camera.position.set(0, 6 * distanceMultiplier, cameraDistance);
         camera.lookAt(lookAtPoint);
 
         // Initialize camera rotation to match current position
         // Calculate the proper initial rotation angles based on the camera position
         const cameraToLookAt = camera.position.clone().sub(lookAtPoint);
         cameraRadius = cameraToLookAt.length(); // Store the radius
-        
+
         cameraRotation.x = Math.asin(cameraToLookAt.y / cameraRadius);
         cameraRotation.y = Math.atan2(cameraToLookAt.x, cameraToLookAt.z);
 
@@ -203,13 +301,43 @@
         updateCameraPosition();
 
         // Create tubes
-        createTubes();
-
-        // Event listeners
+        createTubes(); // Event listeners
         renderer.domElement.addEventListener("click", onMouseClick, false);
-        window.addEventListener("resize", onWindowResize, false);
+        window.addEventListener("resize", onWindowResize, false); 
 
-        updateStatus("游戏准备就绪！点击试管开始游戏。");
+        // Send game loaded message
+        if (!gameLoaded) {
+          window.parent.postMessage({ type: "gameLoaded" }, "*");
+          gameLoaded = true;
+        }
+      }
+      function onDifficultyChange() {
+        const select = document.getElementById("difficultySelect");
+        currentDifficulty = parseInt(select.value);
+
+        const config = DIFFICULTY_CONFIGS[currentDifficulty];
+        TUBE_COUNT = config.tubeCount;
+        COLOR_COUNT = config.colorCount;
+        EMPTY_TUBES = config.emptyTubes;
+
+        console.log(`难度切换到 ${config.level}级 - ${config.name}: ${TUBE_COUNT}试管, ${COLOR_COUNT}颜色`);
+        // Adjust camera distance based on new tube count
+        const lookAtPoint = new THREE.Vector3(0, 2, 0);
+        const baseCameraDistance = 6;
+        const distanceMultiplier = Math.max(1, Math.sqrt(TUBE_COUNT / 12));
+        const cameraDistance = baseCameraDistance * distanceMultiplier;
+
+        camera.position.set(0, 6 * distanceMultiplier, cameraDistance);
+        camera.lookAt(lookAtPoint);
+
+        // Update camera rotation parameters
+        const cameraToLookAt = camera.position.clone().sub(lookAtPoint);
+        cameraRadius = cameraToLookAt.length();
+        cameraRotation.x = Math.asin(cameraToLookAt.y / cameraRadius);
+        cameraRotation.y = Math.atan2(cameraToLookAt.x, cameraToLookAt.z);
+
+        // Reset and recreate the game with new difficulty
+        resetGame();
       }
       function setupCameraControls() {
         let isDragging = false;
@@ -220,10 +348,9 @@
         renderer.domElement.addEventListener("mousedown", function (e) {
           isDragging = true;
           hasMoved = false;
+          isDragOperation = false; // Reset drag operation flag
           previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
-
-        // Mouse move
+        }); // Mouse move
         renderer.domElement.addEventListener("mousemove", function (e) {
           if (isDragging) {
             const deltaMove = {
@@ -234,9 +361,10 @@
             // Only rotate if movement is significant enough
             if (Math.abs(deltaMove.x) > 2 || Math.abs(deltaMove.y) > 2) {
               hasMoved = true;
+              isDragOperation = true; // Mark as drag operation
               const rotateSpeed = 0.005;
               cameraRotation.y -= deltaMove.x * rotateSpeed;
-              cameraRotation.x -= deltaMove.y * rotateSpeed;
+              cameraRotation.x += deltaMove.y * rotateSpeed; // Inverted Y-axis
 
               // Limit vertical rotation
               cameraRotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraRotation.x));
@@ -246,29 +374,25 @@
 
             previousMousePosition = { x: e.clientX, y: e.clientY };
           }
-        });
-
-        // Mouse up
+        }); // Mouse up
         renderer.domElement.addEventListener("mouseup", function (e) {
           isDragging = false;
-
-          // Store whether this was a drag operation
-          e.wasDrag = hasMoved;
+          // Note: isDragOperation flag is used in click handler
         });
         // Mouse wheel disabled (zoom removed)
         renderer.domElement.addEventListener("wheel", function (e) {
           e.preventDefault(); // Prevent default scrolling behavior
         });
-      }      function updateCameraPosition() {
+      }
+      function updateCameraPosition() {
         // Use the same radius and lookAt point as initialization to prevent jumping
         const lookAtPoint = new THREE.Vector3(0, 2, 0);
-        
+
         camera.position.x = cameraRadius * Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x);
         camera.position.y = cameraRadius * Math.sin(cameraRotation.x) + lookAtPoint.y;
         camera.position.z = cameraRadius * Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x);
         camera.lookAt(lookAtPoint);
       }
-
       function createTubes() {
         // Clear existing tubes
         tubes.forEach((tube) => {
@@ -278,10 +402,9 @@
         });
         tubes = [];
 
-        // Generate shuffled liquid configuration
+        // Generate shuffled liquid configuration based on current difficulty
         let liquidSegments = [];
-        for (let i = 0; i < 10; i++) {
-          // 10 different colors
+        for (let i = 0; i < COLOR_COUNT; i++) {
           for (let j = 0; j < TUBE_CAPACITY; j++) {
             liquidSegments.push(i);
           }
@@ -293,12 +416,13 @@
           [liquidSegments[i], liquidSegments[j]] = [liquidSegments[j], liquidSegments[i]];
         }
 
-        // Create tubes in a grid layout
-        const rows = 3;
-        const cols = 4;
+        // Create tubes in a dynamic grid layout
+        const totalTubes = TUBE_COUNT;
+        const cols = Math.ceil(Math.sqrt(totalTubes * 1.5)); // Wider layout
+        const rows = Math.ceil(totalTubes / cols);
         const spacing = 2.5;
 
-        for (let i = 0; i < TUBE_COUNT; i++) {
+        for (let i = 0; i < totalTubes; i++) {
           const row = Math.floor(i / cols);
           const col = i % cols;
           const x = (col - cols / 2 + 0.5) * spacing;
@@ -307,31 +431,37 @@
           const tube = createTube(x, 0, z, i);
           tubes.push(tube);
 
-          // Fill first 10 tubes with liquid, leave 2 empty
-          if (i < 10) {
+          // Fill tubes with liquid, leave EMPTY_TUBES empty
+          const filledTubes = totalTubes - EMPTY_TUBES;
+          if (i < filledTubes) {
             for (let j = 0; j < TUBE_CAPACITY; j++) {
-              const colorIndex = liquidSegments[i * TUBE_CAPACITY + j];
-              tube.liquids.push(colorIndex);
+              const segmentIndex = i * TUBE_CAPACITY + j;
+              if (segmentIndex < liquidSegments.length) {
+                const colorIndex = liquidSegments[segmentIndex];
+                tube.liquids.push(colorIndex);
+              }
             }
             updateTubeVisuals(tube);
           }
         }
 
-        console.log("创建了", tubes.length, "个试管");
+        console.log(`创建了 ${tubes.length} 个试管 (难度${DIFFICULTY_CONFIGS[currentDifficulty].level}级)`);
       }
 
       function createTube(x, y, z, index) {
         const group = new THREE.Group();
         group.position.set(x, y, z);
-        group.userData = { isTube: true, index: index };
-
-        // Tube glass (hollow cylinder)
+        group.userData = { isTube: true, index: index }; // Tube glass (hollow cylinder)
         const tubeGeometry = new THREE.CylinderGeometry(0.4, 0.4, 3, 16, 1, true);
         const tubeMaterial = new THREE.MeshPhongMaterial({
           color: 0xffffff,
           transparent: true,
           opacity: 0.2,
           side: THREE.DoubleSide,
+          depthWrite: false, // Allow seeing through to liquid inside
+          shininess: 100,
+          specular: 0x888888,
+          alphaTest: 0.01, // Helps with depth sorting
         });
         const tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
         tubeMesh.position.y = 1.5;
@@ -357,7 +487,6 @@
         group.add(indicator);
 
         scene.add(group);
-
         return {
           group: group,
           liquids: [],
@@ -365,10 +494,21 @@
           indicator: indicator,
           tubeMesh: tubeMesh,
           index: index,
+          originalPosition: new THREE.Vector3(x, y, z), // Store original position
+          isSelected: false, // Track selection state
         };
       }
+      function updateTubeVisuals(tube, animateChanges = false) {
+        if (animateChanges) {
+          // Animate liquid changes with alpha transitions
+          updateTubeVisualsWithAnimation(tube);
+        } else {
+          // Immediate update without animation (for initial setup)
+          updateTubeVisualsImmediate(tube);
+        }
+      }
 
-      function updateTubeVisuals(tube) {
+      function updateTubeVisualsImmediate(tube) {
         // Remove existing liquid meshes
         tube.liquidMeshes.forEach((mesh) => {
           tube.group.remove(mesh);
@@ -385,7 +525,11 @@
           const liquidMaterial = new THREE.MeshPhongMaterial({
             color: COLORS[colorIndex],
             transparent: false,
+            opacity: 1.0,
             shininess: 100,
+            specular: 0x444444, // Add specular highlights for water-like effect
+            reflectivity: 0.3, // Add slight reflectivity
+            depthWrite: true, // Ensure proper depth sorting
           });
           const liquidMesh = new THREE.Mesh(liquidGeometry, liquidMaterial);
           liquidMesh.position.y = 0.4 + i * liquidHeight;
@@ -395,16 +539,202 @@
           tube.liquidMeshes.push(liquidMesh);
         }
       }
+      function updateTubeVisualsWithAnimation(tube) {
+        const liquidHeight = 0.65;
+        const oldLiquids = [
+          ...tube.liquidMeshes.map((mesh) => ({
+            color: mesh.material.color.getHex(),
+            position: mesh.position.y,
+          })),
+        ]; // Store old liquid state
+        const animationDuration = 800; // Animation duration in milliseconds
+
+        // Determine which segments need to be animated (only new/changed ones)
+        const unchangedSegments = [];
+        const changedSegments = [];
+
+        for (let i = 0; i < Math.max(oldLiquids.length, tube.liquids.length); i++) {
+          const oldColor = i < oldLiquids.length ? oldLiquids[i].color : null;
+          const newColor = i < tube.liquids.length ? COLORS[tube.liquids[i]] : null;
+
+          if (oldColor === newColor && oldColor !== null) {
+            // Segment unchanged, keep the existing mesh
+            unchangedSegments.push(i);
+          } else {
+            // Segment changed or new, needs animation
+            changedSegments.push(i);
+          }
+        }
+
+        // Remove only the changed/removed segments
+        const meshesToRemove = [];
+        tube.liquidMeshes.forEach((mesh, index) => {
+          if (changedSegments.includes(index) || index >= tube.liquids.length) {
+            meshesToRemove.push(mesh);
+            // Animate old liquid disappearing
+            new TWEEN.Tween(mesh.material)
+              .to({ opacity: 0 }, animationDuration * 0.5)
+              .easing(TWEEN.Easing.Quadratic.InOut)
+              .onComplete(() => {
+                tube.group.remove(mesh);
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material) mesh.material.dispose();
+              })
+              .start();
+          }
+        });
+
+        // Remove the animated meshes from the array
+        meshesToRemove.forEach((mesh) => {
+          const index = tube.liquidMeshes.indexOf(mesh);
+          if (index > -1) {
+            tube.liquidMeshes.splice(index, 1);
+          }
+        });
+
+        // Create new liquid meshes for changed segments only
+        setTimeout(() => {
+          changedSegments.forEach((i) => {
+            if (i < tube.liquids.length) {
+              const colorIndex = tube.liquids[i];
+              const liquidGeometry = new THREE.CylinderGeometry(0.35, 0.35, liquidHeight, 16);
+              const liquidMaterial = new THREE.MeshPhongMaterial({
+                color: COLORS[colorIndex],
+                transparent: true,
+                opacity: 0, // Start invisible
+                shininess: 100,
+                specular: 0x444444,
+                reflectivity: 0.3,
+                depthWrite: true,
+              });
+
+              const liquidMesh = new THREE.Mesh(liquidGeometry, liquidMaterial);
+              liquidMesh.position.y = 0.4 + i * liquidHeight;
+              liquidMesh.castShadow = true;
+              liquidMesh.receiveShadow = true;
+
+              // Add slight scale animation for more dynamic effect
+              liquidMesh.scale.set(0.8, 0.8, 0.8);
+
+              tube.group.add(liquidMesh);
+
+              // Insert at correct position in array
+              if (i < tube.liquidMeshes.length) {
+                tube.liquidMeshes.splice(i, 0, liquidMesh);
+              } else {
+                tube.liquidMeshes.push(liquidMesh);
+              }
+
+              // Animate new liquid appearing with staggered timing
+              const delay = (i - Math.min(...changedSegments)) * 100; // Stagger only changed segments
+
+              setTimeout(() => {
+                // Scale animation
+                new TWEEN.Tween(liquidMesh.scale)
+                  .to({ x: 1, y: 1, z: 1 }, animationDuration * 0.6)
+                  .easing(TWEEN.Easing.Back.Out)
+                  .start();
+
+                // Alpha animation - animate to solid (opacity 1.0)
+                new TWEEN.Tween(liquidMaterial)
+                  .to({ opacity: 1.0 }, animationDuration * 0.8)
+                  .easing(TWEEN.Easing.Quadratic.Out)
+                  .onComplete(() => {
+                    // Make the material non-transparent once animation is complete
+                    liquidMaterial.transparent = false;
+                    liquidMaterial.opacity = 1.0;
+                  })
+                  .start();
+
+                // Slight bounce effect on Y position
+                const originalY = liquidMesh.position.y;
+                liquidMesh.position.y = originalY - 0.2;
+                new TWEEN.Tween(liquidMesh.position)
+                  .to({ y: originalY }, animationDuration * 0.7)
+                  .easing(TWEEN.Easing.Bounce.Out)
+                  .start();
+              }, delay);
+            }
+          });
+
+          // Add splash particle effect for the top liquid (only if it's a changed segment)
+          if (tube.liquids.length > 0 && changedSegments.includes(tube.liquids.length - 1)) {
+            createSplashEffect(tube, tube.liquids.length - 1);
+          }
+        }, animationDuration * 0.3); // Start new liquid animation after old liquid starts fading
+      }
+
+      // Create a subtle splash effect when liquid settles
+      function createSplashEffect(tube, liquidIndex) {
+        const liquidHeight = 0.65;
+        const splashY = 0.4 + liquidIndex * liquidHeight + liquidHeight * 0.5;
+        const splashColor = COLORS[tube.liquids[liquidIndex]];
+
+        // Create small particle system
+        const particleCount = 8;
+        const particles = [];
+
+        for (let i = 0; i < particleCount; i++) {
+          const particleGeometry = new THREE.SphereGeometry(0.02, 4, 4);
+          const particleMaterial = new THREE.MeshPhongMaterial({
+            color: splashColor,
+            transparent: true,
+            opacity: 0.8,
+          });
+
+          const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+
+          // Position particles in a small circle
+          const angle = (i / particleCount) * Math.PI * 2;
+          const radius = 0.15;
+          particle.position.set(Math.cos(angle) * radius, splashY, Math.sin(angle) * radius);
+
+          tube.group.add(particle);
+          particles.push(particle);
+
+          // Animate particles
+          const targetY = splashY + Math.random() * 0.3 + 0.1;
+          const targetRadius = radius + Math.random() * 0.2;
+
+          new TWEEN.Tween(particle.position)
+            .to(
+              {
+                x: Math.cos(angle) * targetRadius,
+                y: targetY,
+                z: Math.sin(angle) * targetRadius,
+              },
+              500
+            )
+            .easing(TWEEN.Easing.Quadratic.Out)
+            .start();
+
+          new TWEEN.Tween(particle.material)
+            .to({ opacity: 0 }, 500)
+            .easing(TWEEN.Easing.Quadratic.Out)
+            .onComplete(() => {
+              tube.group.remove(particle);
+              if (particle.geometry) particle.geometry.dispose();
+              if (particle.material) particle.material.dispose();
+            })
+            .start();
+        }
+      }
       function onMouseClick(event) {
         if (isPouring) return;
 
         // Ignore clicks that were actually drags
-        if (event.wasDrag) return;
+        if (isDragOperation) {
+          isDragOperation = false; // Reset for next interaction
+          return;
+        }
 
         event.preventDefault();
 
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        // Get the game area bounds (excluding sidebar)
+        const gameArea = document.getElementById("gameArea");
+        const rect = gameArea.getBoundingClientRect(); // Calculate mouse coordinates relative to the game area canvas
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
 
@@ -422,7 +752,7 @@
             if (clickedTube.liquids.length > 0) {
               selectTube(clickedTube);
             } else {
-              updateStatus("这个试管是空的！请选择有液体的试管。");
+              // Empty tube selected, do nothing
             }
           } else if (selectedTube === clickedTube) {
             // Deselect if clicking same tube
@@ -432,7 +762,7 @@
             if (canPour(selectedTube, clickedTube)) {
               pourLiquid(selectedTube, clickedTube);
             } else {
-              updateStatus("无法倾倒！颜色必须相同或目标试管必须为空。");
+              
             }
             deselectTube();
           }
@@ -442,17 +772,26 @@
       }
       function selectTube(tube) {
         selectedTube = tube;
-        tube.indicator.visible = true;
-        updateStatus(`已选择试管 ${tube.index}。点击另一个试管进行倾倒。`);
-        document.getElementById("selectedInfo").textContent = `试管 ${tube.index}`;
+        tube.isSelected = true;
+
+        // Animate tube moving up slightly with a smooth tween
+        const liftHeight = 0.3; // How much to lift the tube
+        const targetPosition = tube.originalPosition.clone();
+        targetPosition.y += liftHeight;
+        new TWEEN.Tween(tube.group.position).to(targetPosition, 300).easing(TWEEN.Easing.Quadratic.Out).start();
+
+        
       }
 
       function deselectTube() {
         if (selectedTube) {
-          selectedTube.indicator.visible = false;
+          selectedTube.isSelected = false;
+
+          // Animate tube moving back to original position          
+          new TWEEN.Tween(selectedTube.group.position).to(selectedTube.originalPosition, 300).easing(TWEEN.Easing.Quadratic.Out).start();
+
           selectedTube = null;
-          updateStatus("点击试管进行选择。");
-          document.getElementById("selectedInfo").textContent = "无";
+          
         }
       }
 
@@ -484,9 +823,7 @@
             break;
           }
         }
-        console.log(`从试管 ${fromTube.index} 向试管 ${toTube.index} 倾倒 ${pourCount} 段颜色 ${topColor}`);
-
-        // Start pouring animation
+        console.log(`从试管 ${fromTube.index} 向试管 ${toTube.index} 倾倒 ${pourCount} 段颜色 ${topColor}`); // Start pouring animation
         animatePour(fromTube, toTube, pourCount, () => {
           // Remove liquid from source tube
           const pouredLiquid = fromTube.liquids.splice(-pourCount, pourCount);
@@ -494,32 +831,27 @@
           // Add liquid to destination tube
           toTube.liquids.push(...pouredLiquid);
 
-          // Update visuals
-          updateTubeVisuals(fromTube);
-          updateTubeVisuals(toTube);
-
-          // End pouring
+          // Update visuals with animation
+          updateTubeVisuals(fromTube, true); // Animate changes for source tube
+          updateTubeVisuals(toTube, true); // Animate changes for destination tube          // End pouring
           isPouring = false;
-          updateStatus("倾倒完成！");
-          document.getElementById("actionInfo").textContent = `倾倒了 ${pourCount} 段`;
-
+          
           // Check for win condition
           setTimeout(() => {
             if (checkWinCondition()) {
               showWinMessage();
             }
-          }, 500);
+          }, 1000); // Increased delay to account for animation
         });
       }
       function animatePour(fromTube, toTube, pourCount, onComplete) {
-        updateStatus("正在倾倒...");
-
-        // Store original positions
-        const originalFromPos = fromTube.group.position.clone();
-        const originalToPos = toTube.group.position.clone();
+        
+        // Store original positions (use stored original position instead of current position)
+        const originalFromPos = fromTube.originalPosition.clone();
+        const originalToPos = toTube.originalPosition.clone();
 
         // Calculate target position (above the destination tube)
-        const targetPos = new THREE.Vector3(toTube.group.position.x + 0.5, toTube.group.position.y + 2, toTube.group.position.z);
+        const targetPos = new THREE.Vector3(toTube.originalPosition.x + 0.5, toTube.originalPosition.y + 2, toTube.originalPosition.z);
 
         // Move source tube to target position
         const moveTween = new TWEEN.Tween(fromTube.group.position).to(targetPos, 500).easing(TWEEN.Easing.Quadratic.InOut);
@@ -551,31 +883,6 @@
             rotateToWithLocalPivot(fromTube.group, new THREE.Vector3(0, 3, 0), new THREE.Vector3(0, 0, 1), obj.angle);
           });
 
-        // Create pouring stream effect
-        const streamGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 8);
-        const streamMaterial = new THREE.MeshPhongMaterial({
-          color: COLORS[fromTube.liquids[fromTube.liquids.length - 1]],
-          transparent: true,
-          opacity: 0.8,
-        });
-        const stream = new THREE.Mesh(streamGeometry, streamMaterial);
-
-        // Position stream between source tube tip and target tube
-        stream.position.set(targetPos.x - 0.5, targetPos.y - 0.5, targetPos.z);
-        stream.rotation.z = -Math.PI / 4;
-
-        scene.add(stream);
-
-        // Animate stream opacity
-        const streamTween = new TWEEN.Tween(stream.material)
-          .to({ opacity: 0 }, 800)
-          .easing(TWEEN.Easing.Quadratic.Out)
-          .onComplete(() => {
-            scene.remove(stream);
-            stream.geometry.dispose();
-            stream.material.dispose();
-          });
-
         // Return tube to original rotation and position
         const returnTiltTween = new TWEEN.Tween({ angle: Math.PI / 3 })
           .to({ angle: 0 }, 500)
@@ -600,8 +907,122 @@
         returnTiltTween.chain(returnMoveTween);
 
         // Start animations
-        moveTween.start();
-        streamTween.start();
+        moveTween.start(); // Create realistic water stream effect
+        setTimeout(() => {
+          createWaterStream(fromTube, toTube, pourCount, targetPos);
+        }, 500); // Start stream after tilt begins
+      }
+      // Enhanced Water Stream Animation
+      function createWaterStream(fromTube, toTube, pourCount, sourcePos) {
+        const streamColor = COLORS[fromTube.liquids[fromTube.liquids.length - 1]];
+        const streamGroup = new THREE.Group();
+        scene.add(streamGroup);
+
+        // Calculate stream path using physics simulation
+        const startPos = new THREE.Vector3(sourcePos.x - 0.4, sourcePos.y + 2.5, sourcePos.z);
+        const endPos = new THREE.Vector3(toTube.originalPosition.x, toTube.originalPosition.y + 1.5, toTube.originalPosition.z);
+
+        // Physics parameters
+        const gravity = -9.2;
+        const initialVelocity = new THREE.Vector3(
+          (endPos.x - startPos.x) * 0.8,
+          2.0, // Initial upward velocity
+          (endPos.z - startPos.z) * 0.8
+        );
+
+        // Create multiple stream segments for better visual effect
+        const segmentCount = 12;
+        const streamSegments = [];
+        const streamDuration = 1500; // Total stream duration
+        for (let i = 0; i < segmentCount; i++) {
+          // Create curved geometry for each segment - made bigger
+          const segmentGeometry = new THREE.CylinderGeometry(0.08, 0.04, 0.4, 8);
+          const segmentMaterial = new THREE.MeshPhongMaterial({
+            color: streamColor,
+            transparent: true,
+            opacity: 0.9,
+            shininess: 100,
+          });
+
+          const segment = new THREE.Mesh(segmentGeometry, segmentMaterial);
+          segment.visible = false; // Start invisible
+          streamGroup.add(segment);
+          streamSegments.push(segment);
+        }
+
+        // Animate stream segments appearing sequentially
+        let currentSegment = 0;
+        const segmentDelay = 80; // Delay between segments appearing
+
+        function animateSegment(segmentIndex) {
+          if (segmentIndex >= segmentCount) return;
+
+          const segment = streamSegments[segmentIndex];
+          const t = segmentIndex / (segmentCount - 1); // Normalized time (0 to 1)
+
+          // Calculate position using physics equations
+          const time = t * 1.2; // Time for this segment
+          const position = new THREE.Vector3(startPos.x + initialVelocity.x * time, startPos.y + initialVelocity.y * time + 0.5 * gravity * time * time, startPos.z + initialVelocity.z * time);
+
+          // Calculate rotation to align with velocity direction
+          const velocity = new THREE.Vector3(initialVelocity.x, initialVelocity.y + gravity * time, initialVelocity.z);
+          velocity.normalize();
+
+          // Set position and rotation
+          segment.position.copy(position);
+          segment.lookAt(position.clone().add(velocity));
+          segment.rotateX(Math.PI / 2); // Align cylinder with direction
+
+          // Make segment visible with fade-in effect
+          segment.visible = true;
+          segment.material.opacity = 0;
+
+          // Animate segment appearance and movement
+          const appearTween = new TWEEN.Tween(segment.material).to({ opacity: 0.9 }, 100).easing(TWEEN.Easing.Quadratic.Out);
+
+          // Animate segment movement (slight wobble for realism)
+          const wobbleTween = new TWEEN.Tween(segment.position)
+            .to(
+              {
+                x: position.x + (Math.random() - 0.5) * 0.05,
+                y: position.y - 0.1,
+                z: position.z + (Math.random() - 0.5) * 0.05,
+              },
+              300
+            )
+            .easing(TWEEN.Easing.Quadratic.Out);
+
+          // Fade out segment
+          const fadeOutTween = new TWEEN.Tween(segment.material)
+            .to({ opacity: 0 }, 200)
+            .delay(400)
+            .easing(TWEEN.Easing.Quadratic.In)
+            .onComplete(() => {
+              segment.visible = false;
+            });
+
+          // Start animations
+          appearTween.start();
+          wobbleTween.start();
+          fadeOutTween.start();
+
+          // Schedule next segment
+          setTimeout(() => {
+            animateSegment(segmentIndex + 1);
+          }, segmentDelay);
+        }
+
+        // Start the stream animation
+        animateSegment(0);
+
+        // Clean up stream group after animation
+        setTimeout(() => {
+          scene.remove(streamGroup);
+          streamSegments.forEach((segment) => {
+            if (segment.geometry) segment.geometry.dispose();
+            if (segment.material) segment.material.dispose();
+          });
+        }, streamDuration);
       }
 
       function checkWinCondition() {
@@ -618,38 +1039,73 @@
             }
           }
         }
-        console.log(`胜利检查: ${sortedTubes} 个分类试管, ${emptyTubes} 个空试管`);
-        return sortedTubes === 10 && emptyTubes === 2;
+        console.log(`胜利检查: ${sortedTubes} 个分类试管, ${emptyTubes} 个空试管 (需要${COLOR_COUNT}个分类试管)`);
+        return sortedTubes === COLOR_COUNT && emptyTubes === EMPTY_TUBES;
       }
       function showWinMessage() {
-        document.getElementById("winMessage").style.display = "block";
-        updateStatus("🎉 益智游戏完成！🎉");
-      }
+        if (isGameFinished) return; // Prevent duplicate triggers
+        isGameFinished = true;
+        document.getElementById("winMessage").classList.remove("hidden");
+        
+        // Calculate score based on difficulty and moves
+        const config = DIFFICULTY_CONFIGS[currentDifficulty];
+        const baseScore = config.level * 10; // Base score based on difficulty level
+        const movesPenalty = Math.max(0, moves - config.tubeCount * 2); // Penalty for excessive moves
+        const finalScore = Math.max(1, Math.min(100, baseScore - movesPenalty));
 
+        // Update best score
+        if (finalScore > bestScore) {
+          bestScore = finalScore;
+          localStorage.setItem("waterSplitBestScore", bestScore.toString());
+        }
+
+        // Send game finished message
+        window.parent.postMessage(
+          {
+            type: "gameFinished",
+            data: {
+              score: finalScore,
+              bestScore: bestScore,
+              difficulty: config.level,
+              moves: moves,
+              difficultyName: config.name,
+              tubeCount: config.tubeCount,
+              colorCount: config.colorCount,
+            },
+          },
+          "*"
+        );
+      }
       function resetGame() {
         moves = 0;
+        isGameFinished = false; // Reset game finished state
+        gameStartTime = Date.now(); // Reset game start time
         document.getElementById("moveCounter").textContent = moves;
-        document.getElementById("winMessage").style.display = "none";
-        document.getElementById("actionInfo").textContent = "-";
+        document.getElementById("winMessage").classList.add("hidden");
         deselectTube();
         createTubes();
-        updateStatus("游戏重置完成！点击试管开始游戏。");
+        
+        // Send game started message
+        if (!gameStarted) {
+          window.parent.postMessage({ type: "gameStarted" }, "*");
+          gameStarted = true;
+        }
       }
 
-      function updateStatus(message) {
-        document.getElementById("status").textContent = message;
-      }
 
       function animate() {
         requestAnimationFrame(animate);
         TWEEN.update();
         renderer.render(scene, camera);
       }
-
       function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        // Calculate the game area size (full width minus sidebar width)
+        const gameAreaWidth = window.innerWidth - 320; // 320px is the sidebar width
+        const gameAreaHeight = window.innerHeight;
+
+        camera.aspect = gameAreaWidth / gameAreaHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(gameAreaWidth, gameAreaHeight);
       }
     </script>
   </body>
