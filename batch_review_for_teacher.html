@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>智能作业批改系统 · H5</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: "#eef6ff",
+                100: "#d9ebff",
+                200: "#b6d7ff",
+                300: "#85bdff",
+                400: "#539dff",
+                500: "#2b7fff",
+                600: "#0f5ff1",
+                700: "#0a49c4",
+                800: "#093e9d",
+                900: "#0b367f",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+      .scrollbar-thin::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .scrollbar-thin::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 8px;
+      }
+      .scrollbar-thin::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <!-- App Container -->
+    <div class="min-h-screen flex flex-col">
+      <!-- Header -->
+      <header class="bg-white border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold">AI</div>
+            <h1 class="text-lg sm:text-xl font-semibold">智能作业批改系统</h1>
+          </div>
+          <div class="flex-1"></div>
+
+          <!-- Current Class Selector -->
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-slate-600 hidden sm:block">当前班级</label>
+            <select id="currentClassSelect" class="px-3 py-1.5 border rounded-lg text-sm"></select>
+            <button id="btnManageClasses" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-sm">班级管理</button>
+          </div>
+
+          <!-- Settings quick -->
+          <button id="btnSettings" class="ml-2 px-3 py-1.5 border rounded-lg text-sm">设置</button>
+        </div>
+      </header>
+
+      <!-- Tabs -->
+      <nav class="bg-slate-100 border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4">
+          <div class="flex gap-2">
+            <button data-tab="grading" class="tab-btn px-4 py-2 text-sm rounded-t-lg bg-white border-x border-t border-slate-200">批改</button>
+            <button data-tab="reports" class="tab-btn px-4 py-2 text-sm rounded-t-lg text-slate-600">报告</button>
+            <button data-tab="analytics" class="tab-btn px-4 py-2 text-sm rounded-t-lg text-slate-600">分析</button>
+            <button data-tab="settings" class="tab-btn px-4 py-2 text-sm rounded-t-lg text-slate-600">设置</button>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main -->
+      <main class="flex-1">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+          <!-- Tab: Grading -->
+          <section id="tab-grading" class="tab-panel">
+            <!-- Alert: API Key missing -->
+            <div id="apiKeyAlert" class="hidden mb-4 p-3 rounded-md bg-yellow-50 border border-yellow-200 text-yellow-900 text-sm">
+              未配置 Doubao API Key，已自动启用“模拟批改模式”。请前往“设置”中配置 API 后再进行真实批改。
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <!-- Left column: Theme & Prompt -->
+              <div class="lg:col-span-1 space-y-4">
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-semibold">批改主题与提示词</h2>
+                    <button id="btnResetPrompt" class="text-sm text-slate-600 hover:text-slate-900">重置默认</button>
+                  </div>
+
+                  <label class="block text-sm text-slate-600 mb-1">主题</label>
+                  <select id="themeSelect" class="w-full border rounded-lg px-3 py-2 mb-3">
+                    <option value="math">数学作业</option>
+                    <option value="english">英语作文</option>
+                    <option value="chinese">语文作文</option>
+                    <option value="custom">自定义</option>
+                  </select>
+
+                  <label class="block text-sm text-slate-600 mb-1">可编辑提示词</label>
+                  <textarea id="promptTextarea" class="w-full border rounded-lg px-3 py-2 h-44 text-sm mb-3" placeholder="在此编辑提示词..."></textarea>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-sm text-slate-600 mb-1">最高分</label>
+                      <input id="maxScoreInput" type="number" value="100" class="w-full border rounded-lg px-3 py-2" />
+                    </div>
+                    <div>
+                      <label class="block text-sm text-slate-600 mb-1">是否返回等级</label>
+                      <select id="levelToggle" class="w-full border rounded-lg px-3 py-2">
+                        <option value="on" selected>是</option>
+                        <option value="off">否</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                  <h2 class="font-semibold mb-3">图片上传与识别</h2>
+                  <div class="border-2 border-dashed rounded-xl p-4 text-center">
+                    <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
+                    <button id="btnChooseFiles" class="px-4 py-2 bg-brand-600 text-white rounded-lg">选择图片</button>
+                    <p class="text-xs text-slate-500 mt-2">支持多张图片，自动 OCR 识别学生姓名</p>
+                  </div>
+                  <div id="ocrProgress" class="hidden mt-3 text-sm text-slate-600"></div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                  <h2 class="font-semibold mb-3">批改执行</h2>
+                  <div class="space-y-2">
+                    <button id="btnStartGrading" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">开始批改</button>
+                    <button id="btnSaveReport" class="w-full py-2 bg-slate-800 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>保存为报告</button>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-2">未能识别到学生姓名的图片将列出，请手动选择对应学生后再批改。</p>
+                  <div id="gradingProgress" class="hidden mt-3 text-sm text-slate-600"></div>
+                </div>
+              </div>
+
+              <!-- Right column: Image list and results -->
+              <div class="lg:col-span-2 space-y-6">
+                <!-- Uploaded images -->
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-semibold">已上传图片</h2>
+                    <div class="text-sm text-slate-500">共 <span id="imgCount">0</span> 张</div>
+                  </div>
+                  <div id="imageGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                  <div id="unmatchedNotice" class="hidden mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900"></div>
+                </div>
+
+                <!-- Grading results -->
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-semibold">批改结果（当前批次）</h2>
+                    <div class="text-sm text-slate-500">班级：<span id="currentClassName">-</span></div>
+                  </div>
+                  <div class="overflow-auto scrollbar-thin">
+                    <table class="min-w-full text-sm">
+                      <thead>
+                        <tr class="text-left text-slate-500 border-b">
+                          <th class="py-2 pr-3">学生</th>
+                          <th class="py-2 pr-3">图片</th>
+                          <th class="py-2 pr-3">分数</th>
+                          <th class="py-2 pr-3">等级</th>
+                          <th class="py-2 pr-3">概述</th>
+                          <th class="py-2">详情</th>
+                        </tr>
+                      </thead>
+                      <tbody id="resultsTbody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Tab: Reports -->
+          <section id="tab-reports" class="tab-panel hidden">
+            <div class="bg-white border border-slate-200 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="font-semibold">班级报告存档</h2>
+                <div class="flex items-center gap-2">
+                  <select id="reportThemeFilter" class="border rounded-lg px-3 py-1.5 text-sm">
+                    <option value="">全部主题</option>
+                    <option value="math">数学作业</option>
+                    <option value="english">英语作文</option>
+                    <option value="chinese">语文作文</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                </div>
+              </div>
+              <div id="reportsList" class="space-y-3"></div>
+            </div>
+          </section>
+
+          <!-- Tab: Analytics -->
+          <section id="tab-analytics" class="tab-panel hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h2 class="font-semibold">班级平均分趋势</h2>
+                  <div class="flex items-center gap-2">
+                    <label class="text-sm text-slate-600">主题</label>
+                    <select id="analyticsThemeFilter" class="border rounded-lg px-3 py-1.5 text-sm">
+                      <option value="">全部</option>
+                      <option value="math">数学作业</option>
+                      <option value="english">英语作文</option>
+                      <option value="chinese">语文作文</option>
+                      <option value="custom">自定义</option>
+                    </select>
+                  </div>
+                </div>
+                <canvas id="avgChart" height="140"></canvas>
+              </div>
+              <div class="lg:col-span-1 bg-white border border-slate-200 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h2 class="font-semibold">最近一次报告排名</h2>
+                  <button id="btnExportLatestCSV" class="text-sm px-3 py-1.5 border rounded-lg">导出 CSV</button>
+                </div>
+                <div id="rankingList" class="space-y-2"></div>
+              </div>
+            </div>
+
+            <div class="mt-6 bg-white border border-slate-200 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="font-semibold">学生个人趋势</h2>
+                <div class="flex items-center gap-2">
+                  <label class="text-sm text-slate-600">选择学生</label>
+                  <select id="studentTrendSelect" class="border rounded-lg px-3 py-1.5 text-sm"></select>
+                </div>
+              </div>
+              <canvas id="studentChart" height="120"></canvas>
+            </div>
+          </section>
+
+          <!-- Tab: Settings -->
+          <section id="tab-settings" class="tab-panel hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <h2 class="font-semibold mb-3">Doubao API 设置</h2>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-sm text-slate-600 mb-1">API Key</label>
+                    <input id="apiKeyInput" type="password" placeholder="sk-..." class="w-full border rounded-lg px-3 py-2" />
+                    <p class="text-xs text-slate-500 mt-1">仅保存在本地浏览器，不会上传。</p>
+                  </div>
+                  <div>
+                    <label class="block text-sm text-slate-600 mb-1">模型名称</label>
+                    <input id="modelInput" type="text" value="ep-xxxxxxxx" class="w-full border rounded-lg px-3 py-2" />
+                    <p class="text-xs text-slate-500 mt-1">例如：ep-xxxxxxxx（在火山方舟后台创建的终端点）</p>
+                  </div>
+                  <div>
+                    <label class="block text-sm text-slate-600 mb-1">Chat Completions Endpoint</label>
+                    <input id="endpointInput" type="text" value="https://ark.cn-beijing.volces.com/api/v3/chat/completions" class="w-full border rounded-lg px-3 py-2" />
+                    <p class="text-xs text-slate-500 mt-1">默认为 Doubao/火山方舟 Chat Completions 接口</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input id="mockToggle" type="checkbox" class="h-4 w-4" />
+                    <label for="mockToggle" class="text-sm text-slate-700">启用模拟批改模式（不调用真实 API）</label>
+                  </div>
+                  <button id="btnSaveApiSettings" class="px-4 py-2 bg-brand-600 text-white rounded-lg">保存设置</button>
+                </div>
+              </div>
+
+              <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <h2 class="font-semibold mb-3">OCR 与匹配设置</h2>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm text-slate-600 mb-1">OCR 语言</label>
+                    <select id="ocrLangSelect" class="w-full border rounded-lg px-3 py-2">
+                      <option value="chi_sim" selected>简体中文</option>
+                      <option value="eng">英文</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm text-slate-600 mb-1">匹配敏感度</label>
+                    <select id="matchSensitivity" class="w-full border rounded-lg px-3 py-2">
+                      <option value="strict">严格（完整匹配）</option>
+                      <option value="loose" selected>宽松（包含匹配）</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <div class="flex items-center gap-2">
+                    <input id="sendImageToggle" type="checkbox" class="h-4 w-4" />
+                    <label for="sendImageToggle" class="text-sm text-slate-700">尝试将图片以 Base64 形式发送给模型（可能不被某些模型支持）</label>
+                  </div>
+                </div>
+                <div class="mt-4 flex items-center gap-2">
+                  <button id="btnSeedDemo" class="px-4 py-2 border rounded-lg">一键填充示例数据</button>
+                  <button id="btnClearAll" class="px-4 py-2 border rounded-lg text-rose-700 border-rose-300">清空全部数据</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- Modal: Class Management -->
+    <div id="classModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
+      <div class="bg-white w-full max-w-3xl rounded-xl p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-lg">班级管理</h3>
+          <button id="closeClassModal" class="p-2 rounded-lg hover:bg-slate-100">&times;</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+          <div>
+            <h4 class="font-semibold mb-2">班级列表</h4>
+            <div id="classList" class="space-y-2 max-h-80 overflow-auto scrollbar-thin"></div>
+            <div class="mt-3 flex gap-2">
+              <input id="newClassName" type="text" placeholder="新班级名称" class="flex-1 border rounded-lg px-3 py-2" />
+              <button id="btnAddClass" class="px-3 py-2 bg-brand-600 text-white rounded-lg">添加</button>
+            </div>
+          </div>
+          <div>
+            <h4 class="font-semibold mb-2">学生管理</h4>
+            <div class="text-sm text-slate-600 mb-2">当前班级：<span id="manageClassName">-</span></div>
+            <div id="studentList" class="space-y-2 max-h-64 overflow-auto scrollbar-thin border rounded-lg p-2"></div>
+            <div class="mt-3">
+              <label class="block text-sm text-slate-600 mb-1">批量导入（每行一个姓名）</label>
+              <textarea
+                id="bulkStudentsInput"
+                class="w-full border rounded-lg px-3 py-2 h-28"
+                placeholder="张三
+李四
+王五"
+              ></textarea>
+              <div class="mt-2 flex gap-2">
+                <button id="btnImportStudents" class="px-3 py-2 border rounded-lg">导入</button>
+                <button id="btnClearStudents" class="px-3 py-2 border rounded-lg text-rose-700 border-rose-300">清空学生</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 text-right">
+          <button id="saveClassChanges" class="px-4 py-2 bg-emerald-600 text-white rounded-lg">保存更改</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Result Detail -->
+    <div id="detailModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
+      <div class="bg-white w-full max-w-2xl rounded-xl p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="font-semibold text-lg">批改详情</h3>
+          <button id="closeDetailModal" class="p-2 rounded-lg hover:bg-slate-100">&times;</button>
+        </div>
+        <div id="detailContent" class="mt-3 text-sm whitespace-pre-wrap"></div>
+      </div>
+    </div>
+
+    <script>
+      // ---------- Utilities ----------
+      const LSK = {
+        classes: "smartgrader.classes",
+        currentClassId: "smartgrader.currentClassId",
+        reports: "smartgrader.reports",
+        settings: "smartgrader.settings",
+      };
+
+      function uid(prefix = "id") {
+        return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      function saveLS(key, value) {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+      function loadLS(key, def = null) {
+        try {
+          const v = localStorage.getItem(key);
+          return v ? JSON.parse(v) : def;
+        } catch {
+          return def;
+        }
+      }
+
+      function formatDate(d) {
+        const dt = d instanceof Date ? d : new Date(d);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, "0");
+        const day = String(dt.getDate()).padStart(2, "0");
+        const hh = String(dt.getHours()).padStart(2, "0");
+        const mm = String(dt.getMinutes()).padStart(2, "0");
+        return `${y}-${m}-${day} ${hh}:${mm}`;
+      }
+
+      function downloadFile(filename, text) {
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function normalize(str) {
+        return (str || "")
+          .toLowerCase()
+          .replace(/\s+/g, "")
+          .replace(/[·•．.\-—_]/g, "");
+      }
+
+      function ensureArray(x) {
+        return Array.isArray(x) ? x : x ? [x] : [];
+      }
+
+      // ---------- App State ----------
+      const state = {
+        classes: [],
+        currentClassId: null,
+        images: [], // {id, file, url, ocrText, detectedName, studentId, status}
+        results: [], // {imageId, studentId, studentName, score, maxScore, level, summary, detail, raw, imageName}
+        reports: [],
+        settings: {
+          apiKey: "",
+          model: "ep-xxxxxxxx",
+          endpoint: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+          mock: true,
+          ocrLang: "chi_sim",
+          matchSensitivity: "loose",
+          sendImageBase64: false,
+        },
+        charts: {
+          avg: null,
+          student: null,
+        },
+      };
+
+      // ---------- Defaults ----------
+      const defaultPrompts = {
+        math: `你是一名严谨的数学老师。请根据 OCR 识别的“学生作答文本”进行批改：
+- 找出每步主要错误点并简要解释
+- 给出本题/本套作业的得分，满分为 {{MAX_SCORE}}
+- 指出改进建议
+- 如能识别多个小题，请分别简述
+输出 JSON（不要多余前后缀）：
+{
+  "score": 0-{{MAX_SCORE}},
+  "max_score": {{MAX_SCORE}},
+  "level": "A/B/C/D",
+  "comments": "总体评价",
+  "mistakes": [{"item":"小题/步骤","reason":"错误原因","fix":"改进建议"}]
+}`,
+        english: `你是一名英语作文老师。请根据学生作文文本进行评分与反馈：
+- 从内容（20）、结构（20）、语言（40）、拼写/标点（20）四方面简评
+- 总分满分 {{MAX_SCORE}}，给出总体评分
+- 指出最值得改进的三点
+输出 JSON（不要多余前后缀）：
+{
+  "score": 0-{{MAX_SCORE}},
+  "max_score": {{MAX_SCORE}},
+  "level": "A/B/C/D",
+  "comments": "总体评价",
+  "mistakes": [{"item":"方面","reason":"问题","fix":"建议"}]
+}`,
+        chinese: `你是一名语文作文老师。请从立意、结构、语言和文采进行点评：
+- 指出亮点与不足
+- 总分满分 {{MAX_SCORE}}，给出总体评分与等级
+- 给出三条具体修改建议
+输出 JSON（不要多余前后缀）：
+{
+  "score": 0-{{MAX_SCORE}},
+  "max_score": {{MAX_SCORE}},
+  "level": "A/B/C/D",
+  "comments": "总体评价",
+  "mistakes": [{"item":"方面","reason":"问题","fix":"建议"}]
+}`,
+        custom: `请根据以下“学生作答文本”进行批改与评分，满分 {{MAX_SCORE}}：
+- 简要说明评分维度与理由
+- 给出总体评语与三条改进建议
+输出 JSON（不要多余前后缀）：
+{
+  "score": 0-{{MAX_SCORE}},
+  "max_score": {{MAX_SCORE}},
+  "level": "A/B/C/D",
+  "comments": "总体评价",
+  "mistakes": [{"item":"方面","reason":"问题","fix":"建议"}]
+}`,
+      };
+
+      // ---------- DOM ----------
+      const els = {};
+      function qs(id) {
+        return document.getElementById(id);
+      }
+
+      function cacheDOM() {
+        els.currentClassSelect = qs("currentClassSelect");
+        els.btnManageClasses = qs("btnManageClasses");
+        els.btnSettings = qs("btnSettings");
+
+        els.apiKeyAlert = qs("apiKeyAlert");
+
+        els.themeSelect = qs("themeSelect");
+        els.promptTextarea = qs("promptTextarea");
+        els.maxScoreInput = qs("maxScoreInput");
+        els.levelToggle = qs("levelToggle");
+        els.btnResetPrompt = qs("btnResetPrompt");
+
+        els.fileInput = qs("fileInput");
+        els.btnChooseFiles = qs("btnChooseFiles");
+        els.ocrProgress = qs("ocrProgress");
+
+        els.btnStartGrading = qs("btnStartGrading");
+        els.btnSaveReport = qs("btnSaveReport");
+        els.gradingProgress = qs("gradingProgress");
+
+        els.imgCount = qs("imgCount");
+        els.imageGrid = qs("imageGrid");
+        els.unmatchedNotice = qs("unmatchedNotice");
+
+        els.currentClassName = qs("currentClassName");
+        els.resultsTbody = qs("resultsTbody");
+
+        // Reports
+        els.reportThemeFilter = qs("reportThemeFilter");
+        els.reportsList = qs("reportsList");
+
+        // Analytics
+        els.analyticsThemeFilter = qs("analyticsThemeFilter");
+        els.avgChart = qs("avgChart");
+        els.rankingList = qs("rankingList");
+        els.btnExportLatestCSV = qs("btnExportLatestCSV");
+        els.studentTrendSelect = qs("studentTrendSelect");
+        els.studentChart = qs("studentChart");
+
+        // Settings
+        els.apiKeyInput = qs("apiKeyInput");
+        els.modelInput = qs("modelInput");
+        els.endpointInput = qs("endpointInput");
+        els.mockToggle = qs("mockToggle");
+        els.ocrLangSelect = qs("ocrLangSelect");
+        els.matchSensitivity = qs("matchSensitivity");
+        els.sendImageToggle = qs("sendImageToggle");
+        els.btnSaveApiSettings = qs("btnSaveApiSettings");
+        els.btnSeedDemo = qs("btnSeedDemo");
+        els.btnClearAll = qs("btnClearAll");
+
+        // Modals
+        els.classModal = qs("classModal");
+        els.closeClassModal = qs("closeClassModal");
+        els.classList = qs("classList");
+        els.studentList = qs("studentList");
+        els.newClassName = qs("newClassName");
+        els.btnAddClass = qs("btnAddClass");
+        els.manageClassName = qs("manageClassName");
+        els.bulkStudentsInput = qs("bulkStudentsInput");
+        els.btnImportStudents = qs("btnImportStudents");
+        els.btnClearStudents = qs("btnClearStudents");
+        els.saveClassChanges = qs("saveClassChanges");
+
+        els.detailModal = qs("detailModal");
+        els.closeDetailModal = qs("closeDetailModal");
+        els.detailContent = qs("detailContent");
+      }
+
+      // ---------- Init / Persistence ----------
+      function initFromStorage() {
+        const storedClasses = loadLS(LSK.classes, []);
+        const storedReports = loadLS(LSK.reports, []);
+        const storedSettings = loadLS(LSK.settings, state.settings);
+        const storedCurrent = loadLS(LSK.currentClassId, null);
+
+        state.classes = storedClasses;
+        state.reports = storedReports;
+        state.settings = { ...state.settings, ...storedSettings };
+        state.currentClassId = storedCurrent || (state.classes[0]?.id ?? null);
+
+        // set settings UI
+        els.apiKeyInput.value = state.settings.apiKey || "";
+        els.modelInput.value = state.settings.model || "ep-xxxxxxxx";
+        els.endpointInput.value = state.settings.endpoint || "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+        els.mockToggle.checked = !!state.settings.mock;
+        els.ocrLangSelect.value = state.settings.ocrLang || "chi_sim";
+        els.matchSensitivity.value = state.settings.matchSensitivity || "loose";
+        els.sendImageToggle.checked = !!state.settings.sendImageBase64;
+
+        updateApiKeyAlert();
+      }
+
+      function persistAll() {
+        saveLS(LSK.classes, state.classes);
+        saveLS(LSK.reports, state.reports);
+        saveLS(LSK.settings, state.settings);
+        saveLS(LSK.currentClassId, state.currentClassId);
+      }
+
+      // ---------- UI Render ----------
+      function renderClassesToHeader() {
+        els.currentClassSelect.innerHTML = "";
+        state.classes.forEach((c) => {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.name;
+          els.currentClassSelect.appendChild(opt);
+        });
+        els.currentClassSelect.value = state.currentClassId || "";
+        const cls = getCurrentClass();
+        els.currentClassName.textContent = cls ? cls.name : "-";
+      }
+
+      function renderClassModal() {
+        // Classes
+        els.classList.innerHTML = "";
+        state.classes.forEach((c) => {
+          const div = document.createElement("div");
+          div.className = "flex items-center justify-between p-2 border rounded-lg";
+          div.innerHTML = `
+          <div class="flex-1">
+            <div class="font-medium">${c.name}</div>
+            <div class="text-xs text-slate-500">学生数：${c.students.length}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button data-act="switch" data-id="${c.id}" class="px-2 py-1 text-sm border rounded-lg ${state.currentClassId === c.id ? "bg-slate-900 text-white" : ""}">切换</button>
+            <button data-act="rename" data-id="${c.id}" class="px-2 py-1 text-sm border rounded-lg">重命名</button>
+            <button data-act="delete" data-id="${c.id}" class="px-2 py-1 text-sm border rounded-lg text-rose-700 border-rose-300">删除</button>
+          </div>
+        `;
+          els.classList.appendChild(div);
+        });
+
+        const cls = getCurrentClass();
+        els.manageClassName.textContent = cls ? cls.name : "-";
+
+        // Students
+        renderStudentList();
+      }
+
+      function renderStudentList() {
+        const cls = getCurrentClass();
+        els.studentList.innerHTML = "";
+        if (!cls) return;
+        cls.students.forEach((s) => {
+          const row = document.createElement("div");
+          row.className = "flex items-center justify-between p-2 border rounded-lg";
+          row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs">${s.name.slice(0, 1)}</div>
+            <div>${s.name}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button data-act="rename-stu" data-id="${s.id}" class="px-2 py-1 text-sm border rounded-lg">重命名</button>
+            <button data-act="del-stu" data-id="${s.id}" class="px-2 py-1 text-sm border rounded-lg text-rose-700 border-rose-300">删除</button>
+          </div>
+        `;
+          els.studentList.appendChild(row);
+        });
+      }
+
+      function renderImageGrid() {
+        els.imgCount.textContent = state.images.length;
+        els.imageGrid.innerHTML = "";
+        const classStudents = getCurrentClass()?.students || [];
+
+        state.images.forEach((img) => {
+          const container = document.createElement("div");
+          container.className = "border rounded-xl p-3";
+          container.innerHTML = `
+          <div class="aspect-[4/3] bg-slate-100 rounded-lg overflow-hidden mb-2">
+            <img src="${img.url}" alt="${img.file?.name || "image"}" class="w-full h-full object-contain">
+          </div>
+          <div class="text-xs text-slate-500 mb-2 line-clamp-2">${img.ocrText ? img.ocrText : "等待 OCR..."}</div>
+          <div class="grid grid-cols-1 gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">识别学生：</span>
+              <span class="text-sm font-medium ${img.studentId ? "text-emerald-700" : "text-amber-700"}">${img.detectedName || "未识别"}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm">手动指定：</label>
+              <select data-image="${img.id}" class="manual-select border rounded-lg px-2 py-1 text-sm flex-1">
+                <option value="">未指定</option>
+                ${classStudents.map((s) => `<option value="${s.id}" ${s.id === img.studentId ? "selected" : ""}>${s.name}</option>`).join("")}
+              </select>
+            </div>
+            <div class="text-xs ${img.status === "error" ? "text-rose-700" : "text-slate-500"}">状态：${img.status || "待处理"}</div>
+          </div>
+        `;
+          els.imageGrid.appendChild(container);
+        });
+
+        // Unmatched notice
+        const unmatched = state.images.filter((x) => !x.studentId);
+        if (unmatched.length) {
+          els.unmatchedNotice.classList.remove("hidden");
+          els.unmatchedNotice.textContent = `有 ${unmatched.length} 张图片未能识别/匹配到学生姓名，请手动选择后再开始批改。`;
+        } else {
+          els.unmatchedNotice.classList.add("hidden");
+        }
+      }
+
+      function renderResultsTable() {
+        els.resultsTbody.innerHTML = "";
+        state.results.forEach((r) => {
+          const tr = document.createElement("tr");
+          tr.className = "border-b";
+          tr.innerHTML = `
+          <td class="py-2 pr-3">${r.studentName}</td>
+          <td class="py-2 pr-3 text-slate-500 text-xs">${r.imageName || "-"}</td>
+          <td class="py-2 pr-3 font-semibold">${r.score ?? "-"}/${r.maxScore ?? "-"}</td>
+          <td class="py-2 pr-3">${r.level ?? "-"}</td>
+          <td class="py-2 pr-3 text-slate-600">
+            <div class="line-clamp-2">${r.summary || r.comments || "-"}</div>
+          </td>
+          <td class="py-2">
+            <button data-id="${r.imageId}" class="btn-detail px-3 py-1.5 text-sm border rounded-lg">查看</button>
+          </td>
+        `;
+          els.resultsTbody.appendChild(tr);
+        });
+        els.btnSaveReport.disabled = !state.results.length;
+      }
+
+      function renderReportsList() {
+        const clsId = state.currentClassId;
+        const themeFilter = els.reportThemeFilter.value;
+        const list = state.reports
+          .filter((r) => r.classId === clsId)
+          .filter((r) => !themeFilter || r.theme === themeFilter)
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        els.reportsList.innerHTML = "";
+        if (!list.length) {
+          els.reportsList.innerHTML = `<div class="p-4 text-slate-500 text-sm">暂无报告</div>`;
+          return;
+        }
+        list.forEach((rep) => {
+          const div = document.createElement("div");
+          const avg = (rep.summary?.classAvg ?? 0).toFixed(1);
+          const min = rep.summary?.min ?? "-";
+          const max = rep.summary?.max ?? "-";
+          div.className = "border rounded-xl p-4";
+          div.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-semibold">${formatTheme(rep.theme)} · ${formatDate(rep.date)}</div>
+              <div class="text-xs text-slate-500">班级：${getClassById(rep.classId)?.name || "-"}</div>
+            </div>
+            <div class="text-sm text-slate-600">平均 ${avg}，最高 ${max}，最低 ${min}</div>
+          </div>
+          <div class="mt-3 overflow-auto scrollbar-thin">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-slate-500 border-b">
+                  <th class="py-2 pr-3">学生</th>
+                  <th class="py-2 pr-3">分数</th>
+                  <th class="py-2 pr-3">等级</th>
+                  <th class="py-2 pr-3">摘要</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rep.results
+                  .map(
+                    (r) => `
+                  <tr class="border-b">
+                    <td class="py-2 pr-3">${r.studentName}</td>
+                    <td class="py-2 pr-3">${r.score}/${r.maxScore}</td>
+                    <td class="py-2 pr-3">${r.level || "-"}</td>
+                    <td class="py-2 pr-3 text-slate-600"><div class="line-clamp-2">${r.summary || r.comments || "-"}</div></td>
+                  </tr>
+                `
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button data-id="${rep.id}" data-act="export-json" class="px-3 py-1.5 text-sm border rounded-lg">导出 JSON</button>
+            <button data-id="${rep.id}" data-act="export-csv" class="px-3 py-1.5 text-sm border rounded-lg">导出 CSV</button>
+            <button data-id="${rep.id}" data-act="delete-report" class="px-3 py-1.5 text-sm border rounded-lg text-rose-700 border-rose-300">删除</button>
+          </div>
+        `;
+          els.reportsList.appendChild(div);
+        });
+      }
+
+      function formatTheme(t) {
+        return { math: "数学作业", english: "英语作文", chinese: "语文作文", custom: "自定义" }[t] || t;
+      }
+
+      function updateApiKeyAlert() {
+        if (!state.settings.apiKey && !state.settings.mock) {
+          els.apiKeyAlert.classList.remove("hidden");
+        } else if (state.settings.mock) {
+          els.apiKeyAlert.classList.remove("hidden");
+        } else {
+          els.apiKeyAlert.classList.add("hidden");
+        }
+      }
+
+      // ---------- Classes & Students ----------
+      function getCurrentClass() {
+        return state.classes.find((c) => c.id === state.currentClassId) || null;
+      }
+      function getClassById(id) {
+        return state.classes.find((c) => c.id === id) || null;
+      }
+      function getStudentById(classId, studentId) {
+        return getClassById(classId)?.students.find((s) => s.id === studentId) || null;
+      }
+
+      function addClass(name) {
+        if (!name.trim()) return;
+        state.classes.push({ id: uid("class"), name: name.trim(), students: [] });
+        if (!state.currentClassId) state.currentClassId = state.classes[0].id;
+        persistAll();
+        renderClassesToHeader();
+        renderClassModal();
+      }
+      function deleteClass(id) {
+        const i = state.classes.findIndex((c) => c.id === id);
+        if (i >= 0) state.classes.splice(i, 1);
+        if (state.currentClassId === id) {
+          state.currentClassId = state.classes[0]?.id || null;
+        }
+        persistAll();
+        renderClassesToHeader();
+        renderClassModal();
+      }
+      function renameClass(id, newName) {
+        const c = getClassById(id);
+        if (!c) return;
+        c.name = newName.trim() || c.name;
+        persistAll();
+        renderClassesToHeader();
+        renderClassModal();
+      }
+      function importStudents(text) {
+        const cls = getCurrentClass();
+        if (!cls) return;
+        const names = (text || "")
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const existed = new Set(cls.students.map((s) => normalize(s.name)));
+        names.forEach((n) => {
+          const key = normalize(n);
+          if (!existed.has(key)) {
+            cls.students.push({ id: uid("stu"), name: n });
+            existed.add(key);
+          }
+        });
+        persistAll();
+        renderClassModal();
+        refreshStudentSelects(); // also refresh image cards
+      }
+      function clearStudents() {
+        const cls = getCurrentClass();
+        if (!cls) return;
+        cls.students = [];
+        persistAll();
+        renderClassModal();
+        refreshStudentSelects();
+      }
+      function renameStudent(stuId, newName) {
+        const cls = getCurrentClass();
+        if (!cls) return;
+        const s = cls.students.find((x) => x.id === stuId);
+        if (!s) return;
+        s.name = (newName || s.name).trim();
+        persistAll();
+        renderClassModal();
+        refreshStudentSelects();
+      }
+      function deleteStudent(stuId) {
+        const cls = getCurrentClass();
+        if (!cls) return;
+        const i = cls.students.findIndex((x) => x.id === stuId);
+        if (i >= 0) cls.students.splice(i, 1);
+        // clear mapping in images
+        state.images.forEach((img) => {
+          if (img.studentId === stuId) {
+            img.studentId = null;
+            img.detectedName = null;
+          }
+        });
+        persistAll();
+        renderClassModal();
+        refreshStudentSelects();
+        renderImageGrid();
+      }
+
+      function refreshStudentSelects() {
+        // refresh dropdowns on image cards
+        renderImageGrid();
+        // refresh student trend select
+        const cls = getCurrentClass();
+        els.studentTrendSelect.innerHTML = "";
+        if (cls) {
+          els.studentTrendSelect.innerHTML = `<option value="">选择学生</option>` + cls.students.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+        }
+      }
+
+      // ---------- Tabs ----------
+      function initTabs() {
+        const btns = document.querySelectorAll(".tab-btn");
+        btns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            btns.forEach((b) => b.classList.remove("bg-white", "border-x", "border-t", "border-slate-200", "text-slate-900"));
+            btns.forEach((b) => b.classList.add("text-slate-600"));
+            btn.classList.add("bg-white", "border-x", "border-t", "border-slate-200", "text-slate-900");
+            const tab = btn.dataset.tab;
+            document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("hidden"));
+            qs(`tab-${tab}`).classList.remove("hidden");
+            if (tab === "analytics") buildAnalytics();
+            if (tab === "reports") renderReportsList();
+          });
+        });
+      }
+
+      // ---------- OCR ----------
+      async function runOCRForImages() {
+        const { ocrLang, matchSensitivity } = state.settings;
+        const cls = getCurrentClass();
+        if (!cls) return;
+
+        els.ocrProgress.classList.remove("hidden");
+        els.ocrProgress.textContent = `正在识别 0/${state.images.length} ...`;
+
+        let i = 0;
+        for (const img of state.images) {
+          i++;
+          els.ocrProgress.textContent = `正在识别 ${i}/${state.images.length}：${img.file?.name || img.id}`;
+          img.status = "OCR 中";
+          renderImageGrid();
+
+          try {
+            const ocr = await Tesseract.recognize(img.file, ocrLang, { logger: (m) => {} });
+            const text = (ocr?.data?.text || "").trim();
+            img.ocrText = text;
+            // Name match
+            let matched = null;
+            const ntext = normalize(text);
+            for (const s of cls.students) {
+              const sn = normalize(s.name);
+              if (matchSensitivity === "strict" ? ntext.includes(sn) && sn.length > 0 && new RegExp(sn).test(ntext) : ntext.includes(sn)) {
+                matched = s;
+                break;
+              }
+            }
+            if (matched) {
+              img.studentId = matched.id;
+              img.detectedName = matched.name;
+              img.status = "已识别";
+            } else {
+              img.studentId = null;
+              img.detectedName = null;
+              img.status = "未识别";
+            }
+          } catch (e) {
+            img.status = "error";
+            img.ocrText = "";
+          }
+          renderImageGrid();
+        }
+        els.ocrProgress.textContent = `识别完成：${state.images.length} 张`;
+        setTimeout(() => els.ocrProgress.classList.add("hidden"), 1500);
+      }
+
+      // ---------- Doubao API (Mock fallback) ----------
+      function buildMessages({ studentName, className, theme, prompt, maxScore, ocrText, imageBase64 }) {
+        const system = `你是一名严格且友好的老师，负责${formatTheme(theme)}的作业批改。严格按照指令输出 JSON。`;
+        const finalPrompt = prompt.replaceAll("{{MAX_SCORE}}", String(maxScore || 100));
+
+        const userParts = [
+          { type: "text", text: `班级：${className}\n学生：${studentName}\n主题：${formatTheme(theme)}\n` },
+          { type: "text", text: `批改指令：\n${finalPrompt}\n` },
+          { type: "text", text: `学生作答文本（OCR）：\n${ocrText || "(OCR 未识别到文本)"}\n` },
+        ];
+
+        if (imageBase64 && state.settings.sendImageBase64) {
+          userParts.push({ type: "image_url", image_url: { url: imageBase64 } });
+        }
+
+        // For Ark/Doubao v3, content supports multimodal parts for some models; if not supported, API may ignore.
+        return [
+          { role: "system", content: system },
+          { role: "user", content: userParts },
+        ];
+      }
+
+      async function callDoubao(messages) {
+        if (state.settings.mock || !state.settings.apiKey) {
+          // Mock a deterministic-looking result
+          const score = Math.floor(70 + Math.random() * 30);
+          const maxScore = Number(els.maxScoreInput.value || 100);
+          const levels = ["A", "B", "C", "D"];
+          const level = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "D";
+          const json = {
+            score,
+            max_score: maxScore,
+            level,
+            comments: "内容完整，表达清晰，但仍有改进空间。",
+            mistakes: [
+              { item: "细节", reason: "论证不充分", fix: "补充数据或例子支撑观点" },
+              { item: "格式", reason: "标点或书写不规范", fix: "检查并规范书写与标点" },
+            ],
+          };
+          return { ok: true, text: JSON.stringify(json) };
+        }
+
+        try {
+          const resp = await fetch(state.settings.endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${state.settings.apiKey}`,
+            },
+            body: JSON.stringify({
+              model: state.settings.model,
+              messages,
+              temperature: 0.2,
+              response_format: { type: "json_object" },
+            }),
+          });
+          if (!resp.ok) {
+            const errText = await resp.text();
+            return { ok: false, error: `HTTP ${resp.status}: ${errText}` };
+          }
+          const data = await resp.json();
+          const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.[0]?.text || "";
+          return { ok: true, text };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      }
+
+      function safeParseJSON(text) {
+        if (!text) return null;
+        // strip code fences if any
+        const cleaned = text
+          .replace(/^```(json)?/i, "")
+          .replace(/```$/, "")
+          .trim();
+        try {
+          return JSON.parse(cleaned);
+        } catch {
+          // try to find JSON substring
+          const m = cleaned.match(/\{[\s\S]*\}$/);
+          if (m) {
+            try {
+              return JSON.parse(m[0]);
+            } catch {}
+          }
+          return null;
+        }
+      }
+
+      async function gradeOne(imageItem, className, theme, prompt, maxScore) {
+        const student = getStudentById(state.currentClassId, imageItem.studentId);
+        const studentName = student?.name || imageItem.detectedName || "未知学生";
+
+        const base64 = state.settings.sendImageBase64 ? await fileToDataURL(imageItem.file) : null;
+
+        const messages = buildMessages({
+          studentName,
+          className,
+          theme,
+          prompt,
+          maxScore,
+          ocrText: imageItem.ocrText,
+          imageBase64: base64,
+        });
+
+        const res = await callDoubao(messages);
+        if (!res.ok) {
+          return { error: res.error };
+        }
+        const parsed = safeParseJSON(res.text);
+        if (!parsed) {
+          return { error: "模型未返回有效 JSON。", raw: res.text };
+        }
+        return {
+          score: Number(parsed.score),
+          maxScore: Number(parsed.max_score || maxScore),
+          level: parsed.level || "",
+          summary: parsed.comments || "",
+          detail: JSON.stringify(parsed, null, 2),
+          raw: parsed,
+        };
+      }
+
+      function fileToDataURL(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // ---------- Grading Flow ----------
+      async function startGrading() {
+        const cls = getCurrentClass();
+        if (!cls) {
+          alert("请先创建并选择班级");
+          return;
+        }
+        if (!state.images.length) {
+          alert("请先上传图片");
+          return;
+        }
+
+        // Ensure all mapped
+        const unresolved = state.images.filter((x) => !x.studentId);
+        if (unresolved.length) {
+          alert(`仍有 ${unresolved.length} 张图片未匹配到学生，请手动选择后再开始。`);
+          return;
+        }
+
+        const theme = els.themeSelect.value;
+        const prompt = els.promptTextarea.value || defaultPrompts[theme] || defaultPrompts.custom;
+        const maxScore = Number(els.maxScoreInput.value || 100);
+
+        state.results = [];
+        els.gradingProgress.classList.remove("hidden");
+        els.gradingProgress.textContent = `开始批改：0/${state.images.length}`;
+        els.btnStartGrading.disabled = true;
+
+        let idx = 0;
+        for (const img of state.images) {
+          idx++;
+          els.gradingProgress.textContent = `批改进度：${idx}/${state.images.length}（${img.file?.name || img.id}）`;
+          const result = await gradeOne(img, cls.name, theme, prompt, maxScore);
+          if (result.error) {
+            img.status = "批改失败";
+            state.results.push({
+              imageId: img.id,
+              studentId: img.studentId,
+              studentName: getStudentById(state.currentClassId, img.studentId)?.name || "未知",
+              score: null,
+              maxScore: maxScore,
+              level: "-",
+              summary: `错误：${result.error}`,
+              detail: result.raw ? JSON.stringify(result.raw, null, 2) : result.error,
+              raw: result.raw || null,
+              imageName: img.file?.name || "-",
+            });
+          } else {
+            img.status = "已批改";
+            state.results.push({
+              imageId: img.id,
+              studentId: img.studentId,
+              studentName: getStudentById(state.currentClassId, img.studentId)?.name || "未知",
+              score: result.score,
+              maxScore: result.maxScore,
+              level: result.level,
+              summary: result.summary,
+              detail: result.detail,
+              raw: result.raw,
+              imageName: img.file?.name || "-",
+            });
+          }
+          renderImageGrid();
+          renderResultsTable();
+        }
+
+        els.gradingProgress.textContent = `批改完成`;
+        setTimeout(() => els.gradingProgress.classList.add("hidden"), 1500);
+        els.btnStartGrading.disabled = false;
+        els.btnSaveReport.disabled = false;
+      }
+
+      function saveReport() {
+        if (!state.results.length) {
+          alert("暂无可保存结果");
+          return;
+        }
+        const cls = getCurrentClass();
+        const theme = els.themeSelect.value;
+        const prompt = els.promptTextarea.value;
+        const date = new Date().toISOString();
+
+        // Aggregate
+        const scores = state.results.map((r) => Number(r.score)).filter((s) => !isNaN(s));
+        const classAvg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+        const min = scores.length ? Math.min(...scores) : 0;
+        const max = scores.length ? Math.max(...scores) : 0;
+
+        const report = {
+          id: uid("rep"),
+          classId: state.currentClassId,
+          theme,
+          date,
+          prompt,
+          results: state.results,
+          summary: { classAvg, min, max, count: state.results.length },
+        };
+        state.reports.push(report);
+        persistAll();
+        alert("报告已保存到本地存档（localStorage）");
+        renderReportsList();
+      }
+
+      // ---------- Analytics ----------
+      function buildAnalytics() {
+        buildAvgChart();
+        buildRanking();
+        buildStudentChart();
+      }
+
+      function buildAvgChart() {
+        const clsId = state.currentClassId;
+        const themeFilter = els.analyticsThemeFilter.value;
+        const list = state.reports
+          .filter((r) => r.classId === clsId)
+          .filter((r) => !themeFilter || r.theme === themeFilter)
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const labels = list.map((r) => formatDate(r.date));
+        const data = list.map((r) => Number(r.summary?.classAvg || 0).toFixed(1));
+
+        if (state.charts.avg) {
+          state.charts.avg.destroy();
+        }
+        state.charts.avg = new Chart(els.avgChart, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "平均分",
+                data,
+                tension: 0.3,
+                borderColor: "#2b7fff",
+                backgroundColor: "rgba(43,127,255,0.15)",
+                fill: true,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, suggestedMax: 100 } },
+          },
+        });
+      }
+
+      function buildRanking() {
+        const clsId = state.currentClassId;
+        const classReports = state.reports.filter((r) => r.classId === clsId);
+        if (!classReports.length) {
+          els.rankingList.innerHTML = `<div class="text-sm text-slate-500">暂无报告</div>`;
+          return;
+        }
+        const latest = classReports.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        const ranked = [...latest.results].sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+        els.rankingList.innerHTML = "";
+        ranked.forEach((r, i) => {
+          const row = document.createElement("div");
+          row.className = "flex items-center justify-between p-2 border rounded-lg";
+          row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-full ${i < 3 ? "bg-amber-200" : "bg-slate-200"} flex items-center justify-center text-xs">${i + 1}</div>
+            <div>${r.studentName}</div>
+          </div>
+          <div class="font-medium">${r.score}/${r.maxScore}</div>
+        `;
+          els.rankingList.appendChild(row);
+        });
+
+        els.btnExportLatestCSV.onclick = () => {
+          const lines = ["名次,学生,分数,满分,等级,摘要"];
+          ranked.forEach((r, i) => {
+            const summary = (r.summary || "").replace(/\n/g, " ").replace(/,/g, "，");
+            lines.push(`${i + 1},${r.studentName},${r.score},${r.maxScore},${r.level || ""},${summary}`);
+          });
+          downloadFile(`ranking_${formatDate(latest.date)}.csv`, lines.join("\n"));
+        };
+      }
+
+      function buildStudentChart() {
+        const stuId = els.studentTrendSelect.value;
+        const clsId = state.currentClassId;
+
+        const recs = state.reports
+          .filter((r) => r.classId === clsId)
+          .map((r) => ({ date: r.date, theme: r.theme, row: r.results.find((x) => x.studentId === stuId) }))
+          .filter((x) => x.row)
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const labels = recs.map((x) => formatDate(x.date));
+        const data = recs.map((x) => Number(x.row.score || 0));
+
+        if (state.charts.student) {
+          state.charts.student.destroy();
+        }
+        state.charts.student = new Chart(els.studentChart, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "得分",
+                data,
+                backgroundColor: "#10b981",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, suggestedMax: 100 } },
+          },
+        });
+      }
+
+      // ---------- Events ----------
+      function bindEvents() {
+        // Tabs
+        initTabs();
+
+        // Header
+        els.btnManageClasses.addEventListener("click", () => {
+          renderClassModal();
+          els.classModal.classList.remove("hidden");
+          els.classModal.classList.add("flex");
+        });
+        els.btnSettings.addEventListener("click", () => {
+          document.querySelector('[data-tab="settings"]').click();
+        });
+        els.currentClassSelect.addEventListener("change", (e) => {
+          state.currentClassId = e.target.value;
+          persistAll();
+          renderClassesToHeader();
+          renderReportsList();
+          refreshStudentSelects();
+        });
+
+        // Modals
+        els.closeClassModal.addEventListener("click", () => {
+          els.classModal.classList.add("hidden");
+          els.classModal.classList.remove("flex");
+        });
+        els.classList.addEventListener("click", (e) => {
+          const btn = e.target.closest("button");
+          if (!btn) return;
+          const act = btn.dataset.act;
+          const id = btn.dataset.id;
+          if (act === "switch") {
+            state.currentClassId = id;
+            persistAll();
+            renderClassesToHeader();
+            renderClassModal();
+          } else if (act === "rename") {
+            const c = getClassById(id);
+            const name = prompt("输入新班级名", c?.name || "");
+            if (name) renameClass(id, name);
+          } else if (act === "delete") {
+            if (confirm("确认删除该班级及其关联报告？此操作不可撤销。")) {
+              // Also delete reports
+              state.reports = state.reports.filter((r) => r.classId !== id);
+              deleteClass(id);
+              persistAll();
+              renderReportsList();
+            }
+          }
+        });
+        els.btnAddClass.addEventListener("click", () => addClass(els.newClassName.value));
+        els.saveClassChanges.addEventListener("click", () => {
+          persistAll();
+          alert("已保存班级与学生更改");
+          els.classModal.classList.add("hidden");
+          els.classModal.classList.remove("flex");
+          renderClassesToHeader();
+        });
+        els.studentList.addEventListener("click", (e) => {
+          const btn = e.target.closest("button");
+          if (!btn) return;
+          const act = btn.dataset.act;
+          const id = btn.dataset.id;
+          if (act === "rename-stu") {
+            const s = getStudentById(state.currentClassId, id);
+            const name = prompt("输入新学生姓名", s?.name || "");
+            if (name) renameStudent(id, name);
+          } else if (act === "del-stu") {
+            if (confirm("确认删除该学生？")) deleteStudent(id);
+          }
+        });
+        els.btnImportStudents.addEventListener("click", () => importStudents(els.bulkStudentsInput.value));
+        els.btnClearStudents.addEventListener("click", () => {
+          if (confirm("确认清空当前班级全部学生？")) clearStudents();
+        });
+
+        // Upload & OCR
+        els.btnChooseFiles.addEventListener("click", () => els.fileInput.click());
+        els.fileInput.addEventListener("change", async (e) => {
+          const files = Array.from(e.target.files || []);
+          if (!files.length) return;
+          const added = files.map((f) => ({
+            id: uid("img"),
+            file: f,
+            url: URL.createObjectURL(f),
+            ocrText: "",
+            detectedName: null,
+            studentId: null,
+            status: "待 OCR",
+          }));
+          state.images.push(...added);
+          renderImageGrid();
+          await runOCRForImages();
+        });
+
+        // Manual assign student mapping
+        els.imageGrid.addEventListener("change", (e) => {
+          const sel = e.target.closest(".manual-select");
+          if (!sel) return;
+          const imageId = sel.getAttribute("data-image");
+          const img = state.images.find((x) => x.id === imageId);
+          const val = sel.value;
+          if (img) {
+            img.studentId = val || null;
+            img.detectedName = val ? getStudentById(state.currentClassId, val)?.name || null : img.detectedName;
+            renderImageGrid();
+          }
+        });
+
+        // Prompt defaults
+        function setDefaultPrompt() {
+          const theme = els.themeSelect.value;
+          const maxScore = Number(els.maxScoreInput.value || 100);
+          const p = (defaultPrompts[theme] || defaultPrompts.custom).replaceAll("{{MAX_SCORE}}", String(maxScore));
+          els.promptTextarea.value = p;
+        }
+        els.themeSelect.addEventListener("change", setDefaultPrompt);
+        els.maxScoreInput.addEventListener("change", setDefaultPrompt);
+        els.btnResetPrompt.addEventListener("click", setDefaultPrompt);
+
+        // Grading
+        els.btnStartGrading.addEventListener("click", startGrading);
+        els.btnSaveReport.addEventListener("click", saveReport);
+
+        // Results detail
+        els.resultsTbody.addEventListener("click", (e) => {
+          const btn = e.target.closest(".btn-detail");
+          if (!btn) return;
+          const id = btn.getAttribute("data-id");
+          const r = state.results.find((x) => x.imageId === id);
+          if (!r) return;
+          els.detailContent.textContent = r.detail || "无";
+          els.detailModal.classList.remove("hidden");
+          els.detailModal.classList.add("flex");
+        });
+        els.closeDetailModal.addEventListener("click", () => {
+          els.detailModal.classList.add("hidden");
+          els.detailModal.classList.remove("flex");
+        });
+
+        // Reports
+        els.reportThemeFilter.addEventListener("change", renderReportsList);
+        els.reportsList.addEventListener("click", (e) => {
+          const btn = e.target.closest("button");
+          if (!btn) return;
+          const act = btn.dataset.act;
+          const id = btn.dataset.id;
+          const rep = state.reports.find((r) => r.id === id);
+          if (!rep) return;
+          if (act === "export-json") {
+            downloadFile(`report_${formatDate(rep.date)}.json`, JSON.stringify(rep, null, 2));
+          } else if (act === "export-csv") {
+            const lines = ["学生,分数,满分,等级,摘要,主题,日期"];
+            rep.results.forEach((r) => {
+              const summary = (r.summary || "").replace(/\n/g, " ").replace(/,/g, "，");
+              lines.push(`${r.studentName},${r.score},${r.maxScore},${r.level || ""},${summary},${formatTheme(rep.theme)},${formatDate(rep.date)}`);
+            });
+            downloadFile(`report_${formatDate(rep.date)}.csv`, lines.join("\n"));
+          } else if (act === "delete-report") {
+            if (confirm("确认删除该报告？")) {
+              state.reports = state.reports.filter((x) => x.id !== id);
+              persistAll();
+              renderReportsList();
+            }
+          }
+        });
+
+        // Analytics
+        els.analyticsThemeFilter.addEventListener("change", buildAnalytics);
+        els.studentTrendSelect.addEventListener("change", buildStudentChart);
+        els.btnExportLatestCSV.addEventListener("click", () => {}); // set in buildRanking
+
+        // Settings
+        els.btnSaveApiSettings.addEventListener("click", () => {
+          state.settings.apiKey = els.apiKeyInput.value.trim();
+          state.settings.model = els.modelInput.value.trim();
+          state.settings.endpoint = els.endpointInput.value.trim();
+          state.settings.mock = !!els.mockToggle.checked;
+          state.settings.ocrLang = els.ocrLangSelect.value;
+          state.settings.matchSensitivity = els.matchSensitivity.value;
+          state.settings.sendImageBase64 = !!els.sendImageToggle.checked;
+          persistAll();
+          updateApiKeyAlert();
+          alert("设置已保存");
+        });
+        els.btnSeedDemo.addEventListener("click", seedDemoData);
+        els.btnClearAll.addEventListener("click", () => {
+          if (!confirm("确认清空全部数据（班级、报告、设置、缓存图片）？此操作不可恢复。")) return;
+          localStorage.clear();
+          location.reload();
+        });
+      }
+
+      // ---------- Demo Data ----------
+      function seedDemoData() {
+        if (!state.classes.length) {
+          state.classes = [
+            {
+              id: uid("class"),
+              name: "高一(1)班",
+              students: [
+                { id: uid("stu"), name: "张三" },
+                { id: uid("stu"), name: "李四" },
+                { id: uid("stu"), name: "王五" },
+                { id: uid("stu"), name: "赵六" },
+              ],
+            },
+            {
+              id: uid("class"),
+              name: "高一(2)班",
+              students: [
+                { id: uid("stu"), name: "陈七" },
+                { id: uid("stu"), name: "孙八" },
+              ],
+            },
+          ];
+          state.currentClassId = state.classes[0].id;
+        }
+        // Demo reports
+        if (!state.reports.length) {
+          const c0 = state.classes[0];
+          const mkRep = (daysAgo, theme) => {
+            const date = new Date(Date.now() - daysAgo * 86400000).toISOString();
+            const results = c0.students.map((s) => {
+              const score = Math.floor(60 + Math.random() * 40);
+              return {
+                imageId: uid("img"),
+                studentId: s.id,
+                studentName: s.name,
+                score,
+                maxScore: 100,
+                level: score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "D",
+                summary: "总体表现良好，注意细节与规范。",
+                detail: JSON.stringify({ score, max_score: 100, level: "B", comments: "不错", mistakes: [] }, null, 2),
+                raw: null,
+                imageName: "-",
+              };
+            });
+            const scores = results.map((r) => r.score);
+            const report = {
+              id: uid("rep"),
+              classId: c0.id,
+              theme,
+              date,
+              prompt: defaultPrompts[theme],
+              results,
+              summary: {
+                classAvg: scores.reduce((a, b) => a + b, 0) / scores.length,
+                min: Math.min(...scores),
+                max: Math.max(...scores),
+                count: results.length,
+              },
+            };
+            state.reports.push(report);
+          };
+          mkRep(15, "math");
+          mkRep(7, "english");
+          mkRep(3, "math");
+        }
+        persistAll();
+        renderClassesToHeader();
+        renderReportsList();
+        refreshStudentSelects();
+        alert("已填充示例数据");
+      }
+
+      function StartPage() {
+        cacheDOM();
+        initFromStorage();
+        bindEvents();
+        renderClassesToHeader();
+        refreshStudentSelects();
+        // default prompt
+        els.themeSelect.value = "math";
+        els.maxScoreInput.value = 100;
+        els.levelToggle.value = "on";
+        els.promptTextarea.value = (defaultPrompts["math"] || "").replaceAll("{{MAX_SCORE}}", "100");
+      }
+      StartPage();
+    </script>
+  </body>
+</html>
