@@ -812,16 +812,6 @@
         }
       }
 
-      function toggleMaisiDevServer(isEnabled) {
-        devOptions.isUseMaisiDevServer = isEnabled;
-        console.log('Maisi Dev服务:', isEnabled ? '已启用' : '已禁用');
-      }
-
-      function toggleShowDevContent(isEnabled) {
-        devOptions.isShowDevContent = isEnabled;
-        console.log('显示Dev内容:', isEnabled ? '已启用' : '已禁用');
-      }
-
       // 修改API客户端，自动添加Authorization头
       class ApiClient {
         constructor(baseUrl = "") {
@@ -898,6 +888,22 @@
 
       // 创建API客户端实例
       const api = new ApiClient("https://api.keepwork.com/core/v0");
+      const maisiApi = new ApiClient("https://be.maseai.com/api/v1/open");
+
+      // 获取maisiAI用户信息
+      async function getMsUserInfo() {
+        try {
+          const header = {
+            Authorization: `Bearer ${await tokenManager.getMaisiAccessToken()}`,
+          };
+          const response = await maisiApi.get("/open/getUserInfo", {}, header);
+          console.log("获取maisiAI用户信息响应:", response);
+          return response;
+        } catch (error) {
+          console.warn("获取maisiAI用户信息失败:", error);
+          return null;
+        }
+      }
 
       class LocalStorageProxy {
         constructor() {
@@ -1000,6 +1006,7 @@
           this.MAISI_TOKEN_KEY = "mais_games_access_token";
           this.MAISI_EXPIRES_KEY = "mais_games_token_expires";
           this.USER_INFO_KEY = "keepwork_user_info";
+          this.DEV_PANEL_KEY = "dev_panel_options";
 
           // 确保parentLocalStorage存在
           this.storage = window.parentLocalStorage || localStorage;
@@ -1111,12 +1118,14 @@
             await this.storage.removeItem(this.MAISI_TOKEN_KEY);
             await this.storage.removeItem(this.MAISI_EXPIRES_KEY);
             await this.storage.removeItem(this.USER_INFO_KEY);
+            await this.storage.removeItem(this.DEV_PANEL_KEY);
           } else {
             this.storage.removeItem(this.TOKEN_KEY);
             this.storage.removeItem(this.EXPIRES_KEY);
             this.storage.removeItem(this.MAISI_TOKEN_KEY);
             this.storage.removeItem(this.MAISI_EXPIRES_KEY);
             this.storage.removeItem(this.USER_INFO_KEY);
+            this.storage.removeItem(this.DEV_PANEL_KEY);
           }
         }
 
@@ -1140,6 +1149,37 @@
           }
 
           return userInfo ? JSON.parse(userInfo) : null;
+        }
+
+        // 保存Developer Panel状态
+        async saveDevPanelOptions(devOptions) {
+          if (this.isUsingProxy) {
+            await this.storage.setItem(this.DEV_PANEL_KEY, JSON.stringify(devOptions));
+          } else {
+            this.storage.setItem(this.DEV_PANEL_KEY, JSON.stringify(devOptions));
+          }
+        }
+
+        // 获取Developer Panel状态
+        async getDevPanelOptions() {
+          let devOptionsStr;
+
+          if (this.isUsingProxy) {
+            devOptionsStr = await this.storage.getItem(this.DEV_PANEL_KEY);
+          } else {
+            devOptionsStr = this.storage.getItem(this.DEV_PANEL_KEY);
+          }
+
+          return devOptionsStr ? JSON.parse(devOptionsStr) : null;
+        }
+
+        // 清除Developer Panel状态
+        async clearDevPanelOptions() {
+          if (this.isUsingProxy) {
+            await this.storage.removeItem(this.DEV_PANEL_KEY);
+          } else {
+            this.storage.removeItem(this.DEV_PANEL_KEY);
+          }
         }
       }
 
@@ -1446,6 +1486,25 @@
         console.log("检查登录状态...");
         if (await tokenManager.isTokenValid()) {
           console.log("用户已登录，token有效");
+          
+          // 恢复Developer Panel状态
+          try {
+            const savedDevOptions = await tokenManager.getDevPanelOptions();
+            if (savedDevOptions) {
+              devOptions.isUseMaisiDevServer = savedDevOptions.isUseMaisiDevServer || false;
+              devOptions.isShowDevContent = savedDevOptions.isShowDevContent || false;
+              
+              // 更新maisiApi的baseUrl
+              if (devOptions.isUseMaisiDevServer) {
+                maisiApi.setBaseUrl("https://maseai-be-qa1.langcong.com/api/v1");
+              }
+              
+              console.log("Developer Panel状态已恢复:", devOptions);
+            }
+          } catch (error) {
+            console.warn("恢复Developer Panel状态失败:", error);
+          }
+          
           // 有效token视为已同意并登录过
           markPrivacyConsent();
           if (!(await tokenManager.isMaisiTokenValid())) {
@@ -1855,6 +1914,9 @@
                 loginTime: new Date().toISOString(),
               });
 
+              // 保存Developer Panel状态
+              await tokenManager.saveDevPanelOptions(devOptions);
+
               // 尝试获取麦思Token（不影响主流程）
               if (!(await tokenManager.getMaisiAccessToken())) {
                 try {
@@ -1979,6 +2041,9 @@
               realname: response2.realname,
               loginTime: new Date().toISOString(),
             });
+
+            // 保存Developer Panel状态
+            await tokenManager.saveDevPanelOptions(devOptions);
 
             // 尝试获取麦思Token（不影响主流程）
             if (!(await tokenManager.getMaisiAccessToken()) && response2.cellphone) {
@@ -2126,20 +2191,25 @@
         });
       }
 
-      // 获取maisiAI用户信息
-      const maisiApi = new ApiClient("https://be.maseai.com/api/v1/open");
-      async function getMsUserInfo() {
-        try {
-          const header = {
-            Authorization: `Bearer ${await tokenManager.getMaisiAccessToken()}`,
-          };
-          const response = await maisiApi.get("/getUserInfo", {}, header);
-          console.log("获取maisiAI用户信息响应:", response);
-          return response;
-        } catch (error) {
-          console.warn("获取maisiAI用户信息失败:", error);
-          return null;
-        }
+      function toggleMaisiDevServer(isEnabled) {
+        devOptions.isUseMaisiDevServer = isEnabled;
+        maisiApi.setBaseUrl(isEnabled ? "https://maseai-be-qa1.langcong.com/api/v1" : "https://be.maseai.com/api/v1");
+        console.log('Maisi Dev服务:', isEnabled ? '已启用' : '已禁用');
+        
+        // 保存Developer Panel状态到缓存
+        tokenManager.saveDevPanelOptions(devOptions).catch(error => {
+          console.warn('保存Developer Panel状态失败:', error);
+        });
+      }
+
+      function toggleShowDevContent(isEnabled) {
+        devOptions.isShowDevContent = isEnabled;
+        console.log('显示Dev内容:', isEnabled ? '已启用' : '已禁用');
+        
+        // 保存Developer Panel状态到缓存
+        tokenManager.saveDevPanelOptions(devOptions).catch(error => {
+          console.warn('保存Developer Panel状态失败:', error);
+        });
       }
 
       window.addEventListener("message", async function (event) {
