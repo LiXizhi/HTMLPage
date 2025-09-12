@@ -82,7 +82,7 @@
         </header>
 
         <!-- 内容 -->
-        <section id="content" class="p-4 space-y-6">
+        <section id="content" class="p-3">
           <!-- 概览 -->
           <div data-section="overview" class="section">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -346,7 +346,8 @@
           </div>
           <!-- 集成：3D虚拟仿真 -->
           <div data-section="integrations" class="section hidden">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- 页面管理模式 -->
+            <div id="pageManagementMode" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <!-- 左侧：页面管理 -->
               <div class="lg:col-span-1 space-y-4">
                 <div class="bg-white rounded border border-slate-200 p-4">
@@ -359,8 +360,8 @@
                       <input type="text" name="name" class="w-full px-3 py-2 border border-slate-300 rounded text-sm" placeholder="例如: 3D建模平台" required />
                     </div>
                     <div>
-                      <label class="block text-sm font-medium text-slate-700 mb-1">页面URL</label>
-                      <input type="url" name="url" class="w-full px-3 py-2 border border-slate-300 rounded text-sm" placeholder="https://example.com" required />
+                      <label class="block text-sm font-medium text-slate-700 mb-1">页面URL或paracraft项目ID</label>
+                      <input type="text" name="url" class="w-full px-3 py-2 border border-slate-300 rounded text-sm" placeholder="https://example.com 或 项目ID" required />
                     </div>
                     <button type="submit" class="w-full px-3 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700">添加页面</button>
                   </form>
@@ -375,31 +376,42 @@
                 </div>
               </div>
 
-              <!-- 右侧：页面预览 -->
+              <!-- 右侧：管理说明 -->
               <div class="lg:col-span-2">
-                <div class="bg-white rounded border border-slate-200 h-[600px] relative">
-                  <!-- 无页面选中状态 -->
-                  <div id="noPageSelected" class="flex flex-col items-center justify-center h-full text-slate-500">
-                    <div class="text-6xl mb-4">📱</div>
-                    <div class="text-lg font-medium mb-2">请选择一个页面</div>
-                    <div class="text-sm">从左侧页面列表或侧边栏中选择要预览的页面</div>
+                <div class="bg-white rounded border border-slate-200 p-6">
+                  <div class="text-center text-slate-500">
+                    <div class="text-6xl mb-4">🛠️</div>
+                    <div class="text-lg font-medium mb-2">页面管理中心</div>
+                    <div class="text-sm mb-4">在这里添加和管理集成页面</div>
+                    <div class="text-xs text-slate-400">要预览页面，请点击左侧边栏中的相应页面链接</div>
                   </div>
-
-                  <!-- 页面预览区域 -->
-                  <div id="pagePreviewContainer" class="hidden h-full flex flex-col">
-                    <div class="flex items-center justify-between p-3 border-b border-slate-200">
-                      <div class="font-medium" id="currentPageName">页面名称</div>
-                      <a id="openInNew" href="#" target="_blank" class="text-sm text-indigo-600 hover:text-indigo-800 hidden"> 在新窗口打开 ↗ </a>
-                    </div>
-                    <div class="flex-1 relative">
-                      <iframe id="pagePreview" class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
-                      <div id="pageLoadError" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 hidden">
-                        <div class="text-4xl mb-2">⚠️</div>
-                        <div class="text-slate-600 text-center">
-                          <div class="font-medium mb-1">无法加载页面</div>
-                          <div class="text-sm">该站点可能禁止在iframe中显示或存在跨域限制</div>
-                        </div>
-                      </div>
+                </div>
+              </div>
+            </div>
+            <!-- 全屏预览模式 -->
+            <div id="pagePreviewMode" class="hidden">
+              <div class="bg-white rounded border border-slate-200" style="height: calc(100vh - 140px)">
+                <div class="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50">
+                  <div class="flex items-center gap-3">
+                    <button id="backToManagement" class="px-3 py-1 text-sm bg-slate-600 text-white rounded hover:bg-slate-700">← 返回管理</button>
+                    <h3 id="currentPageTitle" class="font-medium text-slate-700"></h3>
+                  </div>
+                  <a id="openInNewWindow" href="#" target="_blank" class="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"> 在新窗口打开 </a>
+                </div>
+                <div class="w-full" style="height: calc(100% - 53px)">
+                  <iframe
+                    id="fullScreenIframe"
+                    class="w-full h-full border-0"
+                    style="width: 100%; height: 100%"
+                    onload="document.getElementById('pageLoadError').style.display = 'none';"
+                    onerror="document.getElementById('pageLoadError').style.display = 'block';"
+                  >
+                  </iframe>
+                  <div id="pageLoadError" class="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-500 text-sm" style="display: none">
+                    <div class="text-center">
+                      <div class="text-4xl mb-2">🚫</div>
+                      <div class="font-medium mb-1">页面加载失败</div>
+                      <div class="text-xs mt-1">可能是网络问题或页面禁止嵌入</div>
                     </div>
                   </div>
                 </div>
@@ -457,16 +469,13 @@
           { id: "E-4001", name: "检测工位", status: "故障", temp: 45, vib: 4.5, updatedAt: nowISO() },
         ],
         integratedPages: [
-          { id: "page-1", name: "Keepwork", url: "https://keepwork.com", order: 1 },
-          { id: "page-2", name: "Paracraft", url: "https://paracraft.cn", order: 2 },
-          { id: "page-3", name: "3D建模平台", url: "https://www.tinkercad.com", order: 3 },
+          { id: "page-1", name: "网站创作", url: "https://keepwork.com/ed", order: 1 },
+          { id: "page-2", name: "3D世界创作", url: "https://webparacraft.keepwork.com", order: 2 },
+          { id: "page-3", name: "文档中心", url: "https://keepwork.com/official/docs/UserGuide/keepwork/index", order: 3 },
+          { id: "page-4", name: "虚拟仿真世界", url: "3468093", order: 4 },
         ],
         currentPageId: null,
-        settings: {
-          keepworkUrl: "",
-          paracraftWebUrl: "",
-          paracraftDeepLink: "",
-        },
+        settings: {},
         seeded: false,
       };
 
@@ -533,9 +542,6 @@
       }
       function byId(id) {
         return document.getElementById(id);
-      }
-      function sleep(ms) {
-        return new Promise((r) => setTimeout(r, ms));
       }
 
       // -------------------------
@@ -997,6 +1003,22 @@
           li(`近两周平均停机率：${Math.round(avg)}%`);
           li(`最大停机率：${max}%；建议排查设备维护与备件保障`);
         }
+      } // -------------------------
+      // URL 验证辅助函数
+      // -------------------------
+      function isValidUrlOrProjectId(input) {
+        // 检查是否为纯数字（项目ID）
+        if (/^\d+$/.test(input.trim())) {
+          return true;
+        }
+
+        // 检查是否为有效的URL
+        try {
+          new URL(input);
+          return true;
+        } catch (error) {
+          return false;
+        }
       }
 
       // -------------------------
@@ -1019,42 +1041,14 @@
         a.remove();
         URL.revokeObjectURL(url);
       }
-
-      // -------------------------
-      // 3D虚仿集成：Keepwork / Paracraft
-      // -------------------------
-      function tryLoadIframe(iframe, url, hintEl) {
-        hintEl.classList.add("hidden");
-        if (!url) {
-          iframe.removeAttribute("src");
-          return;
-        }
-        iframe.onload = () => {
-          /* 可能跨域，onload 不代表可通信 */
-        };
-        iframe.onerror = () => {
-          hintEl.classList.remove("hidden");
-        };
-        iframe.src = url;
-        // 超时提示（站点可能通过 X-Frame-Options 禁止）
-        setTimeout(() => {
-          // 简单检测：若仍为 about:blank 或无内容高度，显示提示
-          try {
-            if (!iframe.contentWindow || iframe.contentWindow.location.href === "about:blank") {
-              hintEl.classList.remove("hidden");
-            }
-          } catch (e) {
-            // 跨域访问会抛异常，直接忽略，交由可视判断
-          }
-        }, 1500);
-      }
       function initIntegrationsUI() {
         // 渲染页面列表
         renderIntegratedPages();
 
-        // 不自动恢复之前选中的页面，只在用户点击时才加载
-        // 重置预览区域到默认状态
-        resetPagePreview();
+        // 只有在没有当前选中页面时才重置预览区域到默认状态
+        if (!state.currentPageId) {
+          resetPagePreview();
+        }
 
         // 绑定添加页面表单
         const addPageForm = byId("addPageForm");
@@ -1064,17 +1058,14 @@
             const formData = new FormData(e.target);
             const name = formData.get("name")?.trim();
             const url = formData.get("url")?.trim();
-
             if (!name || !url) {
               alert("请输入页面名称和URL");
               return;
             }
 
-            // 验证URL格式
-            try {
-              new URL(url);
-            } catch (error) {
-              alert("请输入有效的URL格式（如 https://example.com）");
+            // 验证URL格式或项目ID
+            if (!isValidUrlOrProjectId(url)) {
+              alert("请输入有效的URL格式（如 https://keepwork.com）或项目ID数字");
               return;
             }
 
@@ -1127,13 +1118,11 @@
                 🗑️
               </button>
             </div>
-          `;
-
-          // 点击选择页面
-          pageItem.addEventListener("click", (e) => {
-            if (e.target.tagName === "BUTTON") return; // 忽略按钮点击
-            selectPage(page.id);
-          });
+          `; // 点击选择页面 - 移除预览功能，只保留编辑和删除
+          // pageItem.addEventListener("click", (e) => {
+          //   if (e.target.tagName === "BUTTON") return; // 忽略按钮点击
+          //   selectPage(page.id);
+          // });
 
           // 拖拽排序
           pageItem.addEventListener("dragstart", (e) => {
@@ -1177,10 +1166,10 @@
         [sidebarList, mobileList].forEach((list) => {
           if (!list) return;
           list.innerHTML = "";
-
           sortedPages.forEach((page) => {
             const pageBtn = document.createElement("button");
-            pageBtn.className = "w-full flex items-center gap-2 px-3 py-1.5 rounded text-left hover:bg-slate-100 text-sm text-slate-600";
+            pageBtn.className = "w-full flex items-center gap-2 px-3 py-1.5 rounded text-left hover:bg-slate-100 text-sm text-slate-600 sidebar-page-btn";
+            pageBtn.dataset.pageId = page.id;
             pageBtn.innerHTML = `<span>🔗</span><span class="truncate">${page.name}</span>`;
             pageBtn.onclick = () => {
               setActiveSection("integrations");
@@ -1196,70 +1185,64 @@
 
         state.currentPageId = pageId;
 
-        // 更新预览区域
-        const pagePreviewContainer = byId("pagePreviewContainer");
-        const noPageMessage = byId("noPageMessage");
+        // 切换到集成页面section
+        setActiveSection("integrations");
 
-        if (!pagePreviewContainer) return;
+        // 等待DOM更新后再设置预览模式
+        setTimeout(() => {
+          // 显示全屏预览模式，隐藏管理模式
+          const managementMode = byId("pageManagementMode");
+          const previewMode = byId("pagePreviewMode");
+          const fullScreenIframe = byId("fullScreenIframe");
+          const currentPageTitle = byId("currentPageTitle");
+          const openInNewWindow = byId("openInNewWindow");
 
-        // 隐藏无页面选择的消息
-        if (noPageMessage) {
-          noPageMessage.style.display = "none";
-        }
+          if (managementMode) managementMode.style.display = "none";
+          if (previewMode) previewMode.style.display = "block"; // 设置iframe和页面信息
+          if (fullScreenIframe) {
+            // 检查URL是否为纯数字，如果是则转换为Paracraft项目链接
+            const isNumeric = /^\d+$/.test(page.url.trim());
+            fullScreenIframe.src = isNumeric ? `https://webparacraft.keepwork.com/?pid=${page.url.trim()}` : page.url;
+          }
+          if (currentPageTitle) {
+            currentPageTitle.textContent = page.name;
+          }
+          if (openInNewWindow) {
+            // 同样处理新窗口打开的链接
+            const isNumeric = /^\d+$/.test(page.url.trim());
+            openInNewWindow.href = isNumeric ? `https://webparacraft.keepwork.com/?pid=${page.url.trim()}` : page.url;
+          }
 
-        // 清空容器并创建新的iframe
-        pagePreviewContainer.innerHTML = `
-          <div class="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50">
-            <h3 class="font-medium text-slate-700">${page.name}</h3>
-            <a href="${page.url}" target="_blank" 
-               class="text-xs px-2 py-1 bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors">
-              在新窗口打开
-            </a>
-          </div>
-          <div class="relative flex-1">
-            <iframe 
-              id="pageIframe" 
-              src="${page.url}" 
-              class="w-full h-full border-0"
-              onload="document.getElementById('pageLoadError').style.display = 'none';"
-              onerror="document.getElementById('pageLoadError').style.display = 'block';">
-            </iframe>
-            <div id="pageLoadError" 
-                 class="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-500 text-sm"
-                 style="display: none;">
-              <div class="text-center">
-                <div>🚫 页面加载失败</div>
-                <div class="text-xs mt-1">可能是网络问题或页面禁止嵌入</div>
-              </div>
-            </div>
-          </div>
-        `;
+          // 高亮选中的侧边栏页面项
+          document.querySelectorAll("[data-page-id]").forEach((el) => {
+            el.classList.remove("bg-indigo-50", "border-indigo-200");
+          });
 
-        // 显示预览容器
-        pagePreviewContainer.style.display = "flex";
+          // 高亮侧边栏中的页面按钮
+          document.querySelectorAll(".sidebar-page-btn").forEach((btn) => {
+            btn.classList.remove("bg-slate-100");
+          });
 
-        // 高亮选中的页面项
-        document.querySelectorAll("[data-page-id]").forEach((el) => {
-          el.classList.remove("bg-indigo-50", "border-indigo-200");
-        });
-        const selectedItem = document.querySelector(`[data-page-id="${pageId}"]`);
-        if (selectedItem) {
-          selectedItem.classList.add("bg-indigo-50", "border-indigo-200");
-        }
+          const sidebarBtn = document.querySelector(`[data-page-id="${pageId}"].sidebar-page-btn`);
+          if (sidebarBtn) {
+            sidebarBtn.classList.add("bg-slate-100");
+          }
+        }, 50);
 
         saveState();
       }
       function resetPagePreview() {
-        const pagePreviewContainer = byId("pagePreviewContainer");
-        const noPageMessage = byId("noPageMessage");
+        const managementMode = byId("pageManagementMode");
+        const previewMode = byId("pagePreviewMode");
+        const fullScreenIframe = byId("fullScreenIframe");
 
-        if (pagePreviewContainer) {
-          pagePreviewContainer.style.display = "none";
-          pagePreviewContainer.innerHTML = "";
-        }
+        // 显示管理模式，隐藏预览模式
+        if (managementMode) managementMode.style.display = "grid";
+        if (previewMode) previewMode.style.display = "none";
 
-        if (noPageMessage) {
-          noPageMessage.style.display = "flex";
+        // 清空iframe
+        if (fullScreenIframe) {
+          fullScreenIframe.src = "about:blank";
         }
 
         // 清除当前页面选择状态
@@ -1268,6 +1251,11 @@
         // 清除页面项的高亮状态
         document.querySelectorAll("[data-page-id]").forEach((el) => {
           el.classList.remove("bg-indigo-50", "border-indigo-200");
+        });
+
+        // 清除侧边栏页面按钮的高亮状态
+        document.querySelectorAll(".sidebar-page-btn").forEach((btn) => {
+          btn.classList.remove("bg-slate-100");
         });
       }
       function editPage(pageId) {
@@ -1291,18 +1279,15 @@
 
         const newUrl = prompt("请输入页面URL:", page.url);
         if (newUrl === null) return;
-
         const trimmedUrl = newUrl.trim();
         if (!trimmedUrl) {
           alert("页面URL不能为空");
           return;
         }
 
-        // 验证URL格式
-        try {
-          new URL(trimmedUrl);
-        } catch (error) {
-          alert("请输入有效的URL格式（如 https://example.com）");
+        // 验证URL格式或项目ID
+        if (!isValidUrlOrProjectId(trimmedUrl)) {
+          alert("请输入有效的URL格式（如 https://example.com）或项目ID数字");
           return;
         }
 
@@ -1351,15 +1336,6 @@
         });
 
         saveState();
-      }
-
-      function safeJson(text) {
-        try {
-          return JSON.parse(text);
-        } catch (e) {
-          alert("请输入合法 JSON");
-          return null;
-        }
       }
 
       // -------------------------
@@ -1459,18 +1435,29 @@
               console.warn("重置数据失败", e);
             }
           }
-        };
-
-        // 导航按钮
+        }; // 导航按钮
         document.querySelectorAll(".nav-btn").forEach((btn) => {
-          btn.onclick = () => setActiveSection(btn.getAttribute("data-target"));
-        });
+          btn.onclick = () => {
+            const target = btn.getAttribute("data-target");
+            setActiveSection(target);
 
-        // 移动菜单
+            // 如果点击的是集成页面按钮，重置预览状态，显示管理界面
+            if (target === "integrations") {
+              state.currentPageId = null;
+              resetPagePreview();
+              saveState();
+            }
+          };
+        }); // 移动菜单
         byId("mobileMenuBtn")?.addEventListener("click", () => byId("mobileDrawer").classList.remove("hidden"));
         byId("mobileClose")?.addEventListener("click", () => byId("mobileDrawer").classList.add("hidden"));
         document.getElementById("mobileDrawer").addEventListener("click", (e) => {
           if (e.target.id === "mobileDrawer") e.currentTarget.classList.add("hidden");
+        });
+
+        // 返回管理按钮
+        byId("backToManagement")?.addEventListener("click", () => {
+          resetPagePreview();
         });
       }
 
