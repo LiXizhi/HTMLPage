@@ -120,18 +120,43 @@
       .toast-close:hover {
         opacity: 1;
       }
+
+      /* Streaming text styles */
+      #streamingText {
+        font-family: 'Courier New', monospace;
+        line-height: 1.4;
+      }
+
+      .streaming-cursor::after {
+        content: '|';
+        animation: blink 1s infinite;
+        color: #6b7280;
+      }
+
+      @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+      }
     </style>
   </head>
   <body class="bg-slate-50 text-slate-800">
     <!-- App Container -->
     <div class="min-h-screen flex flex-col">
-      <!-- Header -->
+      <!-- Header with Tabs -->
       <header class="bg-white border-b border-slate-200">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
           <div class="flex items-center gap-2">
-            <div class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold">AI</div>
-            <h1 class="text-lg sm:text-xl font-semibold">智能作业批改系统</h1>
+            <div class="h-9 p-2 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold">AI批改</div>
           </div>
+          
+          <!-- Tabs in header -->
+          <div class="flex gap-2 ml-6">
+            <button data-tab="grading" class="tab-btn px-4 py-2 text-sm rounded-lg bg-brand-50 text-brand-700 border border-brand-200">批改</button>
+            <button data-tab="reports" class="tab-btn px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100">报告</button>
+            <button data-tab="analytics" class="tab-btn px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100">分析</button>
+            <button data-tab="settings" class="tab-btn px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100">设置</button>
+          </div>
+          
           <div class="flex-1"></div>
 
           <!-- Current Class Selector -->
@@ -140,23 +165,8 @@
             <select id="currentClassSelect" class="px-3 py-1.5 border rounded-lg text-sm"></select>
             <button id="btnManageClasses" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-sm">班级管理</button>
           </div>
-
-          <!-- Settings quick -->
-          <button id="btnSettings" class="ml-2 px-3 py-1.5 border rounded-lg text-sm">设置</button>
         </div>
       </header>
-
-      <!-- Tabs -->
-      <nav class="bg-slate-100 border-b border-slate-200">
-        <div class="max-w-7xl mx-auto px-4">
-          <div class="flex gap-2">
-            <button data-tab="grading" class="tab-btn px-4 py-2 text-sm rounded-t-lg bg-white border-x border-t border-slate-200">批改</button>
-            <button data-tab="reports" class="tab-btn px-4 py-2 text-sm rounded-t-lg text-slate-600">报告</button>
-            <button data-tab="analytics" class="tab-btn px-4 py-2 text-sm rounded-t-lg text-slate-600">分析</button>
-            <button data-tab="settings" class="tab-btn px-4 py-2 text-sm rounded-t-lg text-slate-600">设置</button>
-          </div>
-        </div>
-      </nav>
 
       <!-- Main -->
       <main class="flex-1">
@@ -181,7 +191,7 @@
                     <option value="math">数学作业</option>
                     <option value="english">英语作文</option>
                     <option value="chinese">语文作文</option>
-                    <option value="custom">自定义</option>
+                    <option value="custom">自定义/全科学</option>
                   </select>
 
                   <!-- Hidden inputs for storing prompt settings -->
@@ -214,6 +224,10 @@
                   </div>
                   <p class="text-xs text-slate-500 mt-2">支持多学科混合批改。切换主题时不会重置已有图片状态。只有手动删除图片才会移除。</p>
                   <div id="gradingProgress" class="hidden mt-3 text-sm text-slate-600"></div>
+                  <div id="streamingStatus" class="hidden mt-2 text-xs text-gray-500 border-l-2 border-gray-300 pl-3">
+                    <div class="font-medium mb-1">AI 响应:</div>
+                    <div id="streamingText" class="whitespace-pre-wrap max-h-32 overflow-y-auto"></div>
+                  </div>
                 </div>
               </div>
 
@@ -267,7 +281,7 @@
                     <option value="math">数学作业</option>
                     <option value="english">英语作文</option>
                     <option value="chinese">语文作文</option>
-                    <option value="custom">自定义</option>
+                    <option value="custom">自定义/全学科</option>
                   </select>
                 </div>
               </div>
@@ -288,7 +302,7 @@
                       <option value="math">数学作业</option>
                       <option value="english">英语作文</option>
                       <option value="chinese">语文作文</option>
-                      <option value="custom">自定义</option>
+                      <option value="custom">自定义/全学科</option>
                     </select>
                   </div>
                 </div>
@@ -319,6 +333,19 @@
           <section id="tab-settings" class="tab-panel hidden">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <h2 class="font-semibold mb-3">AI 服务提供商</h2>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-sm text-slate-600 mb-2">选择 AI 服务</label>
+                    <select id="aiProviderSelect" class="w-full border rounded-lg px-3 py-2">
+                      <option value="doubao">Doubao (豆包) - 自有 API Key</option>
+                      <option value="keepwork">Keepwork SDK - 无需配置</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">选择使用哪种 AI 服务进行批改</p>
+                  </div>
+                </div>
+              </div>
+              <div id="doubaoSettings" class="bg-white border border-slate-200 rounded-xl p-4">
                 <h2 class="font-semibold mb-3">Doubao API 设置</h2>
                 <div class="space-y-3">
                   <div>
@@ -336,11 +363,23 @@
                     <input id="endpointInput" type="text" value="https://ark.cn-beijing.volces.com/api/v3/chat/completions" class="w-full border rounded-lg px-3 py-2" />
                     <p class="text-xs text-slate-500 mt-1">默认为 Doubao/火山方舟 Chat Completions 接口</p>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <input id="mockToggle" type="checkbox" class="h-4 w-4" />
-                    <label for="mockToggle" class="text-sm text-slate-700">启用模拟批改模式（不调用真实 API）</label>
+
+                  <div class="flex gap-2">
+                    <button id="btnSaveApiSettings" class="px-4 py-2 bg-brand-600 text-white rounded-lg">保存设置</button>
+                    <button id="btnTestDoubaoLLM" class="px-4 py-2 bg-emerald-600 text-white rounded-lg">测试 LLM</button>
                   </div>
-                  <button id="btnSaveApiSettings" class="px-4 py-2 bg-brand-600 text-white rounded-lg">保存设置</button>
+                </div>
+              </div>
+              <div id="keepworkSettings" class="bg-white border border-slate-200 rounded-xl p-4 hidden">
+                <h2 class="font-semibold mb-3">Keepwork SDK 设置</h2>
+                <div class="space-y-3">
+                  <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p class="text-sm text-blue-800">使用 Keepwork SDK 无需额外配置，将自动使用内置的 AI 服务。</p>
+                  </div>
+                  <div class="flex gap-2">
+                    <button id="btnSaveKeepworkSettings" class="px-4 py-2 bg-brand-600 text-white rounded-lg">保存设置</button>
+                    <button id="btnTestKeepworkLLM" class="px-4 py-2 bg-emerald-600 text-white rounded-lg">测试 LLM</button>
+                  </div>
                 </div>
               </div>
               <div class="bg-white border border-slate-200 rounded-xl p-4">
@@ -352,7 +391,7 @@
                       <option value="strict">严格（完整匹配）</option>
                       <option value="loose" selected>宽松（包含匹配）</option>
                     </select>
-                    <p class="text-xs text-slate-500 mt-1">使用 Doubao 大模型进行智能文字识别，支持中英文混合识别</p>
+                    <p class="text-xs text-slate-500 mt-1">使用 AI 大模型进行智能文字识别，支持中英文混合识别</p>
                   </div>
                 </div>
                 <div class="mt-3">
@@ -463,31 +502,46 @@
           </div>
         </div>
 
+        <!-- Modal: Test LLM -->
+        <div id="testLLMModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
+          <div class="bg-white w-full max-w-3xl rounded-xl p-5">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-lg">测试 LLM 连接</h3>
+              <button id="closeTestLLMModal" class="p-2 rounded-lg hover:bg-slate-100">&times;</button>
+            </div>
+            <div class="mt-4 space-y-4">
+              <div>
+                <label class="block text-sm text-slate-600 mb-2">测试消息</label>
+                <textarea id="testLLMInput" class="w-full border rounded-lg px-3 py-2 h-24 text-sm" placeholder="输入测试消息，例如：你好，请回复一个简单的问候。">你好，请简单介绍一下自己。</textarea>
+              </div>
+              <div class="flex gap-2">
+                <button id="btnRunLLMTest" class="px-4 py-2 bg-emerald-600 text-white rounded-lg">开始测试</button>
+                <button id="btnCancelLLMTest" class="px-4 py-2 border rounded-lg">取消</button>
+              </div>
+              <div id="testLLMProgress" class="hidden">
+                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p class="text-sm text-blue-800">正在测试 LLM 连接...</p>
+                </div>
+              </div>
+              <div id="testLLMResult" class="hidden">
+                <label class="block text-sm text-slate-600 mb-2">测试结果</label>
+                <div class="border rounded-lg p-3 bg-slate-50 min-h-[100px] max-h-[300px] overflow-y-auto">
+                  <pre id="testLLMResultContent" class="text-sm whitespace-pre-wrap"></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
     <script>
       // LLM API integration (from characterAI.html)
-      let aiChatSession = null;
       const sdk = new KeepworkSDK({
         timeout: 30000,
       });
 
-      // Initialize LLM
-      async function initializeLLM() {
-        try {
-          if (sdk && sdk.aiChat) {
-            aiChatSession = sdk.aiChat.createSession({
-              model: "keepwork-lite",
-              stream: false,
-            });
-          }
-          console.log("LLM initialized successfully");
-        } catch (error) {
-          console.error("Failed to initialize LLM:", error);
-        }
-      }
-      
       const LSK = {
         classes: "classes",
         currentClassId: "currentClassId",
@@ -614,10 +668,10 @@
           currentIndex: 0,
         },
         settings: {
-          apiKey: "ec978213-eff1-4a6f-9c15-7aeb71c082c7",
+          aiProvider: "keepwork", // "doubao" or "keepwork" - default to keepwork when no API key
+          apiKey: "",
           model: "doubao-seed-1-6-flash-250615",
           endpoint: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-          mock: false,
           matchSensitivity: "loose",
           sendImageBase64: false,
         },
@@ -666,17 +720,30 @@
         "comments": "总体评价",
         "mistakes": [{"item":"方面","reason":"问题","fix":"建议"}]
       }`,
-        custom: `请根据以下“学生作答文本”进行批改与评分，满分 {{MAX_SCORE}}：
-      - 简要说明评分维度与理由
-      - 给出总体评语与三条改进建议
-      输出 JSON（不要多余前后缀）：
-      {
-        "score": 0-{{MAX_SCORE}},
-        "max_score": {{MAX_SCORE}},
-        "level": "A/B/C/D",
-        "comments": "总体评价",
-        "mistakes": [{"item":"方面","reason":"问题","fix":"建议"}]
-      }`,
+        custom: `请根据以下"学生作答文本"进行批改与评分，满分 {{MAX_SCORE}}：
+
+    **适用学科：**
+    - 数学：检查计算步骤、公式应用、逻辑推理的正确性
+    - 语文：从内容表达、语言运用、结构组织、书写规范等方面评价
+    - 英语：关注语法准确性、词汇运用、表达流畅度、拼写规范
+    - 物理/化学：重点检查公式运用、实验步骤、单位换算、概念理解
+    - 生物：评估概念掌握、图表分析、实验设计、术语使用
+    - 历史/地理：考查史实准确性、地理知识点、分析能力、表述逻辑
+    - 其他学科：根据学科特点进行针对性评价
+
+    **评分要求：**
+    - 准确识别学科类型并采用相应评分标准
+    - 指出主要错误点并给出具体改进建议
+    - 综合考虑知识掌握度、答题规范性、表达清晰度
+
+    输出 JSON（不要多余前后缀）：
+    {
+      "score": 0-{{MAX_SCORE}},
+      "max_score": {{MAX_SCORE}},
+      "level": "A/B/C/D",
+      "comments": "总体评价（包含学科识别）",
+      "mistakes": [{"item":"知识点/方面","reason":"错误原因","fix":"具体改进建议"}]
+    }`,
       };
 
       // ---------- DOM ----------
@@ -688,8 +755,7 @@
       function cacheDOM() {
         els.currentClassSelect = qs("currentClassSelect");
         els.btnManageClasses = qs("btnManageClasses");
-        els.btnSettings = qs("btnSettings");
-
+        
         els.apiKeyAlert = qs("apiKeyAlert");
 
         els.themeSelect = qs("themeSelect");
@@ -706,6 +772,8 @@
         els.btnStartGrading = qs("btnStartGrading");
         els.btnSaveReport = qs("btnSaveReport");
         els.gradingProgress = qs("gradingProgress");
+        els.streamingStatus = qs("streamingStatus");
+        els.streamingText = qs("streamingText");
 
         els.imgCount = qs("imgCount");
         els.imageGrid = qs("imageGrid");
@@ -724,14 +792,17 @@
         els.rankingList = qs("rankingList");
         els.btnExportLatestCSV = qs("btnExportLatestCSV");
         els.studentTrendSelect = qs("studentTrendSelect");
-        els.studentChart = qs("studentChart"); // Settings
+        els.studentChart = qs("studentChart");        // Settings
+        els.aiProviderSelect = qs("aiProviderSelect");
         els.apiKeyInput = qs("apiKeyInput");
         els.modelInput = qs("modelInput");
         els.endpointInput = qs("endpointInput");
-        els.mockToggle = qs("mockToggle");
         els.matchSensitivity = qs("matchSensitivity");
         els.sendImageToggle = qs("sendImageToggle");
         els.btnSaveApiSettings = qs("btnSaveApiSettings");
+        els.btnSaveKeepworkSettings = qs("btnSaveKeepworkSettings");
+        els.btnTestDoubaoLLM = qs("btnTestDoubaoLLM");
+        els.btnTestKeepworkLLM = qs("btnTestKeepworkLLM");
         els.btnSeedDemo = qs("btnSeedDemo");
         els.btnClearAll = qs("btnClearAll");
 
@@ -760,6 +831,16 @@
         els.btnResetPrompt = qs("btnResetPrompt");
         els.btnSavePromptSettings = qs("btnSavePromptSettings");
         els.btnCancelPromptSettings = qs("btnCancelPromptSettings");
+
+        // Test LLM Modal
+        els.testLLMModal = qs("testLLMModal");
+        els.closeTestLLMModal = qs("closeTestLLMModal");
+        els.testLLMInput = qs("testLLMInput");
+        els.btnRunLLMTest = qs("btnRunLLMTest");
+        els.btnCancelLLMTest = qs("btnCancelLLMTest");
+        els.testLLMProgress = qs("testLLMProgress");
+        els.testLLMResult = qs("testLLMResult");
+        els.testLLMResultContent = qs("testLLMResultContent");
       }
 
       async function initFromStorage() {
@@ -792,15 +873,21 @@
           state.classes.push(defaultClass);
           state.currentClassId = defaultClass.id;
           await persistAll();
-        } // set settings UI
+        }        // set settings UI
+        // Auto-select Keepwork if API key is empty
+        if (!state.settings.apiKey || state.settings.apiKey.trim() === "") {
+          state.settings.aiProvider = "keepwork";
+        }
+        
+        els.aiProviderSelect.value = state.settings.aiProvider || "keepwork";
         els.apiKeyInput.value = state.settings.apiKey || "";
-        els.modelInput.value = state.settings.model || "ep-xxxxxxxx";
+        els.modelInput.value = state.settings.model || "keepwork-pro";
         els.endpointInput.value = state.settings.endpoint || "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
-        els.mockToggle.checked = !!state.settings.mock;
         els.matchSensitivity.value = state.settings.matchSensitivity || "loose";
         els.sendImageToggle.checked = !!state.settings.sendImageBase64;
 
         updateApiKeyAlert();
+        updateProviderSettings();
       }
 
       async function persistAll() {
@@ -1056,12 +1143,22 @@
       }
 
       function updateApiKeyAlert() {
-        if (!state.settings.apiKey && !state.settings.mock) {
-          els.apiKeyAlert.classList.remove("hidden");
-        } else if (state.settings.mock) {
-          els.apiKeyAlert.classList.remove("hidden");
+        if (state.settings.aiProvider === "keepwork" || !state.settings.apiKey || state.settings.apiKey.trim() === "") {
+          // When using Keepwork or no API key, hide the alert since Keepwork SDK will be used
+          els.apiKeyAlert.classList.add("hidden");
         } else {
           els.apiKeyAlert.classList.add("hidden");
+        }
+      }
+
+      function updateProviderSettings() {
+        const provider = state.settings.aiProvider || "doubao";
+        if (provider === "keepwork") {
+          document.getElementById("doubaoSettings").classList.add("hidden");
+          document.getElementById("keepworkSettings").classList.remove("hidden");
+        } else {
+          document.getElementById("doubaoSettings").classList.remove("hidden");
+          document.getElementById("keepworkSettings").classList.add("hidden");
         }
       }
 
@@ -1348,6 +1445,9 @@
           renderImageGrid();
           showToast("正在批改图片...", "info");
           
+          // Show streaming status for single image grading too
+          showStreamingStatus();
+          
           const result = await gradeOne(img, cls.name, theme, prompt, maxScore);
           
           console.log("单独批改结果:", result);
@@ -1432,7 +1532,7 @@
             if (tab === "reports") renderReportsList();
           });
         });
-      } // ---------- LLM-based OCR ----------
+      }      // ---------- LLM-based OCR ----------
       async function performLLMOCR(imageFile) {
         try {
           const imageBase64 = await fileToDataURL(imageFile);
@@ -1459,10 +1559,22 @@
             },
           ];
 
-          const result = await callDoubao(messages);
+          // Show streaming status for OCR
+          showStreamingStatus();
+
+          const result = await callLLM(messages, { 
+            stream: true, // Enable streaming for OCR
+            callback: (streamingText) => {
+              updateStreamingText(streamingText);
+            }
+          });
+
+          // Hide streaming status when done
+          hideStreamingStatus();
+
           if (result.ok) {
             try {
-              const jsonResponse = JSON.parse(result.text);
+              const jsonResponse = safeParseJSON(result.text);
               // Return the structured response with content and username
               return {
                 content: jsonResponse.content || result.text.trim(),
@@ -1484,6 +1596,8 @@
           }
         } catch (error) {
           console.error("OCR processing error:", error);
+          // Hide streaming status on error
+          hideStreamingStatus();
           return {
             content: "",
             username: ""
@@ -1580,7 +1694,7 @@
         setTimeout(() => els.ocrProgress.classList.add("hidden"), 1500);
       }
 
-      // ---------- Doubao API (Mock fallback) ----------
+      // ---------- LLM API Integration ----------
       function buildMessages({ studentName, className, theme, prompt, maxScore, ocrText, imageBase64 }) {
         const system = `你是一名严格且友好的老师，负责${formatTheme(theme)}的作业批改。严格按照指令输出 JSON。`;
         const finalPrompt = prompt.replaceAll("{{MAX_SCORE}}", String(maxScore || 100));
@@ -1602,63 +1716,112 @@
         ];
       }
 
-      async function callDoubao(messages) {
-        if (state.settings.mock || !state.settings.apiKey) {
-          // Check if this is an OCR request based on system message content
-          const systemMessage = messages.find(m => m.role === "system");
-          const isOCRRequest = systemMessage && systemMessage.content.includes("文字识别助手");
-          
-          if (isOCRRequest) {
-            // Mock OCR response
-            const mockOCRResults = [
-              { content: "学生姓名：张三\n题目1：2+3=5\n题目2：10-4=6", username: "张三" },
-              { content: "姓名：李四\n1. 苹果的英文是apple\n2. 香蕉的英文是banana", username: "李四" },
-              { content: "班级：三年级一班\n学生：王五\n数学作业：\n1. 5×6=30\n2. 8÷2=4", username: "王五" },
-              { content: "作业内容：\n语文作业\n1. 春天来了，花儿开了\n2. 小鸟在枝头歌唱", username: "" },
-            ];
-            const randomResult = mockOCRResults[Math.floor(Math.random() * mockOCRResults.length)];
-            return { ok: true, text: JSON.stringify(randomResult) };
+      async function callLLM(messages, options = {}) {
+        const { stream = true, callback = null } = options;
+        
+        // Use Keepwork SDK if API key is empty or provider is set to keepwork
+        if (state.settings.aiProvider === "keepwork" || !state.settings.apiKey || state.settings.apiKey.trim() === "") {
+          try {
+            // Use sdk.aiChat.chat directly with messages array
+            let fullResponse = '';
+            const response = await sdk.aiChat.chat({
+              messages: messages,
+              model: 'keepwork-pro',
+              temperature: 0,
+              stream: stream,
+              onMessage: stream ? (chunk) => {
+                fullResponse = chunk;
+                if(callback) callback(chunk);
+              } : undefined
+            });
+            
+            const finalText = stream ? fullResponse : response;
+            return { ok: true, text: finalText };
+          } catch (error) {
+            console.error("Keepwork LLM error:", error);
+            return { ok: false, error: error.message || String(error) };
           }
-          
-          // Mock a deterministic-looking result for grading
-          const score = Math.floor(70 + Math.random() * 30);
-          const maxScore = Number(els.maxScoreInput.value || 100);
-          const levels = ["A", "B", "C", "D"];
-          const level = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "D";
-          const json = {
-            score,
-            max_score: maxScore,
-            level,
-            comments: "内容完整，表达清晰，但仍有改进空间。",
-            mistakes: [
-              { item: "细节", reason: "论证不充分", fix: "补充数据或例子支撑观点" },
-              { item: "格式", reason: "标点或书写不规范", fix: "检查并规范书写与标点" },
-            ],
-          };
-          return { ok: true, text: JSON.stringify(json) };
         }
 
+        // Use Doubao API
         try {
+          const requestBody = {
+            model: state.settings.model,
+            messages,
+            temperature: 0.2,
+            ...(JSON.stringify(messages).toLowerCase().includes('json') && { response_format: { type: "json_object" } }),
+          };
+          
+          // Add stream parameter if streaming is enabled
+          if (stream) {
+            requestBody.stream = true;
+          }
+          
           const resp = await fetch(state.settings.endpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${state.settings.apiKey}`,
             },
-            body: JSON.stringify({
-              model: state.settings.model,
-              messages,
-              temperature: 0.2,
-              response_format: { type: "json_object" },
-            }),
+            body: JSON.stringify(requestBody),
           });
+          
           if (!resp.ok) {
             const errText = await resp.text();
             return { ok: false, error: `HTTP ${resp.status}: ${errText}` };
           }
-          const data = await resp.json();
-          const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.[0]?.text || "";
-          return { ok: true, text };
+          
+          if (stream) {
+            // Handle streaming response
+            const reader = resp.body?.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let fullResponse = '';
+            let buffer = '';
+            
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const jsonData = line.substring(6);
+                    if (jsonData === '[DONE]') {
+                      break;
+                    }
+                    
+                    try {
+                      const data = JSON.parse(jsonData);
+                      const content = data?.choices?.[0]?.delta?.content || '';
+                      if (content) {
+                        fullResponse += content;
+                        if(callback)
+                          callback(fullResponse);
+                      }
+                    } catch (e) {
+                      console.warn('Failed to parse streaming data:', e);
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Ensure no "data: " prefix remains in the final response
+            if (fullResponse.startsWith('data: ')) {
+              fullResponse = fullResponse.substring(6);
+            }
+            
+            return { ok: true, text: fullResponse };
+          } else {
+            // Handle non-streaming response
+            const data = await resp.json();
+            const text = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.[0]?.text || "";
+            return { ok: true, text };
+          }
         } catch (e) {
           return { ok: false, error: e.message || String(e) };
         }
@@ -1741,7 +1904,19 @@
           imageBase64: base64,
         });
 
-        const res = await callDoubao(messages);
+        // Show streaming status and enable streaming with callback
+        showStreamingStatus();
+        
+        const res = await callLLM(messages, {
+          stream: true,
+          callback: (streamingText) => {
+            updateStreamingText(streamingText);
+          }
+        });
+        
+        // Hide streaming status when done
+        hideStreamingStatus();
+        
         if (!res.ok) {
           return { error: res.error };
         }
@@ -1834,6 +2009,7 @@
           // 检查是否应该暂停
           if (state.grading.isPaused) {
             state.grading.currentIndex = i;
+            hideStreamingStatus(); // Hide streaming when pausing
             els.gradingProgress.textContent = `批改已暂停：${i}/${totalImages}`;
             updateGradingButton();
             return;
@@ -1901,6 +2077,7 @@
         state.grading.isPaused = false;
         state.grading.currentIndex = 0;
         
+        hideStreamingStatus(); // Hide streaming when batch grading completes
         els.gradingProgress.textContent = `批改完成`;
         setTimeout(() => els.gradingProgress.classList.add("hidden"), 1500);
         updateGradingButton();
@@ -1930,6 +2107,40 @@
           els.btnStartGrading.textContent = "开始批改";
           els.btnStartGrading.className = "w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed";
           els.btnStartGrading.disabled = false;
+        }
+      }
+
+      // Streaming status helpers
+      function showStreamingStatus() {
+        if (els.streamingStatus) {
+          els.streamingStatus.classList.remove("hidden");
+          els.streamingText.textContent = "";
+          els.streamingText.classList.add("streaming-cursor");
+        }
+      }
+
+      function updateStreamingText(text) {
+        if (els.streamingText) {
+          // Truncate very long text to prevent UI issues
+          const maxLength = 500;
+          let displayText = text;
+          if (text.length > maxLength) {
+            displayText = text.substring(0, maxLength) + "...";
+          }
+          
+          els.streamingText.textContent = displayText;
+          
+          // Auto-scroll to bottom if text overflows
+          els.streamingText.scrollTop = els.streamingText.scrollHeight;
+        }
+      }
+
+      function hideStreamingStatus() {
+        if (els.streamingStatus) {
+          els.streamingStatus.classList.add("hidden");
+          if (els.streamingText) {
+            els.streamingText.classList.remove("streaming-cursor");
+          }
         }
       }
       async function saveReport() {
@@ -2148,9 +2359,7 @@
           els.classModal.classList.remove("hidden");
           els.classModal.classList.add("flex");
         });
-        els.btnSettings.addEventListener("click", () => {
-          document.querySelector('[data-tab="settings"]').click();
-        });
+        
         els.currentClassSelect.addEventListener("change", async (e) => {
           state.currentClassId = e.target.value;
           await persistAll();
@@ -2374,22 +2583,187 @@
         els.btnExportLatestCSV.addEventListener("click", () => {}); // set in buildRanking
 
         // Settings
+        els.aiProviderSelect.addEventListener("change", async () => {
+          state.settings.aiProvider = els.aiProviderSelect.value;
+          updateProviderSettings();
+          updateApiKeyAlert();
+        });
+        
+        // Auto-switch provider based on API key presence
+        els.apiKeyInput.addEventListener("input", () => {
+          const apiKey = els.apiKeyInput.value.trim();
+          if (!apiKey) {
+            // No API key, switch to Keepwork
+            state.settings.aiProvider = "keepwork";
+            els.aiProviderSelect.value = "keepwork";
+          } else {
+            // API key provided, switch to Doubao
+            state.settings.aiProvider = "doubao";
+            els.aiProviderSelect.value = "doubao";
+          }
+          updateProviderSettings();
+          updateApiKeyAlert();
+        });
+        
         els.btnSaveApiSettings.addEventListener("click", async () => {
-          state.settings.apiKey = els.apiKeyInput.value.trim();
+          const apiKey = els.apiKeyInput.value.trim();
+          
+          // Auto-switch provider based on API key presence
+          if (!apiKey) {
+            state.settings.aiProvider = "keepwork";
+            els.aiProviderSelect.value = "keepwork";
+          } else {
+            state.settings.aiProvider = "doubao";
+            els.aiProviderSelect.value = "doubao";
+          }
+          
+          state.settings.apiKey = apiKey;
           state.settings.model = els.modelInput.value.trim();
           state.settings.endpoint = els.endpointInput.value.trim();
-          state.settings.mock = !!els.mockToggle.checked;
           state.settings.matchSensitivity = els.matchSensitivity.value;
           state.settings.sendImageBase64 = !!els.sendImageToggle.checked;
+          
           await persistAll();
           updateApiKeyAlert();
-          showToast("设置已保存", "success");
+          updateProviderSettings();
+          
+          const providerName = state.settings.aiProvider === "keepwork" ? "Keepwork" : "Doubao";
+          showToast(`${providerName} 设置已保存`, "success");
         });
+        
+        els.btnSaveKeepworkSettings.addEventListener("click", async () => {
+          state.settings.aiProvider = "keepwork";
+          await persistAll();
+          updateApiKeyAlert();
+          
+          showToast("Keepwork 设置已保存", "success");
+        });
+        
+        // Test LLM buttons
+        els.btnTestDoubaoLLM.addEventListener("click", () => {
+          openTestLLMModal("doubao");
+        });
+        
+        els.btnTestKeepworkLLM.addEventListener("click", () => {
+          openTestLLMModal("keepwork");
+        });
+        
+        // Test LLM Modal
+        els.closeTestLLMModal.addEventListener("click", closeTestLLMModal);
+        els.btnCancelLLMTest.addEventListener("click", closeTestLLMModal);
+        els.btnRunLLMTest.addEventListener("click", () => {
+          const provider = els.testLLMModal.dataset.provider;
+          testLLM(provider === "current" ? null : provider);
+        });
+        
+        // Click outside to close modals
+        els.testLLMModal.addEventListener("click", (e) => {
+          if (e.target === els.testLLMModal) closeTestLLMModal();
+        });
+        
         els.btnSeedDemo.addEventListener("click", async () => await seedDemoData());
         els.btnClearAll.addEventListener("click", () => {
           if (!confirm("确认清空全部数据（班级、报告、设置、缓存图片）？此操作不可恢复。")) return;
           location.reload();
         });
+      }
+
+      // ---------- Test LLM Functions ----------
+      function openTestLLMModal(provider) {
+        els.testLLMModal.dataset.provider = provider;
+        const modalTitle = els.testLLMModal.querySelector('h3');
+        if (provider === "doubao") {
+          modalTitle.textContent = "测试 Doubao LLM 连接";
+        } else if (provider === "keepwork") {
+          modalTitle.textContent = "测试 Keepwork LLM 连接";
+        } else {
+          modalTitle.textContent = "测试 LLM 连接";
+        }
+        
+        // Reset modal state
+        els.testLLMProgress.classList.add("hidden");
+        els.testLLMResult.classList.add("hidden");
+        els.testLLMInput.value = "你好，请简单介绍一下自己。";
+        els.testLLMResultContent.textContent = "";
+        
+        els.testLLMModal.classList.remove("hidden");
+        els.testLLMModal.classList.add("flex");
+      }
+
+      function closeTestLLMModal() {
+        els.testLLMModal.classList.add("hidden");
+        els.testLLMModal.classList.remove("flex");
+      }
+
+      async function testLLM(provider = null) {
+        const testMessage = els.testLLMInput.value.trim();
+        if (!testMessage) {
+          showToast("请输入测试消息", "warning");
+          return;
+        }
+
+        // Use current provider if not specified
+        const targetProvider = provider || state.settings.aiProvider;
+        
+        // Show progress
+        els.testLLMProgress.classList.remove("hidden");
+        els.testLLMResult.classList.add("hidden");
+        els.btnRunLLMTest.disabled = true;
+        els.btnRunLLMTest.textContent = "测试中...";
+
+        try {
+          // Build simple test messages
+          const messages = [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "what is your name?"
+                  },
+                ]
+              }
+            ]
+
+          console.log(`Testing ${targetProvider} LLM with message:`, testMessage);
+          
+          const startTime = Date.now();
+          
+          // Hide progress and show result container immediately for streaming
+          els.testLLMProgress.classList.add("hidden");
+          els.testLLMResult.classList.remove("hidden");
+          els.testLLMResultContent.textContent = `正在测试 ${targetProvider.toUpperCase()}...`;
+          
+          const result = await callLLM(messages, {
+            stream: true,
+            callback: (chunk) => {
+              // Update the content as streaming progresses
+              els.testLLMResultContent.textContent = `🔄 正在接收响应...\n\n${targetProvider.toUpperCase()} 响应:\n${chunk}`;
+            }
+          });
+          
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+
+          if (result.ok) {
+            els.testLLMResultContent.textContent = `✅ 测试成功 (${duration}ms)\n\n${targetProvider.toUpperCase()} 响应:\n${result.text}`;
+            showToast(`${targetProvider.toUpperCase()} LLM 连接测试成功`, "success");
+          } else {
+            els.testLLMResultContent.textContent = `❌ 测试失败\n\n错误信息:\n${result.error}`;
+            showToast(`${targetProvider.toUpperCase()} LLM 连接测试失败`, "error");
+          }
+
+        } catch (error) {
+          console.error("Test LLM error:", error);
+          els.testLLMProgress.classList.add("hidden");
+          els.testLLMResult.classList.remove("hidden");
+          els.testLLMResultContent.textContent = `❌ 测试异常\n\n错误信息:\n${error.message || String(error)}`;
+          showToast("LLM 测试过程中发生异常", "error");
+        } finally {
+          // Reset button state
+          els.btnRunLLMTest.disabled = false;
+          els.btnRunLLMTest.textContent = "开始测试";
+        }
       }
 
       // ---------- Demo Data ----------
