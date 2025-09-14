@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>智能作业批改系统 · H5</title>
+    <title>智能作业批改系统 · H5 (KeepWork存储)</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script>
       tailwind.config = {
@@ -28,6 +28,7 @@
       };
     </script>
     <script src="https://cdn.keepwork.com/keepwork/cdn/chart.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?ver=1.0.7"></script>
     <style>
       .scrollbar-thin::-webkit-scrollbar {
         width: 8px;
@@ -466,28 +467,63 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script>
-      // ---------- Utilities ----------
+      // LLM API integration (from characterAI.html)
+      let aiChatSession = null;
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+
+      // Initialize LLM
+      async function initializeLLM() {
+        try {
+          if (sdk && sdk.aiChat) {
+            aiChatSession = sdk.aiChat.createSession({
+              model: "keepwork-lite",
+              stream: false,
+            });
+          }
+          console.log("LLM initialized successfully");
+        } catch (error) {
+          console.error("Failed to initialize LLM:", error);
+        }
+      }
+      
       const LSK = {
-        classes: "smartgrader.classes",
-        currentClassId: "smartgrader.currentClassId",
-        reports: "smartgrader.reports",
-        settings: "smartgrader.settings",
+        classes: "classes",
+        currentClassId: "currentClassId",
+        reports: "reports",
+        settings: "settings",
       };
 
       function uid(prefix = "id") {
         return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       }
 
-      function saveLS(key, value) {
-        localStorage.setItem(key, JSON.stringify(value));
+      const LS = {
+        get: async (k, d) => {
+          try {
+            const data = await sdk.personalPageStore.loadPageData("smart_grader", k);
+            return structuredClone(data ?? d);
+          } catch (e) {
+            console.warn("读取数据失败，使用默认值", e);
+            return d;
+          }
+        },
+        set: async (k, v, bFlush) => {
+          try {
+            await sdk.personalPageStore.savePageData("smart_grader", k, v, bFlush);
+          } catch (e) {
+            console.warn("保存数据失败", e);
+          }
+        },
+      };
+      
+      // Legacy functions for backward compatibility
+      function saveLS(key, value, bFlush) {
+        return LS.set(key, value, bFlush);
       }
-      function loadLS(key, def = null) {
-        try {
-          const v = localStorage.getItem(key);
-          return v ? JSON.parse(v) : def;
-        } catch {
-          return def;
-        }
+      async function loadLS(key, def = null) {
+        return await LS.get(key, def);
       }
 
       function formatDate(d) {
@@ -726,16 +762,25 @@
         els.btnCancelPromptSettings = qs("btnCancelPromptSettings");
       }
 
-      function initFromStorage() {
-        const storedClasses = loadLS(LSK.classes, []);
-        const storedReports = loadLS(LSK.reports, []);
-        const storedSettings = loadLS(LSK.settings, state.settings);
-        const storedCurrent = loadLS(LSK.currentClassId, null);
+      async function initFromStorage() {
+        const storedClasses = await loadLS(LSK.classes, []);
+        const storedReports = await loadLS(LSK.reports, []);
+        const storedSettings = await loadLS(LSK.settings, state.settings);
+        const storedCurrent = await loadLS(LSK.currentClassId, null);
 
-        state.classes = storedClasses;
-        state.reports = storedReports;
+        // Ensure data integrity - always use arrays
+        state.classes = ensureArray(storedClasses);
+        state.reports = ensureArray(storedReports);
         state.settings = { ...state.settings, ...storedSettings };
         state.currentClassId = storedCurrent || (state.classes[0]?.id ?? null);
+
+        // Validate and fix classes structure
+        state.classes.forEach((cls) => {
+          if (!Array.isArray(cls.students)) {
+            console.warn(`Class ${cls.name} has invalid students array, fixing...`);
+            cls.students = [];
+          }
+        });
 
         // Create default class if no classes exist
         if (state.classes.length === 0) {
@@ -746,7 +791,7 @@
           };
           state.classes.push(defaultClass);
           state.currentClassId = defaultClass.id;
-          persistAll();
+          await persistAll();
         } // set settings UI
         els.apiKeyInput.value = state.settings.apiKey || "";
         els.modelInput.value = state.settings.model || "ep-xxxxxxxx";
@@ -758,16 +803,23 @@
         updateApiKeyAlert();
       }
 
-      function persistAll() {
-        saveLS(LSK.classes, state.classes);
-        saveLS(LSK.reports, state.reports);
-        saveLS(LSK.settings, state.settings);
-        saveLS(LSK.currentClassId, state.currentClassId);
+      async function persistAll() {
+        await saveLS(LSK.classes, state.classes);
+        await saveLS(LSK.reports, state.reports);
+        await saveLS(LSK.settings, state.settings);
+        await saveLS(LSK.currentClassId, state.currentClassId, true);
       }
 
       // ---------- UI Render ----------
       function renderClassesToHeader() {
         els.currentClassSelect.innerHTML = "";
+        
+        // Ensure state.classes is an array
+        if (!Array.isArray(state.classes)) {
+          console.warn("state.classes is not an array, initializing to empty array");
+          state.classes = [];
+        }
+        
         state.classes.forEach((c) => {
           const opt = document.createElement("option");
           opt.value = c.id;
@@ -782,9 +834,23 @@
       function renderClassModal() {
         // Classes
         els.classList.innerHTML = "";
+        
+        // Ensure state.classes is an array
+        if (!Array.isArray(state.classes)) {
+          console.warn("state.classes is not an array in renderClassModal, initializing to empty array");
+          state.classes = [];
+        }
+        
         state.classes.forEach((c) => {
           const div = document.createElement("div");
           div.className = "flex items-center justify-between p-2 border rounded-lg";
+          
+          // Ensure c.students is an array before accessing its length
+          if (!Array.isArray(c.students)) {
+            console.warn(`Class ${c.name} students is not an array, initializing to empty array`);
+            c.students = [];
+          }
+          
           div.innerHTML = `
                 <div class="flex-1">
                   <div class="font-medium">${c.name}</div>
@@ -810,6 +876,13 @@
         const cls = getCurrentClass();
         els.studentList.innerHTML = "";
         if (!cls) return;
+        
+        // Ensure cls.students is an array before using array methods
+        if (!Array.isArray(cls.students)) {
+          console.warn("cls.students is not an array in renderStudentList, initializing to empty array");
+          cls.students = [];
+        }
+        
         cls.students.forEach((s) => {
           const row = document.createElement("div");
           row.className = "flex items-center justify-between p-2 border rounded-lg";
@@ -911,6 +984,13 @@
       function renderReportsList() {
         const clsId = state.currentClassId;
         const themeFilter = els.reportThemeFilter.value;
+        
+        // Ensure state.reports is an array before using array methods
+        if (!Array.isArray(state.reports)) {
+          console.warn("state.reports is not an array in renderReportsList, initializing to empty array");
+          state.reports = [];
+        }
+        
         const list = state.reports
           .filter((r) => r.classId === clsId)
           .filter((r) => !themeFilter || r.theme === themeFilter)
@@ -987,44 +1067,71 @@
 
       // ---------- Classes & Students ----------
       function getCurrentClass() {
+        // Ensure state.classes is an array before using array methods
+        if (!Array.isArray(state.classes)) {
+          console.warn("state.classes is not an array in getCurrentClass");
+          state.classes = [];
+        }
         return state.classes.find((c) => c.id === state.currentClassId) || null;
       }
       function getClassById(id) {
+        // Ensure state.classes is an array before using array methods
+        if (!Array.isArray(state.classes)) {
+          console.warn("state.classes is not an array in getClassById");
+          state.classes = [];
+        }
         return state.classes.find((c) => c.id === id) || null;
       }
       function getStudentById(classId, studentId) {
         return getClassById(classId)?.students.find((s) => s.id === studentId) || null;
       }
 
-      function addClass(name) {
+      async function addClass(name) {
         if (!name.trim()) return;
+        // Ensure state.classes is an array before using array methods
+        if (!Array.isArray(state.classes)) {
+          console.warn("state.classes is not an array in addClass, initializing to empty array");
+          state.classes = [];
+        }
         state.classes.push({ id: uid("class"), name: name.trim(), students: [] });
         if (!state.currentClassId) state.currentClassId = state.classes[0].id;
-        persistAll();
+        await persistAll();
         renderClassesToHeader();
         renderClassModal();
       }
-      function deleteClass(id) {
+      async function deleteClass(id) {
+        // Ensure state.classes is an array before using array methods
+        if (!Array.isArray(state.classes)) {
+          console.warn("state.classes is not an array in deleteClass, initializing to empty array");
+          state.classes = [];
+        }
         const i = state.classes.findIndex((c) => c.id === id);
         if (i >= 0) state.classes.splice(i, 1);
         if (state.currentClassId === id) {
           state.currentClassId = state.classes[0]?.id || null;
         }
-        persistAll();
+        await persistAll();
         renderClassesToHeader();
         renderClassModal();
       }
-      function renameClass(id, newName) {
+      async function renameClass(id, newName) {
         const c = getClassById(id);
         if (!c) return;
         c.name = newName.trim() || c.name;
-        persistAll();
+        await persistAll();
         renderClassesToHeader();
         renderClassModal();
       }
-      function importStudents(text) {
+      async function importStudents(text) {
         const cls = getCurrentClass();
         if (!cls) return;
+        
+        // Ensure cls.students is an array before using array methods
+        if (!Array.isArray(cls.students)) {
+          console.warn("cls.students is not an array in importStudents, initializing to empty array");
+          cls.students = [];
+        }
+        
         const names = (text || "")
           .split(/\r?\n/)
           .map((s) => s.trim())
@@ -1037,31 +1144,45 @@
             existed.add(key);
           }
         });
-        persistAll();
+        await persistAll();
         renderClassModal();
         refreshStudentSelects(); // also refresh image cards
       }
-      function clearStudents() {
+      async function clearStudents() {
         const cls = getCurrentClass();
         if (!cls) return;
         cls.students = [];
-        persistAll();
+        await persistAll();
         renderClassModal();
         refreshStudentSelects();
       }
-      function renameStudent(stuId, newName) {
+      async function renameStudent(stuId, newName) {
         const cls = getCurrentClass();
         if (!cls) return;
+        
+        // Ensure cls.students is an array before using array methods
+        if (!Array.isArray(cls.students)) {
+          console.warn("cls.students is not an array in renameStudent, initializing to empty array");
+          cls.students = [];
+        }
+        
         const s = cls.students.find((x) => x.id === stuId);
         if (!s) return;
         s.name = (newName || s.name).trim();
-        persistAll();
+        await persistAll();
         renderClassModal();
         refreshStudentSelects();
       }
-      function deleteStudent(stuId) {
+      async function deleteStudent(stuId) {
         const cls = getCurrentClass();
         if (!cls) return;
+        
+        // Ensure cls.students is an array before using array methods
+        if (!Array.isArray(cls.students)) {
+          console.warn("cls.students is not an array in deleteStudent, initializing to empty array");
+          cls.students = [];
+        }
+        
         const i = cls.students.findIndex((x) => x.id === stuId);
         if (i >= 0) cls.students.splice(i, 1);
         // clear mapping in images
@@ -1071,7 +1192,7 @@
             img.detectedName = null;
           }
         });
-        persistAll();
+        await persistAll();
         renderClassModal();
         refreshStudentSelects();
         renderImageGrid();
@@ -1265,11 +1386,11 @@
             
             // 更新显示
             renderImageGrid();
-            updateSummary();
+            renderResultsTable();
             
             // 如果当前在结果页面，刷新结果
-            if (document.querySelector('.tab-content[data-tab="results"]').style.display !== "none") {
-              renderResults();
+            if (document.querySelector('.tab-content[data-tab="results"]')) {
+              renderResultsTable();
             }
           }
         } catch (error) {
@@ -1287,6 +1408,11 @@
         const cls = getCurrentClass();
         els.studentTrendSelect.innerHTML = "";
         if (cls) {
+          // Ensure cls.students is an array before using array methods
+          if (!Array.isArray(cls.students)) {
+            console.warn("cls.students is not an array in refreshStudentSelects, initializing to empty array");
+            cls.students = [];
+          }
           els.studentTrendSelect.innerHTML = `<option value="">选择学生</option>` + cls.students.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
         }
       }
@@ -1806,7 +1932,7 @@
           els.btnStartGrading.disabled = false;
         }
       }
-      function saveReport() {
+      async function saveReport() {
         console.log("保存报告被调用，当前结果数量：", state.results.length);
         
         if (!state.results.length) {
@@ -1843,7 +1969,7 @@
           };
           
           state.reports.push(report);
-          persistAll();
+          await persistAll();
           
           console.log("报告保存成功：", report);
           showToast(`报告已保存到本地存档 (${state.results.length}份作业)`, "success");
@@ -2025,9 +2151,9 @@
         els.btnSettings.addEventListener("click", () => {
           document.querySelector('[data-tab="settings"]').click();
         });
-        els.currentClassSelect.addEventListener("change", (e) => {
+        els.currentClassSelect.addEventListener("change", async (e) => {
           state.currentClassId = e.target.value;
-          persistAll();
+          await persistAll();
           renderClassesToHeader();
           renderReportsList();
           refreshStudentSelects();
@@ -2038,39 +2164,39 @@
           els.classModal.classList.add("hidden");
           els.classModal.classList.remove("flex");
         });
-        els.classList.addEventListener("click", (e) => {
+        els.classList.addEventListener("click", async (e) => {
           const btn = e.target.closest("button");
           if (!btn) return;
           const act = btn.dataset.act;
           const id = btn.dataset.id;
           if (act === "switch") {
             state.currentClassId = id;
-            persistAll();
+            await persistAll();
             renderClassesToHeader();
             renderClassModal();
           } else if (act === "rename") {
             const c = getClassById(id);
             const name = prompt("输入新班级名", c?.name || "");
-            if (name) renameClass(id, name);
+            if (name) await renameClass(id, name);
           } else if (act === "delete") {
             if (confirm("确认删除该班级及其关联报告？此操作不可撤销。")) {
               // Also delete reports
               state.reports = state.reports.filter((r) => r.classId !== id);
-              deleteClass(id);
-              persistAll();
+              await deleteClass(id);
+              await persistAll();
               renderReportsList();
             }
           }
         });
-        els.btnAddClass.addEventListener("click", () => addClass(els.newClassName.value));
-        els.saveClassChanges.addEventListener("click", () => {
-          persistAll();
+        els.btnAddClass.addEventListener("click", async () => await addClass(els.newClassName.value));
+        els.saveClassChanges.addEventListener("click", async () => {
+          await persistAll();
           showToast("已保存班级与学生更改", "success");
           els.classModal.classList.add("hidden");
           els.classModal.classList.remove("flex");
           renderClassesToHeader();
         });
-        els.studentList.addEventListener("click", (e) => {
+        els.studentList.addEventListener("click", async (e) => {
           const btn = e.target.closest("button");
           if (!btn) return;
           const act = btn.dataset.act;
@@ -2078,14 +2204,14 @@
           if (act === "rename-stu") {
             const s = getStudentById(state.currentClassId, id);
             const name = prompt("输入新学生姓名", s?.name || "");
-            if (name) renameStudent(id, name);
+            if (name) await renameStudent(id, name);
           } else if (act === "del-stu") {
-            if (confirm("确认删除该学生？")) deleteStudent(id);
+            if (confirm("确认删除该学生？")) await deleteStudent(id);
           }
         });
-        els.btnImportStudents.addEventListener("click", () => importStudents(els.bulkStudentsInput.value));
-        els.btnClearStudents.addEventListener("click", () => {
-          if (confirm("确认清空当前班级全部学生？")) clearStudents();
+        els.btnImportStudents.addEventListener("click", async () => await importStudents(els.bulkStudentsInput.value));
+        els.btnClearStudents.addEventListener("click", async () => {
+          if (confirm("确认清空当前班级全部学生？")) await clearStudents();
         });
 
         // Upload & OCR
@@ -2167,7 +2293,7 @@
             startGrading();
           }
         });
-        els.btnSaveReport.addEventListener("click", saveReport);
+        els.btnSaveReport.addEventListener("click", async () => await saveReport());
 
         // Results detail
         els.resultsTbody.addEventListener("click", (e) => {
@@ -2248,27 +2374,26 @@
         els.btnExportLatestCSV.addEventListener("click", () => {}); // set in buildRanking
 
         // Settings
-        els.btnSaveApiSettings.addEventListener("click", () => {
+        els.btnSaveApiSettings.addEventListener("click", async () => {
           state.settings.apiKey = els.apiKeyInput.value.trim();
           state.settings.model = els.modelInput.value.trim();
           state.settings.endpoint = els.endpointInput.value.trim();
           state.settings.mock = !!els.mockToggle.checked;
           state.settings.matchSensitivity = els.matchSensitivity.value;
           state.settings.sendImageBase64 = !!els.sendImageToggle.checked;
-          persistAll();
+          await persistAll();
           updateApiKeyAlert();
           showToast("设置已保存", "success");
         });
-        els.btnSeedDemo.addEventListener("click", seedDemoData);
+        els.btnSeedDemo.addEventListener("click", async () => await seedDemoData());
         els.btnClearAll.addEventListener("click", () => {
           if (!confirm("确认清空全部数据（班级、报告、设置、缓存图片）？此操作不可恢复。")) return;
-          localStorage.clear();
           location.reload();
         });
       }
 
       // ---------- Demo Data ----------
-      function seedDemoData() {
+      async function seedDemoData() {
         if (!state.classes.length) {
           state.classes = [
             {
@@ -2295,9 +2420,16 @@
         // Demo reports
         if (!state.reports.length) {
           const c0 = state.classes[0];
-          const mkRep = (daysAgo, theme) => {
-            const date = new Date(Date.now() - daysAgo * 86400000).toISOString();
-            const results = c0.students.map((s) => {
+          if (c0) {
+            // Ensure c0.students is an array before using array methods
+            if (!Array.isArray(c0.students)) {
+              console.warn("c0.students is not an array in seedDemoData, initializing to empty array");
+              c0.students = [];
+            }
+            
+            const mkRep = (daysAgo, theme) => {
+              const date = new Date(Date.now() - daysAgo * 86400000).toISOString();
+              const results = c0.students.map((s) => {
               const score = Math.floor(60 + Math.random() * 40);
               return {
                 imageId: uid("img"),
@@ -2332,25 +2464,42 @@
           mkRep(15, "math");
           mkRep(7, "english");
           mkRep(3, "math");
+          }
         }
-        persistAll();
+        await persistAll();
         renderClassesToHeader();
         renderReportsList();
         refreshStudentSelects();
         showToast("已填充示例数据", "success");
       }
 
-      function StartPage() {
-        cacheDOM();
-        initFromStorage();
-        bindEvents();
-        renderClassesToHeader();
-        refreshStudentSelects();
-        // default prompt
-        els.themeSelect.value = "math";
-        els.maxScoreInput.value = 100;
-        els.levelToggle.value = "on";
-        els.promptTextarea.value = (defaultPrompts["math"] || "").replaceAll("{{MAX_SCORE}}", "100");
+      async function StartPage() {
+        try {
+          cacheDOM();
+          await initFromStorage();
+          
+          // Additional safety check to ensure state.classes is always an array
+          if (!Array.isArray(state.classes)) {
+            console.warn("state.classes is not an array after initFromStorage, resetting to empty array");
+            state.classes = [];
+          }
+          if (!Array.isArray(state.reports)) {
+            console.warn("state.reports is not an array after initFromStorage, resetting to empty array");
+            state.reports = [];
+          }
+          
+          bindEvents();
+          renderClassesToHeader();
+          refreshStudentSelects();
+          // default prompt
+          els.themeSelect.value = "math";
+          els.maxScoreInput.value = 100;
+          els.levelToggle.value = "on";
+          els.promptTextarea.value = (defaultPrompts["math"] || "").replaceAll("{{MAX_SCORE}}", "100");
+        } catch (error) {
+          console.error("Error during StartPage initialization:", error);
+          showToast("初始化失败，请刷新页面重试", "error");
+        }
         // 初始化按钮状态
         updateGradingButton();
       }
