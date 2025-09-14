@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>智匠 iMOM 生产管理系统 H5</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/chart.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.4"></script>
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      /* 轻微的过渡动画 */
+      .fade-enter {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      .fade-enter-active {
+        opacity: 1;
+        transform: translateY(0);
+        transition: all 0.2s ease;
+      }
+      /* 固定头部阴影 */
+      .header-shadow {
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+      }
+      /* 表格滚动 */
+      .table-scroll {
+        max-height: 360px;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800">
+    <div class="flex min-h-screen">
+      <!-- 侧边栏 -->
+      <aside class="w-56 bg-white border-r border-slate-200 hidden md:flex md:flex-col">
+        <div class="px-4 py-4 border-b border-slate-200">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded bg-indigo-600 text-white flex items-center justify-center font-bold">匠</div>
+            <div>
+              <div class="text-lg font-semibold">智匠 iMOM</div>
+              <div class="text-xs text-slate-500">生产管理系统平台</div>
+            </div>
+          </div>
+        </div>
+        <nav class="p-3 space-y-1">
+          <button data-target="overview" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100 font-medium bg-slate-100">
+            <span>📊</span><span>概览</span>
+          </button>
+          <button data-target="plan" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🗓️</span><span>生产计划</span></button>
+          <button data-target="schedule" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>📅</span><span>调度安排</span></button>
+          <button data-target="tasks" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🧰</span><span>生产任务</span></button>
+          <button data-target="quality" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>✅</span><span>质量检测</span></button>
+          <button data-target="equipment" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🛠️</span><span>设备监控</span></button>
+          <button data-target="analytics" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>📈</span><span>分析报表</span></button>
+          <button data-target="integrations" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🧩</span><span>3D虚仿集成</span></button>
+          <div id="integratedPagesList" class="ml-6 space-y-1">
+            <!-- 动态生成的集成页面列表 -->
+          </div>
+        </nav>
+        <div class="mt-auto p-3 border-t border-slate-200 text-xs text-slate-500">数字孪生教学 · 实验与实训 · iMOM</div>
+      </aside>
+
+      <!-- 主区域 -->
+      <main class="flex-1 flex flex-col">
+        <!-- 顶部条 -->
+        <header class="sticky top-0 bg-white header-shadow z-10">
+          <div class="flex items-center justify-between px-4 py-3">
+            <div class="flex items-center gap-2 md:hidden">
+              <button id="mobileMenuBtn" class="px-3 py-2 rounded border border-slate-200">菜单</button>
+              <span class="font-semibold">智匠 iMOM</span>
+            </div>
+            <div class="hidden md:block">
+              <div class="text-sm text-slate-500">数字孪生教学 / 实验与实训 / 生产全流程</div>
+              <div class="text-lg font-semibold">iMOM 生产管理系统</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="seedBtn" class="px-3 py-2 rounded bg-indigo-600 text-white text-sm">一键生成演示数据</button>
+              <button id="resetBtn" class="px-3 py-2 rounded border border-slate-200 text-sm">重置</button>
+            </div>
+          </div>
+        </header>
+
+        <!-- 内容 -->
+        <section id="content" class="p-3">
+          <!-- 概览 -->
+          <div data-section="overview" class="section">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div class="bg-white rounded border border-slate-200 p-4">
+                <div class="text-slate-500 text-sm">今日产量（件）</div>
+                <div id="kpi-today-output" class="text-3xl font-bold mt-1">0</div>
+              </div>
+              <div class="bg-white rounded border border-slate-200 p-4">
+                <div class="text-slate-500 text-sm">在制品 WIP（件）</div>
+                <div id="kpi-wip" class="text-3xl font-bold mt-1">0</div>
+              </div>
+              <div class="bg-white rounded border border-slate-200 p-4">
+                <div class="text-slate-500 text-sm">合格率</div>
+                <div class="text-3xl font-bold mt-1"><span id="kpi-yield">--</span><span class="text-lg font-medium">%</span></div>
+              </div>
+              <div class="bg-white rounded border border-slate-200 p-4">
+                <div class="text-slate-500 text-sm">设备在线率</div>
+                <div class="text-3xl font-bold mt-1"><span id="kpi-uptime">--</span><span class="text-lg font-medium">%</span></div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div class="bg-white rounded border border-slate-200 p-4 lg:col-span-2">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">周产量趋势</div>
+                  <div class="text-xs text-slate-500">基于任务完成量</div>
+                </div>
+                <canvas id="chart-throughput" class="mt-3"></canvas>
+              </div>
+              <div class="bg-white rounded border border-slate-200 p-4">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">设备状态分布</div>
+                  <div class="text-xs text-slate-500">运行/停机/故障</div>
+                </div>
+                <canvas id="chart-equipment" class="mt-3"></canvas>
+              </div>
+            </div>
+
+            <div class="bg-indigo-50 border border-indigo-100 rounded p-4 text-sm text-indigo-700">
+              本平台用于数字孪生教学、实验与实训。学生可在虚拟环境中进行生产计划制定、调度安排、生产任务分配、质量检测控制与设备监控，并通过数据化管理形成分析报表，辅助决策、优化流程。
+            </div>
+          </div>
+
+          <!-- 生产计划 -->
+          <div data-section="plan" class="section hidden">
+            <div class="bg-white rounded border border-slate-200 p-4">
+              <div class="font-semibold mb-3">新增生产计划</div>
+              <form id="planForm" class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <input required name="product" placeholder="产品名称" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="qty" type="number" placeholder="数量" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="start" type="date" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="end" type="date" class="px-3 py-2 rounded border border-slate-300" />
+                <button class="px-3 py-2 rounded bg-indigo-600 text-white">添加</button>
+              </form>
+            </div>
+
+            <div class="bg-white rounded border border-slate-200 mt-4">
+              <div class="p-4 flex items-center justify-between">
+                <div class="font-semibold">计划列表</div>
+                <div class="text-xs text-slate-500">点击开始调度可推送到调度安排</div>
+              </div>
+              <div class="overflow-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-slate-50">
+                    <tr>
+                      <th class="text-left px-4 py-2">产品</th>
+                      <th class="text-left px-4 py-2">数量</th>
+                      <th class="text-left px-4 py-2">开始</th>
+                      <th class="text-left px-4 py-2">结束</th>
+                      <th class="text-left px-4 py-2">状态</th>
+                      <th class="text-right px-4 py-2">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="planTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 调度安排 -->
+          <div data-section="schedule" class="section hidden">
+            <div class="bg-white rounded border border-slate-200 p-4">
+              <div class="font-semibold mb-3">调度安排（简版）</div>
+              <form id="scheduleForm" class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <input required name="planId" placeholder="计划ID" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="line" placeholder="产线/工位" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="priority" type="number" placeholder="优先级(1高)" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="date" type="date" class="px-3 py-2 rounded border border-slate-300" />
+                <button class="px-3 py-2 rounded bg-indigo-600 text-white">添加</button>
+              </form>
+            </div>
+            <div class="bg-white rounded border border-slate-200 mt-4">
+              <div class="p-4 flex items-center justify-between">
+                <div class="font-semibold">调度队列</div>
+                <div class="text-xs text-slate-500">按优先级从小到大执行</div>
+              </div>
+              <div class="overflow-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-slate-50">
+                    <tr>
+                      <th class="text-left px-4 py-2">#</th>
+                      <th class="text-left px-4 py-2">计划ID</th>
+                      <th class="text-left px-4 py-2">产线/工位</th>
+                      <th class="text-left px-4 py-2">日期</th>
+                      <th class="text-left px-4 py-2">优先级</th>
+                      <th class="text-right px-4 py-2">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scheduleTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 生产任务 -->
+          <div data-section="tasks" class="section hidden">
+            <div class="bg-white rounded border border-slate-200 p-4">
+              <div class="font-semibold mb-3">分配生产任务</div>
+              <form id="taskForm" class="grid grid-cols-1 md:grid-cols-6 gap-3">
+                <input required name="taskName" placeholder="任务名称" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="assignee" placeholder="指派人员" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="qty" type="number" placeholder="数量" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="deadline" type="date" class="px-3 py-2 rounded border border-slate-300" />
+                <select name="status" class="px-3 py-2 rounded border border-slate-300">
+                  <option>未开始</option>
+                  <option>进行中</option>
+                  <option>已完成</option>
+                </select>
+                <button class="px-3 py-2 rounded bg-indigo-600 text-white">创建</button>
+              </form>
+            </div>
+            <div class="bg-white rounded border border-slate-200 mt-4">
+              <div class="p-4 flex items-center justify-between">
+                <div class="font-semibold">任务列表</div>
+                <div class="text-xs text-slate-500">完成任务计入产量</div>
+              </div>
+              <div class="overflow-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-slate-50">
+                    <tr>
+                      <th class="text-left px-4 py-2">#</th>
+                      <th class="text-left px-4 py-2">任务</th>
+                      <th class="text-left px-4 py-2">负责人</th>
+                      <th class="text-left px-4 py-2">数量</th>
+                      <th class="text-left px-4 py-2">截止</th>
+                      <th class="text-left px-4 py-2">状态</th>
+                      <th class="text-right px-4 py-2">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="taskTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 质量检测 -->
+          <div data-section="quality" class="section hidden">
+            <div class="bg-white rounded border border-slate-200 p-4">
+              <div class="font-semibold mb-3">新增质检记录</div>
+              <form id="qualityForm" class="grid grid-cols-1 md:grid-cols-6 gap-3">
+                <input required name="batch" placeholder="批次号" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="item" placeholder="检验项目" class="px-3 py-2 rounded border border-slate-300" />
+                <select name="result" class="px-3 py-2 rounded border border-slate-300">
+                  <option>合格</option>
+                  <option>不合格</option>
+                </select>
+                <input name="defect" placeholder="缺陷类型（不合格时）" class="px-3 py-2 rounded border border-slate-300" />
+                <input required name="qty" type="number" placeholder="数量" class="px-3 py-2 rounded border border-slate-300" />
+                <button class="px-3 py-2 rounded bg-indigo-600 text-white">记录</button>
+              </form>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+              <div class="bg-white rounded border border-slate-200 p-4 lg:col-span-2">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">质检记录</div>
+                  <button id="exportQualityBtn" class="px-3 py-1.5 text-sm rounded border border-slate-200">导出 CSV</button>
+                </div>
+                <div class="table-scroll">
+                  <table class="min-w-full text-sm">
+                    <thead class="bg-slate-50">
+                      <tr>
+                        <th class="text-left px-4 py-2">#</th>
+                        <th class="text-left px-4 py-2">批次</th>
+                        <th class="text-left px-4 py-2">项目</th>
+                        <th class="text-left px-4 py-2">结果</th>
+                        <th class="text-left px-4 py-2">缺陷</th>
+                        <th class="text-left px-4 py-2">数量</th>
+                        <th class="text-left px-4 py-2">时间</th>
+                      </tr>
+                    </thead>
+                    <tbody id="qualityTable"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="bg-white rounded border border-slate-200 p-4">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">缺陷分布</div>
+                  <div class="text-xs text-slate-500">按缺陷类型</div>
+                </div>
+                <canvas id="chart-defects" class="mt-3"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 设备监控 -->
+          <div data-section="equipment" class="section hidden">
+            <div class="bg-white rounded border border-slate-200 p-4">
+              <div class="flex items-center justify-between">
+                <div class="font-semibold">设备列表</div>
+                <div class="text-xs text-slate-500">模拟传感器数据每 3 秒刷新</div>
+              </div>
+              <div class="overflow-auto mt-3">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-slate-50">
+                    <tr>
+                      <th class="text-left px-4 py-2">#</th>
+                      <th class="text-left px-4 py-2">设备</th>
+                      <th class="text-left px-4 py-2">状态</th>
+                      <th class="text-left px-4 py-2">温度(°C)</th>
+                      <th class="text-left px-4 py-2">振动(mm/s)</th>
+                      <th class="text-left px-4 py-2">更新时间</th>
+                      <th class="text-right px-4 py-2">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="equipmentTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分析报表 -->
+          <div data-section="analytics" class="section hidden">
+            <div class="bg-white rounded border border-slate-200 p-4">
+              <div class="font-semibold mb-3">筛选与生成报表</div>
+              <form id="analyticsForm" class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <input name="product" placeholder="产品（可选）" class="px-3 py-2 rounded border border-slate-300" />
+                <input name="from" type="date" class="px-3 py-2 rounded border border-slate-300" />
+                <input name="to" type="date" class="px-3 py-2 rounded border border-slate-300" />
+                <select name="metric" class="px-3 py-2 rounded border border-slate-300">
+                  <option value="throughput">产量</option>
+                  <option value="yield">合格率</option>
+                  <option value="downtime">停机率</option>
+                </select>
+                <button class="px-3 py-2 rounded bg-indigo-600 text-white">生成</button>
+              </form>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+              <div class="bg-white rounded border border-slate-200 p-4 lg:col-span-2">
+                <div class="flex items-center justify-between">
+                  <div class="font-semibold">指标趋势</div>
+                  <button id="exportAnalyticsBtn" class="px-3 py-1.5 text-sm rounded border border-slate-200">导出 CSV</button>
+                </div>
+                <canvas id="chart-analytics" class="mt-3"></canvas>
+              </div>
+              <div class="bg-white rounded border border-slate-200 p-4">
+                <div class="font-semibold mb-2">关键结论</div>
+                <ul id="analyticsInsights" class="list-disc pl-5 text-sm space-y-1 text-slate-700"></ul>
+              </div>
+            </div>
+          </div>
+          <!-- 集成：3D虚拟仿真 -->
+          <div data-section="integrations" class="section hidden">
+            <!-- 页面管理模式 -->
+            <div id="pageManagementMode" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <!-- 左侧：页面管理 -->
+              <div class="lg:col-span-1 space-y-4">
+                <div class="bg-white rounded border border-slate-200 p-4">
+                  <h3 class="font-semibold mb-3">页面管理</h3>
+
+                  <!-- 添加页面表单 -->
+                  <form id="addPageForm" class="mb-4 space-y-3">
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-1">页面名称</label>
+                      <input type="text" name="name" class="w-full px-3 py-2 border border-slate-300 rounded text-sm" placeholder="例如: 3D建模平台" required />
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 mb-1">页面URL或paracraft项目ID</label>
+                      <input type="text" name="url" class="w-full px-3 py-2 border border-slate-300 rounded text-sm" placeholder="https://example.com 或 项目ID" required />
+                    </div>
+                    <button type="submit" class="w-full px-3 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700">添加页面</button>
+                  </form>
+
+                  <!-- 页面列表 -->
+                  <div>
+                    <div class="text-sm font-medium text-slate-700 mb-2">已添加的页面</div>
+                    <div id="pagesList" class="space-y-2">
+                      <!-- 动态生成页面列表 -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 右侧：管理说明 -->
+              <div class="lg:col-span-2">
+                <div class="bg-white rounded border border-slate-200 p-6">
+                  <div class="text-center text-slate-500">
+                    <div class="text-6xl mb-4">🛠️</div>
+                    <div class="text-lg font-medium mb-2">页面管理中心</div>
+                    <div class="text-sm mb-4">在这里添加和管理集成页面</div>
+                    <div class="text-xs text-slate-400">要预览页面，请点击左侧边栏中的相应页面链接</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 全屏预览模式 -->
+            <div id="pagePreviewMode" class="hidden">
+              <div class="bg-white rounded border border-slate-200" style="height: calc(100vh - 140px)">
+                <div class="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50">
+                  <div class="flex items-center gap-3">
+                    <button id="backToManagement" class="px-3 py-1 text-sm bg-slate-600 text-white rounded hover:bg-slate-700">← 返回管理</button>
+                    <h3 id="currentPageTitle" class="font-medium text-slate-700"></h3>
+                  </div>
+                  <a id="openInNewWindow" href="#" target="_blank" class="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"> 在新窗口打开 </a>
+                </div>
+                <div class="w-full" style="height: calc(100% - 53px)">
+                  <iframe
+                    id="fullScreenIframe"
+                    class="w-full h-full border-0"
+                    style="width: 100%; height: 100%"
+                    onload="document.getElementById('pageLoadError').style.display = 'none';"
+                    onerror="document.getElementById('pageLoadError').style.display = 'block';"
+                  >
+                  </iframe>
+                  <div id="pageLoadError" class="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-500 text-sm" style="display: none">
+                    <div class="text-center">
+                      <div class="text-4xl mb-2">🚫</div>
+                      <div class="font-medium mb-1">页面加载失败</div>
+                      <div class="text-xs mt-1">可能是网络问题或页面禁止嵌入</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- 移动端抽屉菜单（简单版） -->
+    <div id="mobileDrawer" class="fixed inset-0 bg-black/40 hidden">
+      <div class="absolute left-0 top-0 bottom-0 w-72 bg-white border-r border-slate-200 p-3">
+        <div class="flex items-center justify-between">
+          <div class="text-lg font-semibold">菜单</div>
+          <button id="mobileClose" class="px-3 py-2 rounded border border-slate-200">关闭</button>
+        </div>
+        <nav class="mt-3 space-y-1">
+          <button data-target="overview" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100 font-medium bg-slate-100">
+            <span>📊</span><span>概览</span>
+          </button>
+          <button data-target="plan" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🗓️</span><span>生产计划</span></button>
+          <button data-target="schedule" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>📅</span><span>调度安排</span></button>
+          <button data-target="tasks" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🧰</span><span>生产任务</span></button>
+          <button data-target="quality" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>✅</span><span>质量检测</span></button>
+          <button data-target="equipment" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🛠️</span><span>设备监控</span></button>
+          <button data-target="analytics" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>📈</span><span>分析报表</span></button>
+          <button data-target="integrations" class="nav-btn w-full flex items-center gap-2 px-3 py-2 rounded text-left hover:bg-slate-100"><span>🧩</span><span>3D虚仿集成</span></button>
+          <div id="integratedPagesListMobile" class="ml-6 space-y-1">
+            <!-- 动态生成的集成页面列表（移动端） -->
+          </div>
+        </nav>
+      </div>
+    </div>
+    <script>
+      // -------------------------
+      // 简易状态管理与持久化
+      // -------------------------
+      const nowISO = () => new Date().toISOString();
+      const todayStr = () => new Date().toISOString().slice(0, 10);
+      // Initialize SDK
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+      const defaultState = {
+        plans: [],
+        schedules: [],
+        tasks: [],
+        quality: [],
+        equipment: [
+          { id: "E-1001", name: "CNC-1 号", status: "运行", temp: 35, vib: 2.1, updatedAt: nowISO() },
+          { id: "E-1002", name: "CNC-2 号", status: "停机", temp: 29, vib: 0.6, updatedAt: nowISO() },
+          { id: "E-2001", name: "机器人-臂", status: "运行", temp: 42, vib: 3.2, updatedAt: nowISO() },
+          { id: "E-3001", name: "激光切割", status: "运行", temp: 38, vib: 2.7, updatedAt: nowISO() },
+          { id: "E-4001", name: "检测工位", status: "故障", temp: 45, vib: 4.5, updatedAt: nowISO() },
+        ],
+        integratedPages: [
+          { id: "page-1", name: "网站创作", url: "https://keepwork.com/ed", order: 1 },
+          { id: "page-2", name: "3D世界创作", url: "https://webparacraft.keepwork.com", order: 2 },
+          { id: "page-3", name: "文档中心", url: "https://keepwork.com/official/docs/UserGuide/keepwork/index", order: 3 },
+          { id: "page-4", name: "虚拟仿真世界", url: "3468093", order: 4 },
+        ],
+        currentPageId: null,
+        settings: {},
+        seeded: false,
+      };
+
+      let state = null;
+      async function loadState() {
+        try {
+          const data = await sdk.personalPageStore.loadPageData("imom_system", "state"); // Check if data has the expected structure with required arrays
+          if (
+            data &&
+            data.plans &&
+            Array.isArray(data.plans) &&
+            data.schedules &&
+            Array.isArray(data.schedules) &&
+            data.tasks &&
+            Array.isArray(data.tasks) &&
+            data.quality &&
+            Array.isArray(data.quality) &&
+            data.equipment &&
+            Array.isArray(data.equipment) &&
+            data.integratedPages &&
+            Array.isArray(data.integratedPages)
+          ) {
+            state = structuredClone(data);
+          } else {
+            console.warn("加载的数据结构不完整，使用默认状态");
+            state = structuredClone(defaultState);
+          }
+        } catch (e) {
+          console.warn("读取本地数据失败，使用默认", e);
+          state = structuredClone(defaultState);
+        }
+      }
+      function saveState() {
+        sdk.personalPageStore
+          .savePageData("imom_system", "state", state)
+          .then(() => {
+            updateAll();
+          })
+          .catch((e) => {
+            console.warn("保存数据失败", e);
+            updateAll();
+          });
+      }
+
+      // -------------------------
+      // 工具
+      // -------------------------
+      function fmt(n) {
+        return Number(n).toLocaleString("zh-CN");
+      }
+      function badge(text, color) {
+        const colors = {
+          未开始: "bg-slate-100 text-slate-700",
+          进行中: "bg-amber-100 text-amber-800",
+          已完成: "bg-emerald-100 text-emerald-800",
+          运行: "bg-emerald-100 text-emerald-800",
+          停机: "bg-slate-100 text-slate-700",
+          故障: "bg-rose-100 text-rose-800",
+          未调度: "bg-slate-100 text-slate-700",
+          已调度: "bg-indigo-100 text-indigo-800",
+        };
+        const cls = colors[text] || "bg-slate-100 text-slate-700";
+        return `<span class="px-2 py-1 text-xs rounded ${cls}">${text}</span>`;
+      }
+      function byId(id) {
+        return document.getElementById(id);
+      }
+
+      // -------------------------
+      // 导航
+      // -------------------------
+      function setActiveSection(name) {
+        document.querySelectorAll(".section").forEach((el) => {
+          if (el.getAttribute("data-section") === name) {
+            el.classList.remove("hidden");
+            el.classList.add("fade-enter");
+            requestAnimationFrame(() => {
+              el.classList.add("fade-enter-active");
+              setTimeout(() => el.classList.remove("fade-enter", "fade-enter-active"), 200);
+            });
+          } else {
+            el.classList.add("hidden");
+          }
+        });
+        document.querySelectorAll(".nav-btn").forEach((btn) => {
+          const active = btn.getAttribute("data-target") === name;
+          btn.classList.toggle("bg-slate-100", active);
+          btn.classList.toggle("font-medium", active);
+        });
+        // 关闭移动抽屉
+        byId("mobileDrawer").classList.add("hidden");
+      }
+
+      // -------------------------
+      // 概览 KPI 与图表
+      // -------------------------
+      let chartThroughput, chartEquipment, chartDefects, chartAnalytics;
+      function calcKPIs() {
+        // Ensure state arrays exist and are arrays
+        const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+        const plans = Array.isArray(state.plans) ? state.plans : [];
+        const quality = Array.isArray(state.quality) ? state.quality : [];
+        const equipment = Array.isArray(state.equipment) ? state.equipment : [];
+
+        const today = todayStr();
+        const todayOutput = tasks.filter((t) => t.status === "已完成" && (t.completedAt || "").slice(0, 10) === today).reduce((sum, t) => sum + Number(t.qty || 0), 0);
+
+        const totalPlanned = plans.reduce((s, p) => s + Number(p.qty || 0), 0);
+        const totalCompleted = tasks.filter((t) => t.status === "已完成").reduce((s, t) => s + Number(t.qty || 0), 0);
+        const wip = Math.max(totalPlanned - totalCompleted, 0);
+
+        const totalQualityQty = quality.reduce((s, q) => s + Number(q.qty || 0), 0);
+        const okQty = quality.filter((q) => q.result === "合格").reduce((s, q) => s + Number(q.qty || 0), 0);
+        const yieldRate = totalQualityQty ? Math.round((okQty / totalQualityQty) * 100) : 100;
+
+        const online = equipment.filter((e) => e.status === "运行").length;
+        const uptime = equipment.length ? Math.round((online / equipment.length) * 100) : 0;
+
+        return { todayOutput, wip, yieldRate, uptime };
+      }
+
+      function updateKPIs() {
+        const k = calcKPIs();
+        byId("kpi-today-output").textContent = fmt(k.todayOutput);
+        byId("kpi-wip").textContent = fmt(k.wip);
+        byId("kpi-yield").textContent = isFinite(k.yieldRate) ? k.yieldRate : "--";
+        byId("kpi-uptime").textContent = isFinite(k.uptime) ? k.uptime : "--";
+      }
+
+      function aggThroughputLast7() {
+        // 近7天任务完成数量
+        const days = [];
+        const data = [];
+        const d = new Date();
+        for (let i = 6; i >= 0; i--) {
+          const di = new Date(d);
+          di.setDate(d.getDate() - i);
+          const key = di.toISOString().slice(0, 10);
+          const label = `${di.getMonth() + 1}/${di.getDate()}`;
+          days.push(label);
+          const sum = state.tasks.filter((t) => t.status === "已完成" && (t.completedAt || "").slice(0, 10) === key).reduce((s, t) => s + Number(t.qty || 0), 0);
+          data.push(sum);
+        }
+        return { labels: days, data };
+      }
+
+      function updateOverviewCharts() {
+        // 产量趋势
+        const t = aggThroughputLast7();
+        if (!chartThroughput) {
+          chartThroughput = new Chart(byId("chart-throughput").getContext("2d"), {
+            type: "line",
+            data: {
+              labels: t.labels,
+              datasets: [
+                {
+                  label: "完成数量",
+                  data: t.data,
+                  borderColor: "#4f46e5",
+                  backgroundColor: "rgba(79,70,229,.15)",
+                  tension: 0.3,
+                  fill: true,
+                  pointRadius: 3,
+                },
+              ],
+            },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+          });
+        } else {
+          chartThroughput.data.labels = t.labels;
+          chartThroughput.data.datasets[0].data = t.data;
+          chartThroughput.update();
+        }
+
+        // 设备状态分布
+        const run = state.equipment.filter((e) => e.status === "运行").length;
+        const stop = state.equipment.filter((e) => e.status === "停机").length;
+        const fault = state.equipment.filter((e) => e.status === "故障").length;
+        const eLabels = ["运行", "停机", "故障"];
+        const eData = [run, stop, fault];
+        if (!chartEquipment) {
+          chartEquipment = new Chart(byId("chart-equipment").getContext("2d"), {
+            type: "doughnut",
+            data: {
+              labels: eLabels,
+              datasets: [
+                {
+                  data: eData,
+                  backgroundColor: ["#10b981", "#94a3b8", "#ef4444"],
+                },
+              ],
+            },
+            options: { responsive: true, plugins: { legend: { position: "bottom" } } },
+          });
+        } else {
+          chartEquipment.data.labels = eLabels;
+          chartEquipment.data.datasets[0].data = eData;
+          chartEquipment.update();
+        }
+      }
+
+      // -------------------------
+      // 计划
+      // -------------------------
+      function renderPlans() {
+        const tbody = document.querySelector("#planTable");
+        tbody.innerHTML = "";
+        state.plans.forEach((p, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td class="px-4 py-2">${p.product}</td>
+          <td class="px-4 py-2">${fmt(p.qty)}</td>
+          <td class="px-4 py-2">${p.start}</td>
+          <td class="px-4 py-2">${p.end}</td>
+          <td class="px-4 py-2">${badge(p.status || "未调度")}</td>
+          <td class="px-4 py-2 text-right">
+            <div class="inline-flex gap-2">
+              <button class="px-2 py-1 text-xs rounded border border-slate-200" data-act="toSchedule" data-id="${p.id}">开始调度</button>
+              <button class="px-2 py-1 text-xs rounded border border-rose-200 text-rose-600" data-act="delPlan" data-id="${p.id}">删除</button>
+            </div>
+          </td>`;
+          tbody.appendChild(tr);
+        });
+        // 事件代理
+        tbody.querySelectorAll("button[data-act='toSchedule']").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-id");
+            const plan = state.plans.find((x) => x.id === id);
+            if (!plan) return;
+            state.schedules.push({ id: crypto.randomUUID(), planId: plan.id, line: "L-1", priority: 1, date: plan.start });
+            plan.status = "已调度";
+            saveState();
+          };
+        });
+        tbody.querySelectorAll("button[data-act='delPlan']").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-id");
+            state.plans = state.plans.filter((x) => x.id !== id);
+            // 同步删除 schedule 中引用
+            state.schedules = state.schedules.filter((s) => s.planId !== id);
+            saveState();
+          };
+        });
+      }
+
+      // -------------------------
+      // 调度
+      // -------------------------
+      function renderSchedules() {
+        const tbody = document.querySelector("#scheduleTable");
+        tbody.innerHTML = "";
+        const list = [...state.schedules].sort((a, b) => Number(a.priority) - Number(b.priority));
+        list.forEach((s, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td class="px-4 py-2">${idx + 1}</td>
+          <td class="px-4 py-2">${s.planId}</td>
+          <td class="px-4 py-2">${s.line}</td>
+          <td class="px-4 py-2">${s.date}</td>
+          <td class="px-4 py-2">${s.priority}</td>
+          <td class="px-4 py-2 text-right">
+            <div class="inline-flex gap-2">
+              <button class="px-2 py-1 text-xs rounded border border-slate-200" data-act="toTask" data-id="${s.id}">生成任务</button>
+              <button class="px-2 py-1 text-xs rounded border border-rose-200 text-rose-600" data-act="delSchedule" data-id="${s.id}">删除</button>
+            </div>
+          </td>`;
+          tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll("button[data-act='toTask']").forEach((btn) => {
+          btn.onclick = () => {
+            const sid = btn.getAttribute("data-id");
+            const s = state.schedules.find((x) => x.id === sid);
+            const p = s ? state.plans.find((x) => x.id === s.planId) : null;
+            if (!s || !p) return;
+            // 简化：计划拆分为一个任务
+            state.tasks.push({
+              id: crypto.randomUUID(),
+              taskName: `${p.product} 生产`,
+              assignee: "学生A",
+              qty: Number(p.qty),
+              deadline: p.end,
+              status: "未开始",
+              createdAt: nowISO(),
+            });
+            saveState();
+            alert("已生成生产任务，可前往“生产任务”查看");
+          };
+        });
+        tbody.querySelectorAll("button[data-act='delSchedule']").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-id");
+            state.schedules = state.schedules.filter((x) => x.id !== id);
+            saveState();
+          };
+        });
+      }
+
+      // -------------------------
+      // 任务
+      // -------------------------
+      function renderTasks() {
+        const tbody = document.querySelector("#taskTable");
+        tbody.innerHTML = "";
+        state.tasks.forEach((t, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td class="px-4 py-2">${idx + 1}</td>
+          <td class="px-4 py-2">${t.taskName}</td>
+          <td class="px-4 py-2">${t.assignee}</td>
+          <td class="px-4 py-2">${fmt(t.qty)}</td>
+          <td class="px-4 py-2">${t.deadline}</td>
+          <td class="px-4 py-2">${badge(t.status)}</td>
+          <td class="px-4 py-2 text-right">
+            <div class="inline-flex gap-2">
+              <button class="px-2 py-1 text-xs rounded border border-slate-200" data-act="start" data-id="${t.id}">开始</button>
+              <button class="px-2 py-1 text-xs rounded border border-emerald-200 text-emerald-700" data-act="done" data-id="${t.id}">完成</button>
+              <button class="px-2 py-1 text-xs rounded border border-rose-200 text-rose-600" data-act="delTask" data-id="${t.id}">删除</button>
+            </div>
+          </td>`;
+          tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll("button[data-act='start']").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-id");
+            const t = state.tasks.find((x) => x.id === id);
+            if (!t) return;
+            t.status = "进行中";
+            t.startedAt = nowISO();
+            saveState();
+          };
+        });
+        tbody.querySelectorAll("button[data-act='done']").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-id");
+            const t = state.tasks.find((x) => x.id === id);
+            if (!t) return;
+            t.status = "已完成";
+            t.completedAt = nowISO();
+            saveState();
+          };
+        });
+        tbody.querySelectorAll("button[data-act='delTask']").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-id");
+            state.tasks = state.tasks.filter((x) => x.id !== id);
+            saveState();
+          };
+        });
+      }
+
+      // -------------------------
+      // 质量
+      // -------------------------
+      function renderQuality() {
+        const tbody = document.querySelector("#qualityTable");
+        tbody.innerHTML = "";
+        state.quality.forEach((q, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td class="px-4 py-2">${idx + 1}</td>
+          <td class="px-4 py-2">${q.batch}</td>
+          <td class="px-4 py-2">${q.item}</td>
+          <td class="px-4 py-2">${badge(q.result)}</td>
+          <td class="px-4 py-2">${q.result === "不合格" ? q.defect || "-" : "-"}</td>
+          <td class="px-4 py-2">${fmt(q.qty)}</td>
+          <td class="px-4 py-2">${new Date(q.time).toLocaleString()}</td>`;
+          tbody.appendChild(tr);
+        });
+        // 缺陷分布
+        const map = new Map();
+        state.quality
+          .filter((q) => q.result === "不合格")
+          .forEach((q) => {
+            const k = q.defect || "未分类";
+            map.set(k, (map.get(k) || 0) + Number(q.qty || 0));
+          });
+        const labels = Array.from(map.keys());
+        const data = Array.from(map.values());
+        if (!chartDefects) {
+          chartDefects = new Chart(byId("chart-defects").getContext("2d"), {
+            type: "pie",
+            data: { labels, datasets: [{ data, backgroundColor: ["#f59e0b", "#ef4444", "#10b981", "#3b82f6", "#a855f7", "#06b6d4"] }] },
+            options: { responsive: true, plugins: { legend: { position: "bottom" } } },
+          });
+        } else {
+          chartDefects.data.labels = labels;
+          chartDefects.data.datasets[0].data = data;
+          chartDefects.update();
+        }
+      }
+
+      // -------------------------
+      // 设备
+      // -------------------------
+      function renderEquipment() {
+        const tbody = document.querySelector("#equipmentTable");
+        tbody.innerHTML = "";
+        state.equipment.forEach((e, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td class="px-4 py-2">${idx + 1}</td>
+          <td class="px-4 py-2">${e.name} <span class="text-xs text-slate-400 ml-1">(${e.id})</span></td>
+          <td class="px-4 py-2">${badge(e.status)}</td>
+          <td class="px-4 py-2">${e.temp.toFixed(1)}</td>
+          <td class="px-4 py-2">${e.vib.toFixed(1)}</td>
+          <td class="px-4 py-2">${new Date(e.updatedAt).toLocaleTimeString()}</td>
+          <td class="px-4 py-2 text-right">
+            <div class="inline-flex gap-2">
+              <button class="px-2 py-1 text-xs rounded border border-slate-200" data-act="run" data-id="${e.id}">运行</button>
+              <button class="px-2 py-1 text-xs rounded border border-slate-200" data-act="stop" data-id="${e.id}">停机</button>
+              <button class="px-2 py-1 text-xs rounded border border-rose-200 text-rose-600" data-act="fault" data-id="${e.id}">故障</button>
+            </div>
+          </td>`;
+          tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll("button").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-id");
+            const act = btn.getAttribute("data-act");
+            const e = state.equipment.find((x) => x.id === id);
+            if (!e) return;
+            if (act === "run") e.status = "运行";
+            if (act === "stop") e.status = "停机";
+            if (act === "fault") e.status = "故障";
+            e.updatedAt = nowISO();
+            saveState();
+          };
+        });
+      }
+      function tickEquipmentSensors() {
+        // 简易模拟：温度、振动在合理范围内随机波动，状态影响范围
+        state.equipment.forEach((e) => {
+          let tDelta = (Math.random() - 0.5) * 2;
+          let vDelta = (Math.random() - 0.5) * 0.6;
+          if (e.status === "运行") {
+            tDelta += 0.3;
+            vDelta += 0.2;
+          }
+          if (e.status === "停机") {
+            tDelta -= 0.4;
+            vDelta -= 0.2;
+          }
+          if (e.status === "故障") {
+            tDelta += 1.0;
+            vDelta += 0.8;
+          }
+          e.temp = Math.max(20, Math.min(80, e.temp + tDelta));
+          e.vib = Math.max(0, Math.min(10, e.vib + vDelta));
+          e.updatedAt = nowISO();
+        });
+        // Note: Removed saveState() - sensor data is simulated and doesn't need persistent storage
+        // Only save when user makes actual changes (equipment status changes, etc.)
+      }
+
+      // -------------------------
+      // 分析报表
+      // -------------------------
+      function generateAnalytics(metric, from, to, product) {
+        // 简化：仅使用已有数据构造 14 天趋势
+        const labels = [];
+        const data = [];
+        const d = new Date();
+        for (let i = 13; i >= 0; i--) {
+          const di = new Date(d);
+          di.setDate(d.getDate() - i);
+          const key = di.toISOString().slice(0, 10);
+          const label = `${di.getMonth() + 1}/${di.getDate()}`;
+          labels.push(label);
+          if (metric === "throughput") {
+            const sum = state.tasks
+              .filter((t) => {
+                const day = (t.completedAt || "").slice(0, 10);
+                const matchDay = t.status === "已完成" && day === key;
+                const matchProd = product ? (t.taskName || "").includes(product) : true;
+                return matchDay && matchProd;
+              })
+              .reduce((s, t) => s + Number(t.qty || 0), 0);
+            data.push(sum);
+          } else if (metric === "yield") {
+            const dayAll = state.quality.filter((q) => (q.time || "").slice(0, 10) === key);
+            const all = dayAll.reduce((s, q) => s + Number(q.qty || 0), 0);
+            const ok = dayAll.filter((q) => q.result === "合格").reduce((s, q) => s + Number(q.qty || 0), 0);
+            data.push(all ? Math.round((ok / all) * 100) : 100);
+          } else if (metric === "downtime") {
+            // 粗略：故障+停机占比（基于设备数量）
+            const run = state.equipment.filter((e) => e.status === "运行").length;
+            const rate = state.equipment.length ? Math.round(((state.equipment.length - run) / state.equipment.length) * 100) : 0;
+            data.push(rate);
+          }
+        }
+        return { labels, data };
+      }
+
+      function renderAnalytics(metric = "throughput", from = "", to = "", product = "") {
+        const res = generateAnalytics(metric, from, to, product);
+        if (!chartAnalytics) {
+          chartAnalytics = new Chart(byId("chart-analytics").getContext("2d"), {
+            type: metric === "throughput" ? "bar" : "line",
+            data: { labels: res.labels, datasets: [{ label: metric, data: res.data, backgroundColor: "#4f46e5", borderColor: "#4f46e5", fill: metric !== "throughput", tension: 0.3 }] },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+          });
+        } else {
+          chartAnalytics.config.type = metric === "throughput" ? "bar" : "line";
+          chartAnalytics.data.labels = res.labels;
+          chartAnalytics.data.datasets[0].data = res.data;
+          chartAnalytics.update();
+        }
+        // 生成简短洞察
+        const insights = byId("analyticsInsights");
+        insights.innerHTML = "";
+        const max = Math.max(...res.data);
+        const min = Math.min(...res.data);
+        const avg = res.data.reduce((s, x) => s + x, 0) / (res.data.length || 1);
+        const li = (t) => {
+          const el = document.createElement("li");
+          el.textContent = t;
+          insights.appendChild(el);
+        };
+        if (metric === "throughput") {
+          li(`近两周最高产量：${fmt(max)} 件；最低：${fmt(min)} 件；平均：${fmt(Math.round(avg))} 件`);
+        } else if (metric === "yield") {
+          li(`近两周合格率均值：${Math.round(avg)}%`);
+          li(`最低合格率：${min}%，关注当天工艺与检验流程`);
+        } else {
+          li(`近两周平均停机率：${Math.round(avg)}%`);
+          li(`最大停机率：${max}%；建议排查设备维护与备件保障`);
+        }
+      } // -------------------------
+      // URL 验证辅助函数
+      // -------------------------
+      function isValidUrlOrProjectId(input) {
+        // 检查是否为纯数字（项目ID）
+        if (/^\d+$/.test(input.trim())) {
+          return true;
+        }
+
+        // 检查是否为有效的URL
+        try {
+          new URL(input);
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      // -------------------------
+      // 导出 CSV
+      // -------------------------
+      function exportToCSV(rows, filename) {
+        const escape = (v) => {
+          const s = String(v ?? "");
+          if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+          return s;
+        };
+        const csv = rows.map((r) => r.map(escape).join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      function initIntegrationsUI() {
+        // 渲染页面列表
+        renderIntegratedPages();
+
+        // 只有在没有当前选中页面时才重置预览区域到默认状态
+        if (!state.currentPageId) {
+          resetPagePreview();
+        }
+
+        // 绑定添加页面表单
+        const addPageForm = byId("addPageForm");
+        if (addPageForm) {
+          addPageForm.onsubmit = (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const name = formData.get("name")?.trim();
+            const url = formData.get("url")?.trim();
+            if (!name || !url) {
+              alert("请输入页面名称和URL");
+              return;
+            }
+
+            // 验证URL格式或项目ID
+            if (!isValidUrlOrProjectId(url)) {
+              alert("请输入有效的URL格式（如 https://keepwork.com）或项目ID数字");
+              return;
+            }
+
+            // 检查名称是否重复
+            if (state.integratedPages.some((p) => p.name === name)) {
+              alert("页面名称已存在，请使用不同的名称");
+              return;
+            }
+
+            // 添加新页面
+            const maxOrder = Math.max(...state.integratedPages.map((p) => p.order || 0), 0);
+            state.integratedPages.push({
+              id: crypto.randomUUID(),
+              name: name,
+              url: url,
+              order: maxOrder + 1,
+            });
+
+            e.target.reset();
+            saveState();
+          };
+        }
+      }
+
+      function renderIntegratedPages() {
+        // 渲染页面管理列表
+        const pagesList = byId("pagesList");
+        if (!pagesList) return;
+
+        const sortedPages = [...state.integratedPages].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        pagesList.innerHTML = "";
+
+        sortedPages.forEach((page, index) => {
+          const pageItem = document.createElement("div");
+          pageItem.className = "flex items-center gap-3 p-3 border border-slate-200 rounded cursor-pointer hover:bg-slate-50 transition-colors";
+          pageItem.draggable = true;
+          pageItem.dataset.pageId = page.id;
+
+          pageItem.innerHTML = `
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-sm truncate">${page.name}</div>
+              <div class="text-xs text-slate-500 truncate">${page.url}</div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button class="p-1 hover:bg-slate-200 rounded text-slate-500" data-action="edit" data-page-id="${page.id}" title="编辑">
+                ✏️
+              </button>
+              <button class="p-1 hover:bg-red-200 rounded text-red-600" data-action="delete" data-page-id="${page.id}" title="删除">
+                🗑️
+              </button>
+            </div>
+          `; // 点击选择页面 - 移除预览功能，只保留编辑和删除
+          // pageItem.addEventListener("click", (e) => {
+          //   if (e.target.tagName === "BUTTON") return; // 忽略按钮点击
+          //   selectPage(page.id);
+          // });
+
+          // 拖拽排序
+          pageItem.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/plain", page.id);
+          });
+
+          pageItem.addEventListener("dragover", (e) => {
+            e.preventDefault();
+          });
+
+          pageItem.addEventListener("drop", (e) => {
+            e.preventDefault();
+            const draggedId = e.dataTransfer.getData("text/plain");
+            if (draggedId !== page.id) {
+              reorderPages(draggedId, page.id);
+            }
+          });
+
+          pagesList.appendChild(pageItem);
+        });
+
+        // 绑定操作按钮
+        pagesList.addEventListener("click", (e) => {
+          if (e.target.dataset.action === "edit") {
+            editPage(e.target.dataset.pageId);
+          } else if (e.target.dataset.action === "delete") {
+            deletePage(e.target.dataset.pageId);
+          }
+        });
+
+        // 渲染侧边栏页面列表
+        renderSidebarPageList();
+      }
+
+      function renderSidebarPageList() {
+        const sidebarList = byId("integratedPagesList");
+        const mobileList = byId("integratedPagesListMobile");
+
+        const sortedPages = [...state.integratedPages].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        [sidebarList, mobileList].forEach((list) => {
+          if (!list) return;
+          list.innerHTML = "";
+          sortedPages.forEach((page) => {
+            const pageBtn = document.createElement("button");
+            pageBtn.className = "w-full flex items-center gap-2 px-3 py-1.5 rounded text-left hover:bg-slate-100 text-sm text-slate-600 sidebar-page-btn";
+            pageBtn.dataset.pageId = page.id;
+            pageBtn.innerHTML = `<span>🔗</span><span class="truncate">${page.name}</span>`;
+            pageBtn.onclick = () => {
+              setActiveSection("integrations");
+              setTimeout(() => selectPage(page.id), 100);
+            };
+            list.appendChild(pageBtn);
+          });
+        });
+      }
+      function selectPage(pageId) {
+        const page = state.integratedPages.find((p) => p.id === pageId);
+        if (!page) return;
+
+        state.currentPageId = pageId;
+
+        // 切换到集成页面section
+        setActiveSection("integrations");
+
+        // 等待DOM更新后再设置预览模式
+        setTimeout(() => {
+          // 显示全屏预览模式，隐藏管理模式
+          const managementMode = byId("pageManagementMode");
+          const previewMode = byId("pagePreviewMode");
+          const fullScreenIframe = byId("fullScreenIframe");
+          const currentPageTitle = byId("currentPageTitle");
+          const openInNewWindow = byId("openInNewWindow");
+
+          if (managementMode) managementMode.style.display = "none";
+          if (previewMode) previewMode.style.display = "block"; // 设置iframe和页面信息
+          if (fullScreenIframe) {
+            // 检查URL是否为纯数字，如果是则转换为Paracraft项目链接
+            const isNumeric = /^\d+$/.test(page.url.trim());
+            fullScreenIframe.src = isNumeric ? `https://webparacraft.keepwork.com/?pid=${page.url.trim()}` : page.url;
+          }
+          if (currentPageTitle) {
+            currentPageTitle.textContent = page.name;
+          }
+          if (openInNewWindow) {
+            // 同样处理新窗口打开的链接
+            const isNumeric = /^\d+$/.test(page.url.trim());
+            openInNewWindow.href = isNumeric ? `https://webparacraft.keepwork.com/?pid=${page.url.trim()}` : page.url;
+          }
+
+          // 高亮选中的侧边栏页面项
+          document.querySelectorAll("[data-page-id]").forEach((el) => {
+            el.classList.remove("bg-indigo-50", "border-indigo-200");
+          });
+
+          // 高亮侧边栏中的页面按钮
+          document.querySelectorAll(".sidebar-page-btn").forEach((btn) => {
+            btn.classList.remove("bg-slate-100");
+          });
+
+          const sidebarBtn = document.querySelector(`[data-page-id="${pageId}"].sidebar-page-btn`);
+          if (sidebarBtn) {
+            sidebarBtn.classList.add("bg-slate-100");
+          }
+        }, 50);
+
+        saveState();
+      }
+      function resetPagePreview() {
+        const managementMode = byId("pageManagementMode");
+        const previewMode = byId("pagePreviewMode");
+        const fullScreenIframe = byId("fullScreenIframe");
+
+        // 显示管理模式，隐藏预览模式
+        if (managementMode) managementMode.style.display = "grid";
+        if (previewMode) previewMode.style.display = "none";
+
+        // 清空iframe
+        if (fullScreenIframe) {
+          fullScreenIframe.src = "about:blank";
+        }
+
+        // 清除当前页面选择状态
+        state.currentPageId = null;
+
+        // 清除页面项的高亮状态
+        document.querySelectorAll("[data-page-id]").forEach((el) => {
+          el.classList.remove("bg-indigo-50", "border-indigo-200");
+        });
+
+        // 清除侧边栏页面按钮的高亮状态
+        document.querySelectorAll(".sidebar-page-btn").forEach((btn) => {
+          btn.classList.remove("bg-slate-100");
+        });
+      }
+      function editPage(pageId) {
+        const page = state.integratedPages.find((p) => p.id === pageId);
+        if (!page) return;
+
+        const newName = prompt("请输入页面名称:", page.name);
+        if (newName === null) return;
+
+        const trimmedName = newName.trim();
+        if (!trimmedName) {
+          alert("页面名称不能为空");
+          return;
+        }
+
+        // 检查名称是否与其他页面重复
+        if (trimmedName !== page.name && state.integratedPages.some((p) => p.name === trimmedName)) {
+          alert("页面名称已存在，请使用不同的名称");
+          return;
+        }
+
+        const newUrl = prompt("请输入页面URL:", page.url);
+        if (newUrl === null) return;
+        const trimmedUrl = newUrl.trim();
+        if (!trimmedUrl) {
+          alert("页面URL不能为空");
+          return;
+        }
+
+        // 验证URL格式或项目ID
+        if (!isValidUrlOrProjectId(trimmedUrl)) {
+          alert("请输入有效的URL格式（如 https://example.com）或项目ID数字");
+          return;
+        }
+
+        page.name = trimmedName;
+        page.url = trimmedUrl;
+
+        // 如果编辑的是当前选中的页面，需要更新预览
+        if (state.currentPageId === pageId) {
+          selectPage(pageId);
+        }
+
+        saveState();
+      }
+
+      function deletePage(pageId) {
+        const page = state.integratedPages.find((p) => p.id === pageId);
+        if (!page) return;
+
+        if (confirm(`确定删除页面 "${page.name}"？`)) {
+          state.integratedPages = state.integratedPages.filter((p) => p.id !== pageId);
+
+          // 如果删除的是当前选中的页面，重置预览
+          if (state.currentPageId === pageId) {
+            state.currentPageId = null;
+            resetPagePreview();
+          }
+
+          saveState();
+        }
+      }
+
+      function reorderPages(draggedId, targetId) {
+        const draggedIndex = state.integratedPages.findIndex((p) => p.id === draggedId);
+        const targetIndex = state.integratedPages.findIndex((p) => p.id === targetId);
+
+        if (draggedIndex === -1 || targetIndex === -1) return;
+
+        // 重新排序
+        const draggedPage = state.integratedPages[draggedIndex];
+        state.integratedPages.splice(draggedIndex, 1);
+        state.integratedPages.splice(targetIndex, 0, draggedPage);
+
+        // 更新order字段
+        state.integratedPages.forEach((page, index) => {
+          page.order = index + 1;
+        });
+
+        saveState();
+      }
+
+      // -------------------------
+      // 表单与事件
+      // -------------------------
+      function bindForms() {
+        byId("planForm").onsubmit = (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          state.plans.push({
+            id: crypto.randomUUID(),
+            product: fd.get("product"),
+            qty: Number(fd.get("qty")),
+            start: fd.get("start"),
+            end: fd.get("end"),
+            status: "未调度",
+            createdAt: nowISO(),
+          });
+          e.target.reset();
+          saveState();
+        };
+
+        byId("scheduleForm").onsubmit = (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          state.schedules.push({
+            id: crypto.randomUUID(),
+            planId: fd.get("planId"),
+            line: fd.get("line"),
+            priority: Number(fd.get("priority")),
+            date: fd.get("date"),
+          });
+          e.target.reset();
+          saveState();
+        };
+
+        byId("taskForm").onsubmit = (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          state.tasks.push({
+            id: crypto.randomUUID(),
+            taskName: fd.get("taskName"),
+            assignee: fd.get("assignee"),
+            qty: Number(fd.get("qty")),
+            deadline: fd.get("deadline"),
+            status: fd.get("status"),
+            createdAt: nowISO(),
+          });
+          e.target.reset();
+          saveState();
+        };
+
+        byId("qualityForm").onsubmit = (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          state.quality.push({
+            id: crypto.randomUUID(),
+            batch: fd.get("batch"),
+            item: fd.get("item"),
+            result: fd.get("result"),
+            defect: fd.get("result") === "不合格" ? fd.get("defect") || "未分类" : "",
+            qty: Number(fd.get("qty")),
+            time: nowISO(),
+          });
+          e.target.reset();
+          saveState();
+        };
+
+        byId("analyticsForm").onsubmit = (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          renderAnalytics(fd.get("metric"), fd.get("from"), fd.get("to"), fd.get("product"));
+        };
+
+        byId("exportQualityBtn").onclick = () => {
+          const rows = [["序号", "批次", "项目", "结果", "缺陷", "数量", "时间"]];
+          state.quality.forEach((q, i) => rows.push([i + 1, q.batch, q.item, q.result, q.defect || "-", q.qty, new Date(q.time).toLocaleString()]));
+          exportToCSV(rows, "quality.csv");
+        };
+
+        byId("exportAnalyticsBtn").onclick = () => {
+          if (!chartAnalytics) return;
+          const rows = [["日期", "值"]];
+          chartAnalytics.data.labels.forEach((l, i) => rows.push([l, chartAnalytics.data.datasets[0].data[i]]));
+          exportToCSV(rows, "analytics.csv");
+        };
+
+        // 顶部按钮
+        byId("seedBtn").onclick = () => seedDemoData();
+        byId("resetBtn").onclick = async () => {
+          if (confirm("确定清空所有数据并恢复默认？")) {
+            try {
+              await sdk.personalPageStore.savePageData("imom_system", "state", {}, true);
+              await loadState();
+              updateAll();
+            } catch (e) {
+              console.warn("重置数据失败", e);
+            }
+          }
+        }; // 导航按钮
+        document.querySelectorAll(".nav-btn").forEach((btn) => {
+          btn.onclick = () => {
+            const target = btn.getAttribute("data-target");
+            setActiveSection(target);
+
+            // 如果点击的是集成页面按钮，重置预览状态，显示管理界面
+            if (target === "integrations") {
+              state.currentPageId = null;
+              resetPagePreview();
+              saveState();
+            }
+          };
+        }); // 移动菜单
+        byId("mobileMenuBtn")?.addEventListener("click", () => byId("mobileDrawer").classList.remove("hidden"));
+        byId("mobileClose")?.addEventListener("click", () => byId("mobileDrawer").classList.add("hidden"));
+        document.getElementById("mobileDrawer").addEventListener("click", (e) => {
+          if (e.target.id === "mobileDrawer") e.currentTarget.classList.add("hidden");
+        });
+
+        // 返回管理按钮
+        byId("backToManagement")?.addEventListener("click", () => {
+          resetPagePreview();
+        });
+      }
+
+      // -------------------------
+      // 演示数据
+      // -------------------------
+      function seedDemoData() {
+        if (state.seeded && !confirm("已经生成过演示数据，是否再次生成并叠加？")) return;
+
+        const today = new Date();
+        const day = (offset) => {
+          const d = new Date(today);
+          d.setDate(d.getDate() + offset);
+          return d.toISOString().slice(0, 10);
+        };
+        // 计划
+        const products = ["智能手环", "无人车底盘", "教育机器人套件", "物联网网关"];
+        for (let i = 0; i < 4; i++) {
+          state.plans.push({
+            id: crypto.randomUUID(),
+            product: products[i],
+            qty: 100 + i * 50,
+            start: day(-3 + i),
+            end: day(1 + i),
+            status: i % 2 ? "已调度" : "未调度",
+            createdAt: nowISO(),
+          });
+        }
+        // 调度（关联已调度计划）
+        state.plans
+          .filter((p) => p.status === "已调度")
+          .forEach((p, idx) => {
+            state.schedules.push({
+              id: crypto.randomUUID(),
+              planId: p.id,
+              line: `L-${idx + 1}`,
+              priority: idx + 1,
+              date: p.start,
+            });
+          });
+        // 任务
+        const assignees = ["学生A", "学生B", "学生C"];
+        for (let i = 0; i < 8; i++) {
+          const status = i % 3 === 0 ? "已完成" : i % 3 === 1 ? "进行中" : "未开始";
+          const created = new Date(today);
+          created.setDate(created.getDate() - Math.floor(Math.random() * 6));
+          const completed = new Date(created);
+          completed.setDate(completed.getDate() + Math.floor(Math.random() * 3));
+          state.tasks.push({
+            id: crypto.randomUUID(),
+            taskName: `${products[i % products.length]} 装配`,
+            assignee: assignees[i % assignees.length],
+            qty: 20 + Math.floor(Math.random() * 30),
+            deadline: day(Math.floor(Math.random() * 5)),
+            status,
+            createdAt: created.toISOString(),
+            completedAt: status === "已完成" ? completed.toISOString() : undefined,
+          });
+        }
+        // 质量
+        const defects = ["外观划痕", "尺寸偏差", "功能失效", "装配不良"];
+        for (let i = 0; i < 10; i++) {
+          const ok = Math.random() > 0.25;
+          state.quality.push({
+            id: crypto.randomUUID(),
+            batch: "BATCH-" + (1000 + i),
+            item: "出厂检验",
+            result: ok ? "合格" : "不合格",
+            defect: ok ? "" : defects[i % defects.length],
+            qty: 10 + Math.floor(Math.random() * 10),
+            time: new Date(today.getTime() - Math.random() * 7 * 86400000).toISOString(),
+          });
+        }
+        state.seeded = true;
+        saveState();
+        alert("已生成演示数据");
+      }
+
+      // -------------------------
+      // 渲染
+      // -------------------------
+      function updateAll() {
+        updateKPIs();
+        renderPlans();
+        renderSchedules();
+        renderTasks();
+        renderQuality();
+        renderEquipment();
+        updateOverviewCharts();
+        // 默认渲染分析图
+        renderAnalytics();
+        // 更新集成区
+        initIntegrationsUI();
+      } // -------------------------
+      // 启动
+      // -------------------------
+      async function init() {
+        await loadState();
+        bindForms();
+        updateAll();
+        setActiveSection("overview");
+        // 设备定时刷新
+        setInterval(tickEquipmentSensors, 3000);
+      }
+
+      init();
+    </script>
+  </body>
+</html>

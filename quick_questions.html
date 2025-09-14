@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>快速答题</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <!-- Chinese character stroke writing library -->
+    <script src="https://cdn.keepwork.com/npm/hanzi-writer@3.5.0/dist/hanzi-writer.min.js?v=1"></script>
+    <!-- Speech recognition and synthesis -->
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      .question-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+      }
+
+      .question-card {
+        background: white;
+        border-radius: 20px;
+        padding: 30px;
+        max-width: 500px;
+        width: 100%;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+      }
+
+      .question-text {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 25px;
+        line-height: 1.6;
+      }
+
+      .option {
+        display: flex;
+        align-items: center;
+        padding: 15px;
+        margin-bottom: 12px;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: #f9fafb;
+      }
+
+      .option:hover {
+        border-color: #3b82f6;
+        background: #eff6ff;
+        transform: translateX(5px);
+      }
+
+      .option.selected {
+        border-color: #3b82f6;
+        background: #dbeafe;
+      }
+
+      .option.correct {
+        border-color: #10b981;
+        background: #d1fae5;
+      }
+
+      .option.incorrect {
+        border-color: #ef4444;
+        background: #fee2e2;
+      }
+
+      .option input[type="radio"] {
+        margin-right: 12px;
+        width: 18px;
+        height: 18px;
+        accent-color: #3b82f6;
+      }
+
+      .option-text {
+        font-size: 16px;
+        color: #374151;
+      }
+      .button-group {
+        display: flex;
+        gap: 15px;
+        margin-top: 30px;
+      }
+
+      .btn {
+        flex: 1;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: 100%;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+      .btn-secondary {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+
+      .btn-secondary:hover {
+        background: #e5e7eb;
+      }
+
+      .btn-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+      }
+
+      .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
+      }
+
+      .result-message {
+        text-align: center;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 20px;
+        font-weight: 600;
+      }
+
+      .result-success {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .result-error {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .stats {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8fafc;
+        border-radius: 10px;
+      }
+
+      .stat-item {
+        text-align: center;
+      }
+
+      .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: #6b7280;
+        text-transform: uppercase;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #6b7280;
+      }
+
+      .spinner {
+        border: 3px solid #f3f4f6;
+        border-top: 3px solid #3b82f6;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      .fade-in {
+        animation: fadeIn 0.5s ease-in;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      } /* Hanzi writing interface */
+      .hanzi-writing-container {
+        text-align: center;
+      }
+
+      .hanzi-canvas {
+        border: 3px solid #3b82f6;
+        border-radius: 12px;
+        background: radial-gradient(circle at 25% 25%, #f0f9ff 0%, transparent 25%), radial-gradient(circle at 75% 75%, #f0f9ff 0%, transparent 25%),
+          linear-gradient(45deg, transparent 49%, #e0f2fe 49%, #e0f2fe 51%, transparent 51%);
+        background-size: 40px 40px, 40px 40px, 20px 20px;
+        display: block;
+        margin: 20px auto;
+        transition: all 0.3s ease;
+      }
+
+      .hanzi-canvas.practice-mode {
+        border-color: #7c3aed;
+        background: radial-gradient(circle at 25% 25%, #faf5ff 0%, transparent 25%), radial-gradient(circle at 75% 75%, #faf5ff 0%, transparent 25%),
+          linear-gradient(45deg, transparent 49%, #f3e8ff 49%, #f3e8ff 51%, transparent 51%);
+      }
+
+      .hanzi-canvas.completed-mode {
+        border-color: #10b981;
+        background: radial-gradient(circle at 25% 25%, #f0fdf4 0%, transparent 25%), radial-gradient(circle at 75% 75%, #f0fdf4 0%, transparent 25%),
+          linear-gradient(45deg, transparent 49%, #ecfdf5 49%, #ecfdf5 51%, transparent 51%);
+      }
+
+      .hanzi-info {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 12px 20px;
+        border-radius: 20px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #374151;
+        margin-bottom: 15px;
+        display: inline-block;
+      }
+
+      .hanzi-char {
+        font-size: 24px;
+        color: #1f2937;
+        margin-right: 10px;
+      }
+
+      .hanzi-pinyin {
+        color: #3b82f6;
+        font-size: 18px;
+      }
+
+      .hanzi-controls {
+        margin-top: 15px;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      .hanzi-btn {
+        background: #6b7280;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .hanzi-btn:hover {
+        background: #4b5563;
+        transform: scale(1.05);
+      }
+
+      .hanzi-btn.outline-btn {
+        background: #3b82f6;
+      }
+
+      .hanzi-btn.outline-btn:hover {
+        background: #2563eb;
+      }
+
+      .hanzi-btn.reset-btn {
+        background: #f59e0b;
+      }
+
+      .hanzi-btn.reset-btn:hover {
+        background: #d97706;
+      }
+
+      .success-animation {
+        animation: successPulse 1s ease-in-out;
+      }
+
+      @keyframes successPulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+
+      /* Speech recognition interface */
+      .speech-container {
+        text-align: center;
+        padding: 20px;
+        background: #f8fafc;
+        border-radius: 10px;
+        margin: 20px 0;
+      }
+
+      .speech-text {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 15px;
+        line-height: 1.6;
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+      }
+
+      .speech-translation {
+        font-size: 14px;
+        color: #6b7280;
+        margin-bottom: 15px;
+        font-style: italic;
+      }
+
+      .mic-button {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: none;
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin: 10px;
+      }
+
+      .mic-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 5px 15px rgba(239, 68, 68, 0.4);
+      }
+
+      .mic-button.recording {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .clear-canvas-btn {
+        background: #f3f4f6;
+        color: #6b7280;
+        border: 1px solid #d1d5db;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin: 10px;
+        transition: all 0.2s ease;
+      }
+      .clear-canvas-btn:hover {
+        background: #e5e7eb;
+      }
+
+      /* Toast notification styles */
+      .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #1f2937;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        max-width: 300px;
+        word-wrap: break-word;
+      }
+
+      .toast.show {
+        transform: translateX(0);
+      }
+
+      .toast.success {
+        background: #10b981;
+      }
+
+      .toast.warning {
+        background: #f59e0b;
+      }
+
+      .toast.error {
+        background: #ef4444;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="question-container">
+      <div class="question-card fade-in" id="questionCard">
+        <!-- Loading state -->
+        <div id="loadingState" class="loading">
+          <div class="spinner"></div>
+          <div>加载题目中...</div>
+        </div>
+
+        <!-- Question content -->
+        <div id="questionContent" style="display: none">
+          <!-- Stats -->
+          <div class="stats" id="statsContainer">
+            <div class="stat-item">
+              <div class="stat-value" id="correctCount">0</div>
+              <div class="stat-label">正确</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="totalCount">0</div>
+              <div class="stat-label">总数</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="accuracy">0%</div>
+              <div class="stat-label">正确率</div>
+            </div>
+          </div>
+
+          <!-- Question text -->
+          <div class="question-text" id="questionText">问题加载中...</div>
+
+          <!-- Options -->
+          <div id="optionsContainer">
+            <!-- Options will be generated dynamically -->
+          </div>
+
+          <!-- Result message -->
+          <div id="resultMessage" style="display: none" class="result-message"></div>
+          <!-- Buttons -->
+          <div class="button-group">
+            <button class="btn btn-secondary" id="nextBtn" onclick="nextQuestion()" style="display: none">下一题</button>
+            <button class="btn btn-primary" id="submitBtn" onclick="submitAnswer()">提交答案</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Set random seed based on current time
+      Math.seedrandom = function (seed) {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      };
+
+      // Initialize random seed with current timestamp
+      const randomSeed = Date.now();
+      let currentSeed = randomSeed;
+
+      // Seeded random function
+      function seededRandom() {
+        currentSeed = (currentSeed * 9301 + 49297) % 233280;
+        return currentSeed / 233280;
+      }
+
+      // Question bank
+      const questionBank = {
+        chinese: [
+          { question: "下列哪个字的读音正确？", options: ["qiáng壮", "jiàng壮", "zhuàng壮", "chuáng壮"], answer: 2 },
+          { question: '"春蚕到死丝方尽"的下一句是？', options: ["蜡炬成灰泪始干", "蜡烛成灰泪始干", "春蚕到死丝方尽", "红颜弃轩冕"], answer: 0 },
+          { question: '"三顾茅庐"说的是哪位历史人物？', options: ["刘备", "关羽", "张飞", "诸葛亮"], answer: 0 },
+          { question: "下列词语中，错别字是？", options: ["再接再厉", "再接再励", "坚持不懈", "持之以恒"], answer: 1 },
+          { question: '"床前明月光"的作者是？', options: ["杜甫", "李白", "王维", "孟浩然"], answer: 1 },
+          { question: "下列哪个成语用法正确？", options: ["他对这件事漠不关心", "他对这件事漠不关己", "他对这件事漠不关情", "他对这件事漠不关怀"], answer: 0 },
+          { question: '"山重水复疑无路"的下一句是？', options: ["柳暗花明又一村", "柳绿花红又一春", "柳暗花明又一春", "柳绿花明又一村"], answer: 0 },
+          { question: "下列哪个字是多音字？", options: ["山", "水", "行", "花"], answer: 2 },
+          { question: '"学而时习之"出自哪本书？', options: ["《论语》", "《孟子》", "《大学》", "《中庸》"], answer: 0 },
+          { question: '下列哪个词语的意思是"非常高兴"？', options: ["心花怒放", "心灰意冷", "心血来潮", "心不在焉"], answer: 0 },
+          { question: "下列哪个词语表示'很快'？", options: ["慢慢", "缓缓", "迅速", "缓慢"], answer: 2 },
+          { question: '"一心一意"的意思是？', options: ["专心致志", "三心二意", "心不在焉", "心猿意马"], answer: 0 },
+          { question: "下列哪个字的笔画数最少？", options: ["人", "大", "小", "工"], answer: 0 },
+          { question: '"古诗十九首"是哪个朝代的作品？', options: ["唐朝", "宋朝", "汉朝", "明朝"], answer: 2 },
+          { question: "下列哪个成语用来形容读书很多？", options: ["学富五车", "才高八斗", "博览群书", "以上都对"], answer: 3 },
+          { question: '"桃李满天下"是用来形容什么的？', options: ["花园", "老师", "学生", "朋友"], answer: 1 },
+          { question: "下列哪个词语是错误的？", options: ["再接再厉", "再接再励", "锲而不舍", "持之以恒"], answer: 1 },
+          { question: '"望梅止渴"这个成语的主人公是？', options: ["曹操", "刘备", "孙权", "诸葛亮"], answer: 0 },
+          { question: "下列哪个字是形声字？", options: ["日", "月", "江", "人"], answer: 2 },
+          { question: '"春眠不觉晓"的下一句是？', options: ["处处闻啼鸟", "夜来风雨声", "花落知多少", "以上都对"], answer: 0 },
+          { question: "下列哪个词语表示'非常安静'？", options: ["鸦雀无声", "震耳欲聋", "人声鼎沸", "热闹非凡"], answer: 0 },
+          { question: '"画蛇添足"告诉我们什么道理？', options: ["做事要认真", "不要多此一举", "要有创新精神", "要坚持不懈"], answer: 1 },
+          { question: "下列哪个字的读音是第四声？", options: ["妈", "麻", "马", "骂"], answer: 3 },
+          { question: '"孟母三迁"的故事说明了什么？', options: ["环境的重要性", "母爱的伟大", "学习的重要", "以上都对"], answer: 3 },
+          { question: "下列哪个成语表示'时间过得很快'？", options: ["度日如年", "光阴似箭", "一日三秋", "天长地久"], answer: 1 },
+          { question: "下面哪个量词用于计量书籍？", options: ["本", "条", "匹", "头"], answer: 0 },
+          { question: "成语“杯弓蛇影”的意思是？", options: ["疑神疑鬼", "心有灵犀", "杯弓换影", "无动于衷"], answer: 0 },
+          { question: "下列哪个汉字是左右结构？", options: ["明", "日", "工", "山"], answer: 0 },
+          { question: "下列哪一组是近义词？", options: ["快乐 - 高兴", "高兴 - 难过", "干净 - 肮脏", "胖 - 瘦"], answer: 0 },
+          { question: "诗句“白日依山尽”的下一句是？", options: ["黄河入海流", "春风又绿江南岸", "欲穷千里目", "举头望明月"], answer: 0 },
+          { question: "下列哪个不是汉字的基本笔画类型？", options: ["横", "竖", "圈", "撇"], answer: 2 },
+          { question: "成语“画龙点睛”主要表示？", options: ["点出关键", "画画技能", "夸大其词", "无关紧要"], answer: 0 },
+          { question: "下列哪一对是反义词？", options: ["进 - 退", "东 - 西", "买 - 卖", "上 - 下"], answer: 0 },
+          { question: "下列哪个字的部首是“氵”？", options: ["海", "火", "白", "日"], answer: 0 },
+          { question: "成语“刻舟求剑”用来告诉我们不要做什么？", options: ["死守教条", "勤学苦练", "互相帮助", "珍惜时间"], answer: 0 },
+          { question: "词语“径直”最接近哪个意思？", options: ["直接", "间接", "缓慢", "犹豫"], answer: 0 },
+          { question: "下列哪个字是“口”字旁？", options: ["唱", "树", "风", "国"], answer: 0 },
+          { question: "下列谁是《登鹳雀楼》的作者？", options: ["王之涣", "王维", "李白", "杜甫"], answer: 0 },
+          { question: "下列哪个词语是表示颜色的？", options: ["蔚蓝", "幸福", "安静", "快速"], answer: 0 },
+          { question: "汉字“谢”的正确读音是？", options: ["xiè", "xiě", "xiá", "xiā"], answer: 0 },
+          { question: "成语“滥竽充数”批评的是？", options: ["以假乱真", "勤学苦练", "助人为乐", "自强不息"], answer: 0 },
+          { question: "下列哪个词语表示时间顺序？", options: ["先后", "左右", "里外", "远近"], answer: 0 },
+          { question: "成语“守株待兔”主要批评什么行为？", options: ["不劳而获的思想", "勤俭持家", "团结合作", "积极进取"], answer: 0 },
+          { question: "下列哪个字既读'zhòng'又读'chóng'？", options: ["重", "国", "山", "日"], answer: 0 },
+          { question: "成语“滔滔不绝”用来形容什么？", options: ["说话不停", "默不作声", "走路很快", "写字漂亮"], answer: 0 },
+          { question: "下列哪个字的声母是 'zh'？", options: ["张", "牛", "包", "马"], answer: 0 },
+          { question: "成语“一石二鸟”的意思是？", options: ["同时达到两个目的", "伤害两只鸟", "扔石头打鸟", "两件事都失败"], answer: 0 },
+          { question: "下列哪句是描写春天的诗句？", options: ["江山如此多娇", "春色满园关不住", "床前明月光", "大漠孤烟直"], answer: 1 },
+          { question: "汉字“松”的部首是？", options: ["木", "氵", "口", "艹"], answer: 0 },
+          { question: "下列哪个词语表示程度很高？", options: ["略微", "稍微", "极其", "尚且"], answer: 2 },
+          { question: "下列哪个成语表示“给予帮助”？", options: ["雪中送炭", "落井下石", "趁火打劫", "坐山观虎斗"], answer: 0 },
+          { question: "量词“把”常用于哪一项？", options: ["伞", "书", "狗", "衣服"], answer: 0 },
+          { question: "汉字“善”的拼音是？", options: ["shàn", "shān", "xìan", "sān"], answer: 0 },
+          { question: "唐代诗人李白的别号是？", options: ["青莲居士", "白居易", "杜甫", "陶渊明"], answer: 0 },
+          { question: "成语“井井有条”表示？", options: ["混乱无序", "条理清楚", "安静无声", "手忙脚乱"], answer: 1 },
+          { question: "下列哪个字表示向上、上升的动作？", options: ["升", "降", "退", "出"], answer: 0 },
+          { question: "成语“亡羊补牢”的意思是？", options: ["亡羊不补牢", "出问题后再补救还来得及", "不必补救", "损失不可挽回"], answer: 1 },
+          { question: "汉字“听”的笔画数是？", options: ["6", "7", "8", "9"], answer: 1 },
+          { question: "下列哪个词语表示“非常努力”？", options: ["不遗余力", "敷衍了事", "得过且过", "心不在焉"], answer: 0 },
+          { question: "成语“力不从心”的意思是？", options: ["能力不足但想做", "力量大于心", "心情很好", "不劳而获"], answer: 0 },
+          { question: "下列哪个字的读音是第二声？", options: ["麻", "马", "吗", "妈"], answer: 0 },
+          { question: "诗句“大漠孤烟直，长河落日圆”的作者是？", options: ["王之涣", "王维", "李白", "杜甫"], answer: 1 },
+          { question: "下列哪一对是反义词？", options: ["爱 - 恨", "高 - 高", "强 - 强", "轻 - 轻"], answer: 0 },
+          { question: "量词“匹”常用来计量什么？", options: ["书籍", "马", "鱼", "纸"], answer: 1 },
+          { question: "汉字“鱼”的部首是？", options: ["鱼", "饣", "灬", "扌"], answer: 0 },
+        ],
+        math: [
+          { question: "一个三角形的内角和是多少度？", options: ["90°", "180°", "270°", "360°"], answer: 1 },
+          { question: "圆的面积公式是？", options: ["πr", "2πr", "πr²", "2πr²"], answer: 2 },
+          { question: "如果一个正方形的边长是5cm，它的面积是多少？", options: ["20cm²", "25cm²", "30cm²", "15cm²"], answer: 1 },
+          { question: "下列哪个数是质数？", options: ["15", "21", "17", "25"], answer: 2 },
+          { question: "如果x + 5 = 12，那么x等于多少？", options: ["5", "6", "7", "8"], answer: 2 },
+          { question: "一个圆的半径是3cm，它的周长是多少？", options: ["6π cm", "9π cm", "12π cm", "18π cm"], answer: 0 },
+          { question: "一个圆的直径是6cm，它的半径是多少？", options: ["2cm", "3cm", "4cm", "12cm"], answer: 1 },
+          { question: "24小时等于多少分钟？", options: ["1440分钟", "1400分钟", "1240分钟", "1480分钟"], answer: 0 },
+          { question: "一个正方形有几条对称轴？", options: ["2条", "4条", "6条", "8条"], answer: 1 },
+          { question: "1公里等于多少米？", options: ["100米", "1000米", "10000米", "100000米"], answer: 1 },
+          { question: "60秒等于多少分钟？", options: ["0.5分钟", "1分钟", "1.5分钟", "2分钟"], answer: 1 },
+          { question: "一个三角形有几个顶点？", options: ["2个", "3个", "4个", "5个"], answer: 1 },
+          { question: "1千克等于多少克？", options: ["100克", "1000克", "10000克", "100000克"], answer: 1 },
+          { question: "一个长方形有几条边？", options: ["3条", "4条", "5条", "6条"], answer: 1 },
+          { question: "百分之五十用小数表示是？", options: ["0.05", "0.5", "5.0", "50"], answer: 1 },
+          { question: "1小时等于多少秒？", options: ["3600秒", "3000秒", "3500秒", "4000秒"], answer: 0 },
+          { question: "一个正六边形有几条边？", options: ["5条", "6条", "7条", "8条"], answer: 1 },
+          { question: "圆周率π约等于多少？", options: ["3.14", "3.41", "4.13", "1.34"], answer: 0 },
+          { question: "1升等于多少毫升？", options: ["100毫升", "1000毫升", "10000毫升", "100000毫升"], answer: 1 },
+          { question: "一个立方体有几个面？", options: ["4个", "6个", "8个", "12个"], answer: 1 },
+          { question: "1分钟等于多少秒？", options: ["30秒", "60秒", "90秒", "120秒"], answer: 1 },
+          { question: "一个圆有几条直径？", options: ["1条", "2条", "无数条", "0条"], answer: 2 },
+          { question: "1米等于多少厘米？", options: ["10厘米", "100厘米", "1000厘米", "10000厘米"], answer: 1 },
+          { question: "一个等边三角形的内角各是多少度？", options: ["45°", "60°", "90°", "120°"], answer: 1 },
+          { question: "1吨等于多少千克？", options: ["100千克", "1000千克", "10000千克", "100000千克"], answer: 1 },
+          { question: "一个正方形的对角线有几条？", options: ["1条", "2条", "3条", "4条"], answer: 1 },
+          { question: "1厘米等于多少毫米？", options: ["1毫米", "10毫米", "100毫米", "1000毫米"], answer: 1 },
+          { question: "圆的周长公式中，d代表什么？", options: ["半径", "直径", "周长", "面积"], answer: 1 },
+          { question: "1平方米等于多少平方厘米？", options: ["100平方厘米", "1000平方厘米", "10000平方厘米", "100000平方厘米"], answer: 2 },
+          { question: "一个直角是多少度？", options: ["45°", "60°", "90°", "180°"], answer: 2 },
+          { question: "1立方米等于多少立方分米？", options: ["100立方分米", "1000立方分米", "10000立方分米", "100000立方分米"], answer: 1 },
+          { question: "一个圆的半径是5cm，它的直径是多少？", options: ["5cm", "10cm", "15cm", "25cm"], answer: 1 },
+          { question: "1年有多少个月？", options: ["10个月", "11个月", "12个月", "13个月"], answer: 2 },
+          { question: "一个平角是多少度？", options: ["90°", "120°", "180°", "360°"], answer: 2 },
+          { question: "1打等于多少个？", options: ["10个", "12个", "15个", "20个"], answer: 1 },
+          { question: "一个正五边形有几个内角？", options: ["4个", "5个", "6个", "7个"], answer: 1 },
+          { question: "1周有多少天？", options: ["6天", "7天", "8天", "9天"], answer: 1 },
+          { question: "两条平行线之间的距离是什么？", options: ["变化的", "相等的", "递增的", "递减的"], answer: 1 },
+          { question: "1世纪等于多少年？", options: ["50年", "100年", "1000年", "10000年"], answer: 1 },
+          { question: "一个等腰三角形有几条相等的边？", options: ["1条", "2条", "3条", "0条"], answer: 1 },
+          { question: "1光年大约等于多少万亿公里？", options: ["6万亿", "9万亿", "12万亿", "15万亿"], answer: 1 },
+          { question: "垂直相交的两条直线形成几个直角？", options: ["2个", "4个", "6个", "8个"], answer: 1 },
+          { question: "1度等于多少分？", options: ["30分", "60分", "90分", "120分"], answer: 1 },
+          { question: "一个菱形有几组平行边？", options: ["1组", "2组", "3组", "4组"], answer: 1 },
+          { question: "声音在空气中的传播速度大约是多少米每秒？", options: ["240米", "340米", "440米", "540米"], answer: 1 },
+          { question: "一个梯形有几条平行边？", options: ["1组", "2组", "3组", "0组"], answer: 0 },
+          { question: "地球绕太阳一周大约需要多少天？", options: ["300天", "365天", "400天", "500天"], answer: 1 },
+          { question: "一个圆锥有几个顶点？", options: ["0个", "1个", "2个", "3个"], answer: 1 },
+          { question: "水的沸点是多少摄氏度？", options: ["90°C", "100°C", "110°C", "120°C"], answer: 1 },
+          { question: "一个长方体有几条棱？", options: ["8条", "12条", "16条", "20条"], answer: 1 },
+          { question: "人体正常体温大约是多少摄氏度？", options: ["35°C", "36°C", "37°C", "38°C"], answer: 2 },
+          { question: "一个球有几个面？", options: ["0个", "1个", "2个", "无数个"], answer: 1 },
+          { question: "一分硬币的直径大约是多少毫米？", options: ["15毫米", "20毫米", "25毫米", "30毫米"], answer: 1 },
+          { question: "金字塔的底面通常是什么形状？", options: ["三角形", "正方形", "圆形", "六边形"], answer: 1 },
+          { question: "一张A4纸的长度大约是多少厘米？", options: ["25厘米", "30厘米", "35厘米", "40厘米"], answer: 1 },
+          { question: "人的正常心跳每分钟大约多少次？", options: ["50次", "70次", "90次", "110次"], answer: 1 },
+        ],
+        english: [
+          { question: '"Hello"的中文意思是？', options: ["再见", "你好", "谢谢", "对不起"], answer: 1 },
+          { question: '英语中"苹果"怎么说？', options: ["Orange", "Banana", "Apple", "Grape"], answer: 2 },
+          { question: '"Thank you"的回答通常是？', options: ["Hello", "Goodbye", "You're welcome", "Sorry"], answer: 2 },
+          { question: "一周有几天？英语怎么说？", options: ["Six days", "Seven days", "Five days", "Eight days"], answer: 1 },
+          { question: '"Good morning"是什么意思？', options: ["晚上好", "下午好", "早上好", "晚安"], answer: 2 },
+          { question: '"How are you?"的常见回答是？', options: ["I am fine", "I am good", "I am okay", "以上都对"], answer: 3 },
+          { question: '英语中"红色"怎么说？', options: ["Blue", "Green", "Red", "Yellow"], answer: 2 },
+          { question: '"What is your name?"是什么意思？', options: ["你多大了？", "你叫什么名字？", "你来自哪里？", "你好吗？"], answer: 1 },
+          { question: "下列哪个是正确的复数形式？", options: ["book → books", "child → childs", "woman → womans", "foot → foots"], answer: 0 },
+          { question: '"I love you"的中文意思是？', options: ["我恨你", "我喜欢你", "我爱你", "我想你"], answer: 2 },
+          { question: '英语中"星期天"怎么说？', options: ["Saturday", "Sunday", "Monday", "Friday"], answer: 1 },
+          { question: '"See you later"的意思是？', options: ["再见", "回头见", "明天见", "晚上见"], answer: 1 },
+          { question: '英语中"水"怎么说？', options: ["Juice", "Milk", "Water", "Tea"], answer: 2 },
+          { question: '"I am hungry"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我开心"], answer: 0 },
+          { question: "下列哪个是正确的过去式？", options: ["go → goed", "see → saw", "eat → eated", "run → runned"], answer: 1 },
+          { question: '"What time is it?"的中文意思是？', options: ["你几点了？", "现在几点？", "你什么时候？", "你在哪里？"], answer: 1 },
+          { question: '英语中"猫"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 1 },
+          { question: '"I am tired"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我开心"], answer: 2 },
+          { question: "下列哪个是正确的比较级形式？", options: ["big → bigger", "good → gooder", "fast → fastly", "happy → happierly"], answer: 0 },
+          { question: '"Where are you from?"的中文意思是？', options: ["你多大了？", "你叫什么名字？", "你来自哪里？", "你好吗？"], answer: 2 },
+          { question: '英语中"书"怎么说？', options: ["Pen", "Pencil", "Book", "Notebook"], answer: 2 },
+          { question: '"I am thirsty"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我开心"], answer: 1 },
+          { question: "下列哪个是正确的现在进行时形式？", options: ["He run", "He running", "He is running", "He runs"], answer: 2 },
+          { question: '"What is this?"的中文意思是？', options: ["这是什么？", "那是什么？", "这是谁？", "那是谁？"], answer: 0 },
+          { question: '英语中"狗"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 0 },
+          { question: '"I am happy"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我开心"], answer: 3 },
+          { question: "下列哪个是正确的将来时形式？", options: ["She will go", "She going", "She goes", "She goed"], answer: 0 },
+          { question: '"How old are you?"的中文意思是？', options: ["你多大了？", "你叫什么名字？", "你来自哪里？", "你好吗？"], answer: 0 },
+          { question: '英语中"鸟"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 2 },
+          { question: '"I am sad"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我难过"], answer: 3 },
+          { question: "下列哪个是正确的现在完成时形式？", options: ["They have gone", "They gone", "They goes", "They goed"], answer: 0 },
+          { question: '"What do you like?"的中文意思是？', options: ["你喜欢什么？", "你讨厌什么？", "你想要什么？", "你需要什么？"], answer: 0 },
+          { question: '英语中"鱼"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 3 },
+          { question: '"I am excited"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我很兴奋"], answer: 3 },
+          { question: "下列哪个是正确的被动语态形式？", options: ["The cake is eaten", "The cake eaten", "The cake eats", "The cake eated"], answer: 0 },
+          { question: '"Where do you live?"的中文意思是？', options: ["你住在哪里？", "你工作在哪里？", "你学习在哪里？", "你去哪里？"], answer: 0 },
+          { question: '英语中"学校"怎么说？', options: ["Hospital", "School", "Library", "Office"], answer: 1 },
+          { question: '"I am bored"是什么意思？', options: ["我饿了", "我渴了", "我无聊了", "我开心"], answer: 2 },
+          {
+            question: "下列哪个是正确的条件句形式？",
+            options: ["If it rains, we will stay home", "If it rains, we stay home", "If it rains, we stayed home", "If it rains, we staying home"],
+            answer: 0,
+          },
+          { question: '"What is your favorite color?"的中文意思是？', options: ["你最喜欢的颜色是什么？", "你最讨厌的颜色是什么？", "你最喜欢的动物是什么？", "你最讨厌的动物是什么？"], answer: 0 },
+          { question: '英语中"老师"怎么说？', options: ["Doctor", "Teacher", "Engineer", "Nurse"], answer: 1 },
+          { question: '"I am nervous"是什么意思？', options: ["我饿了", "我渴了", "我紧张了", "我开心"], answer: 2 },
+          {
+            question: "下列哪个是正确的间接引语形式？",
+            options: [
+              'He said, "I am tired" → He said he was tired',
+              'He said, "I am tired" → He said he is tired',
+              'He said, "I am tired" → He said he am tired',
+              'He said, "I am tired" → He said he were tired',
+            ],
+            answer: 0,
+          },
+          { question: '"How do you spell it?"的中文意思是？', options: ["你怎么拼写它？", "你怎么说它？", "你怎么写它？", "你怎么读它？"], answer: 0 },
+          { question: '英语中"医生"怎么说？', options: ["Doctor", "Teacher", "Engineer", "Nurse"], answer: 0 },
+          { question: '"I am proud"是什么意思？', options: ["我饿了", "我渴了", "我骄傲", "我开心"], answer: 2 },
+          {
+            question: "下列哪个是正确的虚拟语气形式？",
+            options: ["If I were you, I would study harder", "If I was you, I would study harder", "If I am you, I would study harder", "If I be you, I would study harder"],
+            answer: 0,
+          },
+          { question: '"What do you do?"的中文意思是？', options: ["你做什么工作？", "你做什么事？", "你去哪里？", "你喜欢什么？"], answer: 0 },
+          { question: '英语中"护士"怎么说？', options: ["Doctor", "Teacher", "Engineer", "Nurse"], answer: 3 },
+          { question: '"I am confused"是什么意思？', options: ["我饿了", "我渴了", "我困惑了", "我开心"], answer: 2 },
+          { question: "下列哪个是正确的强调句形式？", options: ["It is John who called you", "It John who called you", "It is John called you", "It is who called you"], answer: 0 },
+          { question: "下列哪个是正确的过去式？", options: ["go → goed", "see → saw", "eat → eated", "run → runned"], answer: 1 },
+          { question: '"What time is it?"的中文意思是？', options: ["你多大了？", "现在几点？", "你来自哪里？", "你好吗？"], answer: 1 },
+          { question: '英语中"猫"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 1 },
+          { question: '"I am tired"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我开心"], answer: 2 },
+          { question: "下列哪个是正确的现在进行时形式？", options: ["He run", "He running", "He is running", "He runs"], answer: 2 },
+          { question: '"What is this?"的中文意思是？', options: ["这是什么？", "那是什么？", "这是谁？", "那是谁？"], answer: 0 },
+          { question: '英语中"狗"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 0 },
+          { question: '"I am happy"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我开心"], answer: 3 },
+          { question: "下列哪个是正确的将来时形式？", options: ["She will go", "She going", "She goes", "She goed"], answer: 0 },
+          { question: '"How old are you?"的中文意思是？', options: ["你多大了？", "你叫什么名字？", "你来自哪里？", "你好吗？"], answer: 0 },
+          { question: '英语中"鸟"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 2 },
+          { question: '"I am sad"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我难过"], answer: 3 },
+          { question: "下列哪个是正确的现在完成时形式？", options: ["They have gone", "They gone", "They goes", "They goed"], answer: 0 },
+          { question: '"What do you like?"的中文意思是？', options: ["你喜欢什么？", "你讨厌什么？", "你想要什么？", "你需要什么？"], answer: 0 },
+          { question: '英语中"鱼"怎么说？', options: ["Dog", "Cat", "Bird", "Fish"], answer: 3 },
+          { question: '"I am excited"是什么意思？', options: ["我饿了", "我渴了", "我累了", "我很兴奋"], answer: 3 },
+          { question: "下列哪个是正确的被动语态形式？", options: ["The cake is eaten", "The cake eaten", "The cake eats", "The cake eated"], answer: 0 },
+          { question: '"Where do you live?"的中文意思是？', options: ["你住在哪里？", "你工作在哪里？", "你学习在哪里？", "你去哪里？"], answer: 0 },
+          { question: '英语中"学校"怎么说？', options: ["Hospital", "School", "Library", "Office"], answer: 1 },
+          { question: '"I am bored"是什么意思？', options: ["我饿了", "我渴了", "我无聊了", "我开心"], answer: 2 },
+        ],
+      };
+
+      // Chinese characters for random selection
+      const chineseChars = [
+        { char: "大", strokes: 3, pinyin: "dà", meaning: "big" },
+        { char: "小", strokes: 3, pinyin: "xiǎo", meaning: "small" },
+        { char: "山", strokes: 3, pinyin: "shān", meaning: "mountain" },
+        { char: "水", strokes: 4, pinyin: "shuǐ", meaning: "water" },
+        { char: "火", strokes: 4, pinyin: "huǒ", meaning: "fire" },
+        { char: "土", strokes: 3, pinyin: "tǔ", meaning: "earth" },
+        { char: "木", strokes: 4, pinyin: "mù", meaning: "wood" },
+        { char: "金", strokes: 8, pinyin: "jīn", meaning: "gold" },
+        { char: "日", strokes: 4, pinyin: "rì", meaning: "sun" },
+        { char: "月", strokes: 4, pinyin: "yuè", meaning: "moon" },
+        { char: "天", strokes: 4, pinyin: "tiān", meaning: "sky" },
+        { char: "地", strokes: 6, pinyin: "dì", meaning: "ground" },
+        { char: "手", strokes: 4, pinyin: "shǒu", meaning: "hand" },
+        { char: "心", strokes: 4, pinyin: "xīn", meaning: "heart" },
+        { char: "百", strokes: 6, pinyin: "bǎi", meaning: "hundred" },
+        { char: "千", strokes: 3, pinyin: "qiān", meaning: "thousand" },
+        { char: "万", strokes: 3, pinyin: "wàn", meaning: "ten thousand" },
+        { char: "上", strokes: 3, pinyin: "shàng", meaning: "above/up" },
+        { char: "下", strokes: 3, pinyin: "xià", meaning: "below/down" },
+        { char: "左", strokes: 5, pinyin: "zuǒ", meaning: "left" },
+        { char: "右", strokes: 5, pinyin: "yòu", meaning: "right" },
+        { char: "中", strokes: 4, pinyin: "zhōng", meaning: "middle/center" },
+        { char: "东", strokes: 5, pinyin: "dōng", meaning: "east" },
+        { char: "西", strokes: 6, pinyin: "xī", meaning: "west" },
+        { char: "南", strokes: 9, pinyin: "nán", meaning: "south" },
+        { char: "北", strokes: 5, pinyin: "běi", meaning: "north" },
+        { char: "前", strokes: 9, pinyin: "qián", meaning: "front/before" },
+        { char: "后", strokes: 6, pinyin: "hòu", meaning: "back/after" },
+        { char: "里", strokes: 7, pinyin: "lǐ", meaning: "inside" },
+        { char: "外", strokes: 5, pinyin: "wài", meaning: "outside" },
+        { char: "家", strokes: 10, pinyin: "jiā", meaning: "home/family" },
+        { char: "国", strokes: 8, pinyin: "guó", meaning: "country" },
+        { char: "学", strokes: 8, pinyin: "xué", meaning: "study/learn" },
+        { char: "生", strokes: 5, pinyin: "shēng", meaning: "life/birth" },
+        { char: "老", strokes: 6, pinyin: "lǎo", meaning: "old" },
+        { char: "师", strokes: 6, pinyin: "shī", meaning: "teacher" },
+        { char: "好", strokes: 6, pinyin: "hǎo", meaning: "good" },
+        { char: "坏", strokes: 7, pinyin: "huài", meaning: "bad" },
+        { char: "新", strokes: 13, pinyin: "xīn", meaning: "new" },
+        { char: "旧", strokes: 5, pinyin: "jiù", meaning: "old/used" },
+        { char: "高", strokes: 10, pinyin: "gāo", meaning: "tall/high" },
+        { char: "低", strokes: 7, pinyin: "dī", meaning: "low" },
+        { char: "长", strokes: 4, pinyin: "cháng", meaning: "long" },
+        { char: "短", strokes: 12, pinyin: "duǎn", meaning: "short" },
+        { char: "快", strokes: 7, pinyin: "kuài", meaning: "fast" },
+        { char: "慢", strokes: 14, pinyin: "màn", meaning: "slow" },
+        { char: "多", strokes: 6, pinyin: "duō", meaning: "many/much" },
+        { char: "少", strokes: 4, pinyin: "shǎo", meaning: "few/little" },
+        { char: "来", strokes: 7, pinyin: "lái", meaning: "come" },
+        { char: "去", strokes: 5, pinyin: "qù", meaning: "go" },
+        { char: "回", strokes: 6, pinyin: "huí", meaning: "return" },
+        { char: "走", strokes: 7, pinyin: "zǒu", meaning: "walk/go" },
+        { char: "跑", strokes: 12, pinyin: "pǎo", meaning: "run" },
+        { char: "飞", strokes: 3, pinyin: "fēi", meaning: "fly" },
+        { char: "看", strokes: 9, pinyin: "kàn", meaning: "look/see" },
+        { char: "听", strokes: 7, pinyin: "tīng", meaning: "listen" },
+        { char: "说", strokes: 9, pinyin: "shuō", meaning: "speak/say" },
+        { char: "读", strokes: 10, pinyin: "dú", meaning: "read" },
+        { char: "写", strokes: 5, pinyin: "xiě", meaning: "write" },
+        { char: "吃", strokes: 6, pinyin: "chī", meaning: "eat" },
+        { char: "喝", strokes: 12, pinyin: "hē", meaning: "drink" },
+        { char: "睡", strokes: 13, pinyin: "shuì", meaning: "sleep" },
+        { char: "起", strokes: 10, pinyin: "qǐ", meaning: "get up" },
+        { char: "坐", strokes: 7, pinyin: "zuò", meaning: "sit" },
+        { char: "站", strokes: 10, pinyin: "zhàn", meaning: "stand" },
+        { char: "躺", strokes: 15, pinyin: "tǎng", meaning: "lie down" },
+        { char: "买", strokes: 6, pinyin: "mǎi", meaning: "buy" },
+        { char: "卖", strokes: 8, pinyin: "mài", meaning: "sell" },
+        { char: "开", strokes: 4, pinyin: "kāi", meaning: "open/drive" },
+        { char: "关", strokes: 6, pinyin: "guān", meaning: "close" },
+        { char: "门", strokes: 3, pinyin: "mén", meaning: "door" },
+        { char: "窗", strokes: 12, pinyin: "chuāng", meaning: "window" },
+        { char: "房", strokes: 8, pinyin: "fáng", meaning: "room/house" },
+        { char: "床", strokes: 7, pinyin: "chuáng", meaning: "bed" },
+        { char: "桌", strokes: 10, pinyin: "zhuō", meaning: "table" },
+        { char: "椅", strokes: 12, pinyin: "yǐ", meaning: "chair" },
+        { char: "书", strokes: 4, pinyin: "shū", meaning: "book" },
+        { char: "本", strokes: 5, pinyin: "běn", meaning: "book/volume" },
+        { char: "笔", strokes: 10, pinyin: "bǐ", meaning: "pen" },
+        { char: "纸", strokes: 7, pinyin: "zhǐ", meaning: "paper" },
+        { char: "字", strokes: 6, pinyin: "zì", meaning: "character/word" },
+        { char: "词", strokes: 7, pinyin: "cí", meaning: "word" },
+        { char: "句", strokes: 5, pinyin: "jù", meaning: "sentence" },
+        { char: "话", strokes: 8, pinyin: "huà", meaning: "speech/words" },
+        { char: "语", strokes: 9, pinyin: "yǔ", meaning: "language" },
+        { char: "文", strokes: 4, pinyin: "wén", meaning: "text/culture" },
+        { char: "章", strokes: 11, pinyin: "zhāng", meaning: "chapter" },
+        { char: "题", strokes: 15, pinyin: "tí", meaning: "question/topic" },
+        { char: "答", strokes: 12, pinyin: "dá", meaning: "answer" },
+        { char: "问", strokes: 6, pinyin: "wèn", meaning: "ask" },
+        { char: "知", strokes: 8, pinyin: "zhī", meaning: "know" },
+        { char: "道", strokes: 12, pinyin: "dào", meaning: "path/way" },
+        { char: "想", strokes: 13, pinyin: "xiǎng", meaning: "think/want" },
+        { char: "思", strokes: 9, pinyin: "sī", meaning: "think" },
+        { char: "考", strokes: 6, pinyin: "kǎo", meaning: "test/examine" },
+        { char: "试", strokes: 8, pinyin: "shì", meaning: "try/test" },
+        { char: "做", strokes: 11, pinyin: "zuò", meaning: "do/make" },
+        { char: "作", strokes: 7, pinyin: "zuò", meaning: "work/make" },
+        { char: "工", strokes: 3, pinyin: "gōng", meaning: "work" },
+        { char: "农", strokes: 6, pinyin: "nóng", meaning: "agriculture" },
+        { char: "商", strokes: 11, pinyin: "shāng", meaning: "commerce" },
+        { char: "兵", strokes: 7, pinyin: "bīng", meaning: "soldier" },
+        { char: "医", strokes: 7, pinyin: "yī", meaning: "doctor/medicine" },
+        { char: "药", strokes: 9, pinyin: "yào", meaning: "medicine" },
+        { char: "病", strokes: 10, pinyin: "bìng", meaning: "illness" },
+        { char: "院", strokes: 9, pinyin: "yuàn", meaning: "courtyard/hospital" },
+        { char: "校", strokes: 10, pinyin: "xiào", meaning: "school" },
+        { char: "机", strokes: 6, pinyin: "jī", meaning: "machine" },
+        { char: "器", strokes: 16, pinyin: "qì", meaning: "tool/device" },
+        { char: "具", strokes: 8, pinyin: "jù", meaning: "tool" },
+        { char: "用", strokes: 5, pinyin: "yòng", meaning: "use" },
+        { char: "物", strokes: 8, pinyin: "wù", meaning: "thing/object" },
+        { char: "品", strokes: 9, pinyin: "pǐn", meaning: "product/goods" },
+        { char: "钱", strokes: 10, pinyin: "qián", meaning: "money" },
+        { char: "元", strokes: 4, pinyin: "yuán", meaning: "yuan/unit" },
+        { char: "块", strokes: 7, pinyin: "kuài", meaning: "piece/yuan" },
+        { char: "毛", strokes: 4, pinyin: "máo", meaning: "hair/dime" },
+        { char: "分", strokes: 4, pinyin: "fēn", meaning: "divide/cent" },
+        { char: "角", strokes: 7, pinyin: "jiǎo", meaning: "corner/dime" },
+        { char: "市", strokes: 5, pinyin: "shì", meaning: "market/city" },
+        { char: "店", strokes: 8, pinyin: "diàn", meaning: "shop/store" },
+        { char: "场", strokes: 6, pinyin: "chǎng", meaning: "field/place" },
+        { char: "所", strokes: 8, pinyin: "suǒ", meaning: "place/that which" },
+        { char: "处", strokes: 5, pinyin: "chù", meaning: "place" },
+        { char: "地", strokes: 6, pinyin: "dì", meaning: "ground/place" },
+        { char: "方", strokes: 4, pinyin: "fāng", meaning: "direction/square" },
+        { char: "面", strokes: 9, pinyin: "miàn", meaning: "face/surface" },
+        { char: "边", strokes: 5, pinyin: "biān", meaning: "side/edge" },
+        { char: "旁", strokes: 10, pinyin: "páng", meaning: "beside" },
+        { char: "近", strokes: 7, pinyin: "jìn", meaning: "near" },
+        { char: "远", strokes: 7, pinyin: "yuǎn", meaning: "far" },
+        { char: "今", strokes: 4, pinyin: "jīn", meaning: "today/now" },
+        { char: "明", strokes: 8, pinyin: "míng", meaning: "bright/tomorrow" },
+        { char: "昨", strokes: 9, pinyin: "zuó", meaning: "yesterday" },
+        { char: "早", strokes: 6, pinyin: "zǎo", meaning: "early/morning" },
+        { char: "晚", strokes: 11, pinyin: "wǎn", meaning: "late/evening" },
+        { char: "夜", strokes: 8, pinyin: "yè", meaning: "night" },
+        { char: "午", strokes: 4, pinyin: "wǔ", meaning: "noon" },
+        { char: "时", strokes: 7, pinyin: "shí", meaning: "time/hour" },
+        { char: "分", strokes: 4, pinyin: "fēn", meaning: "minute" },
+        { char: "秒", strokes: 9, pinyin: "miǎo", meaning: "second" },
+        { char: "钟", strokes: 9, pinyin: "zhōng", meaning: "clock/bell" },
+        { char: "表", strokes: 8, pinyin: "biǎo", meaning: "watch/form" },
+        { char: "年", strokes: 6, pinyin: "nián", meaning: "year" },
+        { char: "月", strokes: 4, pinyin: "yuè", meaning: "month" },
+        { char: "周", strokes: 8, pinyin: "zhōu", meaning: "week" },
+        { char: "星", strokes: 9, pinyin: "xīng", meaning: "star" },
+        { char: "期", strokes: 12, pinyin: "qī", meaning: "period" },
+        { char: "春", strokes: 9, pinyin: "chūn", meaning: "spring" },
+        { char: "夏", strokes: 10, pinyin: "xià", meaning: "summer" },
+        { char: "秋", strokes: 9, pinyin: "qiū", meaning: "autumn" },
+        { char: "冬", strokes: 5, pinyin: "dōng", meaning: "winter" },
+        { char: "热", strokes: 10, pinyin: "rè", meaning: "hot" },
+        { char: "冷", strokes: 7, pinyin: "lěng", meaning: "cold" },
+        { char: "暖", strokes: 13, pinyin: "nuǎn", meaning: "warm" },
+        { char: "凉", strokes: 10, pinyin: "liáng", meaning: "cool" },
+        { char: "雨", strokes: 8, pinyin: "yǔ", meaning: "rain" },
+        { char: "雪", strokes: 11, pinyin: "xuě", meaning: "snow" },
+        { char: "风", strokes: 4, pinyin: "fēng", meaning: "wind" },
+        { char: "云", strokes: 4, pinyin: "yún", meaning: "cloud" },
+        { char: "晴", strokes: 12, pinyin: "qíng", meaning: "clear/sunny" },
+        { char: "阴", strokes: 6, pinyin: "yīn", meaning: "cloudy/shady" },
+        { char: "爸", strokes: 8, pinyin: "bà", meaning: "dad" },
+        { char: "妈", strokes: 6, pinyin: "mā", meaning: "mom" },
+        { char: "父", strokes: 4, pinyin: "fù", meaning: "father" },
+        { char: "母", strokes: 5, pinyin: "mǔ", meaning: "mother" },
+        { char: "哥", strokes: 10, pinyin: "gē", meaning: "older brother" },
+        { char: "弟", strokes: 7, pinyin: "dì", meaning: "younger brother" },
+        { char: "姐", strokes: 8, pinyin: "jiě", meaning: "older sister" },
+        { char: "妹", strokes: 8, pinyin: "mèi", meaning: "younger sister" },
+        { char: "爷", strokes: 8, pinyin: "yé", meaning: "grandfather" },
+        { char: "奶", strokes: 5, pinyin: "nǎi", meaning: "grandmother/milk" },
+        { char: "叔", strokes: 8, pinyin: "shū", meaning: "uncle" },
+        { char: "姨", strokes: 9, pinyin: "yí", meaning: "aunt" },
+        { char: "男", strokes: 7, pinyin: "nán", meaning: "male" },
+        { char: "孩", strokes: 9, pinyin: "hái", meaning: "child" },
+        { char: "子", strokes: 3, pinyin: "zǐ", meaning: "child/son" },
+        { char: "夫", strokes: 4, pinyin: "fū", meaning: "husband" },
+        { char: "妻", strokes: 8, pinyin: "qī", meaning: "wife" },
+        { char: "朋", strokes: 8, pinyin: "péng", meaning: "friend" },
+        { char: "友", strokes: 4, pinyin: "yǒu", meaning: "friend" },
+        { char: "同", strokes: 6, pinyin: "tóng", meaning: "same/together" },
+        { char: "学", strokes: 8, pinyin: "xué", meaning: "classmate" },
+        { char: "客", strokes: 9, pinyin: "kè", meaning: "guest" },
+        { char: "我", strokes: 7, pinyin: "wǒ", meaning: "I/me" },
+        { char: "你", strokes: 7, pinyin: "nǐ", meaning: "you" },
+        { char: "他", strokes: 5, pinyin: "tā", meaning: "he/him" },
+        { char: "她", strokes: 6, pinyin: "tā", meaning: "she/her" },
+        { char: "它", strokes: 5, pinyin: "tā", meaning: "it" },
+        { char: "这", strokes: 7, pinyin: "zhè", meaning: "this" },
+        { char: "那", strokes: 6, pinyin: "nà", meaning: "that" },
+        { char: "哪", strokes: 9, pinyin: "nǎ", meaning: "which" },
+        { char: "什", strokes: 4, pinyin: "shén", meaning: "what" },
+        { char: "么", strokes: 3, pinyin: "me", meaning: "what" },
+        { char: "怎", strokes: 9, pinyin: "zěn", meaning: "how" },
+        { char: "样", strokes: 10, pinyin: "yàng", meaning: "appearance/way" },
+        { char: "为", strokes: 4, pinyin: "wéi", meaning: "for/because" },
+        { char: "因", strokes: 6, pinyin: "yīn", meaning: "because" },
+        { char: "所", strokes: 8, pinyin: "suǒ", meaning: "place/so" },
+        { char: "以", strokes: 4, pinyin: "yǐ", meaning: "with/so" },
+        { char: "但", strokes: 7, pinyin: "dàn", meaning: "but" },
+        { char: "是", strokes: 9, pinyin: "shì", meaning: "is/yes" },
+        { char: "不", strokes: 4, pinyin: "bù", meaning: "not" },
+        { char: "没", strokes: 7, pinyin: "méi", meaning: "not have" },
+        { char: "有", strokes: 6, pinyin: "yǒu", meaning: "have" },
+        { char: "在", strokes: 6, pinyin: "zài", meaning: "at/in" },
+        { char: "和", strokes: 8, pinyin: "hé", meaning: "and/with" },
+        { char: "跟", strokes: 13, pinyin: "gēn", meaning: "with/follow" },
+        { char: "给", strokes: 9, pinyin: "gěi", meaning: "give" },
+        { char: "对", strokes: 5, pinyin: "duì", meaning: "correct/to" },
+        { char: "向", strokes: 6, pinyin: "xiàng", meaning: "towards" },
+        { char: "从", strokes: 4, pinyin: "cóng", meaning: "from" },
+        { char: "到", strokes: 8, pinyin: "dào", meaning: "to/arrive" },
+        { char: "把", strokes: 7, pinyin: "bǎ", meaning: "hold/take" },
+        { char: "被", strokes: 10, pinyin: "bèi", meaning: "by/passive" },
+      ];
+
+      // LLM API integration (from characterAI.html)
+      let aiChatSession = null;
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+
+      // Initialize LLM
+      async function initializeLLM() {
+        try {
+          if (sdk && sdk.aiChat) {
+            aiChatSession = sdk.aiChat.createSession({
+              model: "keepwork-lite",
+              stream: false,
+            });
+          }
+          console.log("LLM initialized successfully");
+        } catch (error) {
+          console.error("Failed to initialize LLM:", error);
+        }
+      } // Generate random English sentence using LLM
+      async function generateRandomEnglishSentence(useFallback = false) {
+        if (!aiChatSession || useFallback) {
+          console.warn("LLM not initialized, using fallback sentence");
+          const fallbackSentences = [
+            { english: "Hello, how are you today?", chinese: "你好，你今天怎么样？" },
+            { english: "The weather is nice today.", chinese: "今天天气很好。" },
+            { english: "I like to read books.", chinese: "我喜欢读书。" },
+            { english: "What time is it now?", chinese: "现在几点了？" },
+            { english: "Thank you very much.", chinese: "非常感谢。" },
+          ];
+          return fallbackSentences[Math.floor(seededRandom() * fallbackSentences.length)];
+        }
+
+        try {
+          const topics = ["daily life", "weather", "food", "travel", "family", "work", "hobbies", "animals"];
+          const randomTopic = topics[Math.floor(seededRandom() * topics.length)];
+
+          const prompt = `Generate a simple English sentence about ${randomTopic} suitable for beginners, and provide its Chinese translation. Respond in just two lines with no extra text. First line is english and second line is chinese.`;
+
+          const response = await aiChatSession.send(prompt);
+          console.log("LLM response:", response);
+          const parsed = {};
+          const lines = response.result
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0);
+          if (lines.length >= 2) {
+            parsed.english = lines[0];
+            parsed.chinese = lines[1];
+          } else {
+            parsed.english = response.result;
+          }
+
+          return {
+            english: parsed.english || "Hello, nice to meet you!",
+            chinese: parsed.chinese || "你好，很高兴见到你！",
+          };
+        } catch (error) {
+          console.error("Failed to generate sentence:", error);
+          if (!useFallback) {
+            return await generateRandomEnglishSentence(true);
+          }
+        }
+      }
+
+      // Generate random math question
+      function generateRandomMathQuestion() {
+        const operations = ["+", "-", "*", "/"];
+        const operation = operations[Math.floor(seededRandom() * operations.length)];
+
+        let num1, num2, answer, question;
+
+        switch (operation) {
+          case "+":
+            num1 = Math.floor(seededRandom() * 100);
+            num2 = Math.floor(seededRandom() * 100);
+            answer = num1 + num2;
+            question = `${num1} + ${num2} = ?`;
+            break;
+          case "-":
+            // Ensure positive result
+            num1 = Math.floor(seededRandom() * 100) + 1;
+            num2 = Math.floor(seededRandom() * num1);
+            answer = num1 - num2;
+            question = `${num1} - ${num2} = ?`;
+            break;
+          case "*":
+            num1 = Math.floor(seededRandom() * 20) + 1;
+            num2 = Math.floor(seededRandom() * 20) + 1;
+            answer = num1 * num2;
+            question = `${num1} × ${num2} = ?`;
+            break;
+          case "/":
+            // Ensure integer division
+            answer = Math.floor(seededRandom() * 20) + 1;
+            num2 = Math.floor(seededRandom() * 20) + 1;
+            num1 = answer * num2;
+            question = `${num1} ÷ ${num2} = ?`;
+            break;
+        }
+
+        // Generate wrong options
+        const options = [answer.toString()];
+        while (options.length < 4) {
+          let wrongAnswer;
+          if (operation === "/" || operation === "*") {
+            wrongAnswer = answer + Math.floor(seededRandom() * 10) - 5;
+          } else {
+            wrongAnswer = answer + Math.floor(seededRandom() * 20) - 10;
+          }
+          if (wrongAnswer > 0 && !options.includes(wrongAnswer.toString())) {
+            options.push(wrongAnswer.toString());
+          }
+        }
+
+        // Shuffle options
+        for (let i = options.length - 1; i > 0; i--) {
+          const j = Math.floor(seededRandom() * (i + 1));
+          [options[i], options[j]] = [options[j], options[i]];
+        }
+
+        return {
+          question: question,
+          options: options,
+          answer: options.indexOf(answer.toString()),
+          isRandom: true,
+        };
+      }
+
+      // Generate random Chinese character question
+      function generateRandomChineseQuestion() {
+        const randomChar = chineseChars[Math.floor(seededRandom() * chineseChars.length)];
+
+        return {
+          question: `请按正确的笔画顺序写出汉字"${randomChar.char}"（${randomChar.pinyin} - ${randomChar.meaning}）`,
+          char: randomChar.char,
+          strokes: randomChar.strokes,
+          pinyin: randomChar.pinyin,
+          meaning: randomChar.meaning,
+          options: [], // No multiple choice for writing
+          answer: 0, // Will be checked by stroke order
+          isRandom: true,
+          isWriting: true,
+        };
+      }
+
+      // Toast notification function
+      function showToast(message, type = "info", duration = 3000) {
+        // Remove existing toast if any
+        const existingToast = document.querySelector(".toast");
+        if (existingToast) {
+          existingToast.remove();
+        }
+
+        // Create new toast
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+
+        document.body.appendChild(toast);
+
+        // Show toast
+        setTimeout(() => {
+          toast.classList.add("show");
+        }, 100);
+
+        // Hide and remove toast
+        setTimeout(() => {
+          toast.classList.remove("show");
+          setTimeout(() => {
+            if (toast.parentNode) {
+              toast.parentNode.removeChild(toast);
+            }
+          }, 300);
+        }, duration);
+      } // Game state
+      let gameState = {
+        currentCategory: "math",
+        currentQuestion: null,
+        selectedAnswer: null,
+        correctCount: 0,
+        totalCount: 0,
+        isAnswered: false,
+        usedQuestions: new Set(),
+        maxQuestions: 10, // Default count
+        gameFinished: false,
+        gameStartTime: 0,
+        speechResult: null, // For speech recognition results
+      };
+
+      // Game communication variables
+      let gameLoaded = false;
+      let gameStarted = false;
+      let game_config = null; // Message listener
+      window.addEventListener("message", function (e) {
+        switch (e.data.type) {
+          case "setGameConfig":
+            game_config = e.data.data;
+            console.log("Game config updated:", game_config);
+            break;
+          case "new_question":
+            if (e.data.count) {
+              gameState.maxQuestions = parseInt(e.data.count) || 1;
+            }
+            if (e.data.category && questionBank[e.data.category]) {
+              gameState.currentCategory = e.data.category;
+            } // Use resetGame to handle state reset
+            resetGame(e.data.category, e.data.count);
+
+            // Load new question
+            (async () => await nextQuestion())();
+            break;
+          case "gameContinue":
+            if (gameState.gameFinished) {
+              // Reset for new session if game was finished
+              gameState.gameFinished = false;
+              gameState.selectedAnswer = null;
+              gameState.isAnswered = false;
+            }
+            (async () => await nextQuestion())();
+            break;
+          case "getGameStats":
+            const accuracy = gameState.totalCount > 0 ? Math.round((gameState.correctCount / gameState.totalCount) * 100) : 0;
+            window.parent.postMessage(
+              {
+                type: "gameStats",
+                data: {
+                  score: gameState.correctCount,
+                  accuracy: accuracy,
+                  totalQuestions: gameState.totalCount,
+                  category: gameState.currentCategory,
+                  gameFinished: gameState.gameFinished,
+                },
+              },
+              "*"
+            );
+            break;
+        }
+      });
+
+      // Get URL parameters
+      function getUrlParameter(name) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(name);
+      } // Reset game function
+      function resetGame(category = null, count = null) {
+        // Set category if provided
+        if (category && questionBank[category]) {
+          gameState.currentCategory = category;
+        }
+
+        // Set max questions if provided
+        if (count !== null && !isNaN(count) && parseInt(count) > 0) {
+          gameState.maxQuestions = parseInt(count);
+        }
+
+        // Reset game state
+        gameState.currentQuestion = null;
+        gameState.selectedAnswer = null;
+        gameState.isAnswered = false;
+        gameState.usedQuestions.clear();
+        gameState.gameFinished = false;
+        gameState.gameStartTime = 0;
+        gameStarted = false;
+
+        // Don't reset stats unless explicitly requested
+        // gameState.correctCount = 0;
+        // gameState.totalCount = 0;
+
+        // Hide/show UI elements based on count
+        if (gameState.maxQuestions === 1) {
+          document.getElementById("statsContainer").style.display = "none";
+          document.getElementById("nextBtn").style.display = "none";
+        } else {
+          document.getElementById("statsContainer").style.display = "flex";
+          document.getElementById("nextBtn").style.display = "block";
+        }
+
+        // Load saved stats and update display
+        loadStats();
+      } // Initialize the game
+      async function initGame() {
+        // Initialize LLM and speech recognition
+        await initializeLLM();
+        initializeSpeechRecognition();
+
+        // Get category from URL parameter
+        const categoryParam = getUrlParameter("category");
+        const countParam = getUrlParameter("count");
+
+        // Use resetGame to handle initialization
+        resetGame(categoryParam, countParam); // Show first question after a brief delay
+        setTimeout(async () => {
+          document.getElementById("loadingState").style.display = "none";
+          document.getElementById("questionContent").style.display = "block";
+
+          // Send gameLoaded message
+          if (!gameLoaded) {
+            window.parent.postMessage({ type: "gameLoaded" }, "*");
+            gameLoaded = true;
+          }
+
+          await nextQuestion();
+        }, 800);
+      }
+      function loadStats() {
+        updateStatsDisplay();
+      }
+      function saveStats() {
+        const stats = {
+          lastPlayed: Date.now(),
+        };
+      } // Update stats display
+      function updateStatsDisplay() {
+        document.getElementById("correctCount").textContent = gameState.correctCount;
+        document.getElementById("totalCount").textContent = `${gameState.totalCount}/${gameState.maxQuestions}`;
+
+        const accuracy = gameState.totalCount > 0 ? Math.round((gameState.correctCount / gameState.totalCount) * 100) : 0;
+        document.getElementById("accuracy").textContent = accuracy + "%";
+      } // Load next question
+      async function nextQuestion() {
+        // 50% chance to show random question
+        const useRandomQuestion = seededRandom() < 0.5;
+
+        if (useRandomQuestion) {
+          // Generate random question based on category
+          switch (gameState.currentCategory) {
+            case "chinese":
+              gameState.currentQuestion = generateRandomChineseQuestion();
+              break;
+            case "math":
+              gameState.currentQuestion = generateRandomMathQuestion();
+              break;
+            case "english":
+              const englishData = await generateRandomEnglishSentence(true);
+              gameState.currentQuestion = {
+                question: `请大声朗读以下英文句子：`,
+                englishText: englishData.english,
+                chineseTranslation: englishData.chinese,
+                options: [], // No multiple choice for speaking
+                answer: 0, // Will be checked by speech recognition
+                isRandom: true,
+                isSpeaking: true,
+              };
+              break;
+          }
+        } else {
+          // Use preset questions
+          const questions = questionBank[gameState.currentCategory];
+          if (!questions || questions.length === 0) {
+            console.error("No questions available for category:", gameState.currentCategory);
+            return;
+          }
+
+          // Reset used questions if all have been used
+          if (gameState.usedQuestions.size >= questions.length) {
+            gameState.usedQuestions.clear();
+          }
+
+          // Find unused question
+          let question;
+          let attempts = 0;
+          do {
+            const randomIndex = Math.floor(seededRandom() * questions.length);
+            question = questions[randomIndex];
+            attempts++;
+          } while (gameState.usedQuestions.has(question.question) && attempts < 50);
+
+          gameState.usedQuestions.add(question.question);
+          gameState.currentQuestion = question;
+        }
+
+        gameState.selectedAnswer = null;
+        gameState.isAnswered = false;
+
+        displayQuestion();
+      } // Display current question
+      function displayQuestion() {
+        // Update question text
+        document.getElementById("questionText").textContent = gameState.currentQuestion.question;
+
+        // Create options container
+        const container = document.getElementById("optionsContainer");
+        container.innerHTML = "";
+
+        // Handle different question types
+        if (gameState.currentQuestion.isWriting) {
+          // Chinese character writing
+          displayChineseWritingInterface(container);
+        } else if (gameState.currentQuestion.isSpeaking) {
+          // English speaking
+          displayEnglishSpeakingInterface(container);
+        } else {
+          // Normal multiple choice
+          displayMultipleChoiceOptions(container);
+        }
+
+        // Reset UI state
+        document.getElementById("resultMessage").style.display = "none";
+        document.getElementById("submitBtn").style.display = "block";
+        document.getElementById("submitBtn").textContent = "提交答案";
+        document.getElementById("nextBtn").style.display = "none"; // Reset next button properties
+        const nextBtn = document.getElementById("nextBtn");
+        nextBtn.className = "btn btn-secondary";
+        nextBtn.textContent = "下一题";
+        nextBtn.onclick = async () => await nextQuestion();
+      }
+
+      // Display multiple choice options
+      function displayMultipleChoiceOptions(container) {
+        gameState.currentQuestion.options.forEach((option, index) => {
+          const optionDiv = document.createElement("div");
+          optionDiv.className = "option";
+          optionDiv.innerHTML = `
+            <input type="radio" name="answer" value="${index}" id="option${index}">
+            <label for="option${index}" class="option-text">${option}</label>
+          `;
+          optionDiv.addEventListener("click", () => selectOption(index));
+          container.appendChild(optionDiv);
+        });
+      } // Display Chinese character writing interface
+      function displayChineseWritingInterface(container) {
+        const writingDiv = document.createElement("div");
+        writingDiv.innerHTML = `
+          <div class="hanzi-writing-container">
+            <div id="hanzi-canvas-container" class="hanzi-canvas" style="width: 300px; height: 300px;"></div>
+            <div class="hanzi-controls">
+              <button class="hanzi-btn outline-btn" onclick="showHanziOutline()">显示轮廓</button>
+              <button class="hanzi-btn reset-btn" onclick="resetHanziPractice()">重置练习</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(writingDiv);
+
+        // Initialize hanzi writer
+        setTimeout(() => {
+          initializeHanziWriter();
+        }, 100);
+      } // Display English speaking interface
+      function displayEnglishSpeakingInterface(container) {
+        const speakingDiv = document.createElement("div");
+        speakingDiv.innerHTML = `
+          <div class="speech-container">
+            <div class="speech-text">${gameState.currentQuestion.englishText}</div>
+            <div class="speech-translation">${gameState.currentQuestion.chineseTranslation}</div>
+            <button class="mic-button" id="micButton" onclick="toggleRecording()">🎤</button>
+            <div id="speechStatus" style="margin-top: 10px; color: #6b7280;">点击麦克风开始录音</div>
+          </div>
+        `;
+        container.appendChild(speakingDiv);
+      } // Hanzi writer variables
+      let hanziWriter = null;
+      let hanziCurrentMode = "demo"; // demo, practice, completed
+      let hanziCompleted = false;
+
+      // Initialize hanzi writer for Chinese character writing
+      function initializeHanziWriter() {
+        const container = document.getElementById("hanzi-canvas-container");
+        if (container && gameState.currentQuestion.char) {
+          // Clear previous writer
+          if (hanziWriter) {
+            hanziWriter = null;
+          }
+
+          // Clear container
+          container.innerHTML = "";
+
+          // Create new writer
+          hanziWriter = HanziWriter.create("hanzi-canvas-container", gameState.currentQuestion.char, {
+            width: 300,
+            height: 300,
+            padding: 20,
+            strokeColor: "#2563eb",
+            radicalColor: "#dc2626",
+            showOutline: false,
+            showCharacter: false,
+            drawingFadeDuration: 400,
+            strokeAnimationSpeed: 0.8,
+          });
+
+          // Reset state
+          hanziCurrentMode = "demo";
+          hanziCompleted = false;
+          updateHanziStatus("准备就绪，将自动开始演示...");
+
+          // Auto start demo
+          setTimeout(() => {
+            startHanziDemo();
+          }, 500);
+        }
+      }
+
+      // Start hanzi demo
+      function startHanziDemo() {
+        hanziCurrentMode = "demo";
+        updateHanziStatus("正在演示笔画顺序...");
+
+        if (hanziWriter) {
+          hanziWriter.animateCharacter({
+            onComplete: function () {
+              updateHanziStatus("演示完成！点击开始练习或继续观看演示");
+              setTimeout(() => {
+                startHanziPractice();
+              }, 1000);
+            },
+          });
+        }
+      }
+
+      // Start hanzi practice
+      function startHanziPractice() {
+        hanziCurrentMode = "practice";
+        updateHanziStatus("请按照正确的笔画顺序书写汉字");
+
+        const container = document.getElementById("hanzi-canvas-container");
+        if (container) {
+          container.classList.add("practice-mode");
+        }
+
+        if (hanziWriter) {
+          hanziWriter.quiz({
+            onMistake: function (strokeData) {
+              updateHanziStatus("笔画顺序不正确，请重试");
+              showToast("笔画顺序不正确，请重试", "warning");
+            },
+            onCorrectStroke: function (strokeData) {
+              const progress = strokeData.strokeNum + 1;
+              const total = strokeData.totalStrokes;
+              updateHanziStatus(`笔画正确！进度: ${progress}/${total}`);
+            },
+            onComplete: function (summaryData) {
+              hanziCompleted = true;
+              updateHanziStatus("🎉 恭喜！您已成功完成汉字书写练习！");
+
+              const container = document.getElementById("hanzi-canvas-container");
+              if (container) {
+                container.classList.remove("practice-mode");
+                container.classList.add("completed-mode");
+                container.classList.add("success-animation");
+
+                setTimeout(() => {
+                  container.classList.remove("success-animation");
+                }, 1000);
+              }
+
+              showToast("汉字书写完成！", "success");
+
+              // Enable submit button if it exists
+              const submitBtn = document.getElementById("submitBtn");
+              if (submitBtn) {
+                submitBtn.disabled = false;
+              }
+            },
+          });
+        }
+      }
+
+      // Show hanzi outline
+      function showHanziOutline() {
+        if (hanziWriter) {
+          hanziWriter.showOutline();
+          updateHanziStatus("已显示汉字轮廓");
+        }
+      } // Reset hanzi practice
+      function resetHanziPractice() {
+        if (hanziWriter) {
+          hanziWriter.cancelQuiz();
+
+          const container = document.getElementById("hanzi-canvas-container");
+          if (container) {
+            container.classList.remove("practice-mode", "completed-mode");
+          }
+
+          hanziCompleted = false;
+          updateHanziStatus("已重置，将重新开始演示...");
+
+          // Reinitialize the hanzi writer to clear the canvas
+          setTimeout(() => {
+            initializeHanziWriter();
+          }, 500);
+        }
+      }
+
+      // Update hanzi status
+      function updateHanziStatus(message) {
+        const statusElement = document.getElementById("hanzi-status");
+        if (statusElement) {
+          statusElement.textContent = message;
+        }
+      } // Speech recognition variables
+      let recognition = null;
+      let isRecording = false;
+      let recordingStartTime = null;
+
+      // Initialize speech recognition (fake implementation)
+      function initializeSpeechRecognition() {
+        // Using fake implementation - no real speech recognition needed
+        console.log("Speech recognition initialized (fake mode)");
+      }
+
+      // Toggle recording (fake implementation)
+      function toggleRecording() {
+        if (isRecording) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      }
+
+      // Start recording (fake implementation)
+      function startRecording() {
+        isRecording = true;
+        recordingStartTime = Date.now();
+        const micButton = document.getElementById("micButton");
+        const speechStatus = document.getElementById("speechStatus");
+
+        if (micButton) {
+          micButton.classList.add("recording");
+        }
+        if (speechStatus) {
+          speechStatus.textContent = "正在录音...";
+        }
+
+        // Auto-stop recording after 3 seconds and simulate success if >= 1 second
+        setTimeout(() => {
+          if (isRecording) {
+            stopRecording();
+          }
+        }, 3000);
+      }
+
+      // Stop recording (fake implementation)
+      function stopRecording() {
+        if (!isRecording) return;
+
+        const recordingDuration = Date.now() - recordingStartTime;
+        isRecording = false;
+
+        const micButton = document.getElementById("micButton");
+        const speechStatus = document.getElementById("speechStatus");
+
+        if (micButton) {
+          micButton.classList.remove("recording");
+        }
+
+        // Check if recording was long enough (>= 1 second)
+        if (recordingDuration >= 1000) {
+          // Simulate successful speech recognition
+          const fakeTranscript = gameState.currentQuestion.englishText || "Hello world";
+          handleSpeechResult(fakeTranscript);
+          if (speechStatus) {
+            speechStatus.textContent = `录音成功！时长: ${Math.round(recordingDuration / 1000)}秒`;
+          }
+        } else {
+          // Recording too short
+          if (speechStatus) {
+            speechStatus.textContent = "录音时间太短，请重试（需要至少1秒）";
+          }
+          showToast("录音时间太短，请重试（需要至少1秒）", "warning");
+        }
+      } // Handle speech recognition result
+      function handleSpeechResult(spokenText) {
+        const speechStatus = document.getElementById("speechStatus");
+        if (speechStatus) {
+          speechStatus.textContent = `您说的是: "${spokenText}"`;
+        }
+
+        // Simple similarity check (for fake mode, always high similarity)
+        const targetText = gameState.currentQuestion.englishText.toLowerCase();
+        const similarity = 0.8; // Fake high similarity for demo
+
+        gameState.speechResult = {
+          spoken: spokenText,
+          similarity: similarity,
+          passed: similarity > 0.6, // Will always pass in fake mode
+        };
+
+        // Enable submit button and show success message
+        const submitBtn = document.getElementById("submitBtn");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+        }
+
+        showToast(`语音识别成功！相似度: ${Math.round(similarity * 100)}%`, "success");
+      }
+
+      // Calculate text similarity (simple implementation)
+      function calculateSimilarity(text1, text2) {
+        const words1 = text1.split(" ");
+        const words2 = text2.split(" ");
+        let matches = 0;
+
+        words1.forEach((word) => {
+          if (words2.some((w) => w.includes(word) || word.includes(w))) {
+            matches++;
+          }
+        });
+
+        return matches / Math.max(words1.length, words2.length);
+      }
+
+      // Select an option
+      function selectOption(index) {
+        if (gameState.isAnswered) return;
+
+        // Clear previous selections
+        document.querySelectorAll(".option").forEach((opt) => {
+          opt.classList.remove("selected");
+        });
+
+        // Mark current selection
+        document.querySelectorAll(".option")[index].classList.add("selected");
+        document.querySelector(`input[value="${index}"]`).checked = true;
+        gameState.selectedAnswer = index;
+      } // Submit answer
+      function submitAnswer() {
+        let isCorrect = false;
+        // Handle different question types
+        if (gameState.currentQuestion.isWriting) {
+          // Chinese character writing - check if practice is completed
+          if (!hanziCompleted) {
+            showToast("请先完成汉字书写练习！", "warning");
+            return;
+          }
+          // Writing completed successfully
+          isCorrect = true;
+          gameState.selectedAnswer = 0; // Mark as answered
+        } else if (gameState.currentQuestion.isSpeaking) {
+          // English speaking - check speech result
+          if (!gameState.speechResult) {
+            showToast("请先录音朗读英文句子！", "warning");
+            return;
+          }
+          isCorrect = gameState.speechResult.passed;
+          gameState.selectedAnswer = 0; // Mark as answered
+        } else {
+          // Normal multiple choice
+          if (gameState.selectedAnswer === null) {
+            showToast("请选择一个答案！", "warning");
+            return;
+          }
+          isCorrect = gameState.selectedAnswer === gameState.currentQuestion.answer;
+        }
+
+        if (gameState.isAnswered) return;
+
+        // Send game started event (first time answering)
+        if (!gameStarted) {
+          gameState.gameStartTime = Date.now();
+          window.parent.postMessage({ type: "gameStarted" }, "*");
+          gameStarted = true;
+        }
+
+        gameState.isAnswered = true;
+        gameState.totalCount++;
+        if (isCorrect) {
+          gameState.correctCount++;
+          showToast("答案正确！", "success");
+        } else {
+          showToast("答案错误，请继续努力！", "error");
+        }
+
+        // Update stats display
+        updateStatsDisplay();
+
+        // Show result
+        showResult(isCorrect);
+
+        // Send result to parent window (for iframe usage)
+        if (window.parent !== window) {
+          window.parent.postMessage(
+            {
+              type: "questionAnswered",
+              data: {
+                category: gameState.currentCategory,
+                question: gameState.currentQuestion.question,
+                selectedAnswer: gameState.selectedAnswer,
+                correctAnswer: gameState.currentQuestion.answer,
+                isCorrect: isCorrect,
+                questionType: gameState.currentQuestion.isWriting ? "writing" : gameState.currentQuestion.isSpeaking ? "speaking" : "choice",
+                stats: {
+                  correctCount: gameState.correctCount,
+                  totalCount: gameState.totalCount,
+                  accuracy: Math.round((gameState.correctCount / gameState.totalCount) * 100),
+                },
+              },
+            },
+            "*"
+          );
+        }
+      }
+
+      // Show result
+      function showResult(isCorrect) {
+        const resultMessage = document.getElementById("resultMessage");
+
+        // Handle different question types for result display
+        if (gameState.currentQuestion.isWriting) {
+          // Chinese character writing result
+          resultMessage.style.display = "block";
+          if (isCorrect) {
+            resultMessage.className = "result-message result-success";
+            resultMessage.textContent = `🎉 很好！您成功写出了汉字"${gameState.currentQuestion.char}"`;
+          } else {
+            resultMessage.className = "result-message result-error";
+            resultMessage.textContent = `❌ 请继续练习汉字"${gameState.currentQuestion.char}"的笔画顺序`;
+          }
+        } else if (gameState.currentQuestion.isSpeaking) {
+          // English speaking result
+          resultMessage.style.display = "block";
+          if (isCorrect) {
+            resultMessage.className = "result-message result-success";
+            resultMessage.textContent = `🎉 发音很棒！相似度: ${Math.round(gameState.speechResult.similarity * 100)}%`;
+          } else {
+            resultMessage.className = "result-message result-error";
+            resultMessage.textContent = `❌ 继续练习，相似度: ${Math.round(gameState.speechResult.similarity * 100)}%，目标句子：${gameState.currentQuestion.englishText}`;
+          }
+        } else {
+          // Normal multiple choice result
+          const options = document.querySelectorAll(".option");
+
+          // Highlight correct and incorrect answers
+          options.forEach((option, index) => {
+            if (index === gameState.currentQuestion.answer) {
+              option.classList.add("correct");
+            } else if (index === gameState.selectedAnswer && !isCorrect) {
+              option.classList.add("incorrect");
+            }
+          });
+
+          // Show result message
+          resultMessage.style.display = "block";
+          if (isCorrect) {
+            resultMessage.className = "result-message result-success";
+            resultMessage.textContent = "🎉 回答正确！";
+          } else {
+            resultMessage.className = "result-message result-error";
+            resultMessage.textContent = "❌ 回答错误，正确答案是：" + gameState.currentQuestion.options[gameState.currentQuestion.answer];
+          }
+        }
+
+        // Update button - hide submit button and show next/complete button
+        document.getElementById("submitBtn").style.display = "none";
+
+        // Check if this is the last question and update next button accordingly
+        const nextBtn = document.getElementById("nextBtn");
+        nextBtn.className = "btn btn-success"; // Change to green button
+        if (gameState.totalCount >= gameState.maxQuestions) {
+          // This is the last question, change next button to complete
+          nextBtn.textContent = "完成";
+          nextBtn.onclick = completeGame;
+        } else {
+          // Not the last question, show regular next button
+          nextBtn.textContent = "下一题";
+          nextBtn.onclick = async () => await nextQuestion();
+        }
+        nextBtn.style.display = "block";
+      }
+
+      // Complete game function
+      function completeGame() {
+        gameState.gameFinished = true;
+
+        // Send game finished message
+        const gameTime = gameState.gameStartTime > 0 ? Date.now() - gameState.gameStartTime : 0;
+        window.parent.postMessage(
+          {
+            type: "gameFinished",
+            data: {
+              score: gameState.correctCount,
+              accuracy: gameState.totalCount > 0 ? Math.round((gameState.correctCount / gameState.totalCount) * 100) : 0,
+              totalQuestions: gameState.totalCount,
+              category: gameState.currentCategory,
+              gameTime: Math.round(gameTime / 1000), // Game time in seconds
+            },
+          },
+          "*"
+        );
+      } // Reset stats (for testing)
+      function resetStats() {
+        showToast("确定要重置统计数据吗？点击确认重置", "warning", 5000);
+
+        // Create a temporary confirm button in the toast
+        setTimeout(() => {
+          const confirmReset = () => {
+            gameState.correctCount = 0;
+            gameState.totalCount = 0;
+            gameState.usedQuestions.clear();
+            updateStatsDisplay();
+            showToast("统计数据已重置", "success");
+          };
+
+          // For demo purposes, auto-confirm after showing warning
+          // In real implementation, you might want to add actual confirm UI
+          confirmReset();
+        }, 1000);
+      } // Keyboard shortcuts
+      document.addEventListener("keydown", (e) => {
+        if (gameState.isAnswered) {
+          if (e.key === "Enter" || e.key === " ") {
+            (async () => await nextQuestion())();
+          }
+          return;
+        }
+
+        // Number keys for options
+        if (e.key >= "1" && e.key <= "4") {
+          const index = parseInt(e.key) - 1;
+          if (index < gameState.currentQuestion.options.length) {
+            selectOption(index);
+          }
+        }
+
+        // Enter to submit
+        if (e.key === "Enter" && gameState.selectedAnswer !== null) {
+          submitAnswer();
+        }
+      });
+
+      // Initialize game when page loads
+      initGame();
+    </script>
+  </body>
+</html>

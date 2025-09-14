@@ -108,7 +108,7 @@
                     <h3 class="font-semibold text-blue-800 mb-2">测评注意事项</h3>
                     <ul class="text-sm text-blue-700 space-y-1">
                       <li>• 请直接进入测评室开始测评</li>
-                      <li>• 建议在安静中测评</li>
+                      <li>• 建议在安静环境中测评</li>
                       <li>• 可分多天，多次完成（总时长大约1小时）</li>
                       <li>• 如有技术问题，请及时联系客服协助</li>
                     </ul>
@@ -337,6 +337,25 @@
         }, duration);
       }
 
+      function CommitGame() {
+        setTimeout(() => {
+          // Send game commit event to host with same data as gameFinished
+          window.parent.postMessage(
+            {
+              type: "gameCommit",
+              data: {
+                score: sdk.isTestCompleted ? 100 : 0,
+                earnedPoints: sdk.isTestCompleted ? 1000 : 0,
+                finalProgress: sdk.isTestCompleted ? 100 : 0,
+                isMaxDifficulty: true, // prevent selecting difficulty again
+              },
+            },
+            "*"
+          );
+          console.log("CommitGame");
+        }, 500);
+      }
+
       function removeToast(toast) {
         toast.classList.add("-translate-x-full", "opacity-0");
         setTimeout(() => {
@@ -344,9 +363,7 @@
             toast.parentNode.removeChild(toast);
           }
         }, 300);
-      }
-
-      // 加载保存的报名信息
+      } // 加载保存的报名信息
       async function loadRegistrationData() {
         try {
           const savedData = await sdk.personalPageStore.loadPageData("maisi_test", "registration-data");
@@ -355,14 +372,34 @@
 
             // 检查是否已成功提交过
             if (savedData.hasSubmitForm) {
+              CommitGame();
               showRegistrationInfo(savedData);
             } else {
               // 只是草稿，填充表单数据
               fillFormData(savedData);
             }
+          } else {
+            // 没有保存的数据，尝试自动填充用户信息
+            const autoFillData = {};
+            if (sdk?.miniGameProxyData?.keepworkUserInfo?.nickname) {
+              autoFillData.realName = sdk.miniGameProxyData.keepworkUserInfo.nickname;
+            }
+            if (sdk?.miniGameProxyData?.keepworkUserInfo?.cellphone) {
+              autoFillData.parentPhone = sdk.miniGameProxyData.keepworkUserInfo.cellphone;
+            }
+            fillFormData(autoFillData);
           }
         } catch (error) {
           console.error("加载报名信息失败:", error);
+          // 发生错误时也尝试自动填充用户信息
+          const autoFillData = {};
+          if (sdk?.miniGameProxyData?.keepworkUserInfo?.nickname) {
+            autoFillData.realName = sdk.miniGameProxyData.keepworkUserInfo.nickname;
+          }
+          if (sdk?.miniGameProxyData?.keepworkUserInfo?.cellphone) {
+            autoFillData.parentPhone = sdk.miniGameProxyData.keepworkUserInfo.cellphone;
+          }
+          fillFormData(autoFillData);
         }
       }
 
@@ -376,28 +413,34 @@
         // 显示已报名信息区域，隐藏表单
         document.getElementById("registrationInfo").classList.remove("hidden");
         document.getElementById("registrationForm").classList.add("hidden");
-        
+
         // 隐藏会员提示
         document.getElementById("membershipNotice").classList.add("hidden");
-        
+
         // 绑定修改按钮事件（移除之前的事件监听器以避免重复绑定）
         const editBtn = document.getElementById("editRegistrationBtn");
         editBtn.replaceWith(editBtn.cloneNode(true)); // 移除所有事件监听器
-        document.getElementById("editRegistrationBtn").addEventListener("click", function() {
+        document.getElementById("editRegistrationBtn").addEventListener("click", function () {
           editRegistrationInfo(data);
         });
-      }
-
-      // 填充表单数据（草稿状态）
+      } // 填充表单数据（草稿状态）
       function fillFormData(data) {
+        // 自动填充姓名：优先使用保存的数据，否则使用用户昵称
         if (data.realName) {
           document.getElementById("realName").value = data.realName;
+        } else if (sdk?.miniGameProxyData?.keepworkUserInfo?.nickname) {
+          document.getElementById("realName").value = sdk.miniGameProxyData.keepworkUserInfo.nickname;
         }
+
         if (data.birthDate) {
           document.getElementById("birthDate").value = data.birthDate;
         }
+
+        // 自动填充电话号码：优先使用保存的数据，否则使用用户手机号
         if (data.parentPhone) {
           document.getElementById("parentPhone").value = data.parentPhone;
+        } else if (sdk?.miniGameProxyData?.keepworkUserInfo?.cellphone) {
+          document.getElementById("parentPhone").value = sdk.miniGameProxyData.keepworkUserInfo.cellphone;
         }
       }
 
@@ -406,10 +449,10 @@
         // 隐藏已报名信息区域，显示表单
         document.getElementById("registrationInfo").classList.add("hidden");
         document.getElementById("registrationForm").classList.remove("hidden");
-        
+
         // 显示会员提示
         document.getElementById("membershipNotice").classList.remove("hidden");
-        
+
         // 填充表单数据
         fillFormData(data);
       }
@@ -427,35 +470,9 @@
         }
       }
 
-      // 保存草稿（不包含已提交标记）
-      async function saveDraftData() {
-        const formData = new FormData(document.getElementById("registrationForm"));
-        const data = {
-          realName: formData.get("realName"),
-          birthDate: formData.get("birthDate"),
-          parentPhone: formData.get("parentPhone"),
-          hasSubmitForm: false, // 草稿状态
-        };
-
-        try {
-          await sdk.personalPageStore.savePageData("maisi_test", "registration-data", data, true);
-          console.log("草稿已保存:", data);
-        } catch (error) {
-          console.error("保存草稿失败:", error);
-        }
-      }
-
       // 检查用户会员状态
       async function checkMembershipStatus() {
-        try {
-          // 这里应该调用实际的会员状态检查API
-          // 示例：const memberStatus = await sdk.checkMembership();
-          // 暂时返回false，表示需要成为会员
-          return true;
-        } catch (error) {
-          console.error("检查会员状态失败:", error);
-          return false;
-        }
+        return sdk.isVip;
       }
 
       // 表单提交处理
@@ -470,6 +487,7 @@
           registrationTime: Date.now(),
           hasSubmitForm: true, // 标记为已成功提交
         };
+        CommitGame();
 
         try {
           // 检查会员状态
@@ -488,7 +506,7 @@
           // 会员用户报名成功
           showToast("报名信息已提交成功！", "success");
           showSuccessModal();
-          
+
           // 显示已报名信息
           showRegistrationInfo(data);
         } catch (error) {
@@ -584,21 +602,7 @@
       function initializeApp() {
         loadRegistrationData();
         switchToStats();
-        
-        // 添加表单输入自动保存草稿功能
-        const formInputs = document.querySelectorAll('#registrationForm input');
-        let saveTimeout;
-        
-        formInputs.forEach(input => {
-          input.addEventListener('input', function() {
-            // 防抖：延迟1秒后保存，如果1秒内再次输入则重新计时
-            clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => {
-              saveDraftData();
-            }, 1000);
-          });
-        });
-        
+
         window.parent.postMessage({ type: "gameLoaded" }, "*");
       }
 
@@ -614,20 +618,25 @@
             reject(new Error("不在iframe中"));
             return;
           }
-          // 请求游戏代理数据
-          window.parent.postMessage({ type: "getMiniGameProxyData" }, "*");
-
+          
           // 监听来自父窗口的消息
           const messageHandler = (event) => {
-            if (event.data && event.data.type === "miniGameProxyData") {
-              gameStarted = true;
+            if (event.data && event.data.type === "miniGameProxyDataResponse") {
               sdk.token = event.data?.keepworkToken;
+              sdk.isVip = event.data?.isVip;
+              sdk.isTestCompleted = event.data?.isTestCompleted;
+              sdk.isProfileCreated = event.data?.isProfileCreated;
+              sdk.miniGameProxyData = event.data;
+
               window.removeEventListener("message", messageHandler);
               resolve(event.data);
             }
           };
 
           window.addEventListener("message", messageHandler);
+
+          // 请求游戏代理数据
+          window.parent.postMessage({ type: "getMiniGameProxyData" }, "*");
 
           // 设置超时
           setTimeout(() => {

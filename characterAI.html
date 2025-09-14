@@ -474,14 +474,14 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-      }
-
-      .character-video-canvas {
+      }      .character-video-element {
         border-radius: 15px;
         border: 3px solid #667eea;
         margin-bottom: 15px;
         max-width: 400px;
         max-height: 400px;
+        width: 100%;
+        height: auto;
       }
 
       .character-video-message {
@@ -569,7 +569,12 @@
             <div class="thoughts-content" id="thoughts-content">
               <!-- 想法内容将在这里显示 -->
             </div>
-          </div>
+          </div>        </div>
+
+        <!-- AI声明和举报 -->
+        <div class="flex-shrink-0 mt-4 text-center text-xs text-gray-400">
+          对话内容由AI生成. 
+          <a href="#" id="report-link" class="text-blue-400 hover:text-blue-600 underline ml-1">【举报】</a>
         </div>
 
         <!-- LLM响应状态 -->
@@ -628,12 +633,10 @@
           <!-- AI工具按钮将在这里动态生成 -->
         </div>
       </div>
-    </div>
-
-    <!-- 角色动画视频播放器 -->
+    </div>    <!-- 角色动画视频播放器 -->
     <div id="character-video-overlay" class="character-video-overlay">
       <div class="character-video-container">
-        <canvas id="character-video-canvas" class="character-video-canvas" width="400" height="300"></canvas>
+        <video id="character-video-element" class="character-video-element" muted autoplay loop></video>
         <div id="character-video-message" class="character-video-message">
           <!-- 消息文本将在这里显示 -->
         </div>
@@ -676,13 +679,16 @@
           url: "https://yiyan.baidu.com",
           width: 30, // 30% 宽度
         },
+        /*
         {
           id: "xinghuo",
           name: "讯飞星火",
           icon: "✨",
           url: "https://xinghuo.xfyun.cn/desk",
           width: 30, // 30% 宽度
-        },
+        },        
+        */
+        /*
         {
           id: "kimi",
           name: "Kimi",
@@ -690,7 +696,15 @@
           url: "https://www.kimi.com/",
           width: 30, // 30% 宽度
         },
-      ]; // AI工具箱管理器
+        */
+        {
+          id: "report",
+          name: "举报",
+          icon: "🚨",
+          url: "user_report",
+          width: 30, // 100% 宽度，覆盖模式
+        },
+      ];// AI工具箱管理器
       class AIToolboxManager {
         constructor() {
           this.currentTool = null;
@@ -782,7 +796,7 @@
 
           if (!iframe) {
             // 创建新的iframe
-            iframe = document.createElement("iframe"); // 特殊处理百度百科，如果有wikiword则使用特定URL
+            iframe = document.createElement("iframe");            // 特殊处理百度百科，如果有wikiword则使用特定URL
             let iframeUrl = tool.url;
             if (tool.id === "baike" && this.config && this.config.objective && this.config.objective.wikiword) {
               iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
@@ -791,6 +805,12 @@
               let url = window.location.href;
               url = url.split("?")[0];
               url = url.replace("characterAI", "characterAI_xiaomai");
+              iframeUrl = `${url}?token=`;
+            }
+            else if (tool.id === "report") {
+              let url = window.location.href;
+              url = url.split("?")[0]; // 移除查询参数
+              url = url.replace("characterAI", "user_report");
               iframeUrl = `${url}?token=`;
             }
 
@@ -941,8 +961,7 @@
             if (e.key === "Enter") this.sendMessage();
           });          // 重置对话按钮
           this.elements.resetChatBtn.addEventListener("click", () => this.resetChat()); 
-          
-          // 聊天历史下拉菜单
+            // 聊天历史下拉菜单
           this.elements.historyDropdown.addEventListener("change", (e) => {
             if (e.target.value === "clearHistory") {
               this.clearAllHistory();
@@ -950,6 +969,18 @@
               this.loadSession(e.target.value);
             }
           });
+
+          // 举报链接事件监听器
+          const reportLink = document.getElementById("report-link");
+          if (reportLink) {
+            reportLink.addEventListener("click", (e) => {
+              e.preventDefault();
+              // 使用AI工具箱管理器打开举报页面
+              if (window.aiToolbox) {
+                window.aiToolbox.openTool("report");
+              }
+            });
+          }
         }
         // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
         async loadConfigByObjective(objective) {
@@ -1650,15 +1681,14 @@
               break;
             }
           }
-        }
-        playVideoAction(actionKey, messageText) {
+        }        playVideoAction(actionKey, messageText) {
           const videoConfig = this.config.videoActions[actionKey];
           if (!videoConfig) return;
 
           // 显示视频播放器覆盖层
           const overlay = document.getElementById("character-video-overlay");
           const messageDiv = document.getElementById("character-video-message");
-          const canvas = document.getElementById("character-video-canvas");
+          const videoElement = document.getElementById("character-video-element");
           const backBtn = document.getElementById("character-video-back-btn");
 
           // 设置消息文本
@@ -1668,11 +1698,14 @@
           overlay.classList.add("show");
 
           // 播放视频
-          this.loadAndPlayVideo(canvas, videoConfig.url);
+          this.loadAndPlayVideo(videoElement, videoConfig.url);
 
           // 关闭覆盖层的函数
           const closeOverlay = () => {
             overlay.classList.remove("show");
+            // 停止视频播放
+            videoElement.pause();
+            videoElement.src = "";
             backBtn.removeEventListener("click", handleBackClick);
             overlay.removeEventListener("click", handleOverlayClick);
           };
@@ -1691,49 +1724,40 @@
             }
           };
           overlay.addEventListener("click", handleOverlayClick);
-        }
-        async loadAndPlayVideo(canvas, videoUrl) {
+        }        async loadAndPlayVideo(videoElement, videoUrl) {
           try {
-            if (!canvas) {
-              console.error("Canvas element is null");
+            if (!videoElement) {
+              console.error("Video element is null");
               return;
             }
 
-            const ctx = canvas.getContext("2d");
-            const video = document.createElement("video");
+            // Set video source and properties
+            videoElement.src = videoUrl;
+            videoElement.loop = true;
+            videoElement.muted = true; // 静音以允许自动播放
 
-            video.src = videoUrl;
-            video.loop = true;
-            video.muted = true; // 静音以允许自动播放
-
-            video.addEventListener("loadeddata", () => {
-              // 调整canvas尺寸以适应视频
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
-
+            // Handle video load and play
+            videoElement.addEventListener("loadeddata", () => {
               // 开始播放
-              video.play();
-
-              // 绘制视频帧
-              const drawFrame = () => {
-                if (!video.paused && !video.ended) {
-                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                  requestAnimationFrame(drawFrame);
-                }
-              };
-
-              video.addEventListener("play", drawFrame);
+              videoElement.play().catch((error) => {
+                console.error("视频播放失败:", error);
+              });
             });
 
-            video.addEventListener("error", (e) => {
+            videoElement.addEventListener("error", (e) => {
               console.error("视频加载失败:", e);
-              ctx.fillStyle = "#667eea";
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              ctx.fillStyle = "white";
-              ctx.font = "16px Arial";
-              ctx.textAlign = "center";
-              ctx.fillText("视频加载失败", canvas.width / 2, canvas.height / 2);
+              // Show error message in video element (could be done by replacing src with error image)
+              videoElement.style.backgroundColor = "#667eea";
+              videoElement.style.display = "flex";
+              videoElement.style.alignItems = "center";
+              videoElement.style.justifyContent = "center";
+              videoElement.style.color = "white";
+              videoElement.style.fontSize = "16px";
+              videoElement.innerHTML = "视频加载失败";
             });
+
+            // Load the video
+            videoElement.load();
           } catch (error) {
             console.error("播放视频时出错:", error);
           }

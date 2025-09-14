@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>开发者控制台 - DevConsole</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.3"></script>
+    <style>
+      body {
+        font-family: "JetBrains Mono", "Consolas", "Monaco", "Courier New", monospace;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        overflow-x: hidden;
+      }
+
+      .console-container {
+        background: rgba(0, 0, 0, 0.9);
+        border: 1px solid #333;
+        border-radius: 8px;
+        backdrop-filter: blur(10px);
+      }
+
+      .console-header {
+        background: linear-gradient(90deg, #ff6b6b, #4ecdc4);
+        padding: 8px 16px;
+        border-radius: 7px 7px 0 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .console-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .console-output {
+        height: 300px;
+        overflow-y: auto;
+        background: #1a1a1a;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .console-input {
+        background: #2a2a2a;
+        border: none;
+        color: #00ff00;
+        padding: 8px;
+        width: 100%;
+        font-family: inherit;
+        font-size: 12px;
+      }
+
+      .console-input:focus {
+        outline: none;
+        background: #333;
+      }
+
+      .log-entry {
+        padding: 4px 8px;
+        border-bottom: 1px solid #333;
+      }
+
+      .log-info {
+        color: #00ff00;
+      }
+      .log-warn {
+        color: #ffaa00;
+      }
+      .log-error {
+        color: #ff4444;
+      }
+      .log-debug {
+        color: #8888ff;
+      }
+
+      .dev-button {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 12px;
+        margin: 4px;
+      }
+
+      .dev-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .dev-button.danger {
+        background: linear-gradient(45deg, #ff6b6b, #ff4757);
+      }
+
+      .dev-button.success {
+        background: linear-gradient(45deg, #2ed573, #1e90ff);
+      }
+
+      .dev-section {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 16px;
+        margin: 8px 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .dev-section h3 {
+        color: #4ecdc4;
+        margin-bottom: 12px;
+        font-size: 16px;
+      }
+
+      .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .info-label {
+        color: #aaa;
+        font-size: 12px;
+      }
+
+      .info-value {
+        color: #fff;
+        font-family: "Courier New", monospace;
+        font-size: 11px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 4px 8px;
+        border-radius: 4px;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+      }
+
+      .modal-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #1a1a2e;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        border: 1px solid #333;
+      }
+
+      .task-item {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 12px;
+        margin: 8px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .task-completed {
+        opacity: 0.6;
+        text-decoration: line-through;
+      }
+
+      .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+      }
+
+      .status-online {
+        background: #00ff00;
+      }
+      .status-offline {
+        background: #ff4444;
+      }
+      .status-loading {
+        background: #ffaa00;
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .json-viewer {
+        background: #000;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 12px;
+        font-family: "Courier New", monospace;
+        font-size: 11px;
+        color: #00ff00;
+        max-height: 200px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+
+      .tabs {
+        display: flex;
+        border-bottom: 1px solid #333;
+        margin-bottom: 16px;
+      }
+
+      .tab {
+        padding: 8px 16px;
+        background: rgba(0, 0, 0, 0.3);
+        border: none;
+        color: #aaa;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+      }
+
+      .tab.active {
+        color: #4ecdc4;
+        border-bottom-color: #4ecdc4;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-white p-4">
+    <div class="max-w-7xl w-full">
+      <!-- Header -->
+      <div class="text-center mb-4">
+        <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">🛠️《麦思星球》开发者控制台</h1>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('system')">系统信息</button>
+        <button class="tab" onclick="switchTab('user')">用户管理</button>
+        <button class="tab" onclick="switchTab('tasks')">任务管理</button>
+        <button class="tab" onclick="switchTab('storage')">存储管理</button>
+        <button class="tab" onclick="switchTab('console')">控制台</button>
+        <button class="tab" onclick="switchTab('tools')">开发工具</button>
+      </div>
+
+      <!-- System Info Tab -->
+      <div id="tab-system" class="tab-content active">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="dev-section">
+            <h3>🖥️ 系统状态</h3>
+            <div class="info-item">
+              <span class="info-label">SDK状态</span>
+              <span class="info-value">
+                <span id="sdk-status" class="status-indicator status-loading"></span>
+                <span id="sdk-status-text">检测中...</span>
+              </span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">当前时间</span>
+              <span class="info-value" id="current-time">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">浏览器</span>
+              <span class="info-value" id="browser-info">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">屏幕分辨率</span>
+              <span class="info-value" id="screen-info">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">网络状态</span>
+              <span class="info-value" id="network-status">--</span>
+            </div>
+          </div>
+
+          <div class="dev-section">
+            <h3>🌐 环境信息</h3>
+            <div class="info-item">
+              <span class="info-label">当前域名</span>
+              <span class="info-value" id="current-domain">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">协议</span>
+              <span class="info-value" id="protocol">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">用户代理</span>
+              <span class="info-value" id="user-agent">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">语言</span>
+              <span class="info-value" id="language">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- User Management Tab -->
+      <div id="tab-user" class="tab-content">
+        <div class="dev-section">
+          <h3>👤 当前用户信息</h3>
+          <div class="info-item">
+            <span class="info-label">用户ID</span>
+            <span class="info-value" id="user-id">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">用户名</span>
+            <span class="info-value" id="username">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">认证Token</span>
+            <div class="flex items-center gap-2">
+              <span class="info-value" id="auth-token" style="max-width: none; white-space: break-all; word-break: break-all">--</span>
+              <button class="dev-button" onclick="copyToken()" title="复制Token">📋</button>
+            </div>
+          </div>
+          <div class="info-item">
+            <span class="info-label">登录状态</span>
+            <span class="info-value" id="login-status">--</span>
+          </div>
+          <div class="mt-4">
+            <button class="dev-button" onclick="refreshUserInfo()">🔄 刷新用户信息</button>
+            <button class="dev-button danger" onclick="clearUserSession()">🚪 清除会话</button>
+            <button class="dev-button" onclick="showUserProfile()">📋 查看完整资料</button>
+          </div>
+        </div>
+        <div class="dev-section">
+          <h3>🎮 MiniGame Proxy 数据</h3>
+          <div class="info-item">
+            <span class="info-label">数据状态</span>
+            <span class="info-value" id="proxy-data-status">--</span>
+          </div>
+          <div class="mt-4">
+            <button class="dev-button" onclick="refreshProxyData()">🔄 刷新代理数据</button>
+            <button class="dev-button" onclick="showProxyData()">📋 查看完整数据</button>
+          </div>
+          <div class="mt-4">
+            <label class="block text-sm text-gray-400 mb-2">原始代理数据 (miniGameProxyDataResponse):</label>
+            <div id="proxy-data-raw" class="json-viewer" style="min-height: 100px; max-height: 300px">暂无数据</div>
+          </div>
+          <div id="proxy-data-viewer" class="json-viewer mt-4" style="display: none"></div>
+        </div>
+      </div>
+      <!-- Task Management Tab -->
+      <div id="tab-tasks" class="tab-content">
+        <div class="dev-section">
+          <h3>📋 任务管理</h3>
+          <div class="mb-4">
+            <button class="dev-button" onclick="refreshTaskData()">🔄 刷新任务数据</button>
+            <button class="dev-button" onclick="editTaskData()">✏️ 编辑任务数据</button>
+            <button class="dev-button danger" onclick="resetAllTasks()">🗑️ 重置所有任务</button>
+          </div>
+          <!-- Task Data Display -->
+          <div class="dev-section">
+            <h4 class="text-lg mb-3 text-green-400">✅ 已完成任务</h4>
+            <div class="info-item">
+              <span class="info-label">任务总数</span>
+              <span class="info-value" id="completed-tasks-count">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">数据状态</span>
+              <span class="info-value" id="completed-tasks-status">未加载</span>
+            </div>
+            <div id="completed-tasks-viewer" class="json-viewer mt-4" style="max-height: 300px; overflow-y: auto">点击"从SDK加载任务"查看已完成任务数据</div>
+          </div>
+
+          <div class="dev-section">
+            <h4 class="text-lg mb-3 text-blue-400">📝 已接受任务</h4>
+            <div class="info-item">
+              <span class="info-label">任务总数</span>
+              <span class="info-value" id="accepted-tasks-count">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">数据状态</span>
+              <span class="info-value" id="accepted-tasks-status">未加载</span>
+            </div>
+            <div id="accepted-tasks-viewer" class="json-viewer mt-4" style="max-height: 300px; overflow-y: auto">点击"从SDK加载任务"查看已接受任务数据</div>
+          </div>
+          <!-- Simple Task Overview -->
+          <div class="dev-section">
+            <h4 class="text-lg mb-3 text-yellow-400">📊 任务概览</h4>
+            <div id="tasks-container" class="json-viewer" style="min-height: 100px">
+              <p class="text-gray-400">点击"从SDK加载任务"查看当前任务概览</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Storage Management Tab -->
+      <div id="tab-storage" class="tab-content">
+        <div class="dev-section">
+          <h3>💾 存储管理</h3>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h4 class="text-lg mb-3 text-blue-400">LocalStorage</h4>
+              <div class="mb-4">
+                <button class="dev-button" onclick="showLocalStorage()">📖 查看存储</button>
+                <button class="dev-button danger" onclick="clearLocalStorage()">🗑️ 清空存储</button>
+              </div>
+              <div id="localStorage-viewer" class="json-viewer" style="display: none"></div>
+            </div>
+            <div>
+              <h4 class="text-lg mb-3 text-purple-400">SessionStorage</h4>
+              <div class="mb-4">
+                <button class="dev-button" onclick="showSessionStorage()">📖 查看存储</button>
+                <button class="dev-button danger" onclick="clearSessionStorage()">🗑️ 清空存储</button>
+              </div>
+              <div id="sessionStorage-viewer" class="json-viewer" style="display: none"></div>
+            </div>
+          </div>
+          <div class="mt-6">
+            <h4 class="text-lg mb-3 text-green-400">Cookie管理</h4>
+            <button class="dev-button" onclick="showCookies()">🍪 查看Cookies</button>
+            <button class="dev-button danger" onclick="clearCookies()">🗑️ 清空Cookies</button>
+            <div id="cookies-viewer" class="json-viewer mt-4" style="display: none"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Console Tab -->
+      <div id="tab-console" class="tab-content">
+        <div class="dev-section">
+          <h3>🖥️ 开发者控制台</h3>
+          <div class="console-container">
+            <div class="console-header">
+              <div class="console-dot bg-red-500"></div>
+              <div class="console-dot bg-yellow-500"></div>
+              <div class="console-dot bg-green-500"></div>
+              <span class="text-black font-semibold ml-2">DevConsole</span>
+              <div class="ml-auto">
+                <button class="dev-button" onclick="clearConsole()">清空</button>
+                <button class="dev-button" onclick="openChromeConsole()">打开Chrome控制台</button>
+              </div>
+            </div>
+            <div id="console-output" class="console-output">
+              <div class="log-entry log-info"><span class="text-gray-500">[INFO]</span> 开发者控制台已启动</div>
+            </div>
+            <input type="text" id="console-input" class="console-input" placeholder="输入JavaScript命令..." />
+          </div>
+        </div>
+      </div>
+
+      <!-- Tools Tab -->
+      <div id="tab-tools" class="tab-content">
+        <div class="dev-section">
+          <h3>🛠️ 开发工具</h3>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <button class="dev-button" onclick="testSDKConnection()">🔗 测试SDK连接</button>
+            <button class="dev-button" onclick="generateTestData()">📊 生成测试数据</button>
+            <button class="dev-button" onclick="exportLogs()">📤 导出日志</button>
+            <button class="dev-button" onclick="performanceCheck()">⚡ 性能检测</button>
+            <button class="dev-button" onclick="networkDiagnostic()">🌐 网络诊断</button>
+            <button class="dev-button" onclick="memoryUsage()">💾 内存使用</button>
+            <button class="dev-button" onclick="resetAll()">🔄 重置所有</button>
+            <button class="dev-button danger" onclick="emergencyMode()">🚨 紧急模式</button>
+          </div>
+
+          <div class="mt-6">
+            <h4 class="text-lg mb-3 text-yellow-400">快速操作</h4>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm text-gray-400 mb-2">快速设置用户ID:</label>
+                <div class="flex gap-2">
+                  <input type="text" id="quick-user-id" class="console-input flex-1" placeholder="输入用户ID" />
+                  <button class="dev-button" onclick="setQuickUserId()">设置</button>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm text-gray-400 mb-2">快速执行:</label>
+                <div class="flex gap-2">
+                  <select id="quick-actions" class="console-input flex-1">
+                    <option value="">选择快速操作...</option>
+                    <option value="reload">重新加载页面</option>
+                    <option value="fullscreen">进入全屏</option>
+                    <option value="mobile-view">移动端视图</option>
+                    <option value="debug-mode">调试模式</option>
+                  </select>
+                  <button class="dev-button" onclick="executeQuickAction()">执行</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal for detailed views -->
+    <div id="detail-modal" class="modal">
+      <div class="modal-content">
+        <div class="flex justify-between items-center mb-4">
+          <h3 id="modal-title" class="text-xl font-bold text-blue-400">详细信息</h3>
+          <button class="dev-button" onclick="closeModal()">✕</button>
+        </div>
+        <div id="modal-body" class="json-viewer">
+          <!-- Dynamic content -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for editing tasks -->
+    <div id="edit-task-modal" class="modal">
+      <div class="modal-content" style="max-width: 800px">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-bold text-blue-400">编辑任务数据</h3>
+          <button class="dev-button" onclick="closeEditTaskModal()">✕</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Completed Tasks Editor -->
+          <div>
+            <h4 class="text-lg mb-3 text-green-400">✅ 已完成任务</h4>
+            <textarea id="completed-tasks-editor" class="console-input w-full h-64 resize-none font-mono text-sm" placeholder="请输入JSON格式的已完成任务数据"></textarea>
+            <div class="mt-2">
+              <button class="dev-button success" onclick="saveCompletedTasks()">💾 保存已完成任务</button>
+              <button class="dev-button danger" onclick="clearCompletedTasks()">🗑️ 清空已完成任务</button>
+            </div>
+          </div>
+
+          <!-- Accepted Tasks Editor -->
+          <div>
+            <h4 class="text-lg mb-3 text-blue-400">📝 已接受任务</h4>
+            <textarea id="accepted-tasks-editor" class="console-input w-full h-64 resize-none font-mono text-sm" placeholder="请输入JSON格式的已接受任务数据"></textarea>
+            <div class="mt-2">
+              <button class="dev-button success" onclick="saveAcceptedTasks()">💾 保存已接受任务</button>
+              <button class="dev-button danger" onclick="clearAcceptedTasks()">🗑️ 清空已接受任务</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-gray-600">
+          <div class="flex justify-between">
+            <button class="dev-button" onclick="resetTaskEditorsToOriginal()">🔄 重置为原始数据</button>
+            <div>
+              <button class="dev-button success" onclick="saveAllTaskData()">💾 保存全部</button>
+              <button class="dev-button" onclick="closeEditTaskModal()">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Initialize SDK
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+      console.log(`Keepwork SDK initialized token: ${sdk.token}`); // Global variables
+      let devConsole = {
+        logs: [],
+        userInfo: {},
+        tasks: [], // Legacy task array
+        completedTasks: {}, // SDK: dragon.taskCompleted
+        acceptedTasks: {}, // SDK: dragon.taskAccepted
+        isSDKReady: false,
+        miniGameProxyData: null,
+        tasksLoaded: false, // Flag to track if tasks have been loaded
+      }; // Initialize on page load      // Tab switching
+      function switchTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll(".tab-content").forEach((content) => {
+          content.classList.remove("active");
+        });
+
+        // Remove active class from all tabs
+        document.querySelectorAll(".tab").forEach((tab) => {
+          tab.classList.remove("active");
+        });
+
+        // Show selected tab content
+        document.getElementById(`tab-${tabName}`).classList.add("active");
+
+        // Add active class to clicked tab
+        event.target.classList.add("active");
+
+        // Auto-load tasks when switching to tasks tab
+        if (tabName === "tasks" && !devConsole.tasksLoaded && devConsole.isSDKReady) {
+          log("自动加载任务数据...", "info");
+          loadTasksFromSDK();
+        }
+      } // Initialize dev console
+      function initDevConsole() {
+        log("正在初始化开发者控制台...", "info");
+
+        // Check if running in iframe
+        if (window.parent !== window) {
+          log("检测到iframe环境", "warn");
+        }
+
+        // Check KeepWork SDK
+        if (typeof KeepworkSDK !== "undefined" && sdk) {
+          log("KeepWork SDK已加载", "success");
+          devConsole.isSDKReady = true;
+          initSDK();
+        } else {
+          log("KeepWork SDK未找到", "error");
+        }
+      } // Initialize SDK
+      async function initSDK() {
+        try {
+          // Try to get user info
+          const userInfo = await sdk.getUserProfile();
+          if (userInfo) {
+            devConsole.userInfo = userInfo;
+            updateUserInfo();
+            log("用户信息获取成功", "success");
+          }
+        } catch (error) {
+          log(`SDK初始化失败: ${error.message}`, "error");
+        }
+      }
+
+      // Update system information
+      function updateSystemInfo() {
+        // Browser info
+        document.getElementById("browser-info").textContent = getBrowserInfo();
+        document.getElementById("screen-info").textContent = `${screen.width}x${screen.height}`;
+        document.getElementById("current-domain").textContent = window.location.hostname;
+        document.getElementById("protocol").textContent = window.location.protocol;
+        document.getElementById("user-agent").textContent = navigator.userAgent;
+        document.getElementById("language").textContent = navigator.language;
+
+        // Network status
+        updateNetworkStatus();
+      }
+
+      // Update time
+      function updateTime() {
+        const now = new Date();
+        document.getElementById("current-time").textContent = now.toLocaleString("zh-CN");
+      }
+
+      // Get browser info
+      function getBrowserInfo() {
+        const ua = navigator.userAgent;
+        if (ua.includes("Chrome")) return "Chrome";
+        if (ua.includes("Firefox")) return "Firefox";
+        if (ua.includes("Safari")) return "Safari";
+        if (ua.includes("Edge")) return "Edge";
+        return "Unknown";
+      }
+
+      // Update network status
+      function updateNetworkStatus() {
+        const status = navigator.onLine ? "在线" : "离线";
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        let info = status;
+
+        if (connection) {
+          info += ` (${connection.effectiveType || "unknown"})`;
+        }
+
+        document.getElementById("network-status").textContent = info;
+      } // Check SDK status
+      function checkSDKStatus() {
+        const statusEl = document.getElementById("sdk-status");
+        const textEl = document.getElementById("sdk-status-text");
+
+        if (typeof KeepworkSDK !== "undefined" && sdk) {
+          statusEl.className = "status-indicator status-online";
+          textEl.textContent = "已连接";
+        } else {
+          statusEl.className = "status-indicator status-offline";
+          textEl.textContent = "未连接";
+        }
+      }
+
+      // Update user info display
+      function updateUserInfo() {
+        const userInfo = devConsole.userInfo;
+        document.getElementById("user-id").textContent = userInfo.id || "未知";
+        document.getElementById("username").textContent = userInfo.username || "未知";
+        document.getElementById("auth-token").textContent = sdk.token ? sdk.token : "无";
+        document.getElementById("login-status").textContent = userInfo.id ? "已登录" : "未登录";
+      } // Refresh user information
+      async function refreshUserInfo() {
+        if (!devConsole.isSDKReady) {
+          log("SDK未就绪", "error");
+          return;
+        }
+
+        try {
+          log("正在刷新用户信息...", "info");
+          const userInfo = await sdk.getUserProfile();
+          devConsole.userInfo = userInfo;
+          updateUserInfo();
+          log("用户信息刷新成功", "success");
+        } catch (error) {
+          log(`刷新用户信息失败: ${error.message}`, "error");
+        }
+      }
+
+      // Clear user session
+      function clearUserSession() {
+        if (confirm("确定要清除用户会话吗？")) {
+          localStorage.removeItem("token");
+          sessionStorage.clear();
+          devConsole.userInfo = {};
+          updateUserInfo();
+          log("用户会话已清除", "warn");
+        }
+      }
+
+      // Show user profile in modal
+      function showUserProfile() {
+        const modalTitle = document.getElementById("modal-title");
+        const modalBody = document.getElementById("modal-body");
+
+        modalTitle.textContent = "用户完整资料";
+        modalBody.textContent = JSON.stringify(devConsole.userInfo, null, 2);
+        document.getElementById("detail-modal").style.display = "block";
+      } // Load tasks from SDK
+      async function loadTasksFromSDK() {
+        if (!devConsole.isSDKReady) {
+          log("SDK未就绪，无法加载任务数据", "error");
+          return;
+        }
+
+        try {
+          log("正在从SDK加载任务数据...", "info");
+
+          // Load completed tasks
+          const completedTasks = await sdk.personalPageStore.loadPageData("maisi_userinfo", "dragon.taskCompleted");
+          devConsole.completedTasks = completedTasks || {};
+
+          // Load accepted tasks
+          const acceptedTasks = await sdk.personalPageStore.loadPageData("maisi_userinfo", "dragon.taskAccepted");
+          devConsole.acceptedTasks = acceptedTasks || {}; // Update displays
+          updateTaskDisplays();
+          displayCombinedTasks();
+
+          // Mark tasks as loaded
+          devConsole.tasksLoaded = true;
+
+          log("任务数据加载完成", "success");
+        } catch (error) {
+          log(`加载任务数据失败: ${error.message}`, "error");
+        }
+      } // Refresh task data
+      async function refreshTaskData() {
+        // Reset the loaded flag to allow fresh loading
+        devConsole.tasksLoaded = false;
+        await loadTasksFromSDK();
+      }
+
+      // Update task displays
+      function updateTaskDisplays() {
+        // Update completed tasks display
+        const completedTasksViewer = document.getElementById("completed-tasks-viewer");
+        const completedTasksCount = document.getElementById("completed-tasks-count");
+        const completedTasksStatus = document.getElementById("completed-tasks-status");
+
+        if (devConsole.completedTasks && Object.keys(devConsole.completedTasks).length > 0) {
+          completedTasksViewer.textContent = JSON.stringify(devConsole.completedTasks, null, 2);
+          completedTasksCount.textContent = Object.keys(devConsole.completedTasks).length;
+          completedTasksStatus.textContent = "已加载";
+        } else {
+          completedTasksViewer.textContent = "暂无已完成任务数据";
+          completedTasksCount.textContent = "0";
+          completedTasksStatus.textContent = "无数据";
+        }
+
+        // Update accepted tasks display
+        const acceptedTasksViewer = document.getElementById("accepted-tasks-viewer");
+        const acceptedTasksCount = document.getElementById("accepted-tasks-count");
+        const acceptedTasksStatus = document.getElementById("accepted-tasks-status");
+
+        if (devConsole.acceptedTasks && Object.keys(devConsole.acceptedTasks).length > 0) {
+          acceptedTasksViewer.textContent = JSON.stringify(devConsole.acceptedTasks, null, 2);
+          acceptedTasksCount.textContent = Object.keys(devConsole.acceptedTasks).length;
+          acceptedTasksStatus.textContent = "已加载";
+        } else {
+          acceptedTasksViewer.textContent = "暂无已接受任务数据";
+          acceptedTasksCount.textContent = "0";
+          acceptedTasksStatus.textContent = "无数据";
+        }
+      } // Display combined tasks in a simple text format
+      function displayCombinedTasks() {
+        const container = document.getElementById("tasks-container");
+        container.innerHTML = "";
+
+        const hasData = (devConsole.completedTasks && Object.keys(devConsole.completedTasks).length > 0) || (devConsole.acceptedTasks && Object.keys(devConsole.acceptedTasks).length > 0);
+
+        if (!hasData) {
+          container.innerHTML = '<p class="text-gray-400">暂无任务数据</p>';
+          return;
+        }
+
+        // Create simple text overview
+        let overview = "";
+
+        if (devConsole.completedTasks && Object.keys(devConsole.completedTasks).length > 0) {
+          overview += `✅ 已完成任务 (${Object.keys(devConsole.completedTasks).length}个):\n`;
+          for (const [key, value] of Object.entries(devConsole.completedTasks)) {
+            overview += `  - ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}\n`;
+          }
+          overview += "\n";
+        }
+
+        if (devConsole.acceptedTasks && Object.keys(devConsole.acceptedTasks).length > 0) {
+          overview += `📝 已接受任务 (${Object.keys(devConsole.acceptedTasks).length}个):\n`;
+          for (const [key, value] of Object.entries(devConsole.acceptedTasks)) {
+            overview += `  - ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}\n`;
+          }
+        }
+
+        container.textContent = overview;
+      }
+
+      // Show task details in modal
+      function showTaskDetails() {
+        const modalTitle = document.getElementById("modal-title");
+        const modalBody = document.getElementById("modal-body");
+
+        const taskData = {
+          completedTasks: devConsole.completedTasks || {},
+          acceptedTasks: devConsole.acceptedTasks || {},
+        };
+
+        modalTitle.textContent = "任务数据详情";
+        modalBody.textContent = JSON.stringify(taskData, null, 2);
+        document.getElementById("detail-modal").style.display = "block";
+      }
+
+      // Legacy function - kept for compatibility
+      function loadTasks() {
+        // Redirect to SDK-based loading
+        loadTasksFromSDK();
+      }
+
+      // Display tasks
+      function displayTasks() {
+        // Redirect to combined display
+        displayCombinedTasks();
+      }
+
+      // Toggle task completion (disabled for SDK data)
+      function toggleTaskComplete(taskId) {
+        log("SDK任务数据为只读，无法修改状态", "warn");
+      }
+
+      // Remove completed tasks (disabled for SDK data)
+      function removeCompletedTasks() {
+        log("SDK任务数据为只读，无法删除", "warn");
+      } // Mark all tasks as complete (disabled for SDK data)
+      function markAllTasksComplete() {
+        log("SDK任务数据为只读，无法修改", "warn");
+      }
+
+      // Edit task data function
+      function editTaskData() {
+        if (!devConsole.isSDKReady) {
+          log("SDK未就绪，无法编辑任务数据", "error");
+          return;
+        }
+
+        // Fill the editors with current data
+        document.getElementById("completed-tasks-editor").value = JSON.stringify(devConsole.completedTasks || {}, null, 2);
+        document.getElementById("accepted-tasks-editor").value = JSON.stringify(devConsole.acceptedTasks || {}, null, 2);
+
+        // Show the edit modal
+        document.getElementById("edit-task-modal").style.display = "block";
+        log("已打开任务编辑器", "info");
+      }
+
+      // Close edit task modal
+      function closeEditTaskModal() {
+        document.getElementById("edit-task-modal").style.display = "none";
+      }
+
+      // Reset editors to original data
+      function resetTaskEditorsToOriginal() {
+        document.getElementById("completed-tasks-editor").value = JSON.stringify(devConsole.completedTasks || {}, null, 2);
+        document.getElementById("accepted-tasks-editor").value = JSON.stringify(devConsole.acceptedTasks || {}, null, 2);
+        log("已重置编辑器为原始数据", "info");
+      }
+
+      // Save completed tasks
+      async function saveCompletedTasks() {
+        if (!devConsole.isSDKReady) {
+          log("SDK未就绪", "error");
+          return;
+        }
+
+        try {
+          const editorValue = document.getElementById("completed-tasks-editor").value.trim();
+          let tasksData = {};
+
+          if (editorValue) {
+            tasksData = JSON.parse(editorValue);
+          }
+
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskCompleted", tasksData, true);
+          devConsole.completedTasks = tasksData;
+          updateTaskDisplays();
+          log("已完成任务数据保存成功", "success");
+        } catch (error) {
+          log(`保存已完成任务失败: ${error.message}`, "error");
+        }
+      }
+
+      // Save accepted tasks
+      async function saveAcceptedTasks() {
+        if (!devConsole.isSDKReady) {
+          log("SDK未就绪", "error");
+          return;
+        }
+
+        try {
+          const editorValue = document.getElementById("accepted-tasks-editor").value.trim();
+          let tasksData = {};
+
+          if (editorValue) {
+            tasksData = JSON.parse(editorValue);
+          }
+
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskAccepted", tasksData, true);
+          devConsole.acceptedTasks = tasksData;
+          updateTaskDisplays();
+          log("已接受任务数据保存成功", "success");
+        } catch (error) {
+          log(`保存已接受任务失败: ${error.message}`, "error");
+        }
+      }
+
+      // Clear completed tasks
+      async function clearCompletedTasks() {
+        if (!confirm("确定要清空所有已完成任务吗？此操作不可撤销！")) {
+          return;
+        }
+
+        try {
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskCompleted", {}, true);
+          devConsole.completedTasks = {};
+          document.getElementById("completed-tasks-editor").value = "{}";
+          updateTaskDisplays();
+          log("已完成任务数据已清空", "success");
+        } catch (error) {
+          log(`清空已完成任务失败: ${error.message}`, "error");
+        }
+      }
+
+      // Clear accepted tasks
+      async function clearAcceptedTasks() {
+        if (!confirm("确定要清空所有已接受任务吗？此操作不可撤销！")) {
+          return;
+        }
+
+        try {
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskAccepted", {}, true);
+          devConsole.acceptedTasks = {};
+          document.getElementById("accepted-tasks-editor").value = "{}";
+          updateTaskDisplays();
+          log("已接受任务数据已清空", "success");
+        } catch (error) {
+          log(`清空已接受任务失败: ${error.message}`, "error");
+        }
+      }
+
+      // Save all task data
+      async function saveAllTaskData() {
+        if (!devConsole.isSDKReady) {
+          log("SDK未就绪", "error");
+          return;
+        }
+
+        try {
+          // Save completed tasks
+          const completedValue = document.getElementById("completed-tasks-editor").value.trim();
+          let completedData = {};
+          if (completedValue) {
+            completedData = JSON.parse(completedValue);
+          }
+
+          // Save accepted tasks
+          const acceptedValue = document.getElementById("accepted-tasks-editor").value.trim();
+          let acceptedData = {};
+          if (acceptedValue) {
+            acceptedData = JSON.parse(acceptedValue);
+          }
+
+          // Save both to SDK
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskCompleted", completedData, true);
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskAccepted", acceptedData, true);
+
+          // Update local cache
+          devConsole.completedTasks = completedData;
+          devConsole.acceptedTasks = acceptedData;
+
+          updateTaskDisplays();
+          closeEditTaskModal();
+          log("所有任务数据保存成功", "success");
+        } catch (error) {
+          log(`保存任务数据失败: ${error.message}`, "error");
+        }
+      }
+
+      // Reset all tasks
+      async function resetAllTasks() {
+        if (!devConsole.isSDKReady) {
+          log("SDK未就绪", "error");
+          return;
+        }
+
+        if (!confirm("确定要重置所有任务数据吗？这将删除所有已完成和已接受的任务数据！此操作不可撤销！")) {
+          return;
+        }
+
+        try {
+          // Clear both task types
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskCompleted", {}, true);
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "dragon.taskAccepted", {}, true);
+
+          // Update local cache
+          devConsole.completedTasks = {};
+          devConsole.acceptedTasks = {};
+
+          updateTaskDisplays();
+          log("所有任务数据已重置", "success");
+        } catch (error) {
+          log(`重置任务数据失败: ${error.message}`, "error");
+        }
+      }
+
+      // Storage management functions
+      function showLocalStorage() {
+        const viewer = document.getElementById("localStorage-viewer");
+        const data = {};
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          data[key] = localStorage.getItem(key);
+        }
+        viewer.textContent = JSON.stringify(data, null, 2);
+        viewer.style.display = "block";
+        log("LocalStorage数据已显示", "info");
+      }
+
+      function showSessionStorage() {
+        const viewer = document.getElementById("sessionStorage-viewer");
+        const data = {};
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          data[key] = sessionStorage.getItem(key);
+        }
+        viewer.textContent = JSON.stringify(data, null, 2);
+        viewer.style.display = "block";
+        log("SessionStorage数据已显示", "info");
+      }
+
+      function showCookies() {
+        const viewer = document.getElementById("cookies-viewer");
+        const cookies = {};
+        document.cookie.split(";").forEach((cookie) => {
+          const [name, value] = cookie.trim().split("=");
+          if (name) cookies[name] = value || "";
+        });
+        viewer.textContent = JSON.stringify(cookies, null, 2);
+        viewer.style.display = "block";
+        log("Cookie数据已显示", "info");
+      }
+
+      function clearLocalStorage() {
+        if (confirm("确定要清空LocalStorage吗？")) {
+          localStorage.clear();
+          document.getElementById("localStorage-viewer").style.display = "none";
+          log("LocalStorage已清空", "warn");
+        }
+      }
+
+      function clearSessionStorage() {
+        if (confirm("确定要清空SessionStorage吗？")) {
+          sessionStorage.clear();
+          document.getElementById("sessionStorage-viewer").style.display = "none";
+          log("SessionStorage已清空", "warn");
+        }
+      }
+
+      function clearCookies() {
+        if (confirm("确定要清空所有Cookies吗？")) {
+          document.cookie.split(";").forEach(function (c) {
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+          });
+          document.getElementById("cookies-viewer").style.display = "none";
+          log("Cookies已清空", "warn");
+        }
+      }
+
+      // Console functions
+      function setupConsoleInput() {
+        const input = document.getElementById("console-input");
+        input.addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            const command = input.value.trim();
+            if (command) {
+              executeConsoleCommand(command);
+              input.value = "";
+            }
+          }
+        });
+      }
+
+      function executeConsoleCommand(command) {
+        log(`> ${command}`, "debug");
+
+        try {
+          const result = eval(command);
+          log(result, "info");
+        } catch (error) {
+          log(`Error: ${error.message}`, "error");
+        }
+      }
+
+      function clearConsole() {
+        document.getElementById("console-output").innerHTML = "";
+        log("控制台已清空", "info");
+      }
+
+      function openChromeConsole() {
+        log("请按 F12 或 Ctrl+Shift+I 打开Chrome开发者工具", "info");
+        // Try to trigger dev tools (may not work due to security)
+        debugger;
+      }
+
+      // Tool functions
+      function testSDKConnection() {
+        if (devConsole.isSDKReady) {
+          log("✅ SDK连接正常", "success");
+        } else {
+          log("❌ SDK连接失败", "error");
+        }
+      }
+
+      function generateTestData() {
+        const testData = {
+          userId: Math.floor(Math.random() * 10000),
+          score: Math.floor(Math.random() * 100),
+          level: Math.floor(Math.random() * 10) + 1,
+          timestamp: new Date().toISOString(),
+        };
+        log(`生成测试数据: ${JSON.stringify(testData)}`, "info");
+      }
+
+      function exportLogs() {
+        const logsText = devConsole.logs.map((log) => `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`).join("\n");
+        const blob = new Blob([logsText], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `dev-logs-${new Date().toISOString().split("T")[0]}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        log("日志已导出", "success");
+      }
+
+      function performanceCheck() {
+        const info = {
+          memory: performance.memory
+            ? {
+                used: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024) + "MB",
+                total: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024) + "MB",
+              }
+            : "N/A",
+          timing: performance.timing
+            ? {
+                domLoaded: performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart + "ms",
+                pageLoaded: performance.timing.loadEventEnd - performance.timing.navigationStart + "ms",
+              }
+            : "N/A",
+        };
+        log(`性能信息: ${JSON.stringify(info, null, 2)}`, "info");
+      }
+
+      function networkDiagnostic() {
+        log("正在进行网络诊断...", "info");
+
+        fetch("https://api.keepwork.com/core/v0/ping")
+          .then((response) => {
+            log(`✅ 服务器连接正常 (${response.status})`, "success");
+          })
+          .catch((error) => {
+            log(`❌ 服务器连接失败: ${error.message}`, "error");
+          });
+      }
+
+      function memoryUsage() {
+        if (performance.memory) {
+          const used = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+          const total = Math.round(performance.memory.totalJSHeapSize / 1024 / 1024);
+          const limit = Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024);
+          log(`内存使用: ${used}MB / ${total}MB (限制: ${limit}MB)`, "info");
+        } else {
+          log("内存信息不可用", "warn");
+        }
+      }
+
+      function resetAll() {
+        if (confirm("确定要重置所有设置吗？这将清空所有存储和重新加载页面。")) {
+          localStorage.clear();
+          sessionStorage.clear();
+          location.reload();
+        }
+      }
+
+      function emergencyMode() {
+        log("🚨 紧急模式激活", "error");
+        log("清空所有存储...", "warn");
+        localStorage.clear();
+        sessionStorage.clear();
+        log("停止所有计时器...", "warn");
+        // Clear all intervals and timeouts
+        const highestTimeoutId = setTimeout(";");
+        for (let i = 0; i < highestTimeoutId; i++) {
+          clearTimeout(i);
+        }
+        log("紧急模式完成", "success");
+      }
+
+      function setQuickUserId() {
+        const userId = document.getElementById("quick-user-id").value;
+        if (userId) {
+          devConsole.userInfo.id = userId;
+          updateUserInfo();
+          log(`用户ID已设置为: ${userId}`, "success");
+        }
+      }
+
+      function executeQuickAction() {
+        const action = document.getElementById("quick-actions").value;
+        switch (action) {
+          case "reload":
+            location.reload();
+            break;
+          case "fullscreen":
+            document.documentElement.requestFullscreen();
+            break;
+          case "mobile-view":
+            document.body.style.maxWidth = "375px";
+            document.body.style.margin = "0 auto";
+            break;
+          case "debug-mode":
+            debugger;
+            break;
+          default:
+            log("请选择一个操作", "warn");
+        }
+      }
+
+      // Utility functions
+      function log(message, level = "info") {
+        const timestamp = new Date().toISOString();
+        const logEntry = { message, level, timestamp };
+        devConsole.logs.push(logEntry);
+
+        const output = document.getElementById("console-output");
+        const entry = document.createElement("div");
+        entry.className = `log-entry log-${level}`;
+        entry.innerHTML = `<span class="text-gray-500">[${level.toUpperCase()}]</span> ${message}`;
+        output.appendChild(entry);
+        output.scrollTop = output.scrollHeight;
+      }
+      function closeModal() {
+        document.getElementById("detail-modal").style.display = "none";
+      }
+
+      // Copy token to clipboard
+      function copyToken() {
+        const tokenElement = document.getElementById("auth-token");
+        const token = tokenElement.textContent;
+
+        if (token && token !== "--" && token !== "无") {
+          navigator.clipboard
+            .writeText(token)
+            .then(() => {
+              log("Token已复制到剪贴板", "success");
+            })
+            .catch((err) => {
+              // Fallback for older browsers
+              const textArea = document.createElement("textarea");
+              textArea.value = token;
+              document.body.appendChild(textArea);
+              textArea.select();
+              document.execCommand("copy");
+              document.body.removeChild(textArea);
+              log("Token已复制到剪贴板", "success");
+            });
+        } else {
+          log("没有有效的Token可复制", "warn");
+        }
+      } // MiniGame Proxy functions
+      function refreshProxyData() {
+        log("正在刷新代理数据...", "info");
+        checkStartGame(100); // Quick refresh
+      }
+
+      function showProxyData() {
+        const modalTitle = document.getElementById("modal-title");
+        const modalBody = document.getElementById("modal-body");
+
+        modalTitle.textContent = "MiniGame Proxy 完整数据";
+        modalBody.textContent = devConsole.miniGameProxyData ? JSON.stringify(devConsole.miniGameProxyData, null, 2) : "暂无数据";
+        document.getElementById("detail-modal").style.display = "block";
+      } // Update proxy data status display
+      function updateProxyDataStatus() {
+        const statusEl = document.getElementById("proxy-data-status");
+        const viewerEl = document.getElementById("proxy-data-viewer");
+        const rawViewerEl = document.getElementById("proxy-data-raw");
+
+        if (devConsole.miniGameProxyData) {
+          statusEl.textContent = "已获取";
+          const jsonString = JSON.stringify(devConsole.miniGameProxyData, null, 2);
+          viewerEl.textContent = jsonString;
+          rawViewerEl.textContent = jsonString;
+        } else {
+          statusEl.textContent = "未获取";
+          viewerEl.textContent = "暂无数据";
+          rawViewerEl.textContent = "暂无数据";
+        }
+      }
+
+      // Start the developer console initialization
+      function startDevConsole(hasProxyData = false) {
+        const message = hasProxyData ? "开发者控制台启动完成" : "开发者控制台启动完成 (无代理数据)";
+        const level = hasProxyData ? "success" : "warn";
+
+        log(message, level);
+
+        // Initialize other components
+        initDevConsole();
+        updateSystemInfo();
+        updateTime();
+        checkSDKStatus();
+        setupConsoleInput();
+
+        // Update time every second
+        setInterval(updateTime, 1000);
+        // Check SDK status periodically
+        setInterval(checkSDKStatus, 5000);
+      }
+
+      // Check start game function (adapted from wiki_dashboard.html)
+      function checkStartGame(timeoutMs) {
+        if (!timeoutMs) {
+          const urlParams = new URLSearchParams(window.location.search);
+          timeoutMs = urlParams.get("parent") === "miniGameProxy" ? 3000 : 200;
+        }
+
+        let gameStarted = false;
+        const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (!gameStarted) {
+              resolve(null);
+            }
+          }, timeoutMs);
+
+          let miniGameProxyReceived = false;
+          const messageHandler = function (e) {
+            if (e.data.type === "miniGameProxyDataResponse") {
+              miniGameProxyReceived = true;
+              // Store the proxy data
+              devConsole.miniGameProxyData = e.data;
+              // Update SDK token if available
+              if (e.data?.keepworkToken) {
+                sdk.token = e.data.keepworkToken;
+              }
+              log("MiniGame Proxy数据已接收", "success");
+              updateProxyDataStatus();
+            }
+            if (miniGameProxyReceived) {
+              miniGameProxyReceived = false;
+              window.removeEventListener("message", messageHandler);
+              clearTimeout(timeout);
+              resolve(e.data);
+            }
+          };
+
+          window.addEventListener("message", messageHandler);
+          window.parent.postMessage({ type: "getLocation" }, "*");
+          window.parent.postMessage({ type: "getMiniGameProxyData" }, "*");
+        });
+        waitForMinigameProxyWithTimeout
+          .then(async (data) => {
+            if (!gameStarted) {
+              gameStarted = true;
+              startDevConsole(!!data);
+            }
+          })
+          .catch(async (error) => {
+            if (!gameStarted) {
+              gameStarted = true;
+              startDevConsole(false);
+            }
+          });
+      }
+
+      log("开发者控制台初始化完成", "info");
+      checkStartGame();
+
+      // Network status listener
+      window.addEventListener("online", () => {
+        updateNetworkStatus();
+        log("网络连接已恢复", "success");
+      });
+
+      window.addEventListener("offline", () => {
+        updateNetworkStatus();
+        log("网络连接已断开", "error");
+      });
+    </script>
+  </body>
+</html>

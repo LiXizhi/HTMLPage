@@ -1,0 +1,1500 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>H5 大富翁（2-4人，多地图，默认AI）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+  <meta name="description" content="HTML5 大富翁游戏，支持2-4名玩家，默认AI，多张地图，较完整规则和动画。">
+  <style>
+    /* 轻微自定义，主要视觉风格交给 Tailwind */
+    html, body {
+      height: 100%;
+      background: radial-gradient(1200px 600px at 20% 0%, #dbeafe 10%, #ffffff 50%) no-repeat, linear-gradient(180deg, #f0f9ff 0%, #ffffff 60%) no-repeat;
+    }
+    .soft-card {
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border: 1px solid rgba(0,0,0,0.06);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+    .scroll-smooth::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .scroll-smooth::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .scroll-smooth::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body class="text-slate-800">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+    <!-- 标题与设置 -->
+    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold tracking-tight">大富翁 H5</h1>
+        <p class="text-slate-600">支持 2-4 名玩家（默认都是 AI），提供多张地图与较完整规则。</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <div class="soft-card rounded-xl p-3 flex items-center gap-2">
+          <label class="text-sm text-slate-600">地图</label>
+          <select id="mapSelect" class="px-2 py-1 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400">
+            <option value="classic">经典·大都会</option>
+            <option value="cyber">赛博·霓虹城</option>
+            <option value="fantasy">奇幻·秘境群岛</option>
+          </select>
+        </div>
+        <div class="soft-card rounded-xl p-3 flex items-center gap-2">
+          <label class="text-sm text-slate-600">玩家数</label>
+          <select id="playerCount" class="px-2 py-1 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400">
+            <option value="2">2 人</option>
+            <option value="3">3 人</option>
+            <option value="4" selected>4 人</option>
+          </select>
+        </div>
+        <div class="soft-card rounded-xl p-3 flex items-center gap-2">
+          <label class="text-sm text-slate-600">人类玩家</label>
+          <select id="humanCount" class="px-2 py-1 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400">
+            <option value="0" selected>0（全AI）</option>
+            <option value="1">1 人类</option>
+            <option value="2">2 人类</option>
+          </select>
+        </div>
+        <div class="soft-card rounded-xl p-3 flex items-center gap-4">
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-slate-600">速度</label>
+            <input id="speedRange" type="range" min="0.4" max="2.5" step="0.1" value="1" class="accent-sky-500">
+          </div>
+          <div class="text-xs text-slate-500" id="speedLabel">1.0x</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主界面：棋盘 + 侧栏 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="soft-card rounded-2xl p-3 lg:col-span-2">
+        <div class="relative w-full">
+          <!-- 棋盘容器：自适应宽度，高度由 JS 设置为正方形 -->
+          <div id="boardWrapper" class="w-full">
+            <canvas id="board"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="soft-card rounded-2xl p-4 flex flex-col gap-4">
+        <div class="flex flex-wrap gap-2">
+          <button id="newGameBtn" class="px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm shadow-sm">新开一局</button>
+          <button id="pauseBtn" class="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm shadow-sm">暂停</button>
+          <button id="resumeBtn" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm shadow-sm">继续</button>
+          <button id="stepBtn" class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm shadow-sm">单步</button>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 p-3">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold">当前回合</div>
+            <div id="roundLabel" class="text-slate-500 text-sm">-</div>
+          </div>
+          <div class="mt-2 flex items-center gap-2">
+            <div class="text-sm text-slate-600">玩家：</div>
+            <div id="turnPlayer" class="text-sm font-semibold">-</div>
+            <div id="diceArea" class="ml-auto flex items-center gap-2"></div>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 p-3">
+          <div class="font-semibold mb-2">玩家状态</div>
+          <div id="playersPanel" class="flex flex-col gap-2"></div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 p-0 overflow-hidden">
+          <div class="px-3 py-2 border-b border-slate-200 bg-slate-50 font-semibold">事件日志</div>
+          <div id="log" class="h-64 overflow-auto p-3 scroll-smooth text-sm leading-6"></div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 p-3">
+          <div class="font-semibold mb-2">操作（人类）</div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btnBuy" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed" disabled>购买地皮</button>
+            <button id="btnSkipBuy" class="px-3 py-1.5 rounded-lg bg-slate-600 hover:bg-slate-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed" disabled>跳过购买</button>
+            <button id="btnBuild" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed" disabled>自动建房</button>
+            <button id="btnEndTurn" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm disabled:opacity-40 disabled:cursor-not-allowed" disabled>结束回合</button>
+          </div>
+          <div id="actionHint" class="text-xs text-slate-500 mt-2">当前无可操作项</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-6 text-center text-xs text-slate-500">
+      提示：默认全员 AI 自动对战。你可以将“人类玩家”设置为 1-2，体验手动操作（购买、建房、结束回合等）。
+    </div>
+  </div>
+
+  <script>
+    // ========== 工具函数 ==========
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const randInt = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const fmtMoney = (n) => n >= 0 ? `¥${n}` : `-¥${Math.abs(n)}`;
+    const choice = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    // 颜色
+    const PLAYER_COLORS = ["#ef4444", "#0ea5e9", "#22c55e", "#f59e0b"]; // 红/蓝/绿/黄
+    const GROUP_COLORS = {
+      brown: "#8b5e34",
+      lightblue: "#60a5fa",
+      pink: "#ec4899",
+      orange: "#fb923c",
+      red: "#ef4444",
+      yellow: "#f59e0b",
+      green: "#22c55e",
+      darkblue: "#1d4ed8",
+      rail: "#6b7280",
+      util: "#0891b2",
+      special: "#94a3b8"
+    };
+
+    // ========== 地图与棋盘 ==========
+    // 约定：下标 0=GO, 10=JAIL, 20=FREE, 30=GOTO_JAIL
+    // 简化的租金与建造规则：租金 = base * 多倍；成套无房翻倍；房屋 1-4 级增加。
+    function defineClassicBoard() {
+      // 使用经典大富翁色组，数值略化
+      const sets = {
+        brown: { houseCost: 50, rentMul: [1, 5, 15, 45, 80] },
+        lightblue: { houseCost: 50, rentMul: [1, 5, 15, 45, 80] },
+        pink: { houseCost: 100, rentMul: [1, 6, 18, 54, 90] },
+        orange: { houseCost: 100, rentMul: [1, 7, 20, 60, 100] },
+        red: { houseCost: 150, rentMul: [1, 8, 22, 66, 110] },
+        yellow: { houseCost: 150, rentMul: [1, 9, 25, 70, 120] },
+        green: { houseCost: 200, rentMul: [1, 10, 30, 75, 130] },
+        darkblue: { houseCost: 200, rentMul: [1, 12, 35, 90, 160] },
+      };
+      // helper
+      const prop = (name, group, price, base) => ({ type: "PROPERTY", name, group, price, base, color: GROUP_COLORS[group] });
+      const rail = (name, price) => ({ type: "RAILROAD", name, price, color: GROUP_COLORS.rail });
+      const util = (name, price) => ({ type: "UTILITY", name, price, color: GROUP_COLORS.util });
+      const chest = () => ({ type: "CHEST", name: "公益金", color: GROUP_COLORS.special });
+      const chance = () => ({ type: "CHANCE", name: "机会", color: GROUP_COLORS.special });
+      const tax = (name, amount) => ({ type: "TAX", name, amount, color: GROUP_COLORS.special });
+      const go = () => ({ type: "GO", name: "起点", color: GROUP_COLORS.special });
+      const jail = () => ({ type: "JAIL", name: "监狱/探监", color: GROUP_COLORS.special });
+      const free = () => ({ type: "FREE", name: "免费停车", color: GROUP_COLORS.special });
+      const goJail = () => ({ type: "GOTO_JAIL", name: "入狱", color: GROUP_COLORS.special });
+
+      const tiles = [
+        go(),
+        prop("棕街·一", "brown", 60, 6),
+        chest(),
+        prop("棕街·二", "brown", 60, 10),
+        tax("所得税", 200),
+        rail("中心车站", 200),
+        prop("浅蓝·一", "lightblue", 100, 10),
+        chance(),
+        prop("浅蓝·二", "lightblue", 100, 12),
+        prop("浅蓝·三", "lightblue", 120, 14),
+        jail(),
+
+        prop("粉街·一", "pink", 140, 12),
+        util("自来水厂", 150),
+        prop("粉街·二", "pink", 140, 14),
+        prop("粉街·三", "pink", 160, 16),
+        rail("东站", 200),
+        prop("橙街·一", "orange", 180, 16),
+        chest(),
+        prop("橙街·二", "orange", 180, 18),
+        prop("橙街·三", "orange", 200, 20),
+        free(),
+
+        prop("红街·一", "red", 220, 20),
+        chance(),
+        prop("红街·二", "red", 220, 22),
+        prop("红街·三", "red", 240, 24),
+        rail("南站", 200),
+        prop("黄街·一", "yellow", 260, 26),
+        prop("黄街·二", "yellow", 260, 26),
+        util("电力公司", 150),
+        prop("黄街·三", "yellow", 280, 28),
+        goJail(),
+
+        prop("绿街·一", "green", 300, 30),
+        prop("绿街·二", "green", 300, 30),
+        chest(),
+        prop("绿街·三", "green", 320, 32),
+        rail("西站", 200),
+        chance(),
+        prop("蓝街·一", "darkblue", 350, 35),
+        tax("奢侈税", 100),
+        prop("蓝街·二", "darkblue", 400, 50),
+      ];
+      return { key: "classic", name: "经典·大都会", tiles, sets };
+    }
+
+    function defineCyberBoard() {
+      const sets = {
+        brown: { houseCost: 60, rentMul: [1, 5, 16, 48, 85] },
+        lightblue: { houseCost: 80, rentMul: [1, 5, 16, 48, 85] },
+        pink: { houseCost: 120, rentMul: [1, 6, 18, 54, 95] },
+        orange: { houseCost: 140, rentMul: [1, 7, 21, 63, 105] },
+        red: { houseCost: 180, rentMul: [1, 8, 23, 69, 115] },
+        yellow: { houseCost: 180, rentMul: [1, 9, 26, 72, 125] },
+        green: { houseCost: 220, rentMul: [1, 11, 31, 78, 135] },
+        darkblue: { houseCost: 260, rentMul: [1, 13, 36, 95, 170] },
+      };
+      const prop = (name, group, price, base) => ({ type: "PROPERTY", name, group, price, base, color: GROUP_COLORS[group] });
+      const rail = (name, price) => ({ type: "RAILROAD", name, price, color: GROUP_COLORS.rail });
+      const util = (name, price) => ({ type: "UTILITY", name, price, color: GROUP_COLORS.util });
+      const chest = () => ({ type: "CHEST", name: "公益金", color: GROUP_COLORS.special });
+      const chance = () => ({ type: "CHANCE", name: "机会", color: GROUP_COLORS.special });
+      const tax = (name, amount) => ({ type: "TAX", name, amount, color: GROUP_COLORS.special });
+      const go = () => ({ type: "GO", name: "起点", color: GROUP_COLORS.special });
+      const jail = () => ({ type: "JAIL", name: "监狱/探监", color: GROUP_COLORS.special });
+      const free = () => ({ type: "FREE", name: "免费停车", color: GROUP_COLORS.special });
+      const goJail = () => ({ type: "GOTO_JAIL", name: "入狱", color: GROUP_COLORS.special });
+      const tiles = [
+        go(),
+        prop("贫民窟·边缘网", "brown", 70, 6),
+        chest(),
+        prop("垃圾城·回收区", "brown", 80, 10),
+        tax("数据关税", 200),
+        rail("量子轨交·中心港", 220),
+        prop("霓虹巷·一", "lightblue", 110, 12),
+        chance(),
+        prop("霓虹巷·二", "lightblue", 120, 14),
+        prop("霓虹巷·三", "lightblue", 140, 16),
+        jail(),
+
+        prop("粉墙·广告塔", "pink", 160, 14),
+        util("冷凝水站", 160),
+        prop("粉墙·直播间", "pink", 170, 16),
+        prop("粉墙·偶像社", "pink", 180, 18),
+        rail("量子轨交·东枢", 220),
+        prop("橙域·黑客港", "orange", 200, 20),
+        chest(),
+        prop("橙域·风暴街", "orange", 210, 21),
+        prop("橙域·集散场", "orange", 220, 22),
+        free(),
+
+        prop("红芯·算力园", "red", 240, 24),
+        chance(),
+        prop("红芯·存储谷", "red", 250, 25),
+        prop("红芯·制程厂", "red", 260, 26),
+        rail("量子轨交·南枢", 220),
+        prop("黄域·交易所", "yellow", 280, 28),
+        prop("黄域·数字港", "yellow", 290, 29),
+        util("量子电网", 160),
+        prop("黄域·期货街", "yellow", 300, 30),
+        goJail(),
+
+        prop("绿芯·生物舱", "green", 320, 32),
+        prop("绿芯·医疗港", "green", 330, 33),
+        chest(),
+        prop("绿芯·愈疗塔", "green", 340, 34),
+        rail("量子轨交·西枢", 220),
+        chance(),
+        prop("蓝冠·王座港", "darkblue", 380, 38),
+        tax("奢华税", 120),
+        prop("蓝冠·主城芯", "darkblue", 440, 50),
+      ];
+      return { key: "cyber", name: "赛博·霓虹城", tiles, sets };
+    }
+
+    function defineFantasyBoard() {
+      const sets = {
+        brown: { houseCost: 40, rentMul: [1, 5, 14, 40, 70] },
+        lightblue: { houseCost: 60, rentMul: [1, 5, 14, 40, 70] },
+        pink: { houseCost: 90, rentMul: [1, 6, 16, 48, 85] },
+        orange: { houseCost: 110, rentMul: [1, 7, 19, 57, 95] },
+        red: { houseCost: 140, rentMul: [1, 8, 21, 63, 105] },
+        yellow: { houseCost: 160, rentMul: [1, 9, 24, 70, 120] },
+        green: { houseCost: 190, rentMul: [1, 10, 28, 78, 130] },
+        darkblue: { houseCost: 230, rentMul: [1, 12, 34, 90, 160] },
+      };
+      const prop = (name, group, price, base) => ({ type: "PROPERTY", name, group, price, base, color: GROUP_COLORS[group] });
+      const rail = (name, price) => ({ type: "RAILROAD", name, price, color: GROUP_COLORS.rail });
+      const util = (name, price) => ({ type: "UTILITY", name, price, color: GROUP_COLORS.util });
+      const chest = () => ({ type: "CHEST", name: "宝藏", color: GROUP_COLORS.special });
+      const chance = () => ({ type: "CHANCE", name: "命运", color: GROUP_COLORS.special });
+      const tax = (name, amount) => ({ type: "TAX", name, amount, color: GROUP_COLORS.special });
+      const go = () => ({ type: "GO", name: "出航", color: GROUP_COLORS.special });
+      const jail = () => ({ type: "JAIL", name: "囚笼/探望", color: GROUP_COLORS.special });
+      const free = () => ({ type: "FREE", name: "海风小憩", color: GROUP_COLORS.special });
+      const goJail = () => ({ type: "GOTO_JAIL", name: "被诅咒", color: GROUP_COLORS.special });
+      const tiles = [
+        go(),
+        prop("棕滩·渔村", "brown", 50, 6),
+        chest(),
+        prop("棕滩·海礁", "brown", 60, 8),
+        tax("潮汐税", 150),
+        rail("飞空艇·主港", 200),
+        prop("浅蓝·珊瑚", "lightblue", 90, 10),
+        chance(),
+        prop("浅蓝·螺歌", "lightblue", 100, 12),
+        prop("浅蓝·浪舞", "lightblue", 110, 14),
+        jail(),
+
+        prop("粉境·精灵林", "pink", 130, 14),
+        util("月泉", 140),
+        prop("粉境·花谷", "pink", 140, 16),
+        prop("粉境·蝶丘", "pink", 150, 17),
+        rail("飞空艇·东港", 200),
+        prop("橙沙·遗迹", "orange", 170, 18),
+        chest(),
+        prop("橙沙·石环", "orange", 180, 19),
+        prop("橙沙·驼铃", "orange", 190, 20),
+        free(),
+
+        prop("红峰·熔岩", "red", 210, 22),
+        chance(),
+        prop("红峰·矿脉", "red", 220, 23),
+        prop("红峰·火冠", "red", 230, 24),
+        rail("飞空艇·南港", 200),
+        prop("黄原·风车", "yellow", 250, 26),
+        prop("黄原·麦浪", "yellow", 260, 27),
+        util("雷霆", 140),
+        prop("黄原·金穗", "yellow", 270, 28),
+        goJail(),
+
+        prop("绿岭·苔坡", "green", 290, 30),
+        prop("绿岭·松影", "green", 300, 31),
+        chest(),
+        prop("绿岭·苍壁", "green", 310, 32),
+        rail("飞空艇·西港", 200),
+        chance(),
+        prop("蓝冠·海神殿", "darkblue", 360, 36),
+        tax("贡品", 100),
+        prop("蓝冠·王者岛", "darkblue", 420, 46),
+      ];
+      return { key: "fantasy", name: "奇幻·秘境群岛", tiles, sets };
+    }
+
+    const MAPS = {
+      classic: defineClassicBoard(),
+      cyber: defineCyberBoard(),
+      fantasy: defineFantasyBoard(),
+    };
+
+    // ========== 牌堆（机会/公益金） ==========
+    function makeShuffledDeck(type) {
+      // 精选常见效果 + 简化版
+      // effect: function(game, player, ctx) -> string log
+      const cards = type === "CHANCE" ? [
+        { text: "前进到起点，领取 ¥200", effect: (g,p) => { g.moveTo(p, 0, true); p.cash += 200; return "前进到起点并领取 ¥200"; } },
+        { text: "前进到最近的铁路（支付双倍租金）", effect: (g,p,ctx) => {
+            const idx = g.findNearestOfTypes(p.position, ["RAILROAD"]);
+            g.moveTo(p, idx, true);
+            g.resolveLanding(p, ctx, { forceDoubleRailRent: true });
+            return "前进到最近铁路，若被占领，支付双倍租金";
+          }},
+        { text: "前进到最近的公共设施（按骰子点数×10）", effect: (g,p,ctx) => {
+            const idx = g.findNearestOfTypes(p.position, ["UTILITY"]);
+            g.moveTo(p, idx, true);
+            ctx.overrideLastDiceForUtility = Math.max(7, ctx.lastDiceTotal || 7); // 至少按 7 计
+            g.resolveLanding(p, ctx);
+            return "前进到最近公用设施，若被占领，按骰子×10 支付";
+          }},
+        { text: "退后 3 格", effect: (g,p,ctx) => { g.moveSteps(p, -3, false); g.resolveLanding(p, ctx); return "后退 3 格"; } },
+        { text: "入狱，不经过起点", effect: (g,p) => { g.sendToJail(p, false); return "直接入狱"; } },
+        { text: "银行支付你股息 ¥50", effect: (g,p) => { p.cash += 50; return "获得 ¥50"; } },
+        { text: "修理房屋：每栋房子支付 ¥25", effect: (g,p) => {
+            const houses = g.countHouses(p);
+            const pay = houses * 25;
+            g.payBank(p, pay);
+            return `按房屋数量支付维修费，共 ${fmtMoney(pay)}`;
+          }},
+        { text: "与下一名玩家交换一处随机地产（若有）", effect: (g,p) => {
+            const other = g.findNextAlive(p);
+            if (!other) return "无人可交换";
+            const mine = g.randomOwnedProperty(p);
+            const his = g.randomOwnedProperty(other);
+            if (mine && his) {
+              mine.owner = other.id;
+              his.owner = p.id;
+              return `与 ${other.name} 交换地产`;
+            }
+            return "交换失败（缺少可交换地产）";
+          }},
+        { text: "获得出狱卡", effect: (g,p) => { p.cards.getOutOfJail += 1; return "获得出狱卡（可在狱中使用）"; } },
+        { text: "前进到最近的红色地块", effect: (g,p,ctx) => {
+            const idx = g.findNearestPropertyColor(p.position, "red");
+            g.moveTo(p, idx, true);
+            g.resolveLanding(p, ctx);
+            return "前进到最近红色地块";
+          }},
+      ] : [
+        { text: "获得 ¥200", effect: (g,p) => { p.cash += 200; return "获得 ¥200"; } },
+        { text: "获得 ¥100", effect: (g,p) => { p.cash += 100; return "获得 ¥100"; } },
+        { text: "支付医疗费 ¥50", effect: (g,p) => { g.payBank(p, 50); return "支付 ¥50 医疗费"; } },
+        { text: "继承遗产，获得 ¥100", effect: (g,p) => { p.cash += 100; return "获得 ¥100 遗产"; } },
+        { text: "获赠出狱卡", effect: (g,p) => { p.cards.getOutOfJail += 1; return "获得出狱卡"; } },
+        { text: "支付学费 ¥50", effect: (g,p) => { g.payBank(p, 50); return "支付 ¥50 学费"; } },
+        { text: "社区服务奖励 ¥25", effect: (g,p) => { p.cash += 25; return "获得 ¥25"; } },
+        { text: "房屋保险到期：每栋房子获得 ¥15", effect: (g,p) => { const h=g.countHouses(p); const v=h*15; p.cash+=v; return `按房屋数量获得保险金，共 ${fmtMoney(v)}`; } },
+        { text: "捐款：向贫困玩家平均捐出 ¥100", effect: (g,p,ctx) => {
+            const poorest = ctx.game.players.filter(x=>!x.bankrupt && x.id!==p.id).sort((a,b)=>a.cash-b.cash)[0];
+            if (poorest) { p.cash-=100; poorest.cash+=100; return `向 ${poorest.name} 捐出 ¥100`; }
+            return "无人可捐";
+          }},
+        { text: "移动到免费停车", effect: (g,p,ctx) => { g.moveTo(p, 20, true); g.resolveLanding(p, ctx); return "移至免费停车"; } },
+      ];
+      // 洗牌
+      for (let i = cards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cards[i], cards[j]] = [cards[j], cards[i]];
+      }
+      return {
+        draw() { const c = cards.shift(); cards.push(c); return c; },
+        size: () => cards.length
+      };
+    }
+
+    // ========== 玩家/游戏状态 ==========
+    class Player {
+      constructor(id, name, color, isHuman=false) {
+        this.id = id;
+        this.name = name;
+        this.color = color;
+        this.isHuman = isHuman;
+        this.position = 0;
+        this.cash = 1500;
+        this.inJail = false;
+        this.jailTurns = 0;
+        this.doublesRolled = 0;
+        this.bankrupt = false;
+        this.cards = { getOutOfJail: 0 };
+      }
+    }
+
+    // ========== 游戏主类 ==========
+    class Game {
+      constructor(canvas, ui) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext("2d");
+        this.ui = ui;
+        this.map = MAPS.classic;
+        this.players = [];
+        this.turn = 0;
+        this.round = 1;
+        this.running = false;
+        this.stepMode = false;
+        this.speed = 1.0;
+
+        this.tiles = [];
+        this.sets = {};
+        this.owners = {}; // tileIndex -> ownerId or null
+        this.houses = {}; // tileIndex -> 0..4
+        this.mortgaged = {}; // 留作扩展（暂不使用）
+        this.bankPool = 0; // 免费停车彩池（可选规则：目前累积部分罚款）
+        this.chanceDeck = makeShuffledDeck("CHANCE");
+        this.chestDeck = makeShuffledDeck("CHEST");
+
+        this.lastDice = [0,0];
+        this.lastDiceTotal = 0;
+        this.anim = { moving: false, t: 0, path: [] };
+        this.tileGeos = []; // 缓存几何信息以绘制/碰撞
+
+        this.bindUI();
+        this.setMap("classic");
+        this.resizeCanvas();
+        window.addEventListener("resize", () => this.resizeCanvas());
+        this.draw();
+      }
+
+      setMap(key) {
+        this.map = MAPS[key] || MAPS.classic;
+        this.tiles = this.map.tiles;
+        this.sets = this.map.sets;
+        // 初始化所有权和房屋
+        this.owners = {};
+        this.houses = {};
+        for (let i = 0; i < this.tiles.length; i++) {
+          this.owners[i] = null;
+          this.houses[i] = 0;
+        }
+        this.chanceDeck = makeShuffledDeck("CHANCE");
+        this.chestDeck = makeShuffledDeck("CHEST");
+        this.bankPool = 0;
+        this.log(`地图切换为：${this.map.name}`);
+        this.prepareTileGeos();
+        this.draw();
+      }
+
+      newGame(pCount=4, humanCount=0) {
+        this.players = [];
+        for (let i = 0; i < pCount; i++) {
+          const isHuman = i < humanCount;
+          const player = new Player(i, isHuman ? `你(${i+1})` : `AI-${i+1}`, PLAYER_COLORS[i], isHuman);
+          this.players.push(player);
+        }
+        this.turn = 0;
+        this.round = 1;
+        this.running = true;
+        this.stepMode = false;
+        this.lastDice = [0,0];
+        this.lastDiceTotal = 0;
+        this.anim = { moving: false, t: 0, path: [] };
+        // 重置所有权/房屋
+        for (let i = 0; i < this.tiles.length; i++) {
+          this.owners[i] = null;
+          this.houses[i] = 0;
+        }
+        this.bankPool = 0;
+        this.uiUpdate();
+        this.log(`新游戏开始：${this.map.name} / 玩家 ${pCount}（人类 ${humanCount}）`);
+        // 自动开始回合
+        this.runLoop();
+      }
+
+      pause() { this.running = false; this.uiUpdate(); }
+      resume() { this.running = true; this.stepMode = false; this.uiUpdate(); this.runLoop(); }
+      step() { this.running = true; this.stepMode = true; this.runLoop(); }
+
+      async runLoop() {
+        if (!this.running) return;
+        const current = this.getCurrentPlayer();
+        if (!current || current.bankrupt) { this.nextTurn(); return; }
+        // UI
+        this.uiUpdate();
+
+        // 人类玩家需要手动进行某些操作，否则 AI 自动
+        if (current.isHuman) {
+          await this.humanTurn(current);
+        } else {
+          await this.aiTurn(current);
+        }
+
+        // 检查胜负
+        const alive = this.players.filter(p => !p.bankrupt);
+        if (alive.length <= 1) {
+          this.running = false;
+          if (alive.length === 1) this.log(`游戏结束！赢家：${alive[0].name}`);
+          else this.log("游戏结束！无人生还……");
+          this.uiUpdate();
+          return;
+        }
+
+        if (this.stepMode) {
+          this.running = false; // 单步后暂停
+        } else {
+          this.nextTurn();
+          // 小延迟，对应速度
+          await sleep(400 / this.speed);
+          this.runLoop();
+        }
+      }
+
+      nextTurn() {
+        let prevTurn = this.turn;
+        do {
+          this.turn = (this.turn + 1) % this.players.length;
+          if (this.turn === 0) this.round += 1;
+        } while (this.players[this.turn].bankrupt);
+        // 清零上回合动画状态
+        this.anim = { moving: false, t: 0, path: [] };
+        this.lastDice = [0,0];
+        this.lastDiceTotal = 0;
+        this.uiUpdate();
+      }
+
+      getCurrentPlayer() { return this.players[this.turn]; }
+      findNextAlive(p) {
+        for (let i = 1; i < this.players.length; i++) {
+          const idx = (p.id + i) % this.players.length;
+          if (!this.players[idx].bankrupt) return this.players[idx];
+        }
+        return null;
+      }
+
+      // ========== 回合动作 ==========
+      async humanTurn(p) {
+        // 狱中处理：优先使用出狱卡，其次支付 ¥50，然后尝试掷双骰
+        if (p.inJail) {
+          await this.handleJail(p);
+          this.uiUpdate();
+          if (!this.running) return;
+          if (p.inJail) { // 没出狱也算走过回合（若连续第三次仍不出则强制支付）
+            this.endTurnForHuman(p);
+            return;
+          }
+        }
+
+        // 掷骰 + 移动
+        await this.rollAndMove(p);
+
+        // 落地结算（可能需要购买选择）
+        const ctx = { lastDiceTotal: this.lastDiceTotal, game: this };
+        await this.resolveLanding(p, ctx);
+
+        // 可选建房（人类点击“自动建房”）
+        this.enableBuildIfPossible(p);
+
+        // 等待人类点击“结束回合”
+        await this.waitForHumanEndTurn(p);
+      }
+
+      async aiTurn(p) {
+        // 狱中
+        if (p.inJail) {
+          await this.handleJailAI(p);
+          if (p.inJail) {
+            // 仍在狱中，回合结束
+            return;
+          }
+        }
+
+        // 掷骰 + 移动
+        await this.rollAndMove(p);
+
+        // 落地结算
+        const ctx = { lastDiceTotal: this.lastDiceTotal, game: this };
+        await this.resolveLanding(p, ctx);
+
+        // AI 建房策略
+        await this.aiBuildHouses(p);
+
+        // 若掷出双骰再行动（多一次），滚到第三次双骰则入狱
+        if (p.doublesRolled > 0 && !p.inJail && !p.bankrupt) {
+          // 继续本回合（简单实现：立刻递归调用）
+          await sleep(300 / this.speed);
+          return this.aiTurn(p);
+        }
+      }
+
+      async handleJail(p) {
+        // 人类：自动策略：有出狱卡则用，否则若现金>100则支付50出狱，否则尝试掷骰
+        if (p.cards.getOutOfJail > 0) {
+          p.cards.getOutOfJail -= 1;
+          p.inJail = false; p.jailTurns = 0;
+          this.log(`${p.name} 使用出狱卡`);
+          return;
+        }
+        if (p.cash > 100) {
+          this.payBank(p, 50);
+          p.inJail = false; p.jailTurns = 0;
+          this.log(`${p.name} 支付 ¥50 出狱`);
+          return;
+        }
+        // 掷骰尝试双倍
+        const [d1,d2] = this.rollDice();
+        this.showDice(d1,d2);
+        await sleep(200 / this.speed);
+        if (d1 === d2) {
+          p.inJail = false; p.jailTurns = 0;
+          this.log(`${p.name} 掷出双骰 ${d1}+${d2}，成功出狱并前进`);
+          await this.moveSteps(p, d1 + d2, true);
+          const ctx = { lastDiceTotal: d1+d2, game: this };
+          await this.resolveLanding(p, ctx);
+        } else {
+          p.jailTurns += 1;
+          this.log(`${p.name} 未能掷出双骰（狱中回合 ${p.jailTurns}/3）`);
+          if (p.jailTurns >= 3) {
+            // 强制支付
+            this.payBank(p, 50);
+            p.inJail = false; p.jailTurns = 0;
+            this.log(`${p.name} 第三次未出双骰，强制支付 ¥50 出狱`);
+          }
+        }
+      }
+
+      async handleJailAI(p) {
+        // AI 策略：现金>200 直接付；否则尝试双骰；第三次强制付
+        if (p.cards.getOutOfJail > 0) {
+          p.cards.getOutOfJail -= 1;
+          p.inJail = false; p.jailTurns = 0;
+          this.log(`${p.name} 使用出狱卡`);
+          return;
+        }
+        if (p.cash > 200) {
+          this.payBank(p, 50);
+          p.inJail = false; p.jailTurns = 0;
+          this.log(`${p.name} 支付 ¥50 出狱`);
+          return;
+        }
+        const [d1,d2] = this.rollDice();
+        this.showDice(d1,d2);
+        await sleep(200 / this.speed);
+        if (d1 === d2) {
+          p.inJail = false; p.jailTurns = 0;
+          this.log(`${p.name} 双骰出狱，前进 ${d1+d2} 步`);
+          await this.moveSteps(p, d1 + d2, true);
+          const ctx = { lastDiceTotal: d1+d2, game: this };
+          await this.resolveLanding(p, ctx);
+        } else {
+          p.jailTurns += 1;
+          this.log(`${p.name} 狱中尝试失败（${p.jailTurns}/3）`);
+          if (p.jailTurns >= 3) {
+            this.payBank(p, 50);
+            p.inJail = false; p.jailTurns = 0;
+            this.log(`${p.name} 第三次后强制支付 ¥50 出狱`);
+          }
+        }
+      }
+
+      rollDice() {
+        const d1 = randInt(1,6);
+        const d2 = randInt(1,6);
+        this.lastDice = [d1,d2];
+        this.lastDiceTotal = d1 + d2;
+        return [d1,d2];
+      }
+
+      async rollAndMove(p) {
+        const [d1, d2] = this.rollDice();
+        this.showDice(d1,d2);
+        await sleep(250 / this.speed);
+
+        // 双骰处理
+        if (d1 === d2) {
+          p.doublesRolled += 1;
+          if (p.doublesRolled >= 3) {
+            this.log(`${p.name} 连续第三次双骰，直接入狱！`);
+            this.sendToJail(p, false);
+            return;
+          } else {
+            this.log(`${p.name} 掷出双骰 ${d1}+${d2}，获得一次额外行动`);
+          }
+        } else {
+          p.doublesRolled = 0;
+        }
+
+        // 移动
+        await this.moveSteps(p, d1 + d2, true);
+      }
+
+      async moveSteps(p, steps, passGo=true) {
+        // 动画逐格移动
+        let pos = p.position;
+        const dir = steps >= 0 ? 1 : -1;
+        for (let i = 0; i < Math.abs(steps); i++) {
+          pos = (pos + dir + 40) % 40;
+          // 经过起点奖励
+          if (passGo && dir > 0 && pos === 0) {
+            p.cash += 200;
+            this.log(`${p.name} 经过起点，领取 ¥200`);
+          }
+          p.position = pos;
+          this.draw();
+          await sleep(90 / this.speed);
+        }
+      }
+
+      moveTo(p, index, passGo=true) {
+        // 直接移动，处理经过起点
+        if (passGo) {
+          const dist = (index - p.position + 40) % 40;
+          if (dist > 0 && (p.position + dist) >= 40) {
+            p.cash += 200;
+            this.log(`${p.name} 经过起点，领取 ¥200`);
+          }
+        }
+        p.position = index;
+        this.draw();
+      }
+
+      sendToJail(p, viaMove=true) {
+        if (viaMove) {
+          // 不经过起点直接入狱
+        }
+        p.position = 10;
+        p.inJail = true;
+        p.jailTurns = 0;
+        p.doublesRolled = 0;
+        this.draw();
+      }
+
+      async resolveLanding(p, ctx={}, opts={}) {
+        const idx = p.position;
+        const tile = this.tiles[idx];
+        if (!tile) return;
+
+        switch (tile.type) {
+          case "GO":
+            this.log(`${p.name} 停在起点`);
+            break;
+          case "JAIL":
+            this.log(`${p.name} 探望监狱`);
+            break;
+          case "FREE":
+            this.log(`${p.name} 在免费停车休整`);
+            if (this.bankPool > 0) {
+              this.log(`${p.name} 领取彩池 ${fmtMoney(this.bankPool)}`);
+              p.cash += this.bankPool; this.bankPool = 0;
+            }
+            break;
+          case "GOTO_JAIL":
+            this.log(`${p.name} 被送入监狱`);
+            this.sendToJail(p, false);
+            break;
+          case "TAX":
+            this.log(`${p.name} 支付税费 ${fmtMoney(tile.amount)}`);
+            this.payBank(p, tile.amount);
+            // 税加入彩池
+            this.bankPool += Math.floor(tile.amount / 2);
+            break;
+          case "CHANCE": {
+            const card = this.chanceDeck.draw();
+            this.log(`机会卡：${card.text}`);
+            const logText = card.effect(this, p, ctx) || "卡牌生效";
+            this.log(`→ ${logText}`);
+            break;
+          }
+          case "CHEST": {
+            const card = this.chestDeck.draw();
+            this.log(`公益金/宝藏：${card.text}`);
+            const logText = card.effect(this, p, ctx) || "卡牌生效";
+            this.log(`→ ${logText}`);
+            break;
+          }
+          case "UTILITY":
+          case "RAILROAD":
+          case "PROPERTY":
+            await this.handleEstateLanding(p, idx, tile, ctx, opts);
+            break;
+        }
+
+        // 人类购买/跳过时在 handleEstateLanding 中控制
+      }
+
+      getGroupSize(group) {
+        // 颜色组大小（经典：棕2 浅蓝3 粉3 橙3 红3 黄3 绿3 蓝2）
+        const total = this.tiles.filter(t => t.type==="PROPERTY" && t.group===group).length;
+        return total || 0;
+      }
+
+      ownsFullSet(playerId, group) {
+        const props = this.tiles.map((t, i) => ({t,i})).filter(x => x.t.type==="PROPERTY" && x.t.group===group);
+        if (props.length === 0) return false;
+        return props.every(x => this.owners[x.i] === playerId);
+      }
+
+      countHouses(p) {
+        let sum = 0;
+        for (let i = 0; i < 40; i++) {
+          const t = this.tiles[i];
+          if (t && t.type==="PROPERTY" && this.owners[i] === p.id) {
+            sum += this.houses[i] || 0;
+          }
+        }
+        return sum;
+      }
+
+      calcRent(index, diceTotal=0, opts={}) {
+        const tile = this.tiles[index];
+        if (tile.type === "RAILROAD") {
+          // 根据拥有铁路数量计租
+          const owner = this.owners[index];
+          const count = this.tiles.reduce((acc, t, i) => acc + ((t.type==="RAILROAD" && this.owners[i]===owner) ? 1 : 0), 0);
+          const base = [0, 25, 50, 100, 200][count] || 25;
+          return opts.forceDoubleRailRent ? base * 2 : base;
+        }
+        if (tile.type === "UTILITY") {
+          const owner = this.owners[index];
+          const count = this.tiles.reduce((acc, t, i) => acc + ((t.type==="UTILITY" && this.owners[i]===owner) ? 1 : 0), 0);
+          // 简化：1个=4x，2个=10x
+          const mul = (count >= 2) ? 10 : 4;
+          const total = opts.overrideLastDiceForUtility || diceTotal || this.lastDiceTotal || 7;
+          return mul * total;
+        }
+        if (tile.type === "PROPERTY") {
+          const groupMeta = this.sets[tile.group];
+          const houses = this.houses[index] || 0;
+          if (houses > 0) {
+            // 有房时：base * multiplier 表示化
+            const m = groupMeta.rentMul[houses] || groupMeta.rentMul[groupMeta.rentMul.length - 1];
+            return Math.round(tile.base * m);
+          }
+          // 无房：若成套，租金翻倍
+          const owner = this.owners[index];
+          const mono = this.ownsFullSet(owner, tile.group);
+          return Math.round(tile.base * (mono ? 2 : 1));
+        }
+        return 0;
+      }
+
+      async handleEstateLanding(p, idx, tile, ctx={}, opts={}) {
+        const owner = this.owners[idx];
+        if (owner === null) {
+          // 无人所有：人类/AI 决策是否购买
+          const price = tile.price;
+          if (p.isHuman) {
+            this.uiEnableBuy(true, () => {
+              if (p.cash >= price) {
+                p.cash -= price;
+                this.owners[idx] = p.id;
+                this.log(`${p.name} 购买了 ${tile.name} ，花费 ${fmtMoney(price)}`);
+              } else {
+                this.log(`${p.name} 现金不足，无法购买 ${tile.name}`);
+              }
+              this.uiEnableBuy(false);
+              this.draw();
+            }, () => {
+              this.log(`${p.name} 放弃购买 ${tile.name}`);
+              this.uiEnableBuy(false);
+            }, tile);
+            // 人类在此等待选择
+            await this.waitForBuyChoice();
+          } else {
+            // AI 策略：保留资金阈值后购买
+            const keep = 150;
+            if (p.cash - keep >= price) {
+              p.cash -= price;
+              this.owners[idx] = p.id;
+              this.log(`${p.name} 购买了 ${tile.name} ，花费 ${fmtMoney(price)}`);
+              this.draw();
+            } else {
+              this.log(`${p.name} 放弃购买 ${tile.name}`);
+            }
+          }
+          return;
+        }
+
+        if (owner === p.id) {
+          this.log(`${p.name} 来到自己地盘：${tile.name}`);
+          return;
+        }
+
+        // 支付租金
+        const rent = this.calcRent(idx, this.lastDiceTotal, opts);
+        const to = this.players[owner];
+        this.log(`${p.name} 在 ${tile.name} 支付租金 ${fmtMoney(rent)} 给 ${to.name}`);
+        this.transfer(p, to, rent);
+      }
+
+      transfer(from, to, amount) {
+        // 尝试支付，不足则清算/破产
+        if (from.cash >= amount) {
+          from.cash -= amount;
+          to.cash += amount;
+          return;
+        }
+        // 资产清算：卖房（不考虑抵押, 简化规则）
+        let needed = amount - from.cash;
+        // 卖房回收：按建造成本的一半
+        const ownedProps = this.tiles.map((t,i)=>({t,i})).filter(x => (x.t.type==="PROPERTY" && this.owners[x.i]===from.id && this.houses[x.i]>0));
+        // 按房价高的先卖
+        ownedProps.sort((a,b) => (this.sets[b.t.group].houseCost)-(this.sets[a.t.group].houseCost));
+        for (const e of ownedProps) {
+          const houseCost = this.sets[e.t.group].houseCost;
+          if (this.houses[e.i] > 0) {
+            this.houses[e.i] -= 1;
+            const refund = Math.floor(houseCost/2);
+            from.cash += refund;
+            needed -= refund;
+            this.log(`${from.name} 卖出一栋房子（${e.t.name}），回收 ${fmtMoney(refund)}`);
+            if (needed <= 0) break;
+          }
+        }
+        if (from.cash >= amount) {
+          from.cash -= amount; to.cash += amount;
+          return;
+        }
+
+        // 仍不足：破产
+        const owed = amount - from.cash;
+        to.cash += from.cash;
+        from.cash = 0;
+        this.doBankrupt(from, to);
+        this.log(`${from.name} 无力偿付，向 ${to.name} 破产清算（债务 ${fmtMoney(owed)}）`);
+      }
+
+      payBank(p, amount) {
+        if (p.cash >= amount) {
+          p.cash -= amount;
+          return;
+        }
+        // 卖房清偿
+        let needed = amount - p.cash;
+        const ownedProps = this.tiles.map((t,i)=>({t,i})).filter(x => (x.t.type==="PROPERTY" && this.owners[x.i]===p.id && this.houses[x.i]>0));
+        ownedProps.sort((a,b) => (this.sets[b.t.group].houseCost)-(this.sets[a.t.group].houseCost));
+        for (const e of ownedProps) {
+          const houseCost = this.sets[e.t.group].houseCost;
+          if (this.houses[e.i] > 0) {
+            this.houses[e.i] -= 1;
+            const refund = Math.floor(houseCost/2);
+            p.cash += refund;
+            needed -= refund;
+            this.log(`${p.name} 卖出一栋房子（${e.t.name}），回收 ${fmtMoney(refund)}`);
+            if (needed <= 0) break;
+          }
+        }
+        if (p.cash >= amount) {
+          p.cash -= amount;
+          return;
+        }
+        // 对银行破产：地产归还银行
+        this.doBankrupt(p, null);
+        this.log(`${p.name} 对银行破产，无力支付 ${fmtMoney(amount)}`);
+      }
+
+      doBankrupt(p, creditor) {
+        // 地产移交或清空
+        for (let i = 0; i < 40; i++) {
+          if (this.owners[i] === p.id) {
+            if (creditor) this.owners[i] = creditor.id;
+            else this.owners[i] = null;
+            this.houses[i] = 0;
+          }
+        }
+        p.bankrupt = true;
+        p.inJail = false;
+        this.draw();
+      }
+
+      randomOwnedProperty(p) {
+        const list = this.tiles.map((t,i)=>({t,i})).filter(x => (x.t.type==="PROPERTY" && this.owners[x.i]===p.id));
+        if (list.length === 0) return null;
+        return choice(list).t && this.tiles[choice(list).i] ? this.tiles[choice(list).i] : list[0].t;
+      }
+
+      // ========== 建房 ==========
+      async aiBuildHouses(p) {
+        // 策略：拥有整套时，尽量均匀建房，保留¥200现金安全盘。一次最多建 3 套循环。
+        let loops = 0;
+        const safety = 200;
+        while (loops < 3) {
+          let built = false;
+          // 以组为单位遍历
+          const groups = Object.keys(this.sets);
+          for (const g of groups) {
+            if (!this.ownsFullSet(p.id, g)) continue;
+            const houseCost = this.sets[g].houseCost;
+            if (p.cash - safety < houseCost) continue;
+
+            // 找出该组地块
+            const props = this.tiles.map((t,i)=>({t,i})).filter(x => x.t.type==="PROPERTY" && x.t.group===g && this.owners[x.i]===p.id);
+            // 均衡建造：优先房子少的
+            props.sort((a,b) => (this.houses[a.i]||0)-(this.houses[b.i]||0));
+            for (const e of props) {
+              if ((this.houses[e.i]||0) >= 4) continue;
+              if (p.cash - safety < houseCost) break;
+              this.houses[e.i] = (this.houses[e.i]||0) + 1;
+              p.cash -= houseCost;
+              built = true;
+              this.log(`${p.name} 在 ${e.t.name} 建造一栋房子，花费 ${fmtMoney(houseCost)}`);
+              this.draw();
+              await sleep(150 / this.speed);
+            }
+          }
+          if (!built) break;
+          loops += 1;
+        }
+      }
+
+      enableBuildIfPossible(p) {
+        // 人类：只提供“自动建房”，应用与 AI 相同策略
+        const canAny = Object.keys(this.sets).some(g => this.ownsFullSet(p.id, g));
+        const btnBuild = document.getElementById("btnBuild");
+        btnBuild.disabled = !canAny;
+      }
+
+      async humanBuildAuto(p) {
+        await this.aiBuildHouses(p);
+      }
+
+      // ========== UI交互 ==========
+      bindUI() {
+        const mapSelect = document.getElementById("mapSelect");
+        const playerCount = document.getElementById("playerCount");
+        const humanCount = document.getElementById("humanCount");
+        const newGameBtn = document.getElementById("newGameBtn");
+        const pauseBtn = document.getElementById("pauseBtn");
+        const resumeBtn = document.getElementById("resumeBtn");
+        const stepBtn = document.getElementById("stepBtn");
+        const speedRange = document.getElementById("speedRange");
+        const btnBuild = document.getElementById("btnBuild");
+        const btnEndTurn = document.getElementById("btnEndTurn");
+
+        mapSelect.addEventListener("change", () => {
+          this.setMap(mapSelect.value);
+          this.uiUpdate();
+        });
+        speedRange.addEventListener("input", () => {
+          this.speed = parseFloat(speedRange.value || "1");
+          document.getElementById("speedLabel").textContent = `${this.speed.toFixed(1)}x`;
+        });
+        newGameBtn.addEventListener("click", () => {
+          const pc = parseInt(playerCount.value, 10);
+          const hc = parseInt(humanCount.value, 10);
+          this.setMap(mapSelect.value);
+          this.newGame(pc, hc);
+        });
+        pauseBtn.addEventListener("click", () => this.pause());
+        resumeBtn.addEventListener("click", () => this.resume());
+        stepBtn.addEventListener("click", () => this.step());
+
+        btnBuild.addEventListener("click", async () => {
+          const p = this.getCurrentPlayer();
+          if (!p || !p.isHuman) return;
+          btnBuild.disabled = true;
+          await this.humanBuildAuto(p);
+          this.uiUpdate();
+        });
+        btnEndTurn.addEventListener("click", () => {
+          const p = this.getCurrentPlayer();
+          if (p && p.isHuman) this.endTurnForHuman(p);
+        });
+
+        // 购买相关（在需要时启用）
+        this._buyResolvers = { resolve: null, reject: null };
+        document.getElementById("btnBuy").addEventListener("click", () => {
+          if (this._onBuyYes) this._onBuyYes();
+        });
+        document.getElementById("btnSkipBuy").addEventListener("click", () => {
+          if (this._onBuyNo) this._onBuyNo();
+        });
+      }
+
+      uiUpdate() {
+        document.getElementById("roundLabel").textContent = `第 ${this.round} 轮`;
+        const cur = this.getCurrentPlayer();
+        document.getElementById("turnPlayer").textContent = cur ? `${cur.name}` : "-";
+
+        // 玩家状态面板
+        const panel = document.getElementById("playersPanel");
+        panel.innerHTML = "";
+        for (const p of this.players) {
+          const owned = this.tiles.map((t,i)=>({t,i})).filter(x => (this.owners[x.i]===p.id && x.t.type==="PROPERTY")).length;
+          const el = document.createElement("div");
+          el.className = "flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2";
+          el.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="inline-block w-3 h-3 rounded-full" style="background:${p.color}"></span>
+              <div class="font-medium">${p.name}</div>
+              ${p.bankrupt ? '<span class="text-xs text-rose-600 ml-1">破产</span>' : ''}
+              ${p.inJail ? '<span class="text-xs text-amber-600 ml-1">狱中</span>' : ''}
+            </div>
+            <div class="text-sm">
+              <span class="text-slate-500">现金</span> <span class="font-semibold">${fmtMoney(p.cash)}</span>
+              <span class="ml-3 text-slate-500">地块</span> <span class="font-semibold">${owned}</span>
+            </div>
+          `;
+          panel.appendChild(el);
+        }
+
+        // 控制按钮启用
+        const curIsHuman = cur && cur.isHuman && !cur.bankrupt;
+        document.getElementById("btnEndTurn").disabled = !curIsHuman;
+        this.enableBuildIfPossible(cur || {isHuman:false});
+      }
+
+      log(text) {
+        const logEl = document.getElementById("log");
+        const line = document.createElement("div");
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2,'0');
+        const mm = String(now.getMinutes()).padStart(2,'0');
+        const ss = String(now.getSeconds()).padStart(2,'0');
+        line.innerHTML = `<span class="text-slate-400">[${hh}:${mm}:${ss}]</span> ${text}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      uiEnableBuy(enabled, onYes, onNo, tile=null) {
+        const buy = document.getElementById("btnBuy");
+        const skip = document.getElementById("btnSkipBuy");
+        const hint = document.getElementById("actionHint");
+        buy.disabled = !enabled;
+        skip.disabled = !enabled;
+        this._onBuyYes = null; this._onBuyNo = null;
+        if (enabled) {
+          hint.textContent = tile ? `是否购买：${tile.name}（价格 ${fmtMoney(tile.price)}）` : "是否购买该地块？";
+          this._onBuyYes = () => { if (onYes) onYes(); if (this._buyResolvers.resolve) this._buyResolvers.resolve(true); };
+          this._onBuyNo = () => { if (onNo) onNo(); if (this._buyResolvers.resolve) this._buyResolvers.resolve(false); };
+        } else {
+          hint.textContent = "当前无可操作项";
+        }
+      }
+
+      waitForBuyChoice() {
+        return new Promise((resolve) => {
+          this._buyResolvers.resolve = (ans) => { this._buyResolvers.resolve = null; resolve(ans); };
+        });
+      }
+
+      waitForHumanEndTurn(p) {
+        return new Promise((resolve) => {
+          this._humanEndResolver = resolve;
+        });
+      }
+
+      endTurnForHuman(p) {
+        if (this._humanEndResolver) {
+          const r = this._humanEndResolver; this._humanEndResolver = null;
+          r(true);
+        }
+      }
+
+      showDice(d1, d2) {
+        const area = document.getElementById("diceArea");
+        const die = (n) => {
+          const pip = (x,y)=>`<div class="absolute w-1.5 h-1.5 bg-slate-700 rounded-full" style="left:${x}%;top:${y}%"></div>`;
+          const pipsMap = {
+            1: [[50,50]],
+            2: [[25,25],[75,75]],
+            3: [[25,25],[50,50],[75,75]],
+            4: [[25,25],[25,75],[75,25],[75,75]],
+            5: [[25,25],[25,75],[50,50],[75,25],[75,75]],
+            6: [[25,25],[25,50],[25,75],[75,25],[75,50],[75,75]],
+          }[n];
+          return `
+            <div class="relative w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm grid place-items-center">
+              <div class="absolute inset-0">
+                ${pipsMap.map(([x,y]) => pip(x,y)).join("")}
+              </div>
+            </div>
+          `;
+        };
+        area.innerHTML = die(d1) + die(d2);
+      }
+
+      // ========== 绘制棋盘 ==========
+      resizeCanvas() {
+        const wrap = document.getElementById("boardWrapper");
+        const rect = wrap.getBoundingClientRect();
+        const size = Math.floor(rect.width); // 宽度为基准
+        const pixelRatio = window.devicePixelRatio || 1;
+        this.canvas.style.width = "100%";
+        this.canvas.style.height = `${size}px`;
+        this.canvas.width = size * pixelRatio;
+        this.canvas.height = size * pixelRatio;
+        this.ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        this.prepareTileGeos();
+        this.draw();
+      }
+
+      prepareTileGeos() {
+        const size = this.canvas.clientWidth || this.canvas.width / (window.devicePixelRatio||1);
+        const margin = 16;
+        const board = size - margin*2;
+        const x0 = margin, y0 = margin;
+        const x1 = x0 + board, y1 = y0 + board;
+        const inner = board * 0.78; // 内部留白
+        const tileLen = (board - inner) / 9; // 边上 9 个格子 + 角落占正方形
+        // 保存四边格子区域（用于绘制）
+        this.tileGeos = [];
+
+        // 角落尺寸
+        const corner = (board - inner)/2 + inner/10;
+
+        // 采用典型 40 格：每边 10 格（含角落）
+        const corners = [
+          { idx:0,   x:x1-corner, y:y1-corner, w:corner, h:corner, rot:0 },   // GO
+          { idx:10,  x:x0, y:y1-corner, w:corner, h:corner, rot:1 },         // JAIL
+          { idx:20,  x:x0, y:y0, w:corner, h:corner, rot:2 },                // FREE
+          { idx:30,  x:x1-corner, y:y0, w:corner, h:corner, rot:3 },         // GOTO_JAIL
+        ];
+        const cornerMap = {0: corners[0], 10: corners[1], 20: corners[2], 30: corners[3]};
+        for (const c of corners) this.tileGeos[c.idx] = c;
+
+        // 下边（1..9）
+        for (let i = 1; i <= 9; i++) {
+          const x = (x1 - corner) - (tileLen * i);
+          const y = y1 - corner;
+          this.tileGeos[i] = { idx:i, x:x, y:y, w:tileLen, h:corner, rot:0 };
+        }
+        // 左边（11..19）
+        for (let k = 1; k <= 9; k++) {
+          const idx = 10 + k;
+          const x = x0;
+          const y = (y1 - corner) - (tileLen * k);
+          this.tileGeos[idx] = { idx, x, y, w:corner, h:tileLen, rot:1 };
+        }
+        // 上边（21..29）
+        for (let k = 1; k <= 9; k++) {
+          const idx = 20 + k;
+          const x = x0 + corner + tileLen*(k-1);
+          const y = y0;
+          this.tileGeos[idx] = { idx, x, y, w:tileLen, h:corner, rot:2 };
+        }
+        // 右边（31..39）
+        for (let k = 1; k <= 9; k++) {
+          const idx = 30 + k;
+          const x = x1 - corner;
+          const y = y0 + corner + tileLen*(k-1);
+          this.tileGeos[idx] = { idx, x, y, w:corner, h:tileLen, rot:3 };
+        }
+      }
+
+      draw() {
+        const ctx = this.ctx;
+        const W = this.canvas.clientWidth || this.canvas.width;
+        const H = this.canvas.clientHeight || this.canvas.height;
+        ctx.clearRect(0,0,W,H);
+
+        // 外框
+        const pad = 8;
+        const size = Math.min(W,H) - pad*2;
+        const x0 = pad, y0 = pad, x1 = x0 + size, y1 = y0 + size;
+
+        // 底板
+        ctx.fillStyle = "#f8fafc";
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x0, y0, size, size, 16);
+        ctx.fill();
+        ctx.stroke();
+
+        // 绘制格子
+        for (let i = 0; i < 40; i++) {
+          const g = this.tileGeos[i];
+          if (!g) continue;
+          // 格子背景
+          ctx.save();
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#e5e7eb";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(g.x, g.y, g.w, g.h);
+          ctx.fill();
+          ctx.stroke();
+
+          // 颜色条（地产/铁路/公共设施）
+          const t = this.tiles[i];
+          if (!t) { ctx.restore(); continue; }
+
+          const bandH = Math.min(g.w, g.h) * 0.22;
+          if (t.type === "PROPERTY") {
+            ctx.fillStyle = t.color;
+            if (g.rot === 0)      ctx.fillRect(g.x, g.y + g.h - bandH, g.w, bandH);
+            else if (g.rot === 1) ctx.fillRect(g.x, g.y, bandH, g.h);
+            else if (g.rot === 2) ctx.fillRect(g.x, g.y, g.w, bandH);
+            else if (g.rot === 3) ctx.fillRect(g.x + g.w - bandH, g.y, bandH, g.h);
+
+            // 房屋显示（小方块）
+            const houseCount = this.houses[i] || 0;
+            if (houseCount > 0) {
+              ctx.fillStyle = "#16a34a";
+              for (let k = 0; k < houseCount; k++) {
+                const s = Math.min(g.w, g.h) * 0.16;
+                let hx = g.x + 4 + k*(s+2), hy = g.y + 4;
+                if (g.rot === 0) { hx = g.x + 4 + k*(s+2); hy = g.y + 4; }
+                if (g.rot === 1) { hx = g.x + g.w - s - 4; hy = g.y + 4 + k*(s+2); }
+                if (g.rot === 2) { hx = g.x + 4 + k*(s+2); hy = g.y + g.h - s - 4; }
+                if (g.rot === 3) { hx = g.x + 4; hy = g.y + 4 + k*(s+2); }
+                ctx.fillRect(hx, hy, s, s);
+              }
+            }
+          } else if (t.type === "RAILROAD" || t.type === "UTILITY") {
+            ctx.fillStyle = t.color;
+            if (g.rot === 0)      ctx.fillRect(g.x, g.y + g.h - bandH, g.w, bandH);
+            else if (g.rot === 1) ctx.fillRect(g.x, g.y, bandH, g.h);
+            else if (g.rot === 2) ctx.fillRect(g.x, g.y, g.w, bandH);
+            else if (g.rot === 3) ctx.fillRect(g.x + g.w - bandH, g.y, bandH, g.h);
+          }
+
+          // 角落特殊图标
+          if (t.type === "GO" || t.type === "JAIL" || t.type === "FREE" || t.type === "GOTO_JAIL") {
+            ctx.fillStyle = "#0ea5e9";
+            ctx.globalAlpha = 0.08;
+            ctx.beginPath();
+            ctx.arc(g.x + g.w*0.6, g.y + g.h*0.6, Math.min(g.w,g.h)*0.45, 0, Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+
+          // 文本（缩略显示）
+          ctx.fillStyle = "#334155";
+          ctx.font = "10px system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const name = t.name || "";
+          let tx = g.x + g.w/2, ty = g.y + g.h/2;
+          const label = (t.type==="PROPERTY"||t.type==="RAILROAD"||t.type==="UTILITY") ? name : name;
+          const text = label.length > 6 ? label.slice(0,6)+"…" : label;
+          ctx.fillText(text, tx, ty);
+
+          // 所有者标记（小圆点）
+          const owner = this.owners[i];
+          if (owner !== null && owner !== undefined) {
+            const c = this.players[owner]?.color || "#6b7280";
+            ctx.fillStyle = c;
+            ctx.beginPath();
+            ctx.arc(g.x + g.w - 8, g.y + 8, 5, 0, Math.PI*2);
+            ctx.fill();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+
+          ctx.restore();
+        }
+
+        // 玩家棋子
+        for (const p of this.players) {
+          if (p.bankrupt) continue;
+          const g = this.tileGeos[p.position];
+          if (!g) continue;
+          const cx = g.x + g.w/2;
+          const cy = g.y + g.h/2;
+          // 为避免重叠，根据玩家 id 偏移
+          const offsetMap = [
+            [ -8, -8 ],
+            [  8, -8 ],
+            [ -8,  8 ],
+            [  8,  8 ],
+          ];
+          const [ox, oy] = offsetMap[p.id % offsetMap.length];
+          ctx.save();
+          // 阴影
+          ctx.shadowColor = "rgba(0,0,0,0.18)";
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetY = 2;
+          // 棋子
+          ctx.beginPath();
+          ctx.fillStyle = p.color;
+          ctx.arc(cx + ox, cy + oy, 9, 0, Math.PI*2);
+          ctx.fill();
+          // 高光
+          ctx.shadowColor = "transparent";
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(cx + ox - 3, cy + oy - 4, 3, 0, Math.PI*2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+      }
+
+      // ========== 辅助定位 ==========
+      findNearestOfTypes(start, typeArr) {
+        for (let step = 1; step < 40; step++) {
+          const idx = (start + step) % 40;
+          const t = this.tiles[idx];
+          if (t && typeArr.includes(t.type)) return idx;
+        }
+        return start;
+      }
+      findNearestPropertyColor(start, groupName) {
+        for (let step = 1; step < 40; step++) {
+          const idx = (start + step) % 40;
+          const t = this.tiles[idx];
+          if (t && t.type==="PROPERTY" && t.group===groupName) return idx;
+        }
+        return start;
+      }
+    }
+
+    // ========== 启动 ==========
+    const canvas = document.getElementById("board");
+    const ui = {};
+    const game = new Game(canvas, ui);
+
+    // 启动默认一局（全 AI，4 人）
+    window.addEventListener("load", () => {
+      game.newGame(4, 0);
+    });
+
+    // 人类购买与动作按钮状态联动
+    // 已在 Game 内部管理
+  </script>
+</body>
+</html>
