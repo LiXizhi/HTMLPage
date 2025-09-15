@@ -289,10 +289,28 @@
         text-decoration: underline;
         cursor: pointer;
         transition: color 0.3s ease;
+      }      .agreement-link:hover {
+        color: #5b6ee8;
       }
 
-      .agreement-link:hover {
+      /* 注册链接样式 */
+      .register-link {
+        text-align: center;
+        margin-top: 20px;
+        color: #666;
+        font-size: 18px;
+      }
+
+      .register-link a {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.3s ease;
+      }
+
+      .register-link a:hover {
         color: #5b6ee8;
+        text-decoration: underline;
       }
 
       /* 弹窗样式 */
@@ -501,9 +519,7 @@
         color: #333;
         line-height: 1.6;
         margin-bottom: 30px;
-      }
-
-      /* 用户设置弹窗样式 */
+      }      /* 用户设置弹窗样式 */
       .user-setting-modal {
         transform: translateY(100%);
         transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -511,6 +527,50 @@
 
       .user-setting-modal.show {
         transform: translateY(0);
+      }
+
+      /* 注册弹窗样式 */
+      #registerModal .modal-content {
+        margin: 0;
+        padding: 0;
+        border-radius: 0;
+        width: 100%;
+        max-width: none;
+        height: 100vh;
+        max-height: none;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #registerModal .close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      #registerModal .close:hover {
+        background: rgba(0, 0, 0, 0.7);
+      }
+
+      #registerModal #register_iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: white;
+        overflow: hidden;
       }
 
       /* Developer panel styles */
@@ -765,10 +825,13 @@
             <span>和</span>
             <span class="agreement-link" onclick="openLicenseModal()">用户协议</span>
           </div>
-        </div>
-
-        <div class="button-container" id="usernameButtonContainer">
+        </div>        <div class="button-container" id="usernameButtonContainer">
           <button type="submit" class="login-btn" id="usernameLoginSubmitBtn">登录</button>
+        </div>
+        
+        <!-- 注册链接 -->
+        <div class="register-link">
+          还没有账号？<a href="javascript:void(0)" onclick="openRegisterModal()">点击这里注册</a>
         </div>
       </form>
 
@@ -855,12 +918,18 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 用户信息设置弹窗 -->
+    </div>    <!-- 用户信息设置弹窗 -->
     <div id="userSettingModal" class="modal user-setting-modal">
       <iframe id="user_setting_iframe" src="" style="width: 100%; height: 100vh; border: none; background: white"></iframe>
     </div>
+      <!-- 注册弹窗 -->
+    <div id="registerModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeRegisterModal()">&times;</span>
+        <iframe id="register_iframe" src=""></iframe>
+      </div>
+    </div>
+    
     <!-- Developer Panel -->
     <div id="devPanel" class="dev-panel">
       <button class="dev-close" onclick="hideDevPanel()">&times;</button>
@@ -938,10 +1007,12 @@
 
       function handleMaisiIconClick() {
         maisiIconClickCount++;
+
         // Reset counter after 3 seconds if not reaching 5 clicks
         if (clickTimer) {
           clearTimeout(clickTimer);
         }
+
         clickTimer = setTimeout(() => {
           maisiIconClickCount = 0;
         }, 3000);
@@ -1546,245 +1617,81 @@
       }
       window.parentKeepwork = new KeepworkProxy().createProxy();
 
-      // 获取父窗口Location信息Promise存储
-      let getLocationResolve = null;
-      let getLocationReject = null; // 初始化游戏标题显示
-      function initGameTitle(locationInfo) {
-        const urlParams = new URLSearchParams((locationInfo || window.location).search);
-        const loginGameTitle = urlParams.get("loginGameTitle");
-
-        if (loginGameTitle) {
-          const gameTitleElement = document.getElementById("gameTitle");
-          if (gameTitleElement) {
-            gameTitleElement.textContent = decodeURIComponent(loginGameTitle);
-            gameTitleElement.style.display = "block";
-          }
-        }
-      }
-
-      // 初始化游客模式
-      function initGuestMode(locationInfo) {
-        const urlParams = new URLSearchParams((locationInfo || window.location).search);
-        const allowGuestMode = urlParams.get("allowGuestMode");
-
-        if (allowGuestMode === "true") {
-          // 为手机号登录表单添加游客登录按钮
-          const phoneButtonContainer = document.getElementById("phoneButtonContainer");
-          if (phoneButtonContainer && !document.getElementById("phoneGuestBtn")) {
-            const guestBtn = document.createElement("button");
-            guestBtn.type = "button";
-            guestBtn.className = "guest-login-btn";
-            guestBtn.id = "phoneGuestBtn";
-            guestBtn.textContent = "游客登录";
-            guestBtn.onclick = guestLogin;
-            phoneButtonContainer.appendChild(guestBtn);
-          }
-
-          // 为用户名密码登录表单添加游客登录按钮
-          const usernameButtonContainer = document.getElementById("usernameButtonContainer");
-          if (usernameButtonContainer && !document.getElementById("usernameGuestBtn")) {
-            const guestBtn = document.createElement("button");
-            guestBtn.type = "button";
-            guestBtn.className = "guest-login-btn";
-            guestBtn.id = "usernameGuestBtn";
-            guestBtn.textContent = "游客登录";
-            guestBtn.onclick = guestLogin;
-            usernameButtonContainer.appendChild(guestBtn);
-          }
-        }
-      }
-
-      // 游客登录功能
-      async function guestLogin() {
-        try {
-          showMessage("正在以游客身份登录...");
-          // Forward all existing URL parameters plus the new objective parameter
-          const urlParams = new URLSearchParams(window.location.search);
-
-          // replace current href's wiki_dashboard with characterAI.
-          let url = window.location.href;
-          url = url.split("?")[0];
-          url = url.replace("ms_games_login", urlParams.get("loginGameName") || "");
-
-          url = `${url}?${urlParams.toString()}`;
-          window.location.replace(url);
-        } catch (error) {
-          console.error("游客登录失败:", error);
-          showMessage("游客登录失败，请重试");
-        }
-      }
-      // 页面加载时初始化游戏标题和检查登录状态
-      checkLoginStatus();
-
-      // Initialize developer mode
-      initDevMode();
-
-          // 监听父页面的响应
-          window.addEventListener("message", (event) => {
-            if (event.data.type === "keepworkResponse") {
-              const { requestId, success, data, error } = event.data;
-              const request = this.pendingRequests.get(requestId);
-
-              if (request) {
-                this.pendingRequests.delete(requestId);
-                if (this.debugMode) {
-                  console.debug("KeepworkProxy response received:", { requestId, success, data, error });
-                }
-                if (success) {
-                  request.resolve(data);
-                } else {
-                  request.reject(new Error(error));
-                }
-              }
-            }
-          });
-        }
-
-        _sendRequest(method, args = []) {
-          return new Promise((resolve, reject) => {
-            const requestId = ++this.requestId;
-
-            this.pendingRequests.set(requestId, { resolve, reject });
-
-            if (this.debugMode) {
-              console.debug("KeepworkProxy sending request:", { method, args, requestId });
-            }
-
-            // 设置超时
-            setTimeout(() => {
-              if (this.pendingRequests.has(requestId)) {
-                this.pendingRequests.delete(requestId);
-                reject(new Error("Keepwork operation timeout"));
-              }
-            }, 10000); // keepwork操作可能需要更长时间
-
-            // 发送请求到父页面
-            window.parent.postMessage(
-              {
-                type: "keepwork",
-                method,
-                args,
-                requestId,
-              },
-              "*"
-            );
-          });
-        }
-
-        // 通用方法调用
-        async call(method, ...args) {
-          return await this._sendRequest(method, args);
-        }
-
-        // 支持深层方法调用，如 keepwork.some.deep.method
-        _createProxy(basePath = "") {
-          return new Proxy(this, {
-            get: (target, prop) => {
-              if (typeof prop === "string" && !prop.startsWith("_") && prop !== "constructor") {
-                const fullPath = basePath ? basePath + "." + prop : prop;
-
-                // 如果是已定义的方法，直接返回
-                if (target[prop] && typeof target[prop] === "function") {
-                  return target[prop].bind(target);
-                }
-
-                // 如果是已定义的属性，直接返回
-                if (target[prop]) {
-                  return target[prop];
-                }
-
-                // 否则创建一个新的代理
-                return this._createProxy(fullPath);
-              }
-              return target[prop];
-            },
-            apply: (target, thisArg, argArray) => {
-              // 当作为函数调用时，执行远程方法调用
-              return target._sendRequest(basePath, argArray);
-            },
-          });
-        }
-
-        // 创建代理实例
-        createProxy() {
-          return this._createProxy();
-        }
-      }
-      window.parentKeepwork = new KeepworkProxy().createProxy();
-
-      // 获取父窗口Location信息Promise存储
-      let getLocationResolve = null;
-      let getLocationReject = null; // 初始化游戏标题显示
-      function initGameTitle(locationInfo) {
-        const urlParams = new URLSearchParams((locationInfo || window.location).search);
-        const loginGameTitle = urlParams.get("loginGameTitle");
-
-        if (loginGameTitle) {
-          const gameTitleElement = document.getElementById("gameTitle");
-          if (gameTitleElement) {
-            gameTitleElement.textContent = decodeURIComponent(loginGameTitle);
-            gameTitleElement.style.display = "block";
-          }
-        }
-      }
-
-      // 初始化游客模式
-      function initGuestMode(locationInfo) {
-        const urlParams = new URLSearchParams((locationInfo || window.location).search);
-        const allowGuestMode = urlParams.get("allowGuestMode");
-
-        if (allowGuestMode === "true") {
-          // 为手机号登录表单添加游客登录按钮
-          const phoneButtonContainer = document.getElementById("phoneButtonContainer");
-          if (phoneButtonContainer && !document.getElementById("phoneGuestBtn")) {
-            const guestBtn = document.createElement("button");
-            guestBtn.type = "button";
-            guestBtn.className = "guest-login-btn";
-            guestBtn.id = "phoneGuestBtn";
-            guestBtn.textContent = "游客登录";
-            guestBtn.onclick = guestLogin;
-            phoneButtonContainer.appendChild(guestBtn);
-          }
-
-          // 为用户名密码登录表单添加游客登录按钮
-          const usernameButtonContainer = document.getElementById("usernameButtonContainer");
-          if (usernameButtonContainer && !document.getElementById("usernameGuestBtn")) {
-            const guestBtn = document.createElement("button");
-            guestBtn.type = "button";
-            guestBtn.className = "guest-login-btn";
-            guestBtn.id = "usernameGuestBtn";
-            guestBtn.textContent = "游客登录";
-            guestBtn.onclick = guestLogin;
-            usernameButtonContainer.appendChild(guestBtn);
-          }
-        }
-      }
-
-      // 游客登录功能
-      async function guestLogin() {
-        try {
-          showMessage("正在以游客身份登录...");
-          // Forward all existing URL parameters plus the new objective parameter
-          const urlParams = new URLSearchParams(window.location.search);
-
-          // replace current href's wiki_dashboard with characterAI.
-          let url = window.location.href;
-          url = url.split("?")[0];
-          url = url.replace("ms_games_login", urlParams.get("loginGameName") || "");
-
-          url = `${url}?${urlParams.toString()}`;
-          window.location.replace(url);
-        } catch (error) {
-          console.error("游客登录失败:", error);
-          showMessage("游客登录失败，请重试");
-        }
-      } 
-      // 页面加载时初始化游戏标题和检查登录状态
-      checkLoginStatus();
-
-      // Initialize developer mode
-      initDevMode();
       
+
+      // 获取父窗口Location信息Promise存储
+      let getLocationResolve = null;
+      let getLocationReject = null; // 初始化游戏标题显示
+      function initGameTitle(locationInfo) {
+        const urlParams = new URLSearchParams((locationInfo || window.location).search);
+        const loginGameTitle = urlParams.get("loginGameTitle");
+
+        if (loginGameTitle) {
+          const gameTitleElement = document.getElementById("gameTitle");
+          if (gameTitleElement) {
+            gameTitleElement.textContent = decodeURIComponent(loginGameTitle);
+            gameTitleElement.style.display = "block";
+          }
+        }
+      }
+
+      // 初始化游客模式
+      function initGuestMode(locationInfo) {
+        const urlParams = new URLSearchParams((locationInfo || window.location).search);
+        const allowGuestMode = urlParams.get("allowGuestMode");
+
+        if (allowGuestMode === "true") {
+          // 为手机号登录表单添加游客登录按钮
+          const phoneButtonContainer = document.getElementById("phoneButtonContainer");
+          if (phoneButtonContainer && !document.getElementById("phoneGuestBtn")) {
+            const guestBtn = document.createElement("button");
+            guestBtn.type = "button";
+            guestBtn.className = "guest-login-btn";
+            guestBtn.id = "phoneGuestBtn";
+            guestBtn.textContent = "游客登录";
+            guestBtn.onclick = guestLogin;
+            phoneButtonContainer.appendChild(guestBtn);
+          }
+
+          // 为用户名密码登录表单添加游客登录按钮
+          const usernameButtonContainer = document.getElementById("usernameButtonContainer");
+          if (usernameButtonContainer && !document.getElementById("usernameGuestBtn")) {
+            const guestBtn = document.createElement("button");
+            guestBtn.type = "button";
+            guestBtn.className = "guest-login-btn";
+            guestBtn.id = "usernameGuestBtn";
+            guestBtn.textContent = "游客登录";
+            guestBtn.onclick = guestLogin;
+            usernameButtonContainer.appendChild(guestBtn);
+          }
+        }
+      }
+
+      // 游客登录功能
+      async function guestLogin() {
+        try {
+          showMessage("正在以游客身份登录...");
+          // Forward all existing URL parameters plus the new objective parameter
+          const urlParams = new URLSearchParams(window.location.search);
+
+          // replace current href's wiki_dashboard with characterAI.
+          let url = window.location.href;
+          url = url.split("?")[0];
+          url = url.replace("ms_games_login", urlParams.get("loginGameName") || "");
+
+          url = `${url}?${urlParams.toString()}`;
+          window.location.replace(url);
+        } catch (error) {
+          console.error("游客登录失败:", error);
+          showMessage("游客登录失败，请重试");
+        }
+      }
+      // 页面加载时初始化游戏标题和检查登录状态
+      checkLoginStatus();
+
+      // Initialize developer mode
+      initDevMode();
+
       // Markdown转HTML的简单实现
       function markdownToHtml(markdown) {
         if (!markdown) return "";
@@ -1858,11 +1765,35 @@
           console.error("加载用户协议失败:", error);
           content.innerHTML = '<p style="color: #ef4444;">加载失败，请稍后重试</p>';
         }
-      }
-
-      // 关闭弹窗
+      }      // 关闭弹窗
       function closeModal(modalId) {
         document.getElementById(modalId).style.display = "none";
+      }
+
+      // 打开注册弹窗
+      function openRegisterModal() {
+        const modal = document.getElementById("registerModal");
+        const iframe = document.getElementById("register_iframe");
+        
+        // 设置iframe源
+        const currentUrl = new URL(window.location.href);
+        const baseUrl = currentUrl.origin + currentUrl.pathname.replace('ms_games_login', 'ms_games_register');
+        iframe.src = baseUrl;
+        
+        // 显示modal
+        modal.style.display = "block";
+      }
+
+      // 关闭注册弹窗
+      function closeRegisterModal() {
+        const modal = document.getElementById("registerModal");
+        const iframe = document.getElementById("register_iframe");
+        
+        // 隐藏modal
+        modal.style.display = "none";
+        
+        // 清空iframe源以节省资源
+        iframe.src = "";
       }
 
       // 同意隐私政策按钮：关闭弹窗并勾选外部复选框
@@ -2685,6 +2616,15 @@
               paracraftPlatformResolve = null;
               paracraftPlatformReject = null;
             }
+            break;
+          case "registerSuccess":
+            // 注册成功，关闭注册弹窗并显示登录表单
+            closeRegisterModal();
+            showLoginForm();
+            if (event.data.username) {
+              phoneInput.value = event.data.username;
+            }
+            switchToUsernameLogin();
             break;
           case "userProfileCreated":
             saveUserProfile({
