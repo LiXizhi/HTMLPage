@@ -1,1574 +1,2260 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>青少年用户画像</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/chart.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+        background: linear-gradient(135deg, #f3e8ff 0%, #fce7f3 100%);
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+        position: relative;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* 自定义滚动条 */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: rgba(168, 85, 247, 0.1);
+        border-radius: 3px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: rgba(168, 85, 247, 0.3);
+        border-radius: 3px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(168, 85, 247, 0.5);
+      }
+
+      .profile-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(168, 85, 247, 0.15);
+        margin: 10px;
+        width: calc(100% - 20px);
+        height: calc(100% - 20px);
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+      }
+
+      .profile-container.loaded {
+        opacity: 1;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+        color: white;
+        padding: 12px 25px;
+        border-radius: 12px 12px 0 0;
+        text-align: center;
+        font-size: 22px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+      }
+
+      .header-title {
+        display: inline-block;
+        flex: 1;
+      }
+
+      .refresh-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        color: white;
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .refresh-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .refresh-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      }
+
+      .content {
+        flex: 1;
+        display: flex;
+        padding: 15px;
+        gap: 15px;
+      }
+
+      .left-panel {
+        flex-shrink: 0;
+        width: 280px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .personal-info {
+        background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%);
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+        border: 2px solid #e879f9;
+        transition: box-shadow 0.3s ease;
+      }
+
+      .personal-info:hover {
+        box-shadow: 0 4px 20px rgba(168, 85, 247, 0.25);
+      }
+
+      .avatar {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+        margin: 0 auto 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        color: white;
+      }
+
+      .nickName {
+        font-size: 20px;
+        font-weight: bold;
+        color: #581c87;
+        margin-bottom: 8px;
+      }
+
+      .userName {
+        color: #a855f7;
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+
+      .radar-container {
+        background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%);
+        border-radius: 12px;
+        padding: 10px;
+        border: 2px solid #e879f9;
+        flex: 1;
+        transition: box-shadow 0.3s ease;
+      }
+
+      .radar-container:hover {
+        box-shadow: 0 4px 20px rgba(168, 85, 247, 0.25);
+      }
+
+      .radar-title {
+        text-align: center;
+        font-weight: bold;
+        color: #581c87;
+        margin-bottom: 10px;
+        font-size: 15px;
+      }
+
+      .radar-chart-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 0;
+        position: relative;
+      }
+
+      .radar-chart {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: min(100%, 300px);
+        max-height: min(100%, 300px);
+      }
+
+      /* Canvas高DPI优化 */
+      #radarChart {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
+        image-rendering: pixelated;
+        -ms-interpolation-mode: nearest-neighbor;
+        image-rendering: optimizeQuality;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+      }
+
+      .right-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      /* 顶层两个板块同排显示的容器 */
+      .section-row {
+        display: flex;
+        gap: 10px;
+      }
+      .section-row .ability-section {
+        flex: 1;
+        margin-bottom: 0;
+      }
+
+      .ability-section {
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        flex: 1;
+        display: flex;
+        flex-direction: row; /* 改为横向布局 */
+      }
+
+      .ability-section.renzhi-section {
+        flex-shrink: 0;
+        flex: initial;
+      }
+
+      .section-header {
+        background: #a8d8ea;
+        color: #2d3436;
+        padding: 0 16px;
+        font-weight: bold;
+        font-size: clamp(14px, 2.2vw, 18px); /* 增大字体 */
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0; /* 防止压缩 */
+      }
+
+      /* 不同维度使用不同颜色 */
+      .cognitive-section .section-header {
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed); /* 紫色 */
+        color: white;
+      }
+
+      .strategy-section .section-header {
+        background: linear-gradient(135deg, #3b82f6, #2563eb); /* 蓝色 */
+        color: white;
+      }
+
+      .motivation-section .section-header {
+        background: linear-gradient(135deg, #10b981, #059669); /* 绿色 */
+        color: white;
+      }
+
+      .emotion-section .section-header {
+        background: linear-gradient(135deg, #f59e0b, #d97706); /* 橙色 */
+        color: white;
+      }
+
+      .quality-section .section-header {
+        background: linear-gradient(135deg, #ef4444, #dc2626); /* 红色 */
+        color: white;
+      }
+
+      .section-content {
+        flex: 1;
+        display: flex;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 2px;
+        background: #e9ecef;
+        height: 100%;
+      }
+
+      /* 堆叠两行的容器与行，用于“认知能力”过多末级指标的布局 */
+      .section-content--stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        background: #e9ecef;
+        height: 100%;
+        flex: 1;
+      }
+      .section-content-row {
+        display: flex;
+        gap: 2px;
+        flex: 1;
+      }
+
+      .ability-item {
+        box-sizing: border-box;
+        background: white;
+        padding: 8px; /* 增加内边距 */
+        text-align: center;
+        font-size: 12px; /* 增大子标题字体 */
+        transition: all 0.2s ease;
+        cursor: pointer;
+        flex: 1;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        align-items: center;
+        margin-left: -1px;
+        margin-top: -1px;
+      }
+
+      .ability-item:hover {
+        background-color: #f8f9fa;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      }
+
+      .ability-item:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .ability-label {
+        color: #636e72;
+        font-size: 19px; /* 增大标签字体 */
+        font-weight: 500; /* 增加字重 */
+      }
+
+      .ability-value {
+        font-weight: bold;
+        color: #2d3436;
+        font-size: 22px; /* 增大数值字体 */
+      }
+
+      .ability-value.empty {
+        color: #d8b4fe;
+      }
+      .ability-score-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+
+      .ability-emoji {
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .ability-value.empty {
+        color: #ddd;
+      }
+
+      /* 情绪智力和学习品质横向布局 */
+      .emotion-quality-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 1vh;
+      }
+
+      .emotion-quality-row .ability-section {
+        flex: 1;
+        margin-bottom: 0;
+      }
+
+      .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-size: clamp(14px, 3vw, 20px);
+        color: #a855f7;
+      }
+
+      /* 触摸设备优化 */
+      @media (hover: none) and (pointer: coarse) {
+        .ability-item {
+          min-height: 44px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          cursor: pointer;
+          transition: background-color 0.2s ease;
         }
-        
-        body {
-            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
-            background: linear-gradient(135deg, #f3e8ff 0%, #fce7f3 100%);
-            width: 100%;
-            height: 100vh;
-            overflow: hidden;
-            position: relative;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        
-        /* 自定义滚动条 */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: rgba(168, 85, 247, 0.1);
-            border-radius: 3px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: rgba(168, 85, 247, 0.3);
-            border-radius: 3px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(168, 85, 247, 0.5);
-        }
-        
-        .profile-container {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(168, 85, 247, 0.15);
-            margin: 10px;
-            width: calc(100% - 20px);
-            height: calc(100% - 20px);
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-        }
-        
-        .profile-container.loaded {
-            opacity: 1;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-            color: white;
-            padding: 12px 25px;
-            border-radius: 12px 12px 0 0;
-            text-align: center;
-            font-size: 22px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .header-title {
-            display: inline-block;
-        }
-        
-        .content {
-            flex: 1;
-            display: flex;
-            padding: 15px;
-            gap: 15px;
-        }
-        
-        .left-panel {
-            width: 280px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        .personal-info {
-            background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%);
-            border-radius: 12px;
-            padding: 15px;
-            text-align: center;
-            border: 2px solid #e879f9;
-            transition: box-shadow 0.3s ease;
-        }
-        
-        .personal-info:hover {
-            box-shadow: 0 4px 20px rgba(168, 85, 247, 0.25);
-        }
-        
-        .avatar {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-            margin: 0 auto 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            color: white;
-        }
-        
-        .nickName {
-            font-size: 20px;
-            font-weight: bold;
-            color: #581c87;
-            margin-bottom: 8px;
-        }
-        
-        .userName {
-            color: #a855f7;
-            font-size: 13px;
-            margin-bottom: 12px;
-        }
-        
-        .radar-container {
-            background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%);
-            border-radius: 12px;
-            padding: 10px;
-            border: 2px solid #e879f9;
-            flex: 1;
-            transition: box-shadow 0.3s ease;
-        }
-        
-        .radar-container:hover {
-            box-shadow: 0 4px 20px rgba(168, 85, 247, 0.25);
-        }
-        
-        .radar-title {
-            text-align: center;
-            font-weight: bold;
-            color: #581c87;
-            margin-bottom: 10px;
-            font-size: 15px;
-        }
-        
-        .radar-chart-container {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 0;
-            position: relative;
-        }
-        
-        .radar-chart {
-            width: 100% !important;
-            height: 100% !important;
-            max-width: min(100%, 300px);
-            max-height: min(100%, 300px);
-        }
-        
-        /* Canvas高DPI优化 */
-        #radarChart {
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-            image-rendering: pixelated;
-            -ms-interpolation-mode: nearest-neighbor;
-            image-rendering: optimizeQuality;
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
-            transform: translateZ(0);
-            -webkit-transform: translateZ(0);
-        }
-        
-        .right-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        
-        .ability-section {
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #e9ecef;
-            overflow: hidden;
-            margin-bottom: 1vh;
-            flex: 1;
-            display: flex;
-            flex-direction: row; /* 改为横向布局 */
+
+        .ability-item:active {
+          background-color: #f0f0f0;
         }
 
         .section-header {
-            background: #a8d8ea;
-            color: #2d3436;
-            padding: 2vh 1vw;
-            font-weight: bold;
-            font-size: clamp(14px, 2.2vw, 18px); /* 增大字体 */
-            text-align: center;
-            writing-mode: vertical-rl; /* 竖直显示文字 */
-            text-orientation: mixed;
-            width: 60px; /* 固定宽度 */
-            min-width: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0; /* 防止压缩 */
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
+      }
+      /* Modal样式 */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5px);
+        animation: fadeIn 0.3s ease;
+      }
 
-        /* 不同维度使用不同颜色 */
-        .cognitive-section .section-header {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed); /* 紫色 */
-            color: white;
-        }
+      .modal.show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
-        .strategy-section .section-header {
-            background: linear-gradient(135deg, #3b82f6, #2563eb); /* 蓝色 */
-            color: white;
-        }
+      .modal-content {
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        width: 95%;
+        max-width: 800px;
+        max-height: 90vh;
+        overflow: hidden;
+        animation: slideIn 0.3s ease;
+        position: relative;
+      }
 
-        .motivation-section .section-header {
-            background: linear-gradient(135deg, #10b981, #059669); /* 绿色 */
-            color: white;
-        }
+      .modal-header {
+        background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 12px 12px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
 
-        .emotion-section .section-header {
-            background: linear-gradient(135deg, #f59e0b, #d97706); /* 橙色 */
-            color: white;
-        }
+      .modal-header h3 {
+        margin: 0;
+        font-size: 40px;
+        font-weight: bold;
+      }
 
-        .quality-section .section-header {
-            background: linear-gradient(135deg, #ef4444, #dc2626); /* 红色 */
-            color: white;
-        }
+      .close {
+        color: white;
+        font-size: 4rem;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 1;
+        transition: color 0.2s ease;
+      }
 
-        .section-content {
-            flex: 1;
-            display: flex;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 2px;
-            background: #e9ecef;
-            height: 100%;
-        }
+      .close:hover {
+        color: #f0f0f0;
+      }
 
-        .ability-item {
-            background: white;
-            padding: 10px; /* 增加内边距 */
-            text-align: center;
-            font-size: 12px; /* 增大子标题字体 */
-            transition: all 0.2s ease;
-            cursor: pointer;
-            flex: 1;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            margin-left: -1px;
-        }
+      .modal-body {
+        padding: 30px;
+      }
 
-        .ability-item:hover {
-            background-color: #f8f9fa;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-        }
-        
-        .ability-item:active {
-            transform: translateY(0);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
+      .ability-info {
+        text-align: left;
+      }
 
-        .ability-label {
-            color: #636e72;
-            margin-bottom: 4px; /* 增加间距 */
-            font-size: 15px; /* 增大标签字体 */
-            font-weight: 500; /* 增加字重 */
-        }
+      .ability-name {
+        font-size: 40px;
+        font-weight: bold;
+        color: #2d3436;
+        margin-bottom: 10px;
+        text-align: center;
+      }
 
-        .ability-value {
-            font-weight: bold;
-            color: #2d3436;
-            font-size: 18px; /* 增大数值字体 */
+      .ability-description {
+        font-size: 30px;
+        line-height: 1.6;
+        color: #636e72;
+        text-align: justify;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
         }
-        
-        .ability-value.empty {
-            color: #d8b4fe;
+        to {
+          opacity: 1;
         }
-        .ability-score-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-50px) scale(0.9);
         }
-        
-        .ability-emoji {
-            font-size: 16px;
-            line-height: 1;
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
         }
-        
-        .ability-value.empty {
-            color: #ddd;
-        }
-        
-        /* 情绪智力和学习品质横向布局 */
-        .emotion-quality-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 1vh;
-        }
-        
-        .emotion-quality-row .ability-section {
-            flex: 1;
-            margin-bottom: 0;
-        }
-        
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            font-size: clamp(14px, 3vw, 20px);
-            color: #a855f7;
-        }
-        
-        
-        
-        /* 触摸设备优化 */
-        @media (hover: none) and (pointer: coarse) {
-            .ability-item {
-                min-height: 44px;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                cursor: pointer;
-                transition: background-color 0.2s ease;
-            }
-            
-            .ability-item:active {
-                background-color: #f0f0f0;
-            }
-            
-            .section-header {
-                min-height: 44px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-        }
-        /* Modal样式 */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-            animation: fadeIn 0.3s ease;
-        }
-        
-        .modal.show {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal-content {
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            width: 95%;
-            max-width: 800px;
-            max-height: 90vh;
-            overflow: hidden;
-            animation: slideIn 0.3s ease;
-            position: relative;
-        }
-        
-        .modal-header {
-            background: linear-gradient(135deg, #6fa8dc 0%, #9fc5e8 100%);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 12px 12px 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .modal-header h3 {
-            margin: 0;
-            font-size: 40px;
-            font-weight: bold;
-        }
-        
-        .close {
-            color: white;
-            font-size: 4rem;
-            font-weight: bold;
-            cursor: pointer;
-            line-height: 1;
-            transition: color 0.2s ease;
-        }
-        
-        .close:hover {
-            color: #f0f0f0;
-        }
-        
-        .modal-body {
-            padding: 30px;
-        }
-        
-        .ability-info {
-            text-align: left;
-        }
-        
-        .ability-name {
-            font-size: 40px;
-            font-weight: bold;
-            color: #2d3436;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        
-        .ability-description {
-            font-size: 30px;
-            line-height: 1.6;
-            color: #636e72;
-            text-align: justify;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-50px) scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="profile-container" id="profileContainer">
-        <div class="header">
-            <span class="header-title">个人信息</span>
-        </div>
-        
-        <div class="content">
-            <div class="left-panel">
-                <!-- 个人信息卡片 -->
-                <div class="personal-info">
-                    <div class="avatar">👤</div>
-                    <div class="nickName">用户昵称：</div>
-                    <div class="userName">账号：</div>
-                    <div class="user-info-extra" style="display: none;"></div>
-                </div>
-                <!-- 雷达图 -->
-                <div class="radar-container">
-                    <div class="radar-title">综合能力</div>
-                    <div class="radar-chart-container">
-                        <canvas id="radarChart" class="radar-chart"></canvas>
-                    </div>
-                </div>
+      <div class="header">
+        <span class="header-title">个人信息</span>
+        <button class="refresh-btn" onclick="refreshPage()">
+          <span>🔄</span>
+          <span>刷新</span>
+        </button>
+      </div>
+
+      <div class="content">
+        <div class="left-panel">
+          <!-- 个人信息卡片 -->
+          <div class="personal-info">
+            <div class="avatar">👤</div>
+            <div class="nickName">用户昵称：</div>
+            <div class="userName">账号：</div>
+            <div class="user-info-extra" style="display: none"></div>
+          </div>
+          <!-- 雷达图 -->
+          <div class="radar-container">
+            <div class="radar-title">综合能力</div>
+            <div class="radar-chart-container">
+              <canvas id="radarChart" class="radar-chart"></canvas>
             </div>
-            
-            <div class="right-panel">
-                <!-- 认知能力 -->
-                <div class="ability-section cognitive-section">
-                    <div class="section-header">认知能力</div>
-                    <div class="section-content">                        
-                        <div class="ability-item">
-                            <div class="ability-label">集中性注意力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="focusedAttention">-</div>
-                                <div class="ability-emoji" id="focusedAttention-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">选择性注意力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="selectiveAttention">-</div>
-                                <div class="ability-emoji" id="selectiveAttention-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">转移性注意力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="shiftingAttention">-</div>
-                                <div class="ability-emoji" id="shiftingAttention-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">分配性注意力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="distributedAttention">-</div>
-                                <div class="ability-emoji" id="distributedAttention-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">视觉记忆</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="visualMemory">-</div>
-                                <div class="ability-emoji" id="visualMemory-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">听觉记忆</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="auditoryMemory">-</div>
-                                <div class="ability-emoji" id="auditoryMemory-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">工作记忆</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="workingMemory">-</div>
-                                <div class="ability-emoji" id="workingMemory-emoji"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 思维能力 -->
-                <div class="ability-section cognitive-section">
-                    <div class="section-header">思维能力</div>
-                    <div class="section-content">
-                        <div class="ability-item">
-                            <div class="ability-label">归纳推理能力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="inductiveReasoning">-</div>
-                                <div class="ability-emoji" id="inductiveReasoning-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">演绎推理能力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="deductiveReasoning">-</div>
-                                <div class="ability-emoji" id="deductiveReasoning-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">类比推理能力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="analogicalReasoning">-</div>
-                                <div class="ability-emoji" id="analogicalReasoning-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">言语理解能力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="verbalComprehension">-</div>
-                                <div class="ability-emoji" id="verbalComprehension-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">抽象推理能力</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="abstractReasoning">-</div>
-                                <div class="ability-emoji" id="abstractReasoning-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">视觉空间智能</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="visualSpatialIntelligence">-</div>
-                                <div class="ability-emoji" id="visualSpatialIntelligence-emoji"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 学习策略 -->
-                <div class="ability-section strategy-section">
-                    <div class="section-header">学习策略</div>
-                    <div class="section-content">
-                        <div class="ability-item">
-                            <div class="ability-label">复述策略</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="elaborationStrategy">-</div>
-                                <div class="ability-emoji" id="elaborationStrategy-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">精细加工策略</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="detailedProcessingStrategy">-</div>
-                                <div class="ability-emoji" id="detailedProcessingStrategy-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">组织策略</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="organizationalStrategy">-</div>
-                                <div class="ability-emoji" id="organizationalStrategy-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">元认知计划</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="metacognitivePlanning">-</div>
-                                <div class="ability-emoji" id="metacognitivePlanning-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">元认知监控</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="metacognitiveMonitoring">-</div>
-                                <div class="ability-emoji" id="metacognitiveMonitoring-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">元认知调节</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="metacognitiveRegulation">-</div>
-                                <div class="ability-emoji" id="metacognitiveRegulation-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">努力管理</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="effortManagement">-</div>
-                                <div class="ability-emoji" id="effortManagement-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">时间管理</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="timeManagement">-</div>
-                                <div class="ability-emoji" id="timeManagement-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">外界资源利用</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="externalResourceUtilization">-</div>
-                                <div class="ability-emoji" id="externalResourceUtilization-emoji"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 学习动机 -->
-                <div class="ability-section motivation-section">
-                    <div class="section-header">学习动机</div>
-                    <div class="section-content">
-                        <div class="ability-item">
-                            <div class="ability-label">成长</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="growth">-</div>
-                                <div class="ability-emoji" id="growth-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">自主</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="autonomy">-</div>
-                                <div class="ability-emoji" id="autonomy-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">互动</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="interaction">-</div>
-                                <div class="ability-emoji" id="interaction-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">兴趣</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="interest">-</div>
-                                <div class="ability-emoji" id="interest-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">认可</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="recognition">-</div>
-                                <div class="ability-emoji" id="recognition-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">竞争</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="competition">-</div>
-                                <div class="ability-emoji" id="competition-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">物质奖励</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="materialReward">-</div>
-                                <div class="ability-emoji" id="materialReward-emoji"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 情绪智力和学习品质 -->
-                <div class="emotion-quality-row">
-                    <!-- 情绪智力 -->
-                    <div class="ability-section emotion-section">
-                        <div class="section-header">情绪智力</div>
-                        <div class="section-content">
-                        <div class="ability-item">
-                            <div class="ability-label">情绪感知理解</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="emotionalAwareness">-</div>
-                                <div class="ability-emoji" id="emotionalAwareness-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">情绪调节表达</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="emotionalRegulation">-</div>
-                                <div class="ability-emoji" id="emotionalRegulation-emoji"></div>
-                            </div>
-                        </div>
-                    </div>
-                    </div>
-                    
-                    <!-- 学习品质 -->
-                    <div class="ability-section quality-section">
-                        <div class="section-header">学习品质</div>
-                        <div class="section-content">
-                        <div class="ability-item">
-                            <div class="ability-label">责任心</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="responsibility">-</div>
-                                <div class="ability-emoji" id="responsibility-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">严谨性</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="seriousness">-</div>
-                                <div class="ability-emoji" id="seriousness-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">坚毅性</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="perseverance">-</div>
-                                <div class="ability-emoji" id="perseverance-emoji"></div>
-                            </div>
-                        </div>
-                        <div class="ability-item">
-                            <div class="ability-label">创新性</div>
-                            <div class="ability-score-container">
-                                <div class="ability-value" id="creativity">-</div>
-                                <div class="ability-emoji" id="creativity-emoji"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+          </div>
         </div>
+
+        <div class="right-panel">
+          <!-- 认知能力 -->
+          <div class="ability-section cognitive-section">
+            <div class="section-header">认知能力</div>
+            <div class="section-content">
+              <div class="ability-item">
+                <div class="ability-label">集中性注意力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="focusedAttention">-</div>
+                  <div class="ability-emoji" id="focusedAttention-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">选择性注意力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="selectiveAttention">-</div>
+                  <div class="ability-emoji" id="selectiveAttention-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">转移性注意力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="shiftingAttention">-</div>
+                  <div class="ability-emoji" id="shiftingAttention-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">分配性注意力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="distributedAttention">-</div>
+                  <div class="ability-emoji" id="distributedAttention-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">视觉记忆</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="visualMemory">-</div>
+                  <div class="ability-emoji" id="visualMemory-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">听觉记忆</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="auditoryMemory">-</div>
+                  <div class="ability-emoji" id="auditoryMemory-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">工作记忆</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="workingMemory">-</div>
+                  <div class="ability-emoji" id="workingMemory-emoji"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 思维能力 -->
+          <div class="ability-section cognitive-section">
+            <div class="section-header">思维能力</div>
+            <div class="section-content">
+              <div class="ability-item">
+                <div class="ability-label">归纳推理能力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="inductiveReasoning">-</div>
+                  <div class="ability-emoji" id="inductiveReasoning-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">演绎推理能力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="deductiveReasoning">-</div>
+                  <div class="ability-emoji" id="deductiveReasoning-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">类比推理能力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="analogicalReasoning">-</div>
+                  <div class="ability-emoji" id="analogicalReasoning-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">言语理解能力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="verbalComprehension">-</div>
+                  <div class="ability-emoji" id="verbalComprehension-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">抽象推理能力</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="abstractReasoning">-</div>
+                  <div class="ability-emoji" id="abstractReasoning-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">视觉空间智能</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="visualSpatialIntelligence">-</div>
+                  <div class="ability-emoji" id="visualSpatialIntelligence-emoji"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 学习策略 -->
+          <div class="ability-section strategy-section">
+            <div class="section-header">学习策略</div>
+            <div class="section-content">
+              <div class="ability-item">
+                <div class="ability-label">复述策略</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="elaborationStrategy">-</div>
+                  <div class="ability-emoji" id="elaborationStrategy-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">精细加工策略</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="detailedProcessingStrategy">-</div>
+                  <div class="ability-emoji" id="detailedProcessingStrategy-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">组织策略</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="organizationalStrategy">-</div>
+                  <div class="ability-emoji" id="organizationalStrategy-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">元认知计划</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="metacognitivePlanning">-</div>
+                  <div class="ability-emoji" id="metacognitivePlanning-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">元认知监控</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="metacognitiveMonitoring">-</div>
+                  <div class="ability-emoji" id="metacognitiveMonitoring-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">元认知调节</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="metacognitiveRegulation">-</div>
+                  <div class="ability-emoji" id="metacognitiveRegulation-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">努力管理</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="effortManagement">-</div>
+                  <div class="ability-emoji" id="effortManagement-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">时间管理</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="timeManagement">-</div>
+                  <div class="ability-emoji" id="timeManagement-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">外界资源利用</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="externalResourceUtilization">-</div>
+                  <div class="ability-emoji" id="externalResourceUtilization-emoji"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 学习动机 -->
+          <div class="ability-section motivation-section">
+            <div class="section-header">学习动机</div>
+            <div class="section-content">
+              <div class="ability-item">
+                <div class="ability-label">成长</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="growth">-</div>
+                  <div class="ability-emoji" id="growth-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">自主</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="autonomy">-</div>
+                  <div class="ability-emoji" id="autonomy-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">互动</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="interaction">-</div>
+                  <div class="ability-emoji" id="interaction-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">兴趣</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="interest">-</div>
+                  <div class="ability-emoji" id="interest-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">认可</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="recognition">-</div>
+                  <div class="ability-emoji" id="recognition-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">竞争</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="competition">-</div>
+                  <div class="ability-emoji" id="competition-emoji"></div>
+                </div>
+              </div>
+              <div class="ability-item">
+                <div class="ability-label">物质奖励</div>
+                <div class="ability-score-container">
+                  <div class="ability-value" id="materialReward">-</div>
+                  <div class="ability-emoji" id="materialReward-emoji"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 情绪智力和学习品质 -->
+          <div class="emotion-quality-row">
+            <!-- 情绪智力 -->
+            <div class="ability-section emotion-section">
+              <div class="section-header">情绪智力</div>
+              <div class="section-content">
+                <div class="ability-item">
+                  <div class="ability-label">情绪感知理解</div>
+                  <div class="ability-score-container">
+                    <div class="ability-value" id="emotionalAwareness">-</div>
+                    <div class="ability-emoji" id="emotionalAwareness-emoji"></div>
+                  </div>
+                </div>
+                <div class="ability-item">
+                  <div class="ability-label">情绪调节表达</div>
+                  <div class="ability-score-container">
+                    <div class="ability-value" id="emotionalRegulation">-</div>
+                    <div class="ability-emoji" id="emotionalRegulation-emoji"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 学习品质 -->
+            <div class="ability-section quality-section">
+              <div class="section-header">学习品质</div>
+              <div class="section-content">
+                <div class="ability-item">
+                  <div class="ability-label">责任心</div>
+                  <div class="ability-score-container">
+                    <div class="ability-value" id="responsibility">-</div>
+                    <div class="ability-emoji" id="responsibility-emoji"></div>
+                  </div>
+                </div>
+                <div class="ability-item">
+                  <div class="ability-label">严谨性</div>
+                  <div class="ability-score-container">
+                    <div class="ability-value" id="seriousness">-</div>
+                    <div class="ability-emoji" id="seriousness-emoji"></div>
+                  </div>
+                </div>
+                <div class="ability-item">
+                  <div class="ability-label">坚毅性</div>
+                  <div class="ability-score-container">
+                    <div class="ability-value" id="perseverance">-</div>
+                    <div class="ability-emoji" id="perseverance-emoji"></div>
+                  </div>
+                </div>
+                <div class="ability-item">
+                  <div class="ability-label">创新性</div>
+                  <div class="ability-score-container">
+                    <div class="ability-value" id="creativity">-</div>
+                    <div class="ability-emoji" id="creativity-emoji"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    
+
     <!-- Modal弹框 -->
     <div id="abilityModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalTitle">能力详情</h3>
-                <span class="close" onclick="closeAbilityModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="ability-info">
-                    <div class="ability-name" id="modalAbilityName"></div>
-                    <div class="ability-description" id="modalAbilityDescription"></div>
-                </div>
-                <div class="game-info" id="gameInfo" style="margin-top: 40px; padding-top: 40px; border-top: 2px solid #eee; display: none;">
-                    <h4 style="margin-bottom: 20px; color: #333; font-size: 32px;">相关游戏</h4>
-                    <div class="game-name" id="modalGameName" style="color: #007bff; cursor: pointer; text-decoration: underline; font-weight: bold; font-size: 28px;"></div>
-                </div>
-            </div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalTitle">能力详情</h3>
+          <span class="close" onclick="closeAbilityModal()">&times;</span>
         </div>
+        <div class="modal-body">
+          <div class="ability-info">
+            <div class="ability-name" id="modalAbilityName"></div>
+            <div class="ability-description" id="modalAbilityDescription"></div>
+          </div>
+          <div class="game-info" id="gameInfo" style="margin-top: 40px; padding-top: 40px; border-top: 2px solid #eee; display: none">
+            <h4 style="margin-bottom: 20px; color: #333; font-size: 32px">相关游戏</h4>
+            <div class="game-name" id="modalGameName" style="color: #007bff; cursor: pointer; text-decoration: underline; font-weight: bold; font-size: 28px"></div>
+          </div>
+        </div>
+      </div>
     </div>
-    
+
     <script>
-        let radarChart;
-        let profileData = {};
-        let userInfoData = {};
-        let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        let isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        const isLandscape = () => window.innerWidth > window.innerHeight;
-        const getScreenSize = () => ({
-            width: window.innerWidth,
-            height: window.innerHeight,
-            ratio: window.devicePixelRatio || 1
-        });
-        
-        // 监听来自父页面的消息
-        window.addEventListener('message', function(event) {
-            console.log("收到消息",event.data)
-            if (event.data && event.data.type === 'setGameConfig') {
-                profileData = event.data.data.profileData;
-                userInfoData = event.data.data.userInfoData;
-                profileData && updateProfile(profileData);
-                userInfoData && updateUserInfo(userInfoData);
-            }
-        });
-        
-        // 页面加载完成后发送消息
-        window.addEventListener('load', function() {
-            // 通知父页面页面已加载
-            window.parent.postMessage({
-                type: 'pageLoaded'
-            }, '*');
-            
-            // 请求数据
-            window.parent.postMessage({
-                type: 'requestProfileData'
-            }, '*');
-            
-            // 性能优化：使用 requestAnimationFrame
-            requestAnimationFrame(() => {
-                initRadarChart();
-                // adjustLayout();
-                if (isTouch) {
-                    addTouchEvents();
-                }
+      let radarChart;
+      let abilityConfig = null;
+      let profileData = {};
+      let userInfoData = {};
+      let miniGameProxyData = {};
+      // 刷新按钮防抖计时器
+      let _refreshPageTimer = null;
+      let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      let isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      const isLandscape = () => window.innerWidth > window.innerHeight;
+      const getScreenSize = () => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        ratio: window.devicePixelRatio || 1,
+      });
+      const chartLabels = ["认知能力", "学习策略", "学习动机", "情绪智力", "学习品质"];
 
-                // 初始化能力项点击事件
-                initAbilityItemEvents();
-                
-                // 添加加载完成的视觉反馈
-                const container = document.getElementById('profileContainer');
-                container.classList.add('loaded');
-                
-                // 预加载优化
-                preloadOptimizations();
-            });
-        });
-        
-        // 预设置一些样式以避免闪烁
-        const container = document.getElementById('profileContainer');
-        if (container) {
-            container.style.visibility = 'visible';
-        }
-        
-        // 添加加载指示器
-        showLoadingIndicator();
-        
-        // 预加载优化
-        function preloadOptimizations() {
-            // 预计算一些值以提高性能
-            const screenSize = getScreenSize();
-            
-            // 缓存DOM元素
-            window.cachedElements = {
-                container: document.getElementById('profileContainer'),
-                content: document.querySelector('.content'),
-                leftPanel: document.querySelector('.left-panel'),
-                rightPanel: document.querySelector('.right-panel'),
-                radarContainer: document.querySelector('.radar-container')
-            };
-            
-            // 移除加载指示器
-            hideLoadingIndicator();
-        }
-        
-        // 显示加载指示器
-        function showLoadingIndicator() {
-            const loadingDiv = document.querySelector('.loading');
-            if (loadingDiv) {
-                loadingDiv.style.display = 'flex';
-            }
-        }
-        
-        // 隐藏加载指示器
-        function hideLoadingIndicator() {
-            const loadingDiv = document.querySelector('.loading');
-            if (loadingDiv) {
-                loadingDiv.style.opacity = '0';
-                setTimeout(() => {
-                    loadingDiv.style.display = 'none';
-                }, 300);
-            }
-        }
-            
-        // 防抖函数
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        }
+      class KeepworkProxy {
+        constructor() {
+          this.requestId = 0;
+          this.pendingRequests = new Map();
+          this.debugMode = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
 
-        // 能力配置数据
-        const abilityConfig = {
-            // 认知能力
-            focusedAttention: {
-                id: 'focusedAttention',
-                label: '集中性注意力',
-                description: '指在一定时间内专注于特定任务或刺激的能力。这种能力帮助学习者在学习过程中保持专注，不被外界干扰分散注意力，从而提高学习效率和质量。集中性注意力强的学习者能够更好地完成需要持续专注的任务，如阅读、听讲和解题。'
-            },
-            selectiveAttention: {
-                id: 'selectiveAttention',
-                label: '选择性注意力',
-                description: '指从多个刺激中选择性地关注重要信息，忽略无关信息的能力。这种能力帮助学习者在复杂的学习环境中筛选出关键信息，提高信息处理的效率。选择性注意力强的学习者能够在嘈杂的环境中专注学习，快速识别重点内容。'
-            },
-            shiftingAttention: {
-                id: 'shiftingAttention',
-                label: '转移性注意力',
-                description: '指根据任务需要灵活转换注意力焦点的能力。这种能力帮助学习者在不同学习任务间快速切换，适应多任务学习环境。转移性注意力强的学习者能够更好地处理复合型学习任务，在不同学科间灵活转换思维模式。'
-            },
-            distributedAttention: {
-                id: 'distributedAttention',
-                label: '分配性注意力',
-                description: '指同时关注多个任务或信息源的能力。这种能力帮助学习者在多任务环境中保持效率，合理分配认知资源。分配性注意力强的学习者能够在听讲的同时做笔记，或者同时处理多个学习任务而不降低质量。'
-            },
-            visualMemory: {
-                id: 'visualMemory',
-                label: '视觉记忆',
-                description: '指对视觉信息进行编码、存储和提取的能力。这种能力帮助学习者记住图表、图像、文字布局等视觉材料。视觉记忆强的学习者在学习几何、地理、艺术等需要视觉想象的学科时具有优势，能够更好地理解和记忆空间关系。'
-            },
-            auditoryMemory: {
-                id: 'auditoryMemory',
-                label: '听觉记忆',
-                description: '指对听觉信息进行编码、存储和提取的能力。这种能力帮助学习者记住语言、音乐、声音等听觉材料。听觉记忆强的学习者在语言学习、音乐学习等方面表现突出，能够更好地记住老师的讲解和音频材料。'
-            },
-            workingMemory: {
-                id: 'workingMemory',
-                label: '工作记忆',
-                description: '指在执行认知任务时临时存储和操作信息的能力。这种能力是学习和思维的核心，影响理解、推理和问题解决。工作记忆强的学习者能够在心理上同时保持多个信息，进行复杂的思维操作，在数学计算和逻辑推理中表现优异。'
-            },
-            inductiveReasoning: {
-                id: 'inductiveReasoning',
-                label: '归纳推理能力',
-                description: '指从具体事例中总结出一般规律的思维能力。这种能力帮助学习者发现模式、总结规律，形成概念和理论。归纳推理能力强的学习者善于从实例中抽象出原理，在科学研究和创新思维中具有优势。'
-            },
-            deductiveReasoning: {
-                id: 'deductiveReasoning',
-                label: '演绎推理能力',
-                description: '指从一般原理推导出具体结论的思维能力。这种能力帮助学习者运用已知规律解决新问题，进行逻辑推理。演绎推理能力强的学习者善于运用理论知识分析实际问题，在数学证明和逻辑分析中表现突出。'
-            },
-            analogicalReasoning: {
-                id: 'analogicalReasoning',
-                label: '类比推理能力',
-                description: '指通过比较不同事物间的相似性来进行推理的能力。这种能力帮助学习者运用已有知识理解新概念，促进知识迁移。类比推理能力强的学习者善于发现事物间的内在联系，能够快速理解抽象概念。'
-            },
-            verbalComprehension: {
-                id: 'verbalComprehension',
-                label: '言语理解能力',
-                description: '指理解和运用语言的能力，包括词汇理解、语法掌握和语义分析。这种能力是学习的基础，影响阅读理解和表达能力。言语理解能力强的学习者在语文、外语等语言类学科中表现优异，能够准确理解复杂的文本内容。'
-            },
-            abstractReasoning: {
-                id: 'abstractReasoning',
-                label: '抽象推理能力',
-                description: '指处理抽象概念和符号关系的思维能力。这种能力帮助学习者理解复杂的理论概念，进行高层次的思维活动。抽象推理能力强的学习者在数学、物理、哲学等需要抽象思维的学科中具有优势。'
-            },
-            visualSpatialIntelligence: {
-                id: 'visualSpatialIntelligence',
-                label: '视觉空间智能',
-                description: '指感知、理解和操作视觉空间信息的能力。这种能力帮助学习者理解几何关系、空间结构和视觉模式。视觉空间智能强的学习者在几何、工程、艺术设计等领域表现突出，能够很好地进行空间想象和操作。'
-            },
-            // 学习策略
-            elaborationStrategy: {
-                id: 'elaborationStrategy',
-                label: '复述策略',
-                description: '指通过重复练习来巩固记忆的学习方法。这种策略帮助学习者加强记忆痕迹，提高信息保持率。善用复述策略的学习者能够通过有效的重复练习掌握基础知识，为进一步学习打下坚实基础。'
-            },
-            detailedProcessingStrategy: {
-                id: 'detailedProcessingStrategy',
-                label: '精细加工策略',
-                description: '指通过深入分析、联想和整合来理解和记忆信息的学习方法。这种策略帮助学习者建立知识间的联系，形成深层理解。善用精细加工策略的学习者能够将新知识与已有知识有机结合，提高学习的深度和质量。'
-            },
-            organizationalStrategy: {
-                id: 'organizationalStrategy',
-                label: '组织策略',
-                description: '指通过分类、归纳、构建框架等方式整理学习材料的方法。这种策略帮助学习者形成系统化的知识结构，提高学习效率。善用组织策略的学习者能够将复杂的信息有序化，便于理解和记忆。'
-            },
-            metacognitivePlanning: {
-                id: 'metacognitivePlanning',
-                label: '元认知计划',
-                description: '指对学习过程进行预先规划和设计的能力。这种能力帮助学习者制定合理的学习目标和策略，提高学习的针对性。元认知计划能力强的学习者能够根据任务特点和自身情况制定有效的学习计划。'
-            },
-            metacognitiveMonitoring: {
-                id: 'metacognitiveMonitoring',
-                label: '元认知监控',
-                description: '指对学习过程进行实时监察和评估的能力。这种能力帮助学习者及时发现学习中的问题，调整学习策略。元认知监控能力强的学习者能够准确判断自己的学习状态，及时纠正错误。'
-            },
-            metacognitiveRegulation: {
-                id: 'metacognitiveRegulation',
-                label: '元认知调节',
-                description: '指根据学习情况调整学习策略和方法的能力。这种能力帮助学习者优化学习过程，提高学习效果。元认知调节能力强的学习者能够灵活运用不同的学习策略，适应各种学习情境。'
-            },
-            effortManagement: {
-                id: 'effortManagement',
-                label: '努力管理',
-                description: '指合理分配和调节学习努力程度的能力。这种能力帮助学习者在不同任务间合理分配精力，保持持续的学习动力。努力管理能力强的学习者能够在困难面前坚持不懈，同时避免过度疲劳。'
-            },
-            timeManagement: {
-                id: 'timeManagement',
-                label: '时间管理',
-                description: '指有效规划和利用学习时间的能力。这种能力帮助学习者提高学习效率，平衡各项学习任务。时间管理能力强的学习者能够制定合理的时间安排，避免拖延，充分利用有限的时间。'
-            },
-            externalResourceUtilization: {
-                id: 'externalResourceUtilization',
-                label: '外界资源利用',
-                description: '指有效寻找和利用外部学习资源的能力。这种能力帮助学习者扩展学习渠道，获得更丰富的学习支持。善于利用外界资源的学习者能够主动寻求帮助，充分利用图书馆、网络、同伴等各种学习资源。'
-            },
-            // 学习动机
-            growth: {
-                id: 'growth',
-                label: '成长',
-                description: '指追求个人能力提升和自我发展的内在动机。这种动机驱动学习者不断挑战自己，追求进步。具有强烈成长动机的学习者将学习视为自我完善的过程，能够从挫折中学习，持续提升自己的能力。'
-            },
-            autonomy: {
-                id: 'autonomy',
-                label: '自主',
-                description: '指追求学习自主权和独立性的动机。这种动机帮助学习者发展自主学习能力，培养独立思考的习惯。具有强烈自主动机的学习者喜欢自己掌控学习过程，能够主动探索和发现知识。'
-            },
-            interaction: {
-                id: 'interaction',
-                label: '互动',
-                description: '指通过与他人交流合作来获得学习满足感的动机。这种动机促进学习者积极参与群体学习活动，发展社交技能。具有强烈互动动机的学习者喜欢讨论交流，能够在合作中学习和成长。'
-            },
-            interest: {
-                id: 'interest',
-                label: '兴趣',
-                description: '指对学习内容本身的好奇心和喜爱程度。这种动机是最持久的学习驱动力，能够维持长期的学习热情。具有强烈兴趣动机的学习者对知识充满好奇，能够主动深入探索感兴趣的领域。'
-            },
-            recognition: {
-                id: 'recognition',
-                label: '认可',
-                description: '指寻求他人肯定和赞扬的动机。这种动机帮助学习者获得成就感，增强学习信心。具有强烈认可动机的学习者重视他人的评价，能够通过获得认可来维持学习动力。'
-            },
-            competition: {
-                id: 'competition',
-                label: '竞争',
-                description: '指通过与他人比较来激发学习动力的动机。这种动机能够推动学习者努力超越他人，追求卓越表现。具有强烈竞争动机的学习者喜欢挑战，能够在竞争中激发潜能。'
-            },
-            materialReward: {
-                id: 'materialReward',
-                label: '物质奖励',
-                description: '指通过获得物质回报来维持学习动力的动机。这种动机能够提供短期的学习激励，但需要与内在动机相结合。受物质奖励动机驱动的学习者能够为了获得奖励而努力学习。'
-            },
-            // 情绪智力
-            emotionalAwareness: {
-                id: 'emotionalAwareness',
-                label: '情绪感知理解',
-                description: '指识别、理解自己和他人情绪的能力。这种能力帮助学习者更好地管理学习过程中的情绪波动，建立良好的人际关系。情绪感知理解能力强的学习者能够准确识别情绪信号，理解情绪对学习的影响。'
-            },
-            emotionalRegulation: {
-                id: 'emotionalRegulation',
-                label: '情绪调节表达',
-                description: '指有效管理和表达情绪的能力。这种能力帮助学习者在学习中保持积极的情绪状态，合理表达自己的感受。情绪调节表达能力强的学习者能够控制负面情绪，保持学习的积极性和专注度。'
-            },
-            // 学习品质
-            responsibility: {
-                id: 'responsibility',
-                label: '责任心',
-                description: '指对学习任务和目标承担责任的品质。这种品质帮助学习者认真对待学习，履行学习义务。具有强烈责任心的学习者能够自觉完成学习任务，对自己的学习成果负责。'
-            },
-            seriousness: {
-                id: 'seriousness',
-                label: '严谨性',
-                description: '指在学习过程中保持严格、细致态度的品质。这种品质帮助学习者避免粗心错误，提高学习质量。具有严谨性的学习者注重细节，能够进行深入细致的思考和分析。'
-            },
-            perseverance: {
-                id: 'perseverance',
-                label: '坚毅性',
-                description: '指面对困难和挫折时坚持不懈的品质。这种品质帮助学习者克服学习中的障碍，实现长期目标。具有坚毅性的学习者能够在困难面前不轻易放弃，通过持续努力达成目标。'
-            },
-            creativity: {
-                id: 'creativity',
-                label: '创新性',
-                description: '指产生新颖、独特想法和解决方案的品质。这种品质帮助学习者突破常规思维，发现新的学习方法和知识联系。具有创新性的学习者善于独立思考，能够提出原创性的见解和解决方案。'
-            }
-        };
+          // 监听父页面的响应
+          window.addEventListener("message", (event) => {
+            if (event.data.type === "keepworkResponse") {
+              const { requestId, success, data, error } = event.data;
+              const request = this.pendingRequests.get(requestId);
 
-        function OnClickProfileItem(abilityId) {
-            const config = abilityConfig[abilityId];
-            if (config) {
-                // 获取对应的game信息
-                const fieldData = profileData[abilityId];
-                const gameInfo = fieldData && fieldData.game ? fieldData.game : null;
-                showAbilityModal(config, gameInfo);
-            }
-        }
-        
-        // 显示能力详情弹框
-        function showAbilityModal(config, gameInfo = null) {
-            const modal = document.getElementById('abilityModal');
-            const modalAbilityName = document.getElementById('modalAbilityName');
-            const modalAbilityDescription = document.getElementById('modalAbilityDescription');
-            const gameInfoDiv = document.getElementById('gameInfo');
-            const modalGameName = document.getElementById('modalGameName');
-            
-            modalAbilityName.textContent = config.label;
-            modalAbilityDescription.textContent = config.description;
-            
-            // 处理game信息
-            if (gameInfo && gameInfo.game_name) {
-                try {
-                    // 解码后再编码，确保一致性
-                    const decodedGameName = decodeURIComponent(escape(atob(gameInfo.game_name)));
-
-                    modalGameName.textContent = decodedGameName;
-                    
-                    // 添加点击事件
-                    modalGameName.onclick = function() {
-                        // 关闭modal
-                        closeAbilityModal();
-                        
-                        // 发送postMessage
-                        window.parent.postMessage({
-                            type: 'gameNameClicked',
-                            gameInfo: {...gameInfo, decodeName: decodedGameName}
-                        }, '*');
-                    };
-                    
-                    gameInfoDiv.style.display = 'block';
-                } catch (e) {
-                    console.error('Base64解码失败:', e);
-                    gameInfoDiv.style.display = 'none';
+              if (request) {
+                this.pendingRequests.delete(requestId);
+                if (this.debugMode) {
+                  console.debug("KeepworkProxy response received:", { requestId, success, data, error });
                 }
-            } else {
-                gameInfoDiv.style.display = 'none';
-            }
-            
-            modal.classList.add('show');
-            modal.style.display = 'flex';
-            
-        }
-        
-        // 关闭能力详情弹框
-        function closeAbilityModal() {
-            const modal = document.getElementById('abilityModal');
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-        
-        }
-        
-        // 点击背景关闭弹框
-        document.addEventListener('click', function(event) {
-            const modal = document.getElementById('abilityModal');
-            if (event.target === modal) {
-                closeAbilityModal();
-            }
-        });
-        
-        // ESC键关闭弹框
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                closeAbilityModal();
-            }
-        });
-        
-        // 初始化能力项点击事件
-        function initAbilityItemEvents() {
-            const abilityItems = document.querySelectorAll('.ability-item');
-            abilityItems.forEach(item => {
-                const abilityValueElement = item.querySelector('.ability-value');
-                if (abilityValueElement && abilityValueElement.id) {
-                    const abilityId = abilityValueElement.id;
-                    item.addEventListener('click', function() {
-                        OnClickProfileItem(abilityId);
-                    });
-                    
-                    // 添加视觉反馈
-                    item.style.cursor = 'pointer';
+                if (success) {
+                  request.resolve(data);
+                } else {
+                  request.reject(new Error(error));
                 }
-            });
-        }
-        
-        // 触摸事件处理（优化版本）
-        function addTouchEvents() {
-            const abilityItems = document.querySelectorAll('.ability-item');
-            const sectionHeaders = document.querySelectorAll('.section-header');
-            
-            // 为能力项添加触摸事件
-            abilityItems.forEach(item => {
-                let touchStartTime = 0;
-                
-                item.addEventListener('touchstart', function(e) {
-                    touchStartTime = Date.now();
-                    this.style.backgroundColor = '#e3f2fd';
-                    this.style.transform = 'scale(0.98)';
-                    
-                    // 添加触觉反馈（如果支持）
-                    if (navigator.vibrate) {
-                        navigator.vibrate(10);
-                    }
-                }, { passive: true });
-                
-                item.addEventListener('touchend', function(e) {
-                    const touchDuration = Date.now() - touchStartTime;
-                    const delay = touchDuration < 100 ? 150 : 50;
-                    
-                    setTimeout(() => {
-                        this.style.backgroundColor = 'white';
-                        this.style.transform = '';
-                    }, delay);
-                }, { passive: true });
-                
-                item.addEventListener('touchcancel', function(e) {
-                    this.style.backgroundColor = 'white';
-                    this.style.transform = '';
-                }, { passive: true });
-            });
-            
-            // 为节标题添加触摸事件
-            sectionHeaders.forEach(header => {
-                header.addEventListener('touchstart', function(e) {
-                    this.style.transform = 'translateY(-1px) scale(0.99)';
-                }, { passive: true });
-                
-                header.addEventListener('touchend', function(e) {
-                    setTimeout(() => {
-                        this.style.transform = '';
-                    }, 100);
-                }, { passive: true });
-            });
-        }
-        
-        // 动态调整布局（优化版本）
-        function adjustLayout() {
-            const elements = window.cachedElements || {
-                container: document.getElementById('profileContainer'),
-                content: document.querySelector('.content'),
-                leftPanel: document.querySelector('.left-panel'),
-                rightPanel: document.querySelector('.right-panel'),
-                radarContainer: document.querySelector('.radar-container')
-            };
-            
-            const screenSize = getScreenSize();
-            
-            // 根据屏幕尺寸调整布局
-            if (screenSize.width < 768) {
-                elements.content.style.flexDirection = 'column';
-                elements.leftPanel.style.width = '100%';
-                elements.rightPanel.style.width = '100%';
-            } else {
-                elements.content.style.flexDirection = 'row';
-                elements.leftPanel.style.width = '';
-                elements.rightPanel.style.width = '';
-            }
-            
-            // 调整雷达图大小并重新优化Canvas分辨率
-            if (elements.radarContainer && radarChart) {
-                // 使用 requestAnimationFrame 优化性能
-                requestAnimationFrame(() => {
-                    const canvas = document.getElementById('radarChart');
-                    if (canvas) {
-                        // 重新优化Canvas高DPI显示
-                        optimizeCanvasForHighDPI(canvas);
-                        // 调整图表大小
-                        radarChart.resize();
-                        // 强制重绘以确保清晰度
-                        radarChart.update('none');
-                    }
-                });
-            }
-        }
-        
-        // 防止双击缩放
-        document.addEventListener('touchstart', function(e) {
-            if (e.touches.length > 1) {
-                e.preventDefault();
-            }
-        }, { passive: false });
-        
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', function(e) {
-            const now = (new Date()).getTime();
-            if (now - lastTouchEnd <= 300) {
-                e.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, { passive: false });
-        
-        // 优化Canvas高DPI显示
-        function optimizeCanvasForHighDPI(canvas) {
-            const ctx = canvas.getContext('2d');
-            const devicePixelRatio = window.devicePixelRatio || 1;
-            const backingStoreRatio = ctx.webkitBackingStorePixelRatio ||
-                                    ctx.mozBackingStorePixelRatio ||
-                                    ctx.msBackingStorePixelRatio ||
-                                    ctx.oBackingStorePixelRatio ||
-                                    ctx.backingStorePixelRatio || 1;
-            
-            const ratio = devicePixelRatio / backingStoreRatio;
-            
-            if (devicePixelRatio !== backingStoreRatio) {
-                const oldWidth = canvas.width;
-                const oldHeight = canvas.height;
-                
-                canvas.width = oldWidth * ratio;
-                canvas.height = oldHeight * ratio;
-                
-                canvas.style.width = oldWidth + 'px';
-                canvas.style.height = oldHeight + 'px';
-                
-                ctx.scale(ratio, ratio);
-            }
-            
-            return ratio;
-        }
-        
-        function initRadarChart() {
-            const canvas = document.getElementById('radarChart');
-            const ctx = canvas.getContext('2d');
-            
-            // 优化Canvas高DPI显示
-            // const pixelRatio = optimizeCanvasForHighDPI(canvas);
-            const pixelRatio = 1
-            
-            // 设置Canvas抗锯齿
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            
-            radarChart = new Chart(ctx, {
-                type: 'radar',
-                data: {
-                    labels: ['认知能力', '学习策略', '学习动机', '情绪智力', '学习品质'],
-                    datasets: [{
-                        label: '60分基准线',
-                        data: [60, 60, 60, 60, 60],
-                        backgroundColor: 'transparent',
-                        borderColor: '#ffcc00',
-                        borderWidth: 2 * pixelRatio,
-                        borderDash: [5 * pixelRatio, 5 * pixelRatio],
-                        pointRadius: 0,
-                        pointHoverRadius: 0
-                    }, {
-                        label: '90分基准线',
-                        data: [90, 90, 90, 90, 90],
-                        backgroundColor: 'transparent',
-                        borderColor: '#00cc00',
-                        borderWidth: 2 * pixelRatio,
-                        borderDash: [5 * pixelRatio, 5 * pixelRatio],
-                        pointRadius: 0,
-                        pointHoverRadius: 0
-                    }, {
-                        label: '我的能力',
-                        data: [0, 0, 0, 0, 0],
-                        backgroundColor: 'rgba(116, 185, 255, 0.2)',
-                        borderColor: 'rgba(116, 185, 255, 1)',
-                        borderWidth: 2 * pixelRatio,
-                        pointBackgroundColor: 'rgba(116, 185, 255, 1)',
-                        pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: 'rgba(116, 185, 255, 1)',
-                        pointRadius: 4 * pixelRatio,
-                        pointHoverRadius: 6 * pixelRatio
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    devicePixelRatio: window.devicePixelRatio || 1,
-                    animation: {
-                        duration: 1000,
-                        easing: 'easeInOutQuart'
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: {
-                                font: {
-                                    size: Math.max(12 * pixelRatio, 12)
-                                },
-                                padding: 20 * pixelRatio,
-                                usePointStyle: true
-                            }
-                        }
-                    },
-                    scales: {
-                        r: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: {
-                                stepSize: 20,
-                                font: {
-                                    size: Math.max(10 * pixelRatio, 10)
-                                },
-                                backdropPadding: 2 * pixelRatio
-                            },
-                            pointLabels: {
-                                font: {
-                                    size: 12,
-                                    family: 'Arial, sans-serif'
-                                },
-                                padding: 3 * pixelRatio,
-                                color: '#333'
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)',
-                                lineWidth: 1 * pixelRatio
-                            },
-                            angleLines: {
-                                color: 'rgba(0, 0, 0, 0.1)',
-                                lineWidth: 1 * pixelRatio
-                            }
-                        }
-                    },
-                }
-            });
-            
-            // 存储pixelRatio供后续使用
-            window.canvasPixelRatio = pixelRatio;
-        }
-        
-        function updateUserInfo(data) {
-            // 更新用户信息
-            const fields = ['nickName', 'userName'];
-            fields.forEach(field => {
-                const element = document.querySelector(`.${field}`);
-                if (element) {
-                    const value = data[field];
-                    if (value !== undefined && value !== null && value !== '') {
-                        if (field == 'nickName'){
-                            element.textContent = '用户昵称：' + decodeURIComponent(escape(atob(value)));
-                        }else if(field == 'userName'){
-                            element.textContent = '账号：' + value;
-                        }
-                    } else {
-                        element.textContent = '-';
-                    }
-                }
-            });
-        }
-
-        function updateProfile(data) {
-            // 更新各项能力值
-            const fields = [
-                'focusedAttention', 'selectiveAttention', 'shiftingAttention', 'distributedAttention',
-                'visualMemory', 'auditoryMemory', 'workingMemory',
-                'inductiveReasoning', 'deductiveReasoning', 'analogicalReasoning', 
-                'verbalComprehension', 'abstractReasoning', 'visualSpatialIntelligence',
-                'elaborationStrategy', 'detailedProcessingStrategy', 'organizationalStrategy',
-                'metacognitivePlanning', 'metacognitiveMonitoring', 'metacognitiveRegulation',
-                'effortManagement', 'timeManagement', 'externalResourceUtilization',
-                'growth', 'autonomy', 'interaction', 'interest', 'recognition', 'competition', 'materialReward',
-                'emotionalAwareness', 'emotionalRegulation',
-                'responsibility', 'seriousness', 'perseverance', 'creativity'
-            ];
-           
-            fields.forEach(field => {
-                const element = document.getElementById(field);
-                if (element) {
-                    const fieldData = data[field];
-                    if (fieldData && typeof fieldData === 'object') {
-                        // 新数据格式：包含score和test_score
-                        const score = fieldData.score;
-                        const testScore = fieldData.test_score;
-                        if (score !== undefined && score !== null && score !== '' && score !== '0' && score !== 0) {
-                            if(score !== testScore){
-                                element.innerHTML = `${score}<span style="color: #888; font-size: 0.9em;">(${testScore})</span>`;
-                            }else{
-                                element.textContent = `${score}`;
-                            }
-                            element.classList.remove('empty');
-                            
-                            // 更新emoji图标
-                            updateEmojiForAbility(field, Number(score));
-                        } else {
-                            element.textContent = '-';
-                            element.classList.add('empty');
-                            
-                            // 清空emoji
-                            updateEmojiForAbility(field, null);
-                        }
-                    } else {
-                        // 兼容旧数据格式
-                        const value = fieldData;
-                        if (value !== undefined && value !== null && value !== '' && value !== '0' && value !== 0) {
-                            element.textContent = value;
-                            element.classList.remove('empty');
-                            
-                            // 更新emoji图标
-                            updateEmojiForAbility(field, Number(value));
-                        } else {
-                            element.textContent = '-';
-                            element.classList.add('empty');
-                            
-                            // 清空emoji
-                            updateEmojiForAbility(field, null);
-                        }
-                    }
-                }
-            });
-            
-            // 更新雷达图
-            updateRadarChart(data);
-        }
-        
-        function updateEmojiForAbility(abilityId, score) {
-              const emojiElement = document.querySelector(`#${abilityId}`).parentElement.querySelector('.ability-emoji');
-              if (emojiElement) {
-                  if (score === null || score === undefined) {
-                      emojiElement.innerHTML = '';
-                  } else if (score < 60) {
-                      emojiElement.innerHTML = '<span style="color: #e74c3c; font-weight: bold; font-size: 14px;">⬇</span>'; // 红色向下箭头 - 待提升
-                  } else if (score >= 60 && score < 80) {
-                      emojiElement.innerHTML = '<span style="color: #f39c12; font-weight: bold; font-size: 14px;">➡</span>'; // 橙色向右箭头 - 良好
-                  } else if (score >= 80) {
-                      emojiElement.innerHTML = '<span style="color: #27ae60; font-weight: bold; font-size: 14px;">⬆</span>'; // 绿色向上箭头 - 优异
-                  }
               }
+            }
+          });
+        }
+
+        _sendRequest(method, args = []) {
+          return new Promise((resolve, reject) => {
+            const requestId = ++this.requestId;
+
+            this.pendingRequests.set(requestId, { resolve, reject });
+
+            if (this.debugMode) {
+              console.debug("KeepworkProxy sending request:", { method, args, requestId });
+            }
+
+            // 设置超时
+            setTimeout(() => {
+              if (this.pendingRequests.has(requestId)) {
+                this.pendingRequests.delete(requestId);
+                reject(new Error("Keepwork operation timeout"));
+              }
+            }, 10000); // keepwork操作可能需要更长时间
+
+            // 发送请求到父页面
+            window.parent.parent.postMessage(
+              {
+                type: "keepwork",
+                method,
+                args,
+                requestId,
+              },
+              "*"
+            );
+          });
+        }
+
+        // 通用方法调用
+        async call(method, ...args) {
+          return await this._sendRequest(method, args);
+        }
+
+        // 支持深层方法调用，如 keepwork.some.deep.method
+        _createProxy(basePath = "") {
+          return new Proxy(this, {
+            get: (target, prop) => {
+              if (typeof prop === "string" && !prop.startsWith("_") && prop !== "constructor") {
+                const fullPath = basePath ? basePath + "." + prop : prop;
+
+                // 如果是已定义的方法，直接返回
+                if (target[prop] && typeof target[prop] === "function") {
+                  return target[prop].bind(target);
+                }
+
+                // 如果是已定义的属性，直接返回
+                if (target[prop]) {
+                  return target[prop];
+                }
+
+                // 否则创建一个新的代理
+                return this._createProxy(fullPath);
+              }
+              return target[prop];
+            },
+            apply: (target, thisArg, argArray) => {
+              // 当作为函数调用时，执行远程方法调用
+              return target._sendRequest(basePath, argArray);
+            },
+          });
+        }
+
+        // 创建代理实例
+        createProxy() {
+          return this._createProxy();
+        }
+      }
+
+      window.parentKeepwork = new KeepworkProxy().createProxy();
+
+      // 监听来自父页面的消息
+      window.addEventListener("message", async function (event) {
+        console.log("收到消息", event.data);
+        if (event.data && event.data.type === "setGameConfig") {
+          if (event.data.from === "ms_games") {
+            const data = event.data.data;
+            if (data && Array.isArray(data)) {
+              const abilityConfig = await getAbilityConfig();
+              const miniGameFinishInfo = await getMiniGameFinishInfo();
+
+              // 构建profileData对象，基于miniGameFinishInfo和abilityConfig
+              const profileData = {};
+
+              // 遍历每个能力
+              for (const [abilityKey, abilityInfo] of Object.entries(abilityConfig)) {
+                let gameMaxScore = 0;
+                let hasValidGameScore = false;
+
+                // 遍历该能力关联的游戏，计算游戏最高分
+                if (abilityInfo.games && Array.isArray(abilityInfo.games)) {
+                  for (const game of abilityInfo.games) {
+                    const gameResult = miniGameFinishInfo[game.name];
+                    if (gameResult && gameResult.completed && typeof gameResult.score === "number") {
+                      gameMaxScore = Math.max(gameMaxScore, gameResult.score);
+                      hasValidGameScore = true;
+                    }
+                  }
+                }
+
+                // 从data数组中获取对应的score值
+                const dataItem = data.find((item) => item.quotaName === abilityInfo.label);
+                const dataScore = dataItem ? dataItem.score : 0;
+
+                // 设置该能力的分数
+                profileData[abilityKey] = {
+                  score: dataScore || 0, // 使用data数组中的score值
+                  test_score: hasValidGameScore ? gameMaxScore : null, // 使用游戏最高分，没有则为null
+                };
+              }
+
+              console.log("从游戏成绩构建的profileData:", profileData);
+
+              // 调用updateProfile更新界面
+              updateProfile(profileData);
+              // 基于当前数据动态更新雷达图
+              updateRadarChartFromCaps(data);
+            }
+            const userInfo = event.data.userInfo;
+            const nickNameElement = document.querySelector(".nickName");
+            const userNameElement = document.querySelector(".userName");
+            nickNameElement.textContent = `用户昵称：${userInfo.name || "未知用户"}`;
+            userNameElement.textContent = `账号：${userInfo.phone || "未知账号"}`;
+          } else {
+            profileData = event.data.data.profileData;
+            userInfoData = event.data.data.userInfoData;
+            profileData && updateProfile(profileData);
+            userInfoData && updateUserInfo(userInfoData);
+          }
+        }
+      });
+
+      // 页面加载完成后发送消息
+      window.addEventListener("load", async function () {
+        window.parent.postMessage({ type: "requestProfileData" }, "*");
+
+        // 性能优化：使用 requestAnimationFrame
+        requestAnimationFrame(() => {
+          initRadarChart();
+          // adjustLayout();
+          if (isTouch) {
+            addTouchEvents();
           }
 
-        function updateRadarChart(data) {
-            if (!radarChart) return;
-            
-            // 计算各维度平均值
-            const cognitiveAvg = calculateAverage(data, [
-                'focusedAttention', 'selectiveAttention', 'shiftingAttention', 'distributedAttention',
-                'visualMemory', 'auditoryMemory', 'workingMemory',
-                'inductiveReasoning', 'deductiveReasoning', 'analogicalReasoning', 
-                'verbalComprehension', 'abstractReasoning', 'visualSpatialIntelligence'
-            ]);
-            
-            const strategyAvg = calculateAverage(data, [
-                'elaborationStrategy', 'detailedProcessingStrategy', 'organizationalStrategy',
-                'metacognitivePlanning', 'metacognitiveMonitoring', 'metacognitiveRegulation',
-                'effortManagement', 'timeManagement', 'externalResourceUtilization'
-            ]);
-            
-            const motivationAvg = calculateAverage(data, [
-                'growth', 'autonomy', 'interaction', 'interest', 'recognition', 'competition', 'materialReward'
-            ]);
-            
-            const emotionAvg = calculateAverage(data, [
-                'emotionalAwareness', 'emotionalRegulation'
-            ]);
-            
-            const qualityAvg = calculateAverage(data, [
-                'responsibility', 'seriousness', 'perseverance', 'creativity'
-            ]);
-            
-            radarChart.data.datasets[2].data = [cognitiveAvg, strategyAvg, motivationAvg, emotionAvg, qualityAvg];
-            radarChart.update();
+          // 初始化能力项点击事件
+          initAbilityItemEvents();
+
+          // 添加加载完成的视觉反馈
+          const container = document.getElementById("profileContainer");
+          container.classList.add("loaded");
+
+          // 预加载优化
+          preloadOptimizations();
+        });
+      });
+
+      // 预设置一些样式以避免闪烁
+      const container = document.getElementById("profileContainer");
+      if (container) {
+        container.style.visibility = "visible";
+      }
+
+      // 添加加载指示器
+      showLoadingIndicator();
+
+      // 刷新页面函数（防抖）
+      async function refreshPage() {
+        // 300ms 防抖：连续点击只在松手后执行一次
+        if (_refreshPageTimer) clearTimeout(_refreshPageTimer);
+        _refreshPageTimer = setTimeout(async () => {
+          _refreshPageTimer = null;
+          if (miniGameProxyData.maisiToken) {
+            // todo
+          } else if (miniGameProxyData.keepworkUserInfo?.username) {
+            try {
+              const response = await fetch(`https://gw.yujingceping.com/evaluation/dm/report/quotaList?sid=${miniGameProxyData.keepworkUserInfo.username}`, {
+                method: "GET",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              });
+              const data = await response.json();
+              if (data.code === 200) {
+                await window.parentKeepwork.call("personalPageStore.savePageData", "maisiAI_userCaps", null, data.data);
+                miniGameProxyData.maisiUserCaps = data.data.map((item) => {
+                  switch (item.quotaName) {
+                    case "视觉工作记忆":
+                    case "听觉工作记忆":
+                      item.quotaName = item.quotaName.replace("工作", "");
+                      break;
+                    case "看分辨":
+                      item.quotaName = "视分辨";
+                      break;
+                    case "看记忆":
+                      item.quotaName = "视记忆";
+                      break;
+                  }
+                  return item;
+                });
+                onMessage({ data: miniGameProxyData });
+              }
+            } catch (_) {}
+          }
+        }, 300);
+      }
+
+      async function getAbilityConfig() {
+        try {
+          if (abilityConfig) return abilityConfig;
+          const response = await fetch(`https://api.keepwork.com/core/v0/repos/${encodeURIComponent("maisi/maisi")}/files/${encodeURIComponent("maisi/maisi/webgames/data/config")}.md`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          if (response.ok) {
+            const config = await response.json();
+            const gameList = config.gameList;
+            abilityConfig = config.abilityConfig;
+            gameList.forEach((game) => {
+              game.abilities?.forEach((ability) => {
+                if (abilityConfig[ability]) {
+                  abilityConfig[ability].games = abilityConfig[ability].games || [];
+                  abilityConfig[ability].games.push({
+                    name: game.name,
+                    title: game.title,
+                  });
+                }
+              });
+            });
+            return abilityConfig;
+          }
+        } catch (error) {
+          console.error("获取能力配置失败:", error);
         }
-        
-        function calculateAverage(data, fields) {
-            const validValues = fields
-                .map(field => data[field])
-                .filter(value => value !== undefined && value !== null && value !== '' && !isNaN(value))
-                .map(value => Number(value));
-            
-            if (validValues.length === 0) return 0;
-            return Math.round(validValues.reduce((sum, value) => sum + value, 0) / validValues.length);
+      }
+
+      async function getMiniGameFinishInfo() {
+        try {
+          const miniGameFinishInfo = await window.parentKeepwork.call("personalPageStore.loadPageData", "maisiAI", "miniGameFinishInfo");
+          console.log("获取用户测试成绩:", miniGameFinishInfo);
+          return miniGameFinishInfo;
+        } catch (error) {
+          console.warn("获取用户成绩失败:", error);
+          // const urlParams = new URLSearchParams(window.location.search)
+          // const maisiToken = urlParams.get('maisiToken')
+          // console.log('使用maisiToken:', maisiToken)
+          // await window.parentKeepwork.call('setToken', maisiToken)
+          // const miniGameFinishInfo = await window.parentKeepwork.call(
+          //   'personalPageStore.loadPageData',
+          //   'maisiAI',
+          //   'miniGameFinishInfo'
+          // )
+          // console.log('获取用户测试成绩:', miniGameFinishInfo)
+          // return miniGameFinishInfo
         }
+      }
+
+      // 预加载优化
+      function preloadOptimizations() {
+        // 预计算一些值以提高性能
+        const screenSize = getScreenSize();
+
+        // 缓存DOM元素
+        window.cachedElements = {
+          container: document.getElementById("profileContainer"),
+          content: document.querySelector(".content"),
+          leftPanel: document.querySelector(".left-panel"),
+          rightPanel: document.querySelector(".right-panel"),
+          radarContainer: document.querySelector(".radar-container"),
+        };
+
+        // 移除加载指示器
+        hideLoadingIndicator();
+      }
+
+      // 显示加载指示器
+      function showLoadingIndicator() {
+        const loadingDiv = document.querySelector(".loading");
+        if (loadingDiv) {
+          loadingDiv.style.display = "flex";
+        }
+      }
+
+      // 隐藏加载指示器
+      function hideLoadingIndicator() {
+        const loadingDiv = document.querySelector(".loading");
+        if (loadingDiv) {
+          loadingDiv.style.opacity = "0";
+          setTimeout(() => {
+            loadingDiv.style.display = "none";
+          }, 300);
+        }
+      }
+
+      // 防抖函数
+      function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+
+      async function OnClickProfileItem(abilityId) {
+        const abilityConfig = await getAbilityConfig();
+        const config = abilityConfig[abilityId];
+        if (config && config.games) {
+          // 这里暂时只取第一个游戏信息
+          showAbilityModal(config, config.games[0]);
+        } else {
+          console.warn(`未找到能力配置: ${abilityId} ${config.label}`);
+        }
+      }
+
+      // 显示能力详情弹框
+      function showAbilityModal(config, gameInfo = null) {
+        const modal = document.getElementById("abilityModal");
+        const modalAbilityName = document.getElementById("modalAbilityName");
+        const modalAbilityDescription = document.getElementById("modalAbilityDescription");
+        const gameInfoDiv = document.getElementById("gameInfo");
+        const modalGameName = document.getElementById("modalGameName");
+
+        modalAbilityName.textContent = config.label;
+        modalAbilityDescription.textContent = config.description;
+
+        // 处理game信息
+        if (gameInfo) {
+          try {
+            modalGameName.textContent = gameInfo.title;
+            modalGameName.onclick = function () {
+              closeAbilityModal();
+              window.parent.postMessage(
+                {
+                  type: "gameNameClicked",
+                  gameInfo: { ...gameInfo, decodeName: gameInfo.title },
+                },
+                "*"
+              );
+            };
+            gameInfoDiv.style.display = "block";
+          } catch (e) {
+            console.error("Base64解码失败:", e);
+            gameInfoDiv.style.display = "none";
+          }
+        } else {
+          gameInfoDiv.style.display = "none";
+        }
+        modal.classList.add("show");
+        modal.style.display = "flex";
+      }
+
+      // 关闭能力详情弹框
+      function closeAbilityModal() {
+        const modal = document.getElementById("abilityModal");
+        modal.classList.remove("show");
+        modal.style.display = "none";
+      }
+
+      // 点击背景关闭弹框
+      document.addEventListener("click", function (event) {
+        const modal = document.getElementById("abilityModal");
+        if (event.target === modal) {
+          closeAbilityModal();
+        }
+      });
+
+      // ESC键关闭弹框
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeAbilityModal();
+        }
+      });
+
+      // 初始化能力项点击事件
+      function initAbilityItemEvents() {
+        const abilityItems = document.querySelectorAll(".ability-item");
+        abilityItems.forEach((item) => {
+          const abilityValueElement = item.querySelector(".ability-value");
+          if (abilityValueElement && abilityValueElement.id) {
+            const abilityId = abilityValueElement.id;
+            item.addEventListener("click", function () {
+              OnClickProfileItem(abilityId);
+            });
+
+            // 添加视觉反馈
+            item.style.cursor = "pointer";
+          }
+        });
+      }
+
+      // 触摸事件处理（优化版本）
+      function addTouchEvents() {
+        const abilityItems = document.querySelectorAll(".ability-item");
+        const sectionHeaders = document.querySelectorAll(".section-header");
+
+        // 为能力项添加触摸事件
+        abilityItems.forEach((item) => {
+          let touchStartTime = 0;
+
+          item.addEventListener(
+            "touchstart",
+            function (e) {
+              touchStartTime = Date.now();
+              this.style.backgroundColor = "#e3f2fd";
+              this.style.transform = "scale(0.98)";
+
+              // 添加触觉反馈（如果支持）
+              if (navigator.vibrate) {
+                navigator.vibrate(10);
+              }
+            },
+            { passive: true }
+          );
+
+          item.addEventListener(
+            "touchend",
+            function (e) {
+              const touchDuration = Date.now() - touchStartTime;
+              const delay = touchDuration < 100 ? 150 : 50;
+
+              setTimeout(() => {
+                this.style.backgroundColor = "white";
+                this.style.transform = "";
+              }, delay);
+            },
+            { passive: true }
+          );
+
+          item.addEventListener(
+            "touchcancel",
+            function (e) {
+              this.style.backgroundColor = "white";
+              this.style.transform = "";
+            },
+            { passive: true }
+          );
+        });
+
+        // 为节标题添加触摸事件
+        sectionHeaders.forEach((header) => {
+          header.addEventListener(
+            "touchstart",
+            function (e) {
+              this.style.transform = "translateY(-1px) scale(0.99)";
+            },
+            { passive: true }
+          );
+
+          header.addEventListener(
+            "touchend",
+            function (e) {
+              setTimeout(() => {
+                this.style.transform = "";
+              }, 100);
+            },
+            { passive: true }
+          );
+        });
+      }
+
+      // 动态调整布局（优化版本）
+      function adjustLayout() {
+        const elements = window.cachedElements || {
+          container: document.getElementById("profileContainer"),
+          content: document.querySelector(".content"),
+          leftPanel: document.querySelector(".left-panel"),
+          rightPanel: document.querySelector(".right-panel"),
+          radarContainer: document.querySelector(".radar-container"),
+        };
+
+        const screenSize = getScreenSize();
+
+        // 根据屏幕尺寸调整布局
+        if (screenSize.width < 768) {
+          elements.content.style.flexDirection = "column";
+          elements.leftPanel.style.width = "100%";
+          elements.rightPanel.style.width = "100%";
+        } else {
+          elements.content.style.flexDirection = "row";
+          elements.leftPanel.style.width = "";
+          elements.rightPanel.style.width = "";
+        }
+
+        // 调整雷达图大小并重新优化Canvas分辨率
+        if (elements.radarContainer && radarChart) {
+          // 使用 requestAnimationFrame 优化性能
+          requestAnimationFrame(() => {
+            const canvas = document.getElementById("radarChart");
+            if (canvas) {
+              // 重新优化Canvas高DPI显示
+              optimizeCanvasForHighDPI(canvas);
+              // 调整图表大小
+              radarChart.resize();
+              // 强制重绘以确保清晰度
+              radarChart.update("none");
+            }
+          });
+        }
+      }
+
+      // 防止双击缩放
+      document.addEventListener(
+        "touchstart",
+        function (e) {
+          if (e.touches.length > 1) {
+            e.preventDefault();
+          }
+        },
+        { passive: false }
+      );
+
+      let lastTouchEnd = 0;
+      document.addEventListener(
+        "touchend",
+        function (e) {
+          const now = new Date().getTime();
+          if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+          }
+          lastTouchEnd = now;
+        },
+        { passive: false }
+      );
+
+      // 优化Canvas高DPI显示
+      function optimizeCanvasForHighDPI(canvas) {
+        const ctx = canvas.getContext("2d");
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const backingStoreRatio = ctx.webkitBackingStorePixelRatio || ctx.mozBackingStorePixelRatio || ctx.msBackingStorePixelRatio || ctx.oBackingStorePixelRatio || ctx.backingStorePixelRatio || 1;
+
+        const ratio = devicePixelRatio / backingStoreRatio;
+
+        if (devicePixelRatio !== backingStoreRatio) {
+          const oldWidth = canvas.width;
+          const oldHeight = canvas.height;
+
+          canvas.width = oldWidth * ratio;
+          canvas.height = oldHeight * ratio;
+
+          canvas.style.width = oldWidth + "px";
+          canvas.style.height = oldHeight + "px";
+
+          ctx.scale(ratio, ratio);
+        }
+
+        return ratio;
+      }
+
+      function initRadarChart() {
+        const canvas = document.getElementById("radarChart");
+        const ctx = canvas.getContext("2d");
+
+        // 优化Canvas高DPI显示
+        // const pixelRatio = optimizeCanvasForHighDPI(canvas);
+        const pixelRatio = 1;
+
+        // 设置Canvas抗锯齿
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        radarChart = new Chart(ctx, {
+          type: "radar",
+          data: {
+            labels: chartLabels,
+            datasets: [
+              {
+                label: "60分基准线",
+                data: [60, 60, 60, 60, 60],
+                backgroundColor: "transparent",
+                borderColor: "#ffcc00",
+                borderWidth: 2 * pixelRatio,
+                borderDash: [5 * pixelRatio, 5 * pixelRatio],
+                pointRadius: 0,
+                pointHoverRadius: 0,
+              },
+              {
+                label: "90分基准线",
+                data: [90, 90, 90, 90, 90],
+                backgroundColor: "transparent",
+                borderColor: "#00cc00",
+                borderWidth: 2 * pixelRatio,
+                borderDash: [5 * pixelRatio, 5 * pixelRatio],
+                pointRadius: 0,
+                pointHoverRadius: 0,
+              },
+              {
+                label: "我的能力",
+                data: [0, 0, 0, 0, 0],
+                backgroundColor: "rgba(116, 185, 255, 0.2)",
+                borderColor: "rgba(116, 185, 255, 1)",
+                borderWidth: 2 * pixelRatio,
+                pointBackgroundColor: "rgba(116, 185, 255, 1)",
+                pointBorderColor: "#fff",
+                pointHoverBackgroundColor: "#fff",
+                pointHoverBorderColor: "rgba(116, 185, 255, 1)",
+                pointRadius: 4 * pixelRatio,
+                pointHoverRadius: 6 * pixelRatio,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            devicePixelRatio: window.devicePixelRatio || 1,
+            animation: {
+              duration: 1000,
+              easing: "easeInOutQuart",
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: "bottom",
+                labels: {
+                  font: {
+                    size: Math.max(12 * pixelRatio, 12),
+                  },
+                  padding: 20 * pixelRatio,
+                  usePointStyle: true,
+                },
+              },
+            },
+            scales: {
+              r: {
+                startAngle: 0, // 让首个维度位于正上方
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                  stepSize: 20,
+                  font: {
+                    size: Math.max(10 * pixelRatio, 10),
+                  },
+                  backdropPadding: 2 * pixelRatio,
+                },
+                pointLabels: {
+                  font: {
+                    size: 12,
+                    family: "Arial, sans-serif",
+                  },
+                  padding: 3 * pixelRatio,
+                  color: "#333",
+                },
+                grid: {
+                  color: "rgba(0, 0, 0, 0.1)",
+                  lineWidth: 1 * pixelRatio,
+                },
+                angleLines: {
+                  color: "rgba(0, 0, 0, 0.1)",
+                  lineWidth: 1 * pixelRatio,
+                },
+              },
+            },
+          },
+        });
+
+        // 存储pixelRatio供后续使用
+        window.canvasPixelRatio = pixelRatio;
+      }
+
+      function updateUserInfo(data) {
+        // 更新用户信息
+        const fields = ["nickName", "userName"];
+        fields.forEach((field) => {
+          const element = document.querySelector(`.${field}`);
+          if (element) {
+            const value = data[field];
+            if (value !== undefined && value !== null && value !== "") {
+              if (field == "nickName") {
+                element.textContent = "用户昵称：" + decodeURIComponent(escape(atob(value)));
+              } else if (field == "userName") {
+                element.textContent = "账号：" + value;
+              }
+            } else {
+              element.textContent = "-";
+            }
+          }
+        });
+      }
+
+      function updateProfile(data) {
+        // 更新各项能力值
+        const fields = [
+          "focusedAttention",
+          "selectiveAttention",
+          "shiftingAttention",
+          "distributedAttention",
+          "visualMemory",
+          "auditoryMemory",
+          "workingMemory",
+          "inductiveReasoning",
+          "deductiveReasoning",
+          "analogicalReasoning",
+          "verbalComprehension",
+          "abstractReasoning",
+          "visualSpatialIntelligence",
+          "elaborationStrategy",
+          "detailedProcessingStrategy",
+          "organizationalStrategy",
+          "metacognitivePlanning",
+          "metacognitiveMonitoring",
+          "metacognitiveRegulation",
+          "effortManagement",
+          "timeManagement",
+          "externalResourceUtilization",
+          "growth",
+          "autonomy",
+          "interaction",
+          "interest",
+          "recognition",
+          "competition",
+          "materialReward",
+          "emotionalAwareness",
+          "emotionalRegulation",
+          "responsibility",
+          "seriousness",
+          "perseverance",
+          "creativity",
+        ];
+
+        fields.forEach((field) => {
+          const element = document.getElementById(field);
+          if (element) {
+            const fieldData = data[field];
+            if (fieldData && typeof fieldData === "object") {
+              // 新数据格式：包含score和test_score
+              const score = fieldData.score;
+              const testScore = fieldData.test_score;
+              if (score !== undefined && score !== null && score !== "" && score !== "0" && score !== 0) {
+                if (testScore !== null && testScore !== undefined && score !== testScore) {
+                  element.innerHTML = `${score}<span style="color: #888; font-size: 0.9em;">(${testScore})</span>`;
+                } else {
+                  element.textContent = `${score}`;
+                }
+                element.classList.remove("empty");
+
+                // 更新emoji图标
+                updateEmojiForAbility(field, Number(score), testScore !== null ? Number(testScore) : null);
+              } else {
+                element.textContent = "-";
+                element.classList.add("empty");
+
+                // 清空emoji
+                updateEmojiForAbility(field, null);
+              }
+            } else {
+              // 兼容旧数据格式
+              const value = fieldData;
+              if (value !== undefined && value !== null && value !== "" && value !== "0" && value !== 0) {
+                element.textContent = value;
+                element.classList.remove("empty");
+
+                // 更新emoji图标
+                updateEmojiForAbility(field, Number(value));
+              } else {
+                element.textContent = "-";
+                element.classList.add("empty");
+
+                // 清空emoji
+                updateEmojiForAbility(field, null);
+              }
+            }
+          }
+        });
+
+        // 雷达图更新改为由外部基于 caps 数据驱动
+      }
+
+      function updateEmojiForAbility(abilityId, score, testScore = null) {
+        const emojiElement = document.querySelector(`#${abilityId}`)?.parentElement?.querySelector(".ability-emoji");
+        if (!emojiElement) return;
+
+        // 优先处理无分数情况
+        if (score === null || score === undefined || isNaN(score)) {
+          emojiElement.innerHTML = "";
+          return;
+        }
+
+        // 默认根据分数显示
+        let emoji = "";
+        let color = "";
+
+        if (score < 60) {
+          emoji = "⬇";
+          color = "#e74c3c";
+        } else if (score < 80) {
+          emoji = "➡";
+          color = "#f39c12";
+        } else {
+          emoji = "⬆";
+          color = "#27ae60";
+        }
+
+        // 如果有testScore且与score不同，优先显示对比结果
+        if (testScore !== null && testScore !== undefined && !isNaN(testScore) && score !== testScore) {
+          if (testScore > score) {
+            emoji = "⬆";
+            color = "#27ae60";
+          } else if (testScore < score) {
+            emoji = "⬇";
+            color = "#e74c3c";
+          } else {
+            emoji = "➡";
+            color = "#f39c12";
+          }
+        }
+
+        emojiElement.innerHTML = `<span style="color: ${color}; font-weight: bold; font-size: 20px;">${emoji}</span>`;
+      }
+
+      function updateRadarChart(data) {
+        if (!radarChart) {
+          // 避免重复创建 interval，只允许一个等待定时器
+          if (!window._radarChartInitWaiting) {
+            window._radarChartInitWaiting = true;
+            const interval = setInterval(() => {
+              if (radarChart) {
+                clearInterval(interval);
+                window._radarChartInitWaiting = false;
+                updateRadarChart(data);
+              }
+            }, 50);
+          }
+          return;
+        }
+
+        // 计算各维度平均值
+        const cognitiveAvg = calculateAverage(data, [
+          "focusedAttention",
+          "selectiveAttention",
+          "shiftingAttention",
+          "distributedAttention",
+          "visualMemory",
+          "auditoryMemory",
+          "workingMemory",
+          "inductiveReasoning",
+          "deductiveReasoning",
+          "analogicalReasoning",
+          "verbalComprehension",
+          "abstractReasoning",
+          "visualSpatialIntelligence",
+        ]);
+
+        const strategyAvg = calculateAverage(data, [
+          "elaborationStrategy",
+          "detailedProcessingStrategy",
+          "organizationalStrategy",
+          "metacognitivePlanning",
+          "metacognitiveMonitoring",
+          "metacognitiveRegulation",
+          "effortManagement",
+          "timeManagement",
+          "externalResourceUtilization",
+        ]);
+
+        const motivationAvg = calculateAverage(data, ["growth", "autonomy", "interaction", "interest", "recognition", "competition", "materialReward"]);
+
+        const emotionAvg = calculateAverage(data, ["emotionalAwareness", "emotionalRegulation"]);
+
+        const qualityAvg = calculateAverage(data, ["responsibility", "seriousness", "perseverance", "creativity"]);
+
+        radarChart.data.datasets[2].data = [cognitiveAvg, strategyAvg, motivationAvg, emotionAvg, qualityAvg];
+        radarChart.update();
+      }
+
+      // 基于 caps 列表（maisiUserCaps 或同结构）动态计算维度并更新雷达图（根节点个数=维度数）
+      function updateRadarChartFromCaps(capsList) {
+        if (!Array.isArray(capsList)) return;
+
+        if (!radarChart) {
+          if (!window._radarChartInitWaitingCaps) {
+            window._radarChartInitWaitingCaps = true;
+            const interval = setInterval(() => {
+              if (radarChart) {
+                clearInterval(interval);
+                window._radarChartInitWaitingCaps = false;
+                updateRadarChartFromCaps(capsList);
+              }
+            }, 50);
+          }
+          return;
+        }
+
+        // 使用一层树：每个根节点代表一个维度（自动可为 5 边或 6 边等）
+        const tree = buildTree(capsList);
+        const labels = [];
+        const values = [];
+
+        tree.forEach((root) => {
+          const title = root.quotaName || "";
+          const nums = [];
+          if (Array.isArray(root.children) && root.children.length > 0) {
+            root.children.forEach((c) => {
+              if (c && typeof c.score === "number" && !isNaN(c.score)) nums.push(c.score);
+            });
+          } else if (typeof root.score === "number" && !isNaN(root.score)) {
+            nums.push(root.score);
+          }
+          const avg = nums.length ? Math.round(nums.reduce((s, v) => s + v, 0) / nums.length) : 0;
+          labels.push(title);
+          values.push(avg);
+        });
+
+        if (labels.length === 0) return;
+
+        // 将“认知能力”旋转到首位，确保出现在顶部
+        const idx = labels.indexOf("认知能力");
+        const rotatedLabels = idx > 0 ? labels.slice(idx).concat(labels.slice(0, idx)) : labels;
+        const rotatedValues = idx > 0 ? values.slice(idx).concat(values.slice(0, idx)) : values;
+
+        // 同步更新图表的 labels 与三条数据集长度
+        radarChart.data.labels = rotatedLabels;
+        // 基准线长度匹配
+        radarChart.data.datasets[0].data = Array(rotatedLabels.length).fill(60);
+        radarChart.data.datasets[1].data = Array(rotatedLabels.length).fill(90);
+        radarChart.data.datasets[2].data = rotatedValues;
+        radarChart.update();
+      }
+
+      function getDimensionIndex(sectionClass) {
+        switch (sectionClass) {
+          case "cognitive-section":
+            return 0;
+          case "strategy-section":
+            return 1;
+          case "motivation-section":
+            return 2;
+          case "emotion-section":
+            return 3;
+          case "quality-section":
+            return 4;
+          default:
+            return -1;
+        }
+      }
+
+      function calculateAverage(data, fields) {
+        const validValues = fields
+          .map((field) => data[field].score)
+          .filter((value) => value !== undefined && value !== null && value !== "" && !isNaN(value))
+          .map((value) => Number(value));
+
+        if (validValues.length === 0) return 0;
+        return Math.round(validValues.reduce((sum, value) => sum + value, 0) / validValues.length);
+      }
+
+      /**
+       * 将扁平数据转为树结构
+       * - 父子关系：quotaPid → quotaId
+       * - quotaPid 为 0 或未找到父节点的视为根
+       * - 默认对每层按 depth、quotaId 升序排序
+       * @param {Item[]} list
+       * @returns {(Item & { children: any[] })[]}
+       */
+      function buildTree(list) {
+        const map = new Map();
+        const roots = [];
+
+        // 预创建节点
+        for (const it of list) {
+          map.set(it.quotaId, { ...it, children: [] });
+        }
+
+        // 构建父->子映射（使用原始层级关系）
+        const idToChildren = new Map();
+        for (const node of map.values()) {
+          const pid = node.quotaPid;
+          if (pid && map.has(pid)) {
+            if (!idToChildren.has(pid)) idToChildren.set(pid, []);
+            idToChildren.get(pid).push(node);
+          }
+        }
+
+        // 根：无父或父不存在
+        for (const node of map.values()) {
+          const pid = node.quotaPid;
+          if (!pid || !map.has(pid)) {
+            roots.push(node);
+          }
+        }
+
+        // 收集某个父节点下整棵子树的“末级叶子”（没有子节点的节点）
+        const collectLeaves = (startId) => {
+          const leaves = [];
+          const stack = (idToChildren.get(startId) || []).slice();
+          const visited = new Set();
+          while (stack.length) {
+            const cur = stack.pop();
+            if (!cur || visited.has(cur.quotaId)) continue;
+            visited.add(cur.quotaId);
+            const kids = idToChildren.get(cur.quotaId);
+            if (kids && kids.length) {
+              // 继续向下
+              for (const k of kids) stack.push(k);
+            } else {
+              // 没有更深层孩子，即为末级叶子
+              leaves.push(cur);
+            }
+          }
+          return leaves;
+        };
+
+        // 仅挂载一层：每个根节点的 children 为其整棵子树的末级叶子
+        for (const r of roots) {
+          r.children = collectLeaves(r.quotaId);
+
+          // 按“直接上级”为“思维能力”来标记末级子项隐藏分数（上级不一定是根）
+          if (Array.isArray(r.children)) {
+            r.children.forEach((ch) => {
+              if (!ch) return;
+              const parent = map.get(ch.quotaPid);
+              if (!parent) return;
+              const isThinkingParent = parent.quotaName === "思维能力" || parent.levelName === "思维能力";
+              if (isThinkingParent) ch.hideScore = true;
+            });
+          }
+        }
+
+        // 排序：根与其叶子子节点
+        const sortArr = (arr) => arr.sort((a, b) => a.depth - b.depth || a.quotaId - b.quotaId);
+        sortArr(roots);
+        for (const r of roots) sortArr(r.children);
+
+        return roots;
+      }
+
+      /**
+       * 将树数据渲染到右侧面板（覆盖原有内容）
+       * @param {Array} tree
+       */
+      function renderTreeToRightPanel(tree) {
+        const rightPanel = document.querySelector(".right-panel");
+        if (!rightPanel) return;
+        // 覆盖现有内容
+        rightPanel.innerHTML = "";
+
+        const frag = document.createDocumentFragment();
+        const handled = new Set();
+        // 支持多组顶层区块同排显示（每组可包含多个指标，整组并排展示）
+        const rowGroups = [
+          // 每个子数组代表一行可并排显示的顶层指标名称集合
+          ["运动协调", "情绪能力"],
+          ["情绪智力", "学习品质", "学习相关性格"],
+        ];
+
+        // 1) 保证“认知能力”总在第一行显示
+        const cognitiveNode = tree.find((n) => n.quotaName === "认知能力");
+        if (cognitiveNode) {
+          frag.appendChild(createSectionFromNode(cognitiveNode));
+          handled.add(cognitiveNode.quotaId);
+        }
+
+        for (let i = 0; i < tree.length; i++) {
+          const node = tree[i];
+          if (handled.has(node.quotaId)) continue;
+
+          // 若该节点属于某一行分组，则将该组内未处理的所有节点一起并排展示
+          const group = rowGroups.find((g) => g.includes(node.quotaName));
+          if (group) {
+            const groupNodes = group.map((name) => tree.find((n) => n.quotaName === name)).filter((n) => n && !handled.has(n.quotaId));
+
+            if (groupNodes.length > 0) {
+              const row = document.createElement("div");
+              row.className = "section-row";
+              groupNodes.forEach((n) => {
+                row.appendChild(createSectionFromNode(n));
+                handled.add(n.quotaId);
+              });
+              frag.appendChild(row);
+              continue;
+            }
+          }
+
+          // 不在任何分组中，或分组内其余成员不存在时，单独渲染
+          frag.appendChild(createSectionFromNode(node));
+          handled.add(node.quotaId);
+        }
+        rightPanel.appendChild(frag);
+
+        // 分配唯一的头部颜色，认知能力固定紫色，其它避免使用紫色
+        try {
+          applyUniqueHeaderColors(rightPanel);
+        } catch (_) {}
+
+        // 新内容注入后，重新绑定事件
+        try {
+          initAbilityItemEvents && initAbilityItemEvents();
+        } catch (_) {}
+        try {
+          if (isTouch) addTouchEvents && addTouchEvents();
+        } catch (_) {}
+      }
+
+      // 为每个 section-header 分配唯一颜色（超出调色板数量后循环）
+      function applyUniqueHeaderColors(container) {
+        const purple = "linear-gradient(135deg, #8b5cf6, #7c3aed)";
+        // 不包含紫色的调色板
+        const palette = [
+          "linear-gradient(135deg, #3b82f6, #2563eb)", // 蓝
+          "linear-gradient(135deg, #10b981, #059669)", // 绿
+          "linear-gradient(135deg, #f59e0b, #d97706)", // 橙
+          "linear-gradient(135deg, #ef4444, #dc2626)", // 红
+          "linear-gradient(135deg, #ec4899, #db2777)", // 粉
+          "linear-gradient(135deg, #14b8a6, #0d9488)", // 青
+          "linear-gradient(135deg, #22c55e, #16a34a)", // 翠
+          "linear-gradient(135deg, #06b6d4, #0891b2)", // 湖蓝
+          "linear-gradient(135deg, #f43f5e, #e11d48)", // 玫红
+          "linear-gradient(135deg, #64748b, #475569)", // 蓝灰
+        ];
+        const headers = [...container.querySelectorAll(".section-header")];
+
+        // 先给“认知能力”设置紫色
+        let paletteIndex = 0;
+        headers.forEach((h) => {
+          if (h.textContent && h.textContent.trim() === "认知能力") {
+            h.style.background = purple;
+            h.style.color = "#fff";
+          }
+        });
+
+        // 其它 header 依次分配非紫色
+        headers.forEach((h) => {
+          if (h.textContent && h.textContent.trim() === "认知能力") return;
+          const color = palette[paletteIndex % palette.length];
+          paletteIndex++;
+          h.style.background = color;
+          h.style.color = "#fff";
+        });
+      }
+
+      // 根据标题关键字映射到原本的样式类，用于给 section-header 着色
+      function getSectionClassByName(name = "") {
+        const n = String(name);
+        if (/认知|思维|注意|记忆|推理|理解|空间/.test(n)) return "cognitive-section";
+        if (/策略|组织|元认知|时间|努力|资源/.test(n)) return "strategy-section";
+        if (/动机|成长|自主|互动|兴趣|认可|竞争|物质/.test(n)) return "motivation-section";
+        if (/情绪|情感/.test(n)) return "emotion-section";
+        if (/品质|责任|严谨|坚毅|创新/.test(n)) return "quality-section";
+        return "cognitive-section"; // 默认给个通用的配色
+      }
+
+      /**
+       * 递归创建区块：有子节点的作为一个 section，无子节点的作为一个 ability-item
+       * @param {any} node
+       * @returns {HTMLElement}
+       */
+      function createSectionFromNode(node) {
+        // 若无子节点，作为叶子渲染
+        if (!node.children || node.children.length === 0) {
+          return createAbilityItem(node);
+        }
+
+        const section = document.createElement("div");
+        // 根据标题映射到不同的主题类，以继承 .section-header 的不同颜色
+        section.className = "ability-section " + getSectionClassByName(node.quotaName);
+
+        const header = document.createElement("div");
+        header.className = "section-header";
+        header.textContent = node.quotaName || "";
+        section.appendChild(header);
+
+        // 认知能力：将末级指标分成两行显示
+        if (node.quotaName === "认知能力" && node.children.length > 6) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "section-content--stack";
+
+          const row1 = document.createElement("div");
+          row1.className = "section-content-row";
+          const row2 = document.createElement("div");
+          row2.className = "section-content-row";
+
+          const mid = Math.ceil(node.children.length / 2);
+          const first = node.children.slice(0, mid);
+          const second = node.children.slice(mid);
+
+          first.forEach((child) => row1.appendChild(createAbilityItem(child)));
+          second.forEach((child) => row2.appendChild(createAbilityItem(child)));
+
+          wrapper.appendChild(row1);
+          wrapper.appendChild(row2);
+          section.appendChild(wrapper);
+          section.classList.add("renzhi-section");
+        } else {
+          const content = document.createElement("div");
+          content.className = "section-content";
+          node.children.forEach((child) => {
+            content.appendChild(createAbilityItem(child));
+          });
+          section.appendChild(content);
+        }
+        return section;
+      }
+
+      /**
+       * 创建叶子节点表示块
+       * @param {any} node
+       * @returns {HTMLElement}
+       */
+      function createAbilityItem(node) {
+        const item = document.createElement("div");
+        item.className = "ability-item";
+
+        const label = document.createElement("div");
+        label.className = "ability-label";
+        label.textContent = node.quotaName || "";
+        // 等级徽标（可选）
+        if (node.levelName) {
+          const levelTag = document.createElement("span");
+          levelTag.style.marginLeft = "6px";
+          levelTag.style.fontSize = "12px";
+          levelTag.style.color = "#666";
+          levelTag.textContent = `(${node.levelName})`;
+          label.appendChild(levelTag);
+        }
+
+        const scoreContainer = document.createElement("div");
+        scoreContainer.className = "ability-score-container";
+
+        const value = document.createElement("div");
+        value.className = "ability-value";
+        // const shouldHide = node && node.hideScore === true
+        const shouldHide = ["比较和分类", "对应思维", "空间思维", "序列推理", "数量推理"].includes(node.quotaName);
+        const hasScore = !shouldHide && node.score !== undefined && node.score !== null && node.score !== "";
+        value.textContent = hasScore ? String(node.score) : "-";
+        if (node.totalImprovement && node.totalImprovement > 0) {
+          value.innerHTML = `${value.textContent}<span style="color: #888; font-size: 0.9em;">+${node.totalImprovement}</span>`;
+        }
+        if (!hasScore) value.classList.add("empty");
+
+        const emoji = document.createElement("div");
+        emoji.className = "ability-emoji";
+        // 根据 levelName 展示趋势图标：待提升 / 良好 / 优异
+        {
+          const lvl = (node.levelName || "").trim();
+          let emojiChar = "";
+          let color = "";
+          if (lvl === "待提升") {
+            emojiChar = "⬇";
+            color = "#e74c3c";
+          } else if (lvl === "良好") {
+            emojiChar = "➡";
+            color = "#f39c12";
+          } else if (lvl === "优异") {
+            emojiChar = "⬆";
+            color = "#27ae60";
+          }
+          if (emojiChar) {
+            emoji.style.color = color;
+            emoji.style.fontWeight = "bold";
+            emoji.style.fontSize = "20px";
+            emoji.textContent = emojiChar;
+          }
+        }
+
+        scoreContainer.appendChild(value);
+        scoreContainer.appendChild(emoji);
+
+        item.appendChild(label);
+        item.appendChild(scoreContainer);
+
+        return item;
+      }
+
+      function onMessage(e) {
+        const data = e.data || {};
+        console.log("接收到消息:", data);
+        if (data.type === "miniGameProxyDataResponse") {
+          // console.log('miniGameProxyDataResponse:', data)
+          if (Object.keys(miniGameProxyData).length === 0) {
+            miniGameProxyData = data;
+          }
+          const abilityConfig = data.abilityConfig;
+          const miniGameFinishInfo = data.miniGameFinishInfo;
+
+          // 构建profileData对象，基于miniGameFinishInfo和abilityConfig
+          const profileData = {};
+
+          // 遍历每个能力
+          for (const [abilityKey, abilityInfo] of Object.entries(abilityConfig)) {
+            let gameMaxScore = 0;
+            let hasValidGameScore = false;
+
+            // 遍历该能力关联的游戏，计算游戏最高分
+            if (abilityInfo.games && Array.isArray(abilityInfo.games)) {
+              for (const game of abilityInfo.games) {
+                const gameResult = miniGameFinishInfo[game.name];
+                if (gameResult && gameResult.completed && typeof gameResult.score === "number") {
+                  gameMaxScore = Math.max(gameMaxScore, gameResult.score);
+                  hasValidGameScore = true;
+                }
+              }
+            }
+
+            // 从data数组中获取对应的score值
+            const dataItem = data.maisiUserCaps?.find((item) => item.quotaName === abilityInfo.label);
+            const dataScore = dataItem ? dataItem.score : 0;
+
+            // 设置该能力的分数
+            profileData[abilityKey] = {
+              score: dataScore || 0, // 使用data数组中的score值
+              test_score: hasValidGameScore ? gameMaxScore : null, // 使用游戏最高分，没有则为null
+              totalImprovement: dataItem ? dataItem.totalImprovement || 0 : 0,
+            };
+          }
+
+          // console.log('从游戏成绩构建的profileData:', profileData)
+
+          // 调用updateProfile更新界面
+          updateProfile(profileData);
+          // 基于 maisiUserCaps 动态更新雷达图
+          if (Array.isArray(data.maisiUserCaps)) {
+            data.maisiUserCaps = data.maisiUserCaps.filter((item) => typeof item === "object");
+            updateRadarChartFromCaps(data.maisiUserCaps);
+          }
+
+          // 基于 maisiUserCaps 渲染树并覆盖右侧面板
+          if (Array.isArray(data.maisiUserCaps)) {
+            try {
+              const tree = buildTree(data.maisiUserCaps);
+              console.log("构建的树结构:", tree);
+              renderTreeToRightPanel(tree);
+            } catch (e) {
+              console.warn("渲染树结构失败:", e);
+            }
+          }
+
+          try {
+            const rp = document.querySelector(".right-panel");
+            if (rp) applyUniqueHeaderColors(rp);
+          } catch (_) {}
+
+          const userInfo = data.maisiUserInfo || data.keepworkUserInfo;
+          const nickNameElement = document.querySelector(".nickName");
+          const userNameElement = document.querySelector(".userName");
+          nickNameElement.textContent = `用户昵称：${userInfo.name || userInfo.nickName || userInfo.username || "未知用户"}`;
+          userNameElement.textContent = `账号：${userInfo.phone || userInfo.username || "未知账号"}`;
+        }
+      }
+      window.addEventListener("message", onMessage);
+
+      if (window.parent && window.parent.parent && window.parent !== window.parent.parent) {
+        window.parent.parent.postMessage(
+          {
+            type: "getMiniGameProxyData",
+          },
+          "*"
+        );
+      }
     </script>
-</body>
+  </body>
 </html>

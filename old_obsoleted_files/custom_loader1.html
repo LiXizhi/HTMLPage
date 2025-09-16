@@ -539,7 +539,7 @@
       }
 
       .beta-bubble::after {
-        content: '';
+        content: "";
         position: absolute;
         bottom: -7px;
         left: 20%;
@@ -552,7 +552,8 @@
       }
 
       @keyframes bubblePulse {
-        0%, 100% {
+        0%,
+        100% {
           transform: scale(1);
           opacity: 0.9;
         }
@@ -751,7 +752,6 @@
         margin-top: 2px;
       }
 
-
       /* 抽屉式弹窗 */
       .drawer-overlay {
         position: fixed;
@@ -882,9 +882,7 @@
         border: none;
         width: 100%;
       }
-
     </style>
-
   </head>
 
   <body>
@@ -974,7 +972,7 @@
     </div>
 
     <!-- 固定在左下角的账号管理按钮 -->
-    <button class="account-btn" onclick="openAccountDrawer()" style="display: none;">账号管理</button>
+    <button class="account-btn" onclick="openAccountDrawer()" style="display: none">账号管理</button>
 
     <!-- 账号管理抽屉式弹窗 -->
     <div class="drawer-overlay" id="accountDrawer" onclick="closeAccountDrawer(event)">
@@ -1017,7 +1015,7 @@
         const currentPlatform = detectPlatform();
         return baseGuideImages.filter((config) => config.platform === "all" || config.platform === currentPlatform);
       }
-      const miniGameProxyVersion = "10"; // 每当miniGameProxy发版时，版本号请加1；lastUpdated: 2025/08/15
+      const miniGameProxyVersion = "11"; // 每当miniGameProxy发版时，版本号请加1；lastUpdated: 2025/08/15
       let currentSlide = 0;
       let slideImages = [];
       let slideInterval;
@@ -1030,6 +1028,7 @@
       let shineTextClickCount = 0;
       let shineTextClickTimer = null;
       let devModeUnlocked = false;
+      let isEnterButtonShown = false;
 
       // 加载提示文字数组
       const loadingTexts = ["正在加载精彩内容...", "准备开启思维训练...", "构建学习环境中...", "即将进入麦思星球...", "加载完成，准备开始！"];
@@ -1104,11 +1103,11 @@
           taskButton.classList.remove("hidden");
         }
       }
-
       function showEnterButton() {
         const enterButton = document.querySelector(".enter-btn");
         if (enterButton) {
           enterButton.classList.remove("hidden");
+          isEnterButtonShown = true;
         }
       }
 
@@ -1147,10 +1146,10 @@
             UpdateButtonsByUrlParams(urlParams);
             break;
           case "deleteAccount":
-            navigateToLogin()
+            navigateToLogin();
             break;
           case "logout":
-            navigateToLogin()
+            navigateToLogin();
             break;
           case "getUserInfo":
             getUserInfo();
@@ -1178,11 +1177,10 @@
           showAccountButton();
         }
         if (paracraftPlatform == "android" || paracraftPlatform == "ios" || paracraftPlatform == "harmony") {
-          // showEnterButton();
-          showTaskButton();
+          showEnterButton();
           showAccountButton();
           // showDownloadAppButton();
-          if(isMaisiTestCompleted){
+          if (isMaisiTestCompleted) {
             showTaskButton();
           }
         } else {
@@ -1193,28 +1191,28 @@
 
       function updateTaskButtonDisplay(taskTime) {
         try {
-          const today = new Date()
-          const taskDate = new Date(taskTime ? Number(taskTime) : Date.now())
+          const today = new Date();
+          const taskDate = new Date(taskTime ? Number(taskTime) : Date.now());
 
           // 判断是否为同一天
-          const isToday = today.toDateString() === taskDate.toDateString()
+          const isToday = today.toDateString() === taskDate.toDateString();
 
-          let titleText
+          let titleText;
           if (isToday) {
-            titleText = '今日任务'
+            titleText = "今日任务";
           } else {
-            const month = taskDate.getMonth() + 1
-            const day = taskDate.getDate()
-            titleText = `${month}月${day}日任务`
+            const month = taskDate.getMonth() + 1;
+            const day = taskDate.getDate();
+            titleText = `${month}月${day}日任务`;
           }
 
           // 更新首页的任务标题
-          const taskButton = document.querySelector('.task-btn')
+          const taskButton = document.querySelector(".task-btn");
           if (taskButton) {
-            taskButton.textContent = titleText
+            taskButton.textContent = titleText;
           }
         } catch (error) {
-          console.error('更新任务标题失败:', error)
+          console.error("更新任务标题失败:", error);
         }
       }
 
@@ -1368,11 +1366,20 @@
         if (devModeUnlocked && (!urlParams || urlParams.dev !== "true")) {
           url += "&dev=true";
         }
-        if(urlParams && urlParams.isUseMaisiDevServer === "true"){
+        if (urlParams && urlParams.isUseMaisiDevServer === "true") {
           url += "&from=dev";
         }
+        if (isEnterButtonShown) {
+          url += "&gobackurl=true";
+        }
 
-        window.location.href = url;
+        window.parent.postMessage(
+          {
+            type: "navigate",
+            url,
+          },
+          "*"
+        );
       }
       function enterMSPlanet() {
         if (window.parent) {
@@ -1530,25 +1537,25 @@
       }
 
       // 退出登录页面
-      function navigateToLogin(){
+      function navigateToLogin() {
         showMessage("跳转中...");
         let url = `https://keepwork.com/public/resource/miniGameProxy.html?projectPath=maisi/maisi/webgames/data`;
-        const newUrlParams = new URLSearchParams()
-        newUrlParams.set('gameName', 'ms_games_login')
+        const newUrlParams = new URLSearchParams();
+        newUrlParams.set("gameName", "ms_games_login");
         if (urlParams && Object.keys(urlParams).length > 0) {
           if (urlParams.orientation) {
-            newUrlParams.set('orientation', urlParams.orientation)
+            newUrlParams.set("orientation", urlParams.orientation);
           }
         }
         url += "&" + newUrlParams.toString();
         url += "&showType=logout";
         url += `&version=${miniGameProxyVersion}`;
 
-        window.location.replace(url)
+        window.location.replace(url);
       }
-      
+
       //获得用户信息
-      async function getUserInfo(){
+      async function getUserInfo() {
         let userToken = (urlParams && urlParams.token) || null;
         if (!userToken) {
           showMessage("用户未登录");
@@ -1556,10 +1563,10 @@
         }
         if (!this.userInfo) {
           const response = await fetch("https://api.keepwork.com/core/v0/users/profile", {
-            "headers": {
-              "Authorization": `Bearer ${userToken}`,
+            headers: {
+              Authorization: `Bearer ${userToken}`,
             },
-            "method": "GET"
+            method: "GET",
           });
           const data = await response.json();
           this.userInfo = data;
@@ -1567,10 +1574,13 @@
         if (this.userInfo) {
           const accountIframe = document.getElementById("accountIframe");
           if (accountIframe) {
-            accountIframe.contentWindow.postMessage({
-                type: 'userInfoResponse',
-                userInfo: this.userInfo
-            }, '*');
+            accountIframe.contentWindow.postMessage(
+              {
+                type: "userInfoResponse",
+                userInfo: this.userInfo,
+              },
+              "*"
+            );
           }
         }
       }
@@ -1581,7 +1591,7 @@
           closeDownloadDrawer();
           closeAccountDrawer();
         }
-      }); 
+      });
       // 窗口大小改变处理
       window.addEventListener("resize", function () {
         // 防抖处理
