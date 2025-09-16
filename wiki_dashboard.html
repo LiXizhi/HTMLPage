@@ -197,6 +197,28 @@
                 <span id="question-char-count">0/120</span>
               </div>
             </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">分类 (可选)</label>
+              <select id="new-question-category" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="自定义问题" selected>自定义问题</option>
+                <option value="自然科学类">自然科学类</option>
+                <option value="动物世界类">动物世界类</option>
+                <option value="宇宙探索类">宇宙探索类</option>
+                <option value="人体奥秘类">人体奥秘类</option>
+                <option value="生活常识类">生活常识类</option>
+                <option value="学习方法类">学习方法类</option>
+                <option value="情感与心理类">情感与心理类</option>
+                <option value="家庭关系类">家庭关系类</option>
+                <option value="文化与历史类">文化与历史类</option>
+                <option value="科技与工程类">科技与工程类</option>
+                <option value="数学与逻辑类">数学与逻辑类</option>
+                <option value="艺术与创造类">艺术与创造类</option>
+                <option value="社会与公民类">社会与公民类</option>
+              </select>
+              <div class="text-xs text-gray-500 mt-1">
+                <span>选择问题类别或保持默认</span>
+              </div>
+            </div>
 
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">关键词 (可选)</label>
@@ -804,16 +826,12 @@
         if (customIndex !== -1) {
           customQuestions[customIndex].status = "progress";
           customQuestions[customIndex].progressTime = getCurrentDateCode();
-        }
-
-        // Update global progress_wikiwords array (only if question has wikiWord)
+        } // Update global progress_wikiwords array (only if question has wikiWord)
         if (question.wikiWord && !progress_wikiwords.includes(question.wikiWord)) {
           progress_wikiwords.unshift(question.wikiWord); // Add to front for newest first
         }
 
-        saveProgressData(true);
-
-        // Close modal
+        saveProgressData(true);        // Close modal
         document.getElementById("question-modal").classList.add("hidden");
         // remove ? in question.question when passing to URL
         let objective = question.question.replace(/\?/g, "");
@@ -828,6 +846,12 @@
         // Forward all existing URL parameters plus the new objective parameter
         const urlParams = new URLSearchParams(window.location.search);
         urlParams.set("objective", objective);
+        
+        // If this is a custom question, also pass the custom question ID
+        if (question.id && question.id.startsWith("custom_q_")) {
+          urlParams.set("customQuestionId", question.id);
+        }
+        
         url = `${url}?${urlParams.toString()}`;
 
         window.location.replace(url);
@@ -979,14 +1003,15 @@
         completedContainer.innerHTML = "";
 
         // Filter current period questions by status for unexplored (only current period)
-        const unexplored = currentPeriodQuestions.filter((q) => q.status === "unexplored");
-
-        // Get progress questions - custom questions first, then wikiword-based questions
+        const unexplored = currentPeriodQuestions.filter((q) => q.status === "unexplored"); // Get progress questions - custom questions first, then wikiword-based questions
         const customProgressQuestions = customQuestions.filter((q) => q.status === "progress");
         const progressFromWikiWords = progress_wikiwords.map((wikiword) => wikiWordToQuestionMap.get(wikiword)).filter((q) => q);
 
+        // Remove duplicates: exclude custom questions that are already in progressFromWikiWords
+        const uniqueProgressFromWikiWords = progressFromWikiWords.filter((q) => !customProgressQuestions.some((customQ) => customQ.id === q.id));
+
         // Combine with custom questions at the front, sort by progress time (newest first)
-        const allProgressQuestions = [...customProgressQuestions, ...progressFromWikiWords];
+        const allProgressQuestions = [...customProgressQuestions, ...uniqueProgressFromWikiWords];
         const progress = allProgressQuestions.sort((a, b) => {
           const timeA = a.progressTime || 0;
           const timeB = b.progressTime || 0;
@@ -997,8 +1022,11 @@
         const customCompletedQuestions = customQuestions.filter((q) => q.status === "completed");
         const completedFromWikiWords = completed_wikiwords.map((wikiword) => wikiWordToQuestionMap.get(wikiword)).filter((q) => q);
 
+        // Remove duplicates: exclude custom questions that are already in completedFromWikiWords
+        const uniqueCompletedFromWikiWords = completedFromWikiWords.filter((q) => !customCompletedQuestions.some((customQ) => customQ.id === q.id));
+
         // Combine with custom questions at the front, sort by completion time (newest first)
-        const allCompletedQuestions = [...customCompletedQuestions, ...completedFromWikiWords];
+        const allCompletedQuestions = [...customCompletedQuestions, ...uniqueCompletedFromWikiWords];
         const completed = allCompletedQuestions.sort((a, b) => {
           const timeA = a.completedTime || 0;
           const timeB = b.completedTime || 0;
@@ -1088,13 +1116,17 @@
         // Clear form
         document.getElementById("new-question-text").value = "";
         document.getElementById("new-question-wikiword").value = "";
+        document.getElementById("new-question-category").value = "自定义问题"; // Reset to default
         document.getElementById("question-char-count").textContent = "0/120";
         document.getElementById("wikiword-char-count").textContent = "0/30";
         document.getElementById("create-question-btn").disabled = true;
-      } // Function to create a new question
+      }
+
+      // Function to create a new question
       function createNewQuestion() {
         const questionText = document.getElementById("new-question-text").value.trim();
         const wikiWord = document.getElementById("new-question-wikiword").value.trim();
+        const selectedCategory = document.getElementById("new-question-category").value.trim();
 
         if (!questionText || questionText.length > 120) {
           alert("请输入有效的问题（1-120个字符）");
@@ -1104,19 +1136,32 @@
         if (wikiWord.length > 30) {
           alert("关键词不能超过30个字符");
           return;
-        } // Create new question object with a unique ID
+        }
+
+        // Use selected category or default to "自定义问题"
+        const category = selectedCategory || "自定义问题";
+
+        // Create new question object with a unique ID
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substr(2, 9);
         const newQuestion = {
           id: `custom_q_${timestamp}_${randomSuffix}`,
           question: questionText,
-          category: "自定义问题",
+          category: category,
           wikiWord: wikiWord || null,
           status: "progress",
           progressTime: getCurrentDateCode(),
         };
 
         console.log(`Creating new custom question: ${newQuestion.id}`);
+
+        // Check if this question already exists in customQuestions to prevent duplicates
+        const existingCustomIndex = customQuestions.findIndex((q) => q.question === questionText && q.wikiWord === (wikiWord || null));
+
+        if (existingCustomIndex !== -1) {
+          alert("这个问题已经存在了！");
+          return;
+        }
 
         // Add to custom questions array only (not to allQuestions)
         customQuestions.push(newQuestion);
@@ -1128,7 +1173,7 @@
           currentPeriodQuestions.push(newQuestion);
         }
 
-        // Update wikiword map only if question has wikiWord
+        // Update wikiword map only if question has wikiWord and doesn't already exist
         if (newQuestion.wikiWord && !wikiWordToQuestionMap.has(newQuestion.wikiWord)) {
           wikiWordToQuestionMap.set(newQuestion.wikiWord, newQuestion);
         }

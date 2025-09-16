@@ -945,11 +945,11 @@
           };
           this.initEventListeners();
           this.loadDefaultConfig();
-        }
-        async start() {
+        }        async start() {
           let urlObjective = game.urlObjective || new URLSearchParams(window.location.search).get("objective");
+          let customQuestionId = new URLSearchParams(window.location.search).get("customQuestionId");
           if (urlObjective) {
-            await this.loadConfigByObjective(urlObjective);
+            await this.loadConfigByObjective(urlObjective, customQuestionId);
           }
           console.log(`Keepwork SDK initialized token: ${sdk.token}`);
           this.initializeGame();
@@ -981,9 +981,9 @@
               }
             });
           }
-        }
-        // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
-        async loadConfigByObjective(objective) {
+        }        // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
+        // @param customQuestionId: the ID of custom question if this is a custom question
+        async loadConfigByObjective(objective, customQuestionId = null) {
           if (!objective) {
             console.error("Objective is required to load config.");
             return;
@@ -995,6 +995,7 @@
             objective = objective.replace(/\s*\([^)]*\)/, "").trim();
           }
           this.config.objective.wikiword = wikiword;
+          this.config.objective.customQuestionId = customQuestionId; // Store custom question ID
 
           this.config.character.name = "抱抱龙";
           this.config.character.age = 7;
@@ -2040,10 +2041,7 @@
           setTimeout(() => {
             this.elements.llmStatus.textContent = "";
           }, 3000);
-        }
-        async saveProgress(wikiWord, isFinished = false) {
-          if (!wikiWord) return;
-
+        }        async saveProgress(wikiWord, isFinished = false) {
           try {
             // Load current progress data from keepwork
             let progressData = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
@@ -2056,56 +2054,97 @@
                 inprogress_times: [],
                 currentperiod_wikiwords: [],
                 currentperiod_times: [],
+                custom_questions: [], // Ensure custom_questions array exists
               };
             } else {
               progressData = JSON.parse(JSON.stringify(progressData));
+              // Ensure custom_questions array exists
+              if (!Array.isArray(progressData.custom_questions)) {
+                progressData.custom_questions = [];
+              }
             }
-            if (!isFinished) {
-              // If already completed, do not add to in-progress
-              if (progressData.completed_wikiwords.includes(wikiWord) || progressData.inprogress_wikiwords.includes(wikiWord)) return;
 
-              // Add to in-progress arrays if not already there
-              progressData.inprogress_wikiwords.push(wikiWord);
-              const now = new Date();
-              const year = now.getFullYear().toString().slice(-2);
-              const month = (now.getMonth() + 1).toString().padStart(2, "0");
-              const day = now.getDate().toString().padStart(2, "0");
-              const currentDateCode = parseInt(year + month + day);
-              progressData.inprogress_times.push(currentDateCode);
-              console.log(`Added ${wikiWord} to in-progress arrays with date ${currentDateCode}`);
-            } else {
-              // Remove wikiword from inprogress arrays if it exists
-              const progressIndex = progressData.inprogress_wikiwords.indexOf(wikiWord);
-              if (progressIndex > -1) {
-                progressData.inprogress_wikiwords.splice(progressIndex, 1);
-                // Also remove corresponding time entry
-                if (progressData.inprogress_times.length > progressIndex) {
-                  progressData.inprogress_times.splice(progressIndex, 1);
+            // Get current date in YYMMDD format
+            const now = new Date();
+            const year = now.getFullYear().toString().slice(-2);
+            const month = (now.getMonth() + 1).toString().padStart(2, "0");
+            const day = now.getDate().toString().padStart(2, "0");
+            const currentDateCode = parseInt(year + month + day);
+
+            // Check if this is a custom question
+            const customQuestionId = this.config?.objective?.customQuestionId;
+            
+            if (customQuestionId) {
+              // Handle custom question progress
+              const customIndex = progressData.custom_questions.findIndex(q => q.id === customQuestionId);
+              
+              if (customIndex !== -1) {
+                if (!isFinished) {
+                  // Set to progress status
+                  progressData.custom_questions[customIndex].status = "progress";
+                  progressData.custom_questions[customIndex].progressTime = currentDateCode;
+                  console.log(`Updated custom question ${customQuestionId} to progress status`);
+                } else {
+                  // Set to completed status
+                  progressData.custom_questions[customIndex].status = "completed";
+                  progressData.custom_questions[customIndex].completedTime = currentDateCode;
+                  delete progressData.custom_questions[customIndex].progressTime;
+                  console.log(`Updated custom question ${customQuestionId} to completed status`);
                 }
-                console.log(`Removed ${wikiWord} from progress arrays`);
+              } else {
+                console.warn(`Custom question ${customQuestionId} not found in data`);
               }
-
-              // Add to completed arrays if not already there
-              if (!progressData.completed_wikiwords.includes(wikiWord)) {
-                progressData.completed_wikiwords.push(wikiWord);
-                // Get current date in YYMMDD format
-                const now = new Date();
-                const year = now.getFullYear().toString().slice(-2);
-                const month = (now.getMonth() + 1).toString().padStart(2, "0");
-                const day = now.getDate().toString().padStart(2, "0");
-                const currentDateCode = parseInt(year + month + day);
-
-                progressData.completed_times.push(currentDateCode);
-                console.log(`Added ${wikiWord} to completed arrays with date ${currentDateCode}`);
+              
+              // Also handle wikiword if the custom question has one
+              if (wikiWord) {
+                this.handleWikiwordProgress(progressData, wikiWord, isFinished, currentDateCode);
               }
+            } else if (wikiWord) {
+              // Handle regular wikiword question
+              this.handleWikiwordProgress(progressData, wikiWord, isFinished, currentDateCode);
+            } else {
+              // No wikiword and no custom question ID, nothing to save
+              return;
             }
 
             // Save updated data back to keepwork
             await sdk.personalPageStore.savePageData("maisi_dragon_wiki", "discussion-progress-data", progressData, true);
-            console.log(`Successfully saved progress for ${wikiWord}`);
+            console.log(`Successfully saved progress for ${customQuestionId || wikiWord}`);
           } catch (error) {
             console.error("Error saving progress:", error);
-          }        }
+          }
+        }
+
+        // Helper function to handle wikiword progress
+        handleWikiwordProgress(progressData, wikiWord, isFinished, currentDateCode) {
+          if (!isFinished) {
+            // If already completed, do not add to in-progress
+            if (progressData.completed_wikiwords.includes(wikiWord) || progressData.inprogress_wikiwords.includes(wikiWord)) return;
+
+            // Add to in-progress arrays if not already there
+            progressData.inprogress_wikiwords.push(wikiWord);
+            progressData.inprogress_times.push(currentDateCode);
+            console.log(`Added ${wikiWord} to in-progress arrays with date ${currentDateCode}`);
+          } else {
+            // Remove wikiword from inprogress arrays if it exists
+            const progressIndex = progressData.inprogress_wikiwords.indexOf(wikiWord);
+            if (progressIndex > -1) {
+              progressData.inprogress_wikiwords.splice(progressIndex, 1);
+              // Also remove corresponding time entry
+              if (progressData.inprogress_times.length > progressIndex) {
+                progressData.inprogress_times.splice(progressIndex, 1);
+              }
+              console.log(`Removed ${wikiWord} from progress arrays`);
+            }
+
+            // Add to completed arrays if not already there
+            if (!progressData.completed_wikiwords.includes(wikiWord)) {
+              progressData.completed_wikiwords.push(wikiWord);
+              progressData.completed_times.push(currentDateCode);
+              console.log(`Added ${wikiWord} to completed arrays with date ${currentDateCode}`);
+            }
+          }
+        }
         
         handleBasicCompletion() {
           if (this.gameState.hasCommitted) return;
