@@ -1022,7 +1022,19 @@
       "comments": "总体评价（包含学科识别）",
       "mistakes": [{"item":"知识点/方面","reason":"错误原因","fix":"具体改进建议"}]
     }`,
-      };
+      }; // ---------- Utility Functions ----------
+      // Helper function to check if an image has already been graded
+      function isImageAlreadyGraded(img) {
+        const gradedStatuses = ["已批改", "已批改（已恢复）"];
+        const isGraded = gradedStatuses.includes(img.status);
+
+        // Additional check: if there's a corresponding result in state.results, it's also considered graded
+        const hasResult = state.results.some((r) => r.imageId === img.id);
+
+        console.log(`检查图片批改状态: ${img.fileName || img.file?.name || img.id}, 状态: ${img.status}, 是否已批改: ${isGraded}, 是否有结果: ${hasResult}`);
+
+        return isGraded || hasResult;
+      }
 
       // ---------- DOM ----------
       const els = {};
@@ -2353,12 +2365,11 @@
           }
 
           const img = state.images[i];
-          els.gradingProgress.textContent = `批改进度：${i + 1}/${totalImages}（${img.file?.name || img.id}）`;
-
-          // 只跳过已经批改过的图片，避免重复调用LLM批改
+          els.gradingProgress.textContent = `批改进度：${i + 1}/${totalImages}（${img.file?.name || img.id}）`; // 只跳过已经批改过的图片，避免重复调用LLM批改
           // 已识别但未批改的图片仍需要进行批改
-          if (img.status === "已批改") {
-            console.log(`跳过已批改图片: ${img.file?.name || img.id}`);
+          // 检查多种已批改状态，包括从磁盘恢复的已批改图片
+          if (isImageAlreadyGraded(img)) {
+            console.log(`跳过已批改图片: ${img.file?.name || img.fileName || img.id} (状态: ${img.status})`);
             // 确保已批改的结果在results中
             const existingResult = state.results.find((r) => r.imageId === img.id);
             if (!existingResult) {
@@ -2789,10 +2800,22 @@
               if (existingImage) {
                 duplicateCount++;
                 return null; // Skip duplicate
+              } // Check if this image exists in persistent storage
+              const persistentImage = findPersistentImageByHash(hash);
+
+              // Determine initial status - prioritize grading result status
+              let initialStatus = "待 OCR";
+              if (persistentImage) {
+                if (persistentImage.gradingResult) {
+                  // If there's a grading result, it should be marked as graded
+                  initialStatus = "已批改";
+                } else if (persistentImage.ocrText) {
+                  initialStatus = persistentImage.studentId ? "未批改" : "已识别";
+                } else {
+                  initialStatus = persistentImage.status || "待 OCR";
+                }
               }
 
-              // Check if this image exists in persistent storage
-              const persistentImage = findPersistentImageByHash(hash);
               const imageData = {
                 id: uid("img"),
                 file: processedFile,
@@ -2803,7 +2826,7 @@
                 ocrText: persistentImage?.ocrText || "",
                 detectedName: persistentImage?.detectedName || null,
                 studentId: persistentImage?.studentId || null,
-                status: persistentImage?.status || (persistentImage?.ocrText ? (persistentImage.studentId ? "未批改" : "已识别") : "待 OCR"),
+                status: initialStatus,
                 theme: persistentImage?.theme || null,
               };
 
@@ -2829,7 +2852,7 @@
 
                   // Add to results array later when the image is actually added to state.images
                   imageData._pendingResult = resultData;
-                  imageData.status = "已批改";
+                  // Status already set to "已批改" above
                 }
               } else {
                 newCount++;
