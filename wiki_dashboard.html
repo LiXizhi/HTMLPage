@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>抱抱龙成长百科</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.3"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.8"></script>
     <style>
       body {
         height: 100vh;
@@ -104,10 +104,13 @@
     <!-- Main Content -->
     <div class="main-container w-full px-2">
       <!-- Header -->
-      <div class="progress-section p-3 mb-2 mt-2">
+      <div class="progress-section p-3">
         <div class="flex items-center justify-between">
-          <h3 class="text-lg font-bold text-gray-800">💬 抱抱龙成长百科</h3>
+          <h3 class="text-lg font-bold text-gray-800 py-2">💬 抱抱龙成长百科</h3>
           <div class="flex items-center space-x-4">
+            <button id="new-question-btn" class="bg-gradient-to-r from-green-400 to-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:shadow-lg transition-all flex items-center">
+              <span class="text-lg mr-1">+</span>新建问题
+            </button>
             <!-- help section -->
           </div>
         </div>
@@ -155,7 +158,6 @@
         </div>
       </div>
     </div>
-
     <!-- Modal for Question Details -->
     <div id="question-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50">
       <div class="flex items-center justify-center min-h-screen p-4">
@@ -172,18 +174,87 @@
       </div>
     </div>
 
+    <!-- Modal for New Question -->
+    <div id="new-question-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-2xl p-8 max-w-lg w-full shadow-2xl">
+          <div class="text-center mb-6">
+            <p class="text-gray-600 text-lg">请输入你希望和AI角色共同研究的问题</p>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">研究问题 *</label>
+              <textarea
+                id="new-question-text"
+                placeholder="请输入你想研究的问题..."
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows="3"
+                maxlength="120"
+              ></textarea>
+              <div class="flex justify-between text-xs text-gray-500 mt-1">
+                <span>最多120个字符</span>
+                <span id="question-char-count">0/120</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">关键词 (可选)</label>
+              <input
+                type="text"
+                id="new-question-wikiword"
+                placeholder="输入相关关键词..."
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                maxlength="30"
+              />
+              <div class="flex justify-between text-xs text-gray-500 mt-1">
+                <span>最多10个中文字或30个英文字母</span>
+                <span id="wikiword-char-count">0/30</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex space-x-4 mt-8">
+            <button
+              id="create-question-btn"
+              class="flex-1 bg-gradient-to-r from-green-400 to-blue-500 text-white py-3 px-6 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled
+            >
+              创建问题
+            </button>
+            <button id="cancel-new-question" class="flex-1 bg-gray-300 text-gray-700 py-3 px-6 rounded-xl font-bold hover:bg-gray-400 transition-all">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation Dialog -->
+    <div id="confirmation-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <div class="text-center">
+            <div class="w-16 h-16 bg-gradient-to-r from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-4">❓</div>
+            <h3 class="text-xl font-bold text-gray-800 mb-4" id="confirmation-title">确认操作</h3>
+            <p class="text-gray-600 mb-6" id="confirmation-message">确定要执行此操作吗？</p>
+            <div class="flex space-x-4">
+              <button id="confirmation-cancel" class="flex-1 bg-gray-300 text-gray-700 py-3 px-6 rounded-xl font-bold hover:bg-gray-400 transition-all">取消</button>
+              <button id="confirmation-confirm" class="flex-1 bg-gradient-to-r from-green-400 to-blue-500 text-white py-3 px-6 rounded-xl font-bold hover:shadow-lg transition-all">确定</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
       // Initialize SDK
       const sdk = new KeepworkSDK({
         timeout: 30000,
       });
-      console.log(`Keepwork SDK initialized token: ${sdk.token}`);
-
-      // Global variables      let allQuestions = [];
+      console.log(`Keepwork SDK initialized token: ${sdk.token}`); // Global variables      let allQuestions = [];
       let currentPeriodQuestions = [];
       let wikiWordToQuestionMap = new Map(); // Map from wikiword to question object
       let progress_wikiwords = []; // Global array for progress wiki words
       let completed_wikiwords = []; // Global array for completed wiki words
+      let customQuestions = []; // Array to store all custom questions with their status
       const QUESTIONS_PER_PERIOD = 10;
       let questionsMarkdownCache = null; // Cache for fetched markdown data
 
@@ -290,7 +361,7 @@
         // Fetch markdown data from external resource (with fallback)
         const questionsMarkdown = await fetchQuestionsMarkdown();
         const questions = parseQuestions(questionsMarkdown);
-        // Build wikiword map first for efficient lookup with ALL questions
+        // Build wikiword map first for efficient lookup with parsed questions only
         buildWikiWordMap(questions);
         // Apply saved progress/completion status from new format
         await loadProgressData(questions);
@@ -324,7 +395,6 @@
           times: sortedEntries.map((entry) => entry[1]),
         };
       }
-
       async function loadProgressData(questions) {
         try {
           const progressData = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
@@ -378,9 +448,7 @@
                 }
               });
               console.log(`Loaded ${progress_wikiwords.length} unique progress wikiwords, sorted by time`);
-            }
-
-            // Load current period questions with deduplication and sorting
+            } // Load current period questions with deduplication and sorting
             if (Array.isArray(data.currentperiod_wikiwords) && Array.isArray(data.currentperiod_times)) {
               const { wikiwords: dedupCurrentWords, times: dedupCurrentTimes } = deduplicateAndSortByTime(data.currentperiod_wikiwords, data.currentperiod_times);
 
@@ -392,6 +460,37 @@
                 }
               });
               console.log(`Loaded ${currentPeriodQuestions.length} unique current period questions, sorted by time`);
+            } // Load custom questions - keep them separate, don't add to allQuestions
+            if (Array.isArray(data.custom_questions)) {
+              // Store existing custom questions that might be in memory but not yet saved
+              const existingInMemoryCustomQuestions = [...customQuestions];
+
+              // Process saved custom questions
+              console.log(`Processing ${data.custom_questions.length} custom questions from saved data`);
+
+              // Update customQuestions array by merging saved questions with any in-memory ones
+              customQuestions = [...data.custom_questions];
+
+              // Add back any in-memory custom questions that weren't in the saved data
+              existingInMemoryCustomQuestions.forEach((existingQ) => {
+                if (!data.custom_questions.some((savedQ) => savedQ.id === existingQ.id)) {
+                  customQuestions.push(existingQ);
+                  console.log(`Retained in-memory custom question: ${existingQ.id}`);
+                }
+              });
+
+              // Update wikiword map to include custom questions that have wikiWords
+              customQuestions.forEach((customQ) => {
+                if (customQ.wikiWord && !wikiWordToQuestionMap.has(customQ.wikiWord)) {
+                  wikiWordToQuestionMap.set(customQ.wikiWord, customQ);
+                }
+              });
+
+              console.log(`Final customQuestions array length: ${customQuestions.length}`);
+              console.log(
+                "Custom questions IDs:",
+                customQuestions.map((q) => q.id)
+              );
             }
           }
         } catch (error) {
@@ -431,7 +530,29 @@
               currentperiod_wikiwords.push(q.wikiWord);
               currentperiod_times.push(getCurrentDateCode());
             }
+          }); // Collect custom questions with all their data including status and timestamps
+          // Use the global customQuestions array directly instead of filtering from allQuestions
+          // to ensure all custom questions are saved, not just those that made it into allQuestions
+          console.log(`Before saving: customQuestions array has ${customQuestions.length} items`);
+          console.log(
+            "Custom question IDs:",
+            customQuestions.map((q) => `${q.id}:${q.status}`)
+          );
+
+          // Deduplicate custom questions by ID before saving
+          const uniqueCustomQuestions = [];
+          const seenIds = new Set();
+          customQuestions.forEach((q) => {
+            if (!seenIds.has(q.id)) {
+              seenIds.add(q.id);
+              uniqueCustomQuestions.push(q);
+            }
           });
+
+          if (uniqueCustomQuestions.length !== customQuestions.length) {
+            console.log(`Deduplicated custom questions from ${customQuestions.length} to ${uniqueCustomQuestions.length}`);
+            customQuestions = uniqueCustomQuestions; // Update the global array
+          }
 
           // Apply deduplication and sorting before saving
           const { wikiwords: dedupCompletedWords, times: dedupCompletedTimes } = deduplicateAndSortByTime(completed_wikiwords_data, completed_times_data);
@@ -447,10 +568,11 @@
             inprogress_times: dedupProgressTimes,
             currentperiod_wikiwords: dedupCurrentWords,
             currentperiod_times: dedupCurrentTimes,
-          };
-
-          // Log deduplication results
-          console.log(`Saving data - Completed: ${dedupCompletedWords.length} unique items, Progress: ${dedupProgressWords.length} unique items, Current: ${dedupCurrentWords.length} unique items`);
+            custom_questions: customQuestions, // This now refers to the global array
+          }; // Log deduplication results
+          console.log(
+            `Saving data - Completed: ${dedupCompletedWords.length} unique items, Progress: ${dedupProgressWords.length} unique items, Current: ${dedupCurrentWords.length} unique items, Custom: ${customQuestions.length} questions`
+          );
 
           // Defensive checks to ensure data consistency (should not be needed after deduplication)
           if (dedupCompletedWords.length !== dedupCompletedTimes.length) {
@@ -640,9 +762,7 @@
 
         const startButton = document.getElementById("start-learning");
         startButton.onclick = () => startLearning(question);
-      }
-
-      // Start learning process
+      } // Start learning process
       function startLearning(question) {
         console.log("Starting learning for question:", {
           id: question.id,
@@ -651,19 +771,22 @@
           status: question.status,
         });
 
-        // Update question status to progress in both all questions and current period
-        const allQuestionsIndex = allQuestions.findIndex((q) => q.id === question.id);
-        if (allQuestionsIndex !== -1) {
-          allQuestions[allQuestionsIndex].status = "progress";
-          allQuestions[allQuestionsIndex].progressTime = getCurrentDateCode();
-          console.log("Updated question in allQuestions:", {
-            id: allQuestions[allQuestionsIndex].id,
-            wikiWord: allQuestions[allQuestionsIndex].wikiWord,
-            status: allQuestions[allQuestionsIndex].status,
-            progressTime: allQuestions[allQuestionsIndex].progressTime,
-          });
+        // Update question status to progress in allQuestions only if it's not a custom question
+        if (!question.id.startsWith("custom_")) {
+          const allQuestionsIndex = allQuestions.findIndex((q) => q.id === question.id);
+          if (allQuestionsIndex !== -1) {
+            allQuestions[allQuestionsIndex].status = "progress";
+            allQuestions[allQuestionsIndex].progressTime = getCurrentDateCode();
+            console.log("Updated question in allQuestions:", {
+              id: allQuestions[allQuestionsIndex].id,
+              wikiWord: allQuestions[allQuestionsIndex].wikiWord,
+              status: allQuestions[allQuestionsIndex].status,
+              progressTime: allQuestions[allQuestionsIndex].progressTime,
+            });
+          }
         }
 
+        // Update in current period questions
         const currentIndex = currentPeriodQuestions.findIndex((q) => q.id === question.id);
         if (currentIndex !== -1) {
           currentPeriodQuestions[currentIndex].status = "progress";
@@ -676,9 +799,16 @@
           });
         }
 
-        // Update global progress_wikiwords array
+        // Update customQuestions array if this is a custom question
+        const customIndex = customQuestions.findIndex((q) => q.id === question.id);
+        if (customIndex !== -1) {
+          customQuestions[customIndex].status = "progress";
+          customQuestions[customIndex].progressTime = getCurrentDateCode();
+        }
+
+        // Update global progress_wikiwords array (only if question has wikiWord)
         if (question.wikiWord && !progress_wikiwords.includes(question.wikiWord)) {
-          progress_wikiwords.push(question.wikiWord);
+          progress_wikiwords.unshift(question.wikiWord); // Add to front for newest first
         }
 
         saveProgressData(true);
@@ -704,10 +834,9 @@
 
         // Refresh the display
         renderQuestions();
-      }
-
-      // Complete a question (for simulation)
+      } // Complete a question (for simulation)
       function completeQuestion(questionId) {
+        // Handle regular questions in allQuestions
         const allQuestionsIndex = allQuestions.findIndex((q) => q.id === questionId);
         if (allQuestionsIndex !== -1) {
           allQuestions[allQuestionsIndex].status = "completed";
@@ -715,7 +844,7 @@
           // Remove progress time when completed
           delete allQuestions[allQuestionsIndex].progressTime;
 
-          // Update global arrays
+          // Update global arrays (only for questions with wikiWord)
           const wikiWord = allQuestions[allQuestionsIndex].wikiWord;
           if (wikiWord) {
             // Remove from progress array if exists
@@ -725,11 +854,34 @@
             }
             // Add to completed array if not exists
             if (!completed_wikiwords.includes(wikiWord)) {
-              completed_wikiwords.push(wikiWord);
+              completed_wikiwords.unshift(wikiWord); // Add to front for newest first
             }
           }
         }
 
+        // Update customQuestions array if this is a custom question
+        const customIndex = customQuestions.findIndex((q) => q.id === questionId);
+        if (customIndex !== -1) {
+          customQuestions[customIndex].status = "completed";
+          customQuestions[customIndex].completedTime = getCurrentDateCode();
+          delete customQuestions[customIndex].progressTime;
+
+          // Update global arrays if it has a wikiWord
+          const wikiWord = customQuestions[customIndex].wikiWord;
+          if (wikiWord) {
+            // Remove from progress array if exists
+            const progressIndex = progress_wikiwords.indexOf(wikiWord);
+            if (progressIndex > -1) {
+              progress_wikiwords.splice(progressIndex, 1);
+            }
+            // Add to completed array if not exists
+            if (!completed_wikiwords.includes(wikiWord)) {
+              completed_wikiwords.unshift(wikiWord); // Add to front for newest first
+            }
+          }
+        }
+
+        // Update current period questions
         const currentIndex = currentPeriodQuestions.findIndex((q) => q.id === questionId);
         if (currentIndex !== -1) {
           currentPeriodQuestions[currentIndex].status = "completed";
@@ -737,22 +889,52 @@
           // Remove progress time when completed
           delete currentPeriodQuestions[currentIndex].progressTime;
         }
+
         saveProgressData();
         renderQuestions();
-      }
-
-      // Delete a progress task
+      } // Delete a progress task
       function deleteProgressTask(identifier) {
-        // Find the question by wikiWord or id
+        // Find the question by wikiWord or id in allQuestions (for regular questions)
         const allQuestionsIndex = allQuestions.findIndex((q) => q.wikiWord === identifier || q.id === identifier);
         if (allQuestionsIndex !== -1) {
-          // Reset the question to unexplored status
+          const questionToDelete = allQuestions[allQuestionsIndex];
+
+          // For regular questions, reset to unexplored status
           allQuestions[allQuestionsIndex].status = "unexplored";
           delete allQuestions[allQuestionsIndex].progressTime;
           delete allQuestions[allQuestionsIndex].completedTime;
 
           // Update global arrays
-          const wikiWord = allQuestions[allQuestionsIndex].wikiWord;
+          const wikiWord = questionToDelete.wikiWord;
+          if (wikiWord) {
+            // Remove from progress array if exists
+            const progressIndex = progress_wikiwords.indexOf(wikiWord);
+            if (progressIndex > -1) {
+              progress_wikiwords.splice(progressIndex, 1);
+            }
+            // Remove from completed array if exists
+            const completedIndex = completed_wikiwords.indexOf(wikiWord);
+            if (completedIndex > -1) {
+              completed_wikiwords.splice(completedIndex, 1);
+            }
+          }
+        }
+
+        // Find and handle custom questions
+        const customIndex = customQuestions.findIndex((q) => q.wikiWord === identifier || q.id === identifier);
+        if (customIndex !== -1) {
+          const questionToDelete = customQuestions[customIndex];
+
+          // Remove custom question completely
+          customQuestions.splice(customIndex, 1);
+
+          // Remove from wikiWordToQuestionMap if it has a wikiWord
+          if (questionToDelete.wikiWord && wikiWordToQuestionMap.has(questionToDelete.wikiWord)) {
+            wikiWordToQuestionMap.delete(questionToDelete.wikiWord);
+          }
+
+          // Update global arrays if it has a wikiWord
+          const wikiWord = questionToDelete.wikiWord;
           if (wikiWord) {
             // Remove from progress array if exists
             const progressIndex = progress_wikiwords.indexOf(wikiWord);
@@ -770,16 +952,22 @@
         // Also update in current period questions
         const currentIndex = currentPeriodQuestions.findIndex((q) => q.wikiWord === identifier || q.id === identifier);
         if (currentIndex !== -1) {
-          currentPeriodQuestions[currentIndex].status = "unexplored";
-          delete currentPeriodQuestions[currentIndex].progressTime;
-          delete currentPeriodQuestions[currentIndex].completedTime;
+          const questionToDelete = currentPeriodQuestions[currentIndex];
+
+          // For custom questions, remove from current period
+          if (questionToDelete.id.startsWith("custom_") || (!questionToDelete.wikiWord && questionToDelete.category === "自定义问题")) {
+            currentPeriodQuestions.splice(currentIndex, 1);
+          } else {
+            // For regular questions, reset status
+            currentPeriodQuestions[currentIndex].status = "unexplored";
+            delete currentPeriodQuestions[currentIndex].progressTime;
+            delete currentPeriodQuestions[currentIndex].completedTime;
+          }
         }
 
         saveProgressData();
         renderQuestions();
-      }
-
-      // Render questions in their respective categories
+      } // Render questions in their respective categories
       function renderQuestions() {
         const unexploredContainer = document.getElementById("unexplored-questions");
         const progressContainer = document.getElementById("progress-questions");
@@ -789,14 +977,33 @@
         unexploredContainer.innerHTML = "";
         progressContainer.innerHTML = "";
         completedContainer.innerHTML = "";
+
         // Filter current period questions by status for unexplored (only current period)
         const unexplored = currentPeriodQuestions.filter((q) => q.status === "unexplored");
 
-        // Get progress questions from global progress_wikiwords array (searches ALL questions via map)
-        const progress = progress_wikiwords.map((wikiword) => wikiWordToQuestionMap.get(wikiword)).filter((q) => q);
+        // Get progress questions - custom questions first, then wikiword-based questions
+        const customProgressQuestions = customQuestions.filter((q) => q.status === "progress");
+        const progressFromWikiWords = progress_wikiwords.map((wikiword) => wikiWordToQuestionMap.get(wikiword)).filter((q) => q);
 
-        // Get completed questions from global completed_wikiwords array (searches ALL questions via map)
-        const completed = completed_wikiwords.map((wikiword) => wikiWordToQuestionMap.get(wikiword)).filter((q) => q);
+        // Combine with custom questions at the front, sort by progress time (newest first)
+        const allProgressQuestions = [...customProgressQuestions, ...progressFromWikiWords];
+        const progress = allProgressQuestions.sort((a, b) => {
+          const timeA = a.progressTime || 0;
+          const timeB = b.progressTime || 0;
+          return timeB - timeA; // Sort descending (newest first)
+        });
+
+        // Get completed questions - custom questions first, then wikiword-based questions
+        const customCompletedQuestions = customQuestions.filter((q) => q.status === "completed");
+        const completedFromWikiWords = completed_wikiwords.map((wikiword) => wikiWordToQuestionMap.get(wikiword)).filter((q) => q);
+
+        // Combine with custom questions at the front, sort by completion time (newest first)
+        const allCompletedQuestions = [...customCompletedQuestions, ...completedFromWikiWords];
+        const completed = allCompletedQuestions.sort((a, b) => {
+          const timeA = a.completedTime || 0;
+          const timeB = b.completedTime || 0;
+          return timeB - timeA; // Sort descending (newest first)
+        });
 
         // Render questions
         unexplored.forEach((q) => unexploredContainer.appendChild(createQuestionCard(q)));
@@ -812,46 +1019,162 @@
       // Close modal functionality
       document.getElementById("close-modal").addEventListener("click", () => {
         document.getElementById("question-modal").classList.add("hidden");
-      });
-
-      // Close modal when clicking outside
+      }); // Close modal when clicking outside
       document.getElementById("question-modal").addEventListener("click", (e) => {
         if (e.target.id === "question-modal") {
           document.getElementById("question-modal").classList.add("hidden");
         }
       });
 
-      // Refresh questions button
+      // Close confirmation modal when clicking outside
+      document.getElementById("confirmation-modal").addEventListener("click", (e) => {
+        if (e.target.id === "confirmation-modal") {
+          hideConfirmationDialog();
+        }
+      }); // Refresh questions button
       document.getElementById("refresh-questions-btn").addEventListener("click", () => {
         generateCurrentPeriodQuestions();
         renderQuestions();
       });
 
-      // Demo function to mark random questions as completed (for demonstration)
-      function simulateCompletion() {
-        const progressQuestions = allQuestions.filter((q) => q.status === "progress");
-        if (progressQuestions.length > 0) {
-          const randomQuestion = progressQuestions[Math.floor(Math.random() * progressQuestions.length)];
-          completeQuestion(randomQuestion.id);
+      // New question button functionality
+      document.getElementById("new-question-btn").addEventListener("click", () => {
+        document.getElementById("new-question-modal").classList.remove("hidden");
+        document.getElementById("new-question-text").focus();
+      });
+
+      // Cancel new question
+      document.getElementById("cancel-new-question").addEventListener("click", () => {
+        closeNewQuestionModal();
+      });
+
+      // Close new question modal when clicking outside
+      document.getElementById("new-question-modal").addEventListener("click", (e) => {
+        if (e.target.id === "new-question-modal") {
+          closeNewQuestionModal();
         }
+      });
+
+      // Character counting for question text
+      document.getElementById("new-question-text").addEventListener("input", (e) => {
+        const count = e.target.value.length;
+        document.getElementById("question-char-count").textContent = `${count}/120`;
+
+        // Enable/disable create button
+        const wikiWordCount = document.getElementById("new-question-wikiword").value.length;
+        const createBtn = document.getElementById("create-question-btn");
+        createBtn.disabled = count === 0 || count > 120 || wikiWordCount > 30;
+      });
+
+      // Character counting for wiki word
+      document.getElementById("new-question-wikiword").addEventListener("input", (e) => {
+        const count = e.target.value.length;
+        document.getElementById("wikiword-char-count").textContent = `${count}/30`;
+
+        // Enable/disable create button
+        const questionCount = document.getElementById("new-question-text").value.length;
+        const createBtn = document.getElementById("create-question-btn");
+        createBtn.disabled = questionCount === 0 || questionCount > 120 || count > 30;
+      });
+
+      // Create new question
+      document.getElementById("create-question-btn").addEventListener("click", () => {
+        createNewQuestion();
+      });
+
+      // Function to close new question modal
+      function closeNewQuestionModal() {
+        document.getElementById("new-question-modal").classList.add("hidden");
+        // Clear form
+        document.getElementById("new-question-text").value = "";
+        document.getElementById("new-question-wikiword").value = "";
+        document.getElementById("question-char-count").textContent = "0/120";
+        document.getElementById("wikiword-char-count").textContent = "0/30";
+        document.getElementById("create-question-btn").disabled = true;
+      } // Function to create a new question
+      function createNewQuestion() {
+        const questionText = document.getElementById("new-question-text").value.trim();
+        const wikiWord = document.getElementById("new-question-wikiword").value.trim();
+
+        if (!questionText || questionText.length > 120) {
+          alert("请输入有效的问题（1-120个字符）");
+          return;
+        }
+
+        if (wikiWord.length > 30) {
+          alert("关键词不能超过30个字符");
+          return;
+        } // Create new question object with a unique ID
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substr(2, 9);
+        const newQuestion = {
+          id: `custom_q_${timestamp}_${randomSuffix}`,
+          question: questionText,
+          category: "自定义问题",
+          wikiWord: wikiWord || null,
+          status: "progress",
+          progressTime: getCurrentDateCode(),
+        };
+
+        console.log(`Creating new custom question: ${newQuestion.id}`);
+
+        // Add to custom questions array only (not to allQuestions)
+        customQuestions.push(newQuestion);
+
+        console.log(`Total custom questions after creation: ${customQuestions.length}`);
+
+        // Add to current period questions if there's space
+        if (currentPeriodQuestions.length < QUESTIONS_PER_PERIOD) {
+          currentPeriodQuestions.push(newQuestion);
+        }
+
+        // Update wikiword map only if question has wikiWord
+        if (newQuestion.wikiWord && !wikiWordToQuestionMap.has(newQuestion.wikiWord)) {
+          wikiWordToQuestionMap.set(newQuestion.wikiWord, newQuestion);
+        }
+
+        // Save data
+        saveProgressData(true);
+
+        // Close modal
+        closeNewQuestionModal();
+
+        // Refresh display
+        renderQuestions();
+
+        // Ask if user wants to start conversation now
+        showConfirmationDialog("开始对话", `问题"${questionText}"已创建并添加到进行中栏目。\n\n是否现在开始对话？`, () => {
+          startLearning(newQuestion);
+        });
       }
 
-      // Debug function to view serialized data
-      async function viewSerializedData() {
-        const data = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
-        if (data) {
-          console.log("Serialized Progress Data:", data);
-          console.log(
-            "Completed:",
-            data.completed_wikiwords?.map((word, i) => `${word}: ${data.completed_times?.[i]}`)
-          );
-          console.log(
-            "In Progress:",
-            data.inprogress_wikiwords?.map((word, i) => `${word}: ${data.inprogress_times?.[i]}`)
-          );
-        } else {
-          console.log("No serialized data found");
-        }
+      // Confirmation dialog functions
+      function showConfirmationDialog(title, message, onConfirm) {
+        document.getElementById("confirmation-title").textContent = title;
+        document.getElementById("confirmation-message").textContent = message;
+        document.getElementById("confirmation-modal").classList.remove("hidden");
+
+        // Remove any existing event listeners
+        const confirmBtn = document.getElementById("confirmation-confirm");
+        const cancelBtn = document.getElementById("confirmation-cancel");
+
+        // Clone buttons to remove existing event listeners
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+        // Add new event listeners
+        newConfirmBtn.addEventListener("click", () => {
+          hideConfirmationDialog();
+          if (onConfirm) onConfirm();
+        });
+
+        newCancelBtn.addEventListener("click", hideConfirmationDialog);
+      }
+
+      function hideConfirmationDialog() {
+        document.getElementById("confirmation-modal").classList.add("hidden");
       }
 
       // Cleanup function to fix data consistency issues
@@ -881,18 +1204,6 @@
         console.log("Data cleanup completed");
       }
 
-      // Add keyboard shortcut for demo completion (press 'C' key)
-      document.addEventListener("keydown", (e) => {
-        if (e.key.toLowerCase() === "c" && e.ctrlKey) {
-          e.preventDefault();
-          simulateCompletion();
-        }
-        // Press 'V' to view serialized data
-        if (e.key.toLowerCase() === "v" && e.ctrlKey) {
-          e.preventDefault();
-          viewSerializedData();
-        }
-      }); // Initialize the app
       async function initializeApp() {
         // Load all questions (buildWikiWordMap is called inside loadQuestions)
         allQuestions = await loadQuestions();
