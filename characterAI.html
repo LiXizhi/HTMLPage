@@ -1,11 +1,33 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+  <!--
+  AI Character Chat Game - URL Parameters Documentation
+  
+  This HTML file supports various URL parameters to customize the game behavior:
+  
+  1. Example: ?objective=天空为何是蓝色？(wikiword)
+     Note: Text in parentheses will be extracted as wikiword for 百度百科 integration
+  
+  2. Example: ?objective=什么是人工智能？&customQuestionId=ai_basics_001
+     Note: customQuestionId is used by user defined objective in wiki_dashboard
+  
+  3. config - JSON configuration to override default character and game settings
+     Example: ?config=%7B%22character%22%3A%7B%22name%22%3A%22小红%22%2C%22age%22%3A16%7D%7D
+     (URL encoded JSON: {"character":{"name":"小红","age":16}})
+  
+  4. ?showToolbar=false (hides the right sidebar AI tools)
+  5. ?showCharInfo=false (hides the left character info panel)
+  6. keepwork token: ?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  
+  Complete examples:
+  - Minimal UI: ?showToolbar=false&showCharInfo=false&objective=学习编程&config=%7B"character"%3A%7B"name"%3A"小红"%2C"age"%3A16%7D%7D
+-->
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>角色AI对话游戏</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.8"></script>
     <style>
       .chat-bubble-left {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -520,7 +542,6 @@
         display: flex;
         animation: fadeIn 0.3s ease-in-out;
       }
-
       @keyframes fadeIn {
         from {
           opacity: 0;
@@ -531,6 +552,23 @@
           opacity: 1;
           transform: scale(1);
         }
+      }
+
+      /* URL parameter control styles */
+      .hidden-toolbar {
+        display: none !important;
+      }
+
+      .hidden-char-info {
+        display: none !important;
+      }
+
+      .full-width-chat {
+        width: 100% !important;
+      }
+
+      .no-toolbar-chat {
+        width: calc(100% - 33.333333%) !important; /* w-2/3 equivalent when only char info is shown */
       }
     </style>
   </head>
@@ -956,9 +994,31 @@
           if (urlObjective) {
             await this.loadConfigByObjective(urlObjective, customQuestionId);
           }
+
+          // Apply custom config from URL if available (after loadConfigByObjective to allow overriding)
+          if (window.customURLConfig) {
+            console.log("Applying custom URL config:", window.customURLConfig);
+            // Deep merge custom config with existing config
+            this.config = this.deepMerge(this.config, window.customURLConfig);
+          }
+
           console.log(`Keepwork SDK initialized token: ${sdk.token}`);
           this.initializeGame();
         }
+
+        // Deep merge utility function for combining configs
+        deepMerge(target, source) {
+          const result = { ...target };
+          for (const key in source) {
+            if (source[key] !== null && typeof source[key] === "object" && !Array.isArray(source[key])) {
+              result[key] = this.deepMerge(result[key] || {}, source[key]);
+            } else {
+              result[key] = source[key];
+            }
+          }
+          return result;
+        }
+
         initEventListeners() {
           // 发送消息
           this.elements.sendBtn.addEventListener("click", () => this.sendMessage());
@@ -2604,6 +2664,63 @@
       }
       const aiToolbox = new AIToolboxManager();
       window.aiToolbox = aiToolbox;
+
+      // URL Parameter Handler
+      function parseAndApplyURLParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+
+        // 1. Handle config parameter first
+        const configParam = urlParams.get("config");
+        if (configParam) {
+          try {
+            const decodedConfig = decodeURIComponent(configParam);
+            const customConfig = JSON.parse(decodedConfig);
+            console.log("Applying custom config from URL:", customConfig);
+            // Apply custom config to game (will be applied in game.start())
+            window.customURLConfig = customConfig;
+          } catch (error) {
+            console.error("Error parsing config parameter:", error);
+          }
+        }
+
+        // 2. Handle showToolbar parameter
+        const showToolbar = urlParams.get("showToolbar");
+        if (showToolbar === "false") {
+          const toolbar = document.querySelector(".ai-toolbox");
+          const chatArea = document.querySelector(".flex-1.flex.flex-col.bg-white.shadow-lg");
+          if (toolbar) {
+            toolbar.classList.add("hidden-toolbar");
+          }
+          if (chatArea) {
+            chatArea.classList.add("no-toolbar-chat");
+          }
+        }
+
+        // 3. Handle showCharInfo parameter
+        const showCharInfo = urlParams.get("showCharInfo");
+        if (showCharInfo === "false") {
+          const charInfo = document.querySelector(".w-1\\/3.bg-white.shadow-lg.p-6.flex.flex-col");
+          const chatArea = document.querySelector(".flex-1.flex.flex-col.bg-white.shadow-lg");
+          if (charInfo) {
+            charInfo.classList.add("hidden-char-info");
+          }
+          if (chatArea) {
+            // Check if toolbar is also hidden
+            const showToolbar = urlParams.get("showToolbar");
+            if (showToolbar === "false") {
+              chatArea.classList.remove("no-toolbar-chat");
+              chatArea.classList.add("full-width-chat");
+            } else {
+              chatArea.classList.remove("no-toolbar-chat");
+              // Chat area will take remaining space naturally
+            }
+          }
+        }
+      }
+
+      // Apply URL parameters immediately
+      parseAndApplyURLParams();
+
       const game = new LLMCharacterGame(); // Promise-based location response handler with timeout
 
       // Window message handling for host communication
