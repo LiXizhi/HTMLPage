@@ -18,6 +18,7 @@
   4. ?showToolbar=false (hides the right sidebar AI tools)
   5. ?showCharInfo=false (hides the left character info panel)
   6. keepwork token: ?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  7. ?showClose=true (show close button on right top, and send OnCloseCharacterAI event to parent window)
   
   Complete examples:
   - Minimal UI: ?showToolbar=false&showCharInfo=false&objective=学习编程&config=%7B"character"%3A%7B"name"%3A"小红"%2C"age"%3A16%7D%7D
@@ -565,10 +566,28 @@
 
       .full-width-chat {
         width: 100% !important;
+      }      .no-toolbar-chat {
+        width: calc(100% - 33.333333%) !important; /* w-2/3 equivalent when only char info is shown */
+      }      /* Close button styles */
+      .close-button {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        white-space: nowrap;
       }
 
-      .no-toolbar-chat {
-        width: calc(100% - 33.333333%) !important; /* w-2/3 equivalent when only char info is shown */
+      .close-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .close-button.hidden {
+        display: none !important;
       }
     </style>
   </head>
@@ -622,8 +641,7 @@
         <div id="llm-status" class="text-center text-sm text-gray-500 flex-shrink-0 mt-4"></div>
       </div>
       <!-- 右侧聊天区域 -->
-      <div class="flex-1 flex flex-col bg-white shadow-lg">
-        <div class="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 shadow-lg relative z-10">
+      <div class="flex-1 flex flex-col bg-white shadow-lg">        <div class="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 shadow-lg relative z-10">
           <div class="flex justify-between items-center mb-2">
             <h3 id="chat-title" class="text-lg font-semibold">与小明对话</h3>
             <div class="flex items-center space-x-2">
@@ -640,6 +658,8 @@
               <button id="reset-chat-btn" class="bg-white bg-opacity-20 text-white px-3 py-1 rounded-lg border border-white border-opacity-30 hover:bg-opacity-30 transition-all text-sm font-medium">
                 重置对话
               </button>
+              <!-- Close button -->
+              <button id="close-btn" class="close-button hidden">返回</button>
             </div>
           </div>
           <p id="chat-description" class="text-sm opacity-90">通过耐心的交流，帮助小明重新找回学习的乐趣</p>
@@ -1033,9 +1053,7 @@
             } else if (e.target.value) {
               this.loadSession(e.target.value);
             }
-          });
-
-          // 举报链接事件监听器
+          });          // 举报链接事件监听器
           const reportLink = document.getElementById("report-link");
           if (reportLink) {
             reportLink.addEventListener("click", (e) => {
@@ -1046,7 +1064,22 @@
               }
             });
           }
-        } // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
+
+          // 关闭按钮事件监听器
+          const closeBtn = document.getElementById("close-btn");
+          if (closeBtn) {
+            closeBtn.addEventListener("click", (e) => {
+              e.preventDefault();
+              // 发送关闭事件给父窗口
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                  type: "OnCloseCharacterAI",
+                  data: {}
+                }, "*");
+              }
+            });
+          }
+        }// @param objective: is a question like: "天空为何是蓝色？(wikiword)"
         // @param customQuestionId: the ID of custom question if this is a custom question
         async loadConfigByObjective(objective, customQuestionId = null) {
           if (!objective) {
@@ -2711,9 +2744,17 @@
               chatArea.classList.remove("no-toolbar-chat");
               chatArea.classList.add("full-width-chat");
             } else {
-              chatArea.classList.remove("no-toolbar-chat");
-              // Chat area will take remaining space naturally
+              chatArea.classList.remove("no-toolbar-chat");              // Chat area will take remaining space naturally
             }
+          }
+        }
+
+        // 4. Handle showClose parameter
+        const showClose = urlParams.get("showClose");
+        if (showClose === "true") {
+          const closeBtn = document.getElementById("close-btn");
+          if (closeBtn) {
+            closeBtn.classList.remove("hidden");
           }
         }
       }
