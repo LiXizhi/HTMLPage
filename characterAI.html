@@ -638,12 +638,31 @@
         pointer-events: auto;
         transition: opacity 0.5s ease-in-out;
       }
-
       .avatar-video {
         width: 100%;
         height: 100%;
         object-fit: cover;
+        position: absolute;
+        top: 0;
+        left: 0;
+        transition: opacity 0.8s ease-in-out;
+        pointer-events: none;
+      }
+
+      .avatar-video.visible {
         opacity: 1;
+      }
+
+      .avatar-video.hidden {
+        opacity: 0;
+      }
+
+      .avatar-video-idle {
+        z-index: 1;
+      }
+
+      .avatar-video-talk {
+        z-index: 2;
       }
       .avatar-overlay {
         position: absolute;
@@ -791,7 +810,10 @@
         <!-- Avatar background video positioned relative to the chat area -->
         <div class="flex-1 relative">
           <div id="avatar-background" class="avatar-background hidden">
-            <video id="avatar-video" class="avatar-video" muted loop playsinline>
+            <video id="avatar-video-idle" class="avatar-video avatar-video-idle hidden" muted loop playsinline>
+              <source src="" type="video/mp4" />
+            </video>
+            <video id="avatar-video-talk" class="avatar-video avatar-video-talk hidden" muted loop playsinline>
               <source src="" type="video/mp4" />
             </video>
             <div class="avatar-overlay"></div>
@@ -1906,17 +1928,6 @@
 
           // Scroll to bottom to show the latest message
           this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
-
-          // Avatar video switching for AI messages
-          if (!isUser && avatarManager.isEnabled) {
-            // Switch to talking when AI responds
-            avatarManager.switchToTalking();
-
-            // Switch back to idle after a delay (simulate speaking duration)
-            setTimeout(() => {
-              avatarManager.switchToIdle();
-            }, Math.max(2000, message.length * 50)); // Minimum 2 seconds, or based on message length
-          }
         }
         processMessage(message) {
           return message.replace(/\(([^)]+)\)/g, '<span class="action-text">($1)</span>');
@@ -2083,7 +2094,12 @@
             currentButton.title = "停止语音";
 
             // 保存当前播放信息
-            this.currentPlayingButton = currentButton; // 使用SDK播放语音
+            this.currentPlayingButton = currentButton;
+
+            // Switch avatar to talking when audio starts playing
+            if (avatarManager.isEnabled) {
+              avatarManager.switchToTalking();
+            } // 使用SDK播放语音
             try {
               let audio_url;
 
@@ -2116,9 +2132,7 @@
                 audio.loop = false;
 
                 // 保存音频控制器引用
-                this.currentAudioController = audio;
-
-                // 音频播放完成事件
+                this.currentAudioController = audio; // 音频播放完成事件
                 audio.addEventListener("ended", () => {
                   console.log("音频播放完成");
                   this.stopCurrentAudio();
@@ -2168,6 +2182,11 @@
             this.currentPlayingButton.title = "播放语音";
             this.currentPlayingButton = null;
           }
+
+          // Switch avatar back to idle when audio stops
+          if (avatarManager.isEnabled) {
+            avatarManager.switchToIdle();
+          }
         }
         addStreamingMessage() {
           const messageDiv = document.createElement("div");
@@ -2184,6 +2203,7 @@
           // Prepend streaming message (appears at bottom due to flex-col-reverse)
           this.elements.chatContainer.insertBefore(messageDiv, this.elements.chatContainer.firstChild);
           this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+
           return messageDiv;
         }
 
@@ -2214,6 +2234,12 @@
             // 将按钮添加到最外层 div 的最后，与 addMessage 方法保持一致
             messageDiv.appendChild(audioBtn);
             this.checkAndPlayVideoAction(messageText);
+
+            // Switch avatar back to idle after streaming is complete
+            if (avatarManager.isEnabled) {
+              // Calculate speaking duration based on message length
+              const speakingDuration = Math.max(2000, messageText.length * 50); // Minimum 2 seconds
+            }
           }
         }
 
@@ -2946,18 +2972,20 @@
       // Apply URL parameters immediately
       parseAndApplyURLParams();
 
-      const game = new LLMCharacterGame();
-
-      // Avatar Video Management
+      const game = new LLMCharacterGame(); // Avatar Video Management
       class AvatarVideoManager {
         constructor() {
-          this.avatarVideo = document.getElementById("avatar-video");
+          this.avatarVideoIdle = document.getElementById("avatar-video-idle");
+          this.avatarVideoTalk = document.getElementById("avatar-video-talk");
           this.avatarBackground = document.getElementById("avatar-background");
           this.returnChatBtn = document.getElementById("return-chat-btn");
           this.currentVideoType = null;
-          this.isVideoLoaded = false;
+          this.isIdleVideoLoaded = false;
+          this.isTalkVideoLoaded = false;
           this.isEnabled = false;
           this.hideTimeout = null;
+          this.transitionTimeout = null;
+          this.loadingPromises = new Map();
         }
 
         // Initialize avatar background video
@@ -2978,7 +3006,7 @@
             return;
           }
 
-          console.log("Initializing avatar background video");
+          console.log("Initializing avatar background video system");
           this.isEnabled = true;
           // Add avatar-enabled class to make chat container transparent
           chatContainer.classList.add("avatar-enabled");
@@ -2987,19 +3015,30 @@
           // Add click event listener to avatar background
           this.addAvatarClickHandler(chatContainer);
 
-          // Verify the avatar background is clickable
-          console.log("Avatar background element:", this.avatarBackground);
-          console.log("Avatar background has pointer-events:", window.getComputedStyle(this.avatarBackground).pointerEvents);
+          // Load both videos with proper sequencing
+          this.initializeVideos();
+        }
 
-          this.loadIdleVideo();
-        } // Add click handler for avatar background
+        // Initialize both videos with proper loading sequence
+        async initializeVideos() {
+          try {
+            // First load and start idle video
+            await this.loadIdleVideo();
+            // Then preload talk video in background
+            this.preloadTalkVideo().catch((error) => {
+              console.warn("Talk video preload failed, will load on demand:", error);
+            });
+          } catch (error) {
+            console.error("Failed to initialize avatar videos:", error);
+          }
+        }
+
+        // Add click handler for avatar background
         addAvatarClickHandler(chatContainer) {
           console.log("Adding click handler to avatar background");
 
           this.avatarBackground.addEventListener("click", (e) => {
             console.log("Avatar background clicked - hiding chat content for 10 seconds");
-            console.log("Event target:", e.target);
-            console.log("Avatar background element:", this.avatarBackground);
 
             // Clear any existing timeout
             if (this.hideTimeout) {
@@ -3050,54 +3089,99 @@
         }
 
         async loadIdleVideo() {
-          if (!this.isEnabled || this.isVideoLoaded) return;
+          if (!this.isEnabled || this.isIdleVideoLoaded) return;
 
           const idleAction = game.config.videoActions["待机"];
           if (!idleAction || !idleAction.url) return;
 
+          // Check if already loading
+          if (this.loadingPromises.has("idle")) {
+            return this.loadingPromises.get("idle");
+          }
+
           console.log("Loading idle video:", idleAction.url);
 
-          const source = this.avatarVideo.querySelector("source");
-          source.src = idleAction.url;
-          this.currentVideoType = "待机";
+          const loadPromise = new Promise((resolve, reject) => {
+            const source = this.avatarVideoIdle.querySelector("source");
+            source.src = idleAction.url;
 
-          this.avatarVideo.load();
-
-          return new Promise((resolve, reject) => {
-            this.avatarVideo.onloadeddata = () => {
-              this.isVideoLoaded = true;
+            this.avatarVideoIdle.onloadeddata = () => {
+              this.isIdleVideoLoaded = true;
               console.log("Idle video loaded successfully");
 
               // Auto-play idle video (muted)
-              this.avatarVideo.muted = true;
-              this.avatarVideo
+              this.avatarVideoIdle.muted = true;
+              this.avatarVideoIdle
                 .play()
                 .then(() => {
                   console.log("Idle video started playing");
+                  this.currentVideoType = "待机";
+                  // Show idle video with fade-in
+                  this.avatarVideoIdle.classList.remove("hidden");
+                  this.avatarVideoIdle.classList.add("visible");
+                  this.loadingPromises.delete("idle");
                   resolve();
                 })
                 .catch((error) => {
                   console.error("Error playing idle video:", error);
+                  this.loadingPromises.delete("idle");
                   reject(error);
                 });
             };
 
-            this.avatarVideo.onerror = () => {
+            this.avatarVideoIdle.onerror = () => {
               console.error("Error loading idle video");
-              reject(new Error("Video load failed"));
+              this.loadingPromises.delete("idle");
+              reject(new Error("Idle video load failed"));
             };
+
+            this.avatarVideoIdle.load();
           });
+
+          this.loadingPromises.set("idle", loadPromise);
+          return loadPromise;
         }
 
-        // Switch between video types
-        switchVideo(type) {
-          if (!this.isEnabled || !this.isVideoLoaded) return;
+        async preloadTalkVideo() {
+          if (!this.isEnabled || this.isTalkVideoLoaded) return;
 
-          const videoAction = game.config.videoActions[type];
-          if (!videoAction || !videoAction.url) {
-            console.log(`No video action available for type: ${type}`);
-            return;
+          const talkAction = game.config.videoActions["说话"];
+          if (!talkAction || !talkAction.url) return;
+
+          // Check if already loading
+          if (this.loadingPromises.has("talk")) {
+            return this.loadingPromises.get("talk");
           }
+
+          console.log("Preloading talk video:", talkAction.url);
+
+          const loadPromise = new Promise((resolve, reject) => {
+            const source = this.avatarVideoTalk.querySelector("source");
+            source.src = talkAction.url;
+
+            this.avatarVideoTalk.onloadeddata = () => {
+              this.isTalkVideoLoaded = true;
+              console.log("Talk video preloaded successfully");
+              this.loadingPromises.delete("talk");
+              resolve();
+            };
+
+            this.avatarVideoTalk.onerror = () => {
+              console.error("Error preloading talk video");
+              this.loadingPromises.delete("talk");
+              reject(new Error("Talk video preload failed"));
+            };
+
+            this.avatarVideoTalk.load();
+          });
+
+          this.loadingPromises.set("talk", loadPromise);
+          return loadPromise;
+        }
+
+        // Switch between video types with smooth transition
+        switchVideo(type) {
+          if (!this.isEnabled) return;
 
           // If already playing the same video type, skip
           if (this.currentVideoType === type) {
@@ -3107,43 +3191,158 @@
 
           console.log(`Switching to ${type} video`);
 
-          const source = this.avatarVideo.querySelector("source");
-
-          // Check if we need to change video source
-          if (source.src !== videoAction.url) {
-            source.src = videoAction.url;
-            this.currentVideoType = type;
-            this.avatarVideo.load();
-
-            this.avatarVideo.onloadeddata = () => {
-              // For talking animation, unmute; for others, keep muted
-              this.avatarVideo.muted = type !== "说话";
-
-              this.avatarVideo
-                .play()
-                .then(() => {
-                  console.log(`${type} video started playing`);
-                })
-                .catch((error) => {
-                  console.error(`Error playing ${type} video:`, error);
-                });
-            };
-          } else {
-            // Same video URL, just update mute state
-            this.avatarVideo.muted = type !== "说话";
-            this.currentVideoType = type;
-            console.log(`Same video URL for ${type}, updating mute state only`);
+          if (type === "待机") {
+            this.switchToIdle();
+          } else if (type === "说话") {
+            this.switchToTalking();
           }
         }
 
-        // Switch to idle state
+        // Switch to idle state with smooth transition
         switchToIdle() {
-          this.switchVideo("待机");
+          if (!this.isEnabled) {
+            console.log("Avatar manager not enabled");
+            return;
+          }
+
+          console.log("Switching to idle video");
+
+          // Clear any existing transition timeout
+          if (this.transitionTimeout) {
+            clearTimeout(this.transitionTimeout);
+          }
+
+          // If idle video is not loaded, load it first
+          if (!this.isIdleVideoLoaded) {
+            console.log("Idle video not loaded, loading now...");
+            this.loadIdleVideo().catch((error) => {
+              console.error("Error loading idle video:", error);
+            });
+            return;
+          }
+
+          // Start playing idle video immediately
+          this.avatarVideoIdle.muted = true;
+          this.avatarVideoIdle.currentTime = 0; // Reset to beginning
+
+          this.avatarVideoIdle
+            .play()
+            .then(() => {
+              console.log("Idle video started playing");
+
+              // Show idle video with smooth transition
+              this.avatarVideoIdle.classList.remove("hidden");
+              this.avatarVideoIdle.classList.add("visible");
+
+              // Hide talk video after transition delay to ensure smooth crossfade
+              this.transitionTimeout = setTimeout(() => {
+                this.avatarVideoTalk.classList.remove("visible");
+                this.avatarVideoTalk.classList.add("hidden");
+                // Pause talk video after it's hidden
+                setTimeout(() => {
+                  this.avatarVideoTalk.pause();
+                }, 800); // Wait for opacity transition
+              }, 100);
+
+              this.currentVideoType = "待机";
+            })
+            .catch((error) => {
+              console.error("Error playing idle video:", error);
+            });
         }
 
-        // Switch to talking state
+        // Switch to talking state with smooth transition
         switchToTalking() {
-          this.switchVideo("说话");
+          if (!this.isEnabled) {
+            console.log("Avatar manager not enabled");
+            return;
+          }
+
+          console.log("Switching to talking video");
+
+          // If talk video is not loaded, load it first
+          if (!this.isTalkVideoLoaded) {
+            console.log("Talk video not loaded, loading now...");
+            this.preloadTalkVideo()
+              .then(() => {
+                this.performTalkTransition();
+              })
+              .catch((error) => {
+                console.error("Error loading talk video, falling back to idle:", error);
+                // Fallback to idle if talk video fails to load
+                this.switchToIdle();
+              });
+          } else {
+            this.performTalkTransition();
+          }
+        }
+
+        // Perform the actual transition to talk video
+        performTalkTransition() {
+          console.log("Performing transition to talk video");
+
+          // Clear any existing transition timeout
+          if (this.transitionTimeout) {
+            clearTimeout(this.transitionTimeout);
+          }
+
+          // Prepare talk video
+          this.avatarVideoTalk.muted = false; // Unmute for talking
+          this.avatarVideoTalk.currentTime = 0; // Reset to beginning
+
+          // Start playing talk video
+          this.avatarVideoTalk
+            .play()
+            .then(() => {
+              console.log("Talk video started playing");
+
+              // Show talk video immediately (it has higher z-index so will appear on top)
+              this.avatarVideoTalk.classList.remove("hidden");
+              this.avatarVideoTalk.classList.add("visible");
+
+              // The idle video will still be playing underneath, but talk video will be visible on top
+              // No need to hide idle video immediately since talk video has higher z-index
+
+              this.currentVideoType = "说话";
+            })
+            .catch((error) => {
+              console.error("Error playing talk video:", error);
+              // Fallback to idle video if talk video fails
+              this.switchToIdle();
+            });
+        }
+
+        // Cleanup method to clear timeouts and reset state
+        cleanup() {
+          if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+          }
+
+          if (this.transitionTimeout) {
+            clearTimeout(this.transitionTimeout);
+            this.transitionTimeout = null;
+          }
+
+          // Clear loading promises
+          this.loadingPromises.clear();
+
+          // Reset video states
+          if (this.avatarVideoIdle) {
+            this.avatarVideoIdle.pause();
+            this.avatarVideoIdle.classList.remove("visible");
+            this.avatarVideoIdle.classList.add("hidden");
+          }
+
+          if (this.avatarVideoTalk) {
+            this.avatarVideoTalk.pause();
+            this.avatarVideoTalk.classList.remove("visible");
+            this.avatarVideoTalk.classList.add("hidden");
+          }
+
+          this.currentVideoType = null;
+          this.isIdleVideoLoaded = false;
+          this.isTalkVideoLoaded = false;
         }
       }
 
@@ -3246,3 +3445,4 @@
     </script>
   </body>
 </html>
+```
