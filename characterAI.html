@@ -1163,8 +1163,7 @@
           };
           this.initEventListeners();
           this.loadDefaultConfig();
-        }
-        async start() {
+        }        async start() {
           let urlObjective = game.urlObjective || new URLSearchParams(window.location.search).get("objective");
           let customQuestionId = new URLSearchParams(window.location.search).get("customQuestionId");
           if (urlObjective) {
@@ -1176,6 +1175,9 @@
             console.log("Applying custom URL config:", window.customURLConfig);
             // Deep merge custom config with existing config
             this.config = this.deepMerge(this.config, window.customURLConfig);
+            if (urlObjective) {
+              this.UpdateConfigByObjective(urlObjective, customQuestionId);
+            }
           }
 
           console.log(`Keepwork SDK initialized token: ${sdk.token}`);
@@ -1238,28 +1240,37 @@
               }
             });
           }
-        } // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
-        // @param customQuestionId: the ID of custom question if this is a custom question
-        async loadConfigByObjective(objective, customQuestionId = null) {
-          if (!objective) {
-            console.error("Objective is required to load config.");
-            return;
-          } // find the first wikiword in (), remove it from the objective
+        } 
+        UpdateConfigByObjective(objective, customQuestionId = null){
+          // find the first wikiword in (), remove it from the objective
           const wikimatch = objective.match(/\(([^)]+)\)/);
           let wikiword = null;
           if (wikimatch) {
             wikiword = wikimatch[1]; // Extract just the word, not the match array
             objective = objective.replace(/\s*\([^)]*\)/, "").trim();
           }
+          this.config.objective.title = objective;
           this.config.objective.wikiword = wikiword;
           this.config.objective.customQuestionId = customQuestionId; // Store custom question ID
+          this.config.objective.description = `通过耐心的交流, 解决问题: ${objective}`;
+          this.config.initial.message = `能帮我解决一个问题么：${objective}？ (期待地看着你)`;
+          return objective;
+        }
+
+        // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
+        // @param customQuestionId: the ID of custom question if this is a custom question
+        async loadConfigByObjective(objective, customQuestionId = null) {
+          if (!objective) {
+            console.error("Objective is required to load config.");
+            return;
+          } 
+          objective = this.UpdateConfigByObjective(objective, customQuestionId);
 
           this.config.character.name = "抱抱龙";
           this.config.character.age = 7;
           this.config.character.role = "宠物";
           this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
           this.config.character.chat_background = null;
-          this.config.objective.title = objective;
           this.config.objective.description = `通过耐心的交流, 解决问题: ${objective}`;
           this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
           this.config.quick_replies = [
@@ -1506,6 +1517,19 @@
           this.elements.progressBar.style.width = "0%";
           this.elements.progressText.textContent = "0/100";
 
+          // Ensure system prompt has JSON format requirements
+          if (this.config.system_prompt && !this.config.system_prompt.toLowerCase().includes("json")) {
+            this.config.system_prompt += `
+
+## 输出格式
+你必须严格按照以下JSON格式输出，不要有任何其他内容：
+{
+  "message": "你的回复内容，包含括号内的动作描述",
+  "progress_change": [-10, 30]之间的整数，相对于当前progress_percentage的变化,
+  "progress_reason": "当前对话进度百分比的原因说明",
+  "inner_thoughts": "你此刻真实的内心想法和感受"
+}`;
+          }
           // 添加初始消息
           if (this.config.initial?.message) {
             this.addMessage(this.config.initial.message, false);

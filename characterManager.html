@@ -126,12 +126,12 @@
           <h2 id="modalTitle" class="text-xl font-bold">创建AI角色</h2>
           <button onclick="closeCreateModal()" class="text-white hover:text-gray-200 text-2xl">✖</button>
         </div>
-
         <!-- Tabs Navigation -->
         <div class="flex bg-gray-100 border-b border-gray-200 flex-shrink-0">
           <button onclick="switchTab('basic')" id="tab-basic" class="px-6 py-3 text-sm font-medium bg-white text-blue-600 border-b-2 border-blue-500">📝 基本信息</button>
           <button onclick="switchTab('objective')" id="tab-objective" class="px-6 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">🎯 目标设定</button>
           <button onclick="switchTab('display')" id="tab-display" class="px-6 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">💫 辅助显示</button>
+          <button onclick="switchTab('actions')" id="tab-actions" class="px-6 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">🎬 动作与视觉</button>
         </div>
 
         <!-- Modal Content -->
@@ -154,11 +154,19 @@
                       <input type="number" name="age" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                     </div>
                     <div class="flex items-center gap-4">
+                      <label class="text-sm font-medium text-gray-700 min-w-24">性别</label>
+                      <select name="gender" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">请选择</option>
+                        <option value="male">男性</option>
+                        <option value="female">女性</option>
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-4">
                       <label class="text-sm font-medium text-gray-700 min-w-24">角色职业/身份</label>
                       <input type="text" name="role" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                     </div>
                     <div class="flex items-center gap-4">
-                      <label class="text-sm font-medium text-gray-700 min-w-24">聊天背景</label>
+                      <label class="text-sm font-medium text-gray-700 min-w-24">聊天背景色/图</label>
                       <input type="text" name="chat_background" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                     </div>
                   </div>
@@ -257,7 +265,6 @@
                   </div>
                   <button type="button" onclick="addQuickReply()" class="mt-2 px-4 py-2 text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50 transition-colors">➕ 添加快捷回复</button>
                 </div>
-
                 <!-- Chat Display Options -->
                 <div class="bg-gray-50 rounded-lg">
                   <h3 class="text-lg font-semibold mb-4 text-gray-800">🎛️ 对话显示选项</h3>
@@ -276,6 +283,31 @@
                       </label>
                       <span class="text-xs text-gray-500">控制对话界面是否显示角色详细信息</span>
                     </div>
+                    <div class="flex items-center gap-4">
+                      <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="show_wiki_page" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" />
+                        <span class="text-sm font-medium text-gray-700">显示互动百科</span>
+                      </label>
+                      <span class="text-xs text-gray-500">点击对话时跳转到百科页面而不是角色AI</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Actions Tab -->
+              <div id="tab-content-actions" class="tab-content space-y-6 hidden">
+                <!-- Video Actions -->
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <h3 class="text-lg font-semibold mb-4 text-gray-800">🎬 视频动作配置</h3>
+                  <div class="space-y-4">
+                    <p class="text-sm text-gray-600 mb-4">配置角色在不同状态下的视频动作。"待机"和"说话"是默认动作，您可以添加更多自定义动作。</p>
+
+                    <!-- Video Actions Container -->
+                    <div id="videoActionsContainer" class="space-y-3">
+                      <!-- Default actions will be added here -->
+                    </div>
+
+                    <button type="button" onclick="addVideoAction()" class="mt-4 px-4 py-2 text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50 transition-colors">➕ 添加动作</button>
                   </div>
                 </div>
               </div>
@@ -305,6 +337,7 @@
       console.log(`Keepwork SDK initialized token: ${sdk.token}`); // Global variables
       let characters = [];
       let quickReplyIndex = 1;
+      let videoActionIndex = 0;
       let isEditing = false;
       let editingCharacterId = null;
       let importedUsers = new Set(); // Store imported usernames
@@ -348,6 +381,7 @@
           type: "system",
           name: "抱抱龙",
           age: 7,
+          gender: null,
           role: "宠物",
           description: "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪",
           avatar: "🐲",
@@ -364,12 +398,30 @@
             description: "和抱抱龙的对话很愉快！",
             icon: "🐲",
           },
+          videoActions: {
+            待机: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            },
+            期待: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            },
+            高兴: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4",
+            },
+            难过: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_sad.mp4",
+            },
+            说话: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_talk.mp4",
+            },
+          },
         },
         {
           id: "teacher",
           type: "system",
           name: "小麦老师",
           age: 25,
+          gender: "female",
           role: "老师",
           description: "温和耐心的教育专家，擅长回答各种学习问题",
           avatar: "👩‍🏫",
@@ -392,6 +444,7 @@
           type: "system",
           name: "智能助手",
           age: null,
+          gender: null,
           role: "助手",
           description: "全能的AI助手，可以帮助处理各种日常任务",
           avatar: "🤖",
@@ -675,8 +728,10 @@
                           character.type === "system" ? "bg-blue-100 text-blue-800" : character.type === "imported" ? "bg-purple-100 text-purple-800" : "bg-green-100 text-green-800"
                         }">
                             ${character.type === "system" ? "系统" : character.type === "imported" ? `来自 ${character.sourceUser}` : "个人"}
-                        </span>
-                        ${character.type === "personal" && character.pinned ? '<span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">📌 置顶</span>' : ""}
+                        </span>                        ${
+                          character.type === "personal" && character.pinned ? '<span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">📌 置顶</span>' : ""
+                        }
+                        ${character.show_wiki_page === true ? '<span class="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded-full">百科</span>' : ""}
                         ${(character.tags || []).map((tag) => `<span class="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded-full">${tag}</span>`).join("")}
                     </div><div class="flex gap-2">
                         <button onclick="startChat('${character.id}')" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors text-sm">
@@ -761,6 +816,7 @@
         document.getElementById("createModal").classList.remove("hidden");
         document.body.style.overflow = "hidden";
         resetQuickReplies();
+        resetVideoActions();
       }
 
       // Close create modal
@@ -806,9 +862,7 @@
             `;
         container.appendChild(div);
         quickReplyIndex++;
-      }
-
-      // Remove quick reply
+      } // Remove quick reply
       function removeQuickReply(index) {
         const input = document.querySelector(`input[name="quick_reply_${index}"]`);
         if (input && input.parentElement) {
@@ -816,13 +870,169 @@
         }
       }
 
+      // Reset video actions to initial state
+      function resetVideoActions() {
+        const container = document.getElementById("videoActionsContainer");
+        container.innerHTML = "";
+        videoActionIndex = 0;
+
+        // Add default actions: 待机 and 说话
+        addVideoActionItem("待机", "", true);
+        addVideoActionItem("说话", "", true);
+      }
+
+      // Add video action item
+      function addVideoActionItem(actionName = "", videoUrl = "", isDefault = false) {
+        const container = document.getElementById("videoActionsContainer");
+        const div = document.createElement("div");
+        div.className = "flex gap-2 mb-3 p-3 bg-white rounded-lg border border-gray-200";
+
+        const index = videoActionIndex;
+        div.innerHTML = `
+          <div class="flex-1 grid grid-cols-3 gap-3">
+            <div>
+              <input 
+                type="text" 
+                name="video_action_name_${index}" 
+                value="${actionName}"
+                ${isDefault ? "readonly" : ""}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDefault ? "bg-gray-100" : ""}"
+                placeholder="例如：高兴、难过、思考"
+              />
+            </div>            
+            <div class="col-span-2 flex gap-2">
+              <input 
+                type="text" 
+                name="video_action_url_${index}" 
+                value="${videoUrl}"
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="https://..."
+              />
+              <button 
+                type="button" 
+                onclick="previewVideo(${index})" 
+                class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200 flex items-center justify-center"
+                title="预览视频"
+              >
+                🎬
+              </button>
+            </div>
+          </div>
+          ${
+            !isDefault
+              ? `
+            <button type="button" onclick="removeVideoAction(${index})" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg self-start">
+              🗑
+            </button>
+          `
+              : `
+            <div class="px-3 py-2 text-gray-400 self-start" title="默认动作不可删除">
+              🔒
+            </div>
+          `
+          }
+        `;
+
+        container.appendChild(div);
+        videoActionIndex++;
+      }
+
+      // Add new video action
+      function addVideoAction() {
+        addVideoActionItem();
+      } // Remove video action
+      function removeVideoAction(index) {
+        const nameInput = document.querySelector(`input[name="video_action_name_${index}"]`);
+        if (nameInput && nameInput.closest(".flex")) {
+          nameInput.closest(".flex").remove();
+        }
+      }
+
+      // Preview video function
+      function previewVideo(index) {
+        const urlInput = document.querySelector(`input[name="video_action_url_${index}"]`);
+        if (!urlInput || !urlInput.value.trim()) {
+          showToast("请先输入视频链接", "warning");
+          return;
+        }
+
+        const videoUrl = urlInput.value.trim();
+
+        // Validate URL format
+        try {
+          new URL(videoUrl);
+        } catch {
+          showToast("视频链接格式不正确", "error");
+          return;
+        }
+
+        // Create and show video preview modal
+        showVideoPreview(videoUrl);
+      }
+
+      // Show video preview modal
+      function showVideoPreview(videoUrl) {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById("videoPreviewModal");
+        if (!modal) {
+          modal = document.createElement("div");
+          modal.id = "videoPreviewModal";
+          modal.className = "fixed inset-0 bg-black bg-opacity-75 hidden z-50 flex items-center justify-center";
+          modal.innerHTML = `
+            <div class="relative max-w-4xl max-h-[90vh] bg-black rounded-lg overflow-hidden">
+              <button 
+                onclick="closeVideoPreview()" 
+                class="absolute top-4 right-4 z-10 bg-black bg-opacity-50 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-opacity-75 transition-all"
+                title="关闭预览"
+              >
+                ✕
+              </button>
+              <video 
+                id="previewVideo" 
+                controls 
+                autoplay 
+                loop 
+                muted
+                class="max-w-full max-h-[90vh] object-contain"
+                style="background: #000;"
+              >
+                您的浏览器不支持视频播放
+              </video>
+            </div>
+          `;
+          document.body.appendChild(modal);
+        }
+
+        // Set video source and show modal
+        const video = modal.querySelector("#previewVideo");
+        video.src = videoUrl;
+        modal.classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+
+        // Handle video load error
+        video.onerror = function () {};
+      }
+
+      // Close video preview modal
+      function closeVideoPreview() {
+        const modal = document.getElementById("videoPreviewModal");
+        if (modal) {
+          modal.classList.add("hidden");
+          const video = modal.querySelector("#previewVideo");
+          if (video) {
+            video.pause();
+            video.src = "";
+          }
+        }
+        document.body.style.overflow = "auto";
+      }
+
       // Load character data into form for editing
       function loadCharacterIntoForm(character) {
-        const form = document.getElementById("createCharacterForm");
-
-        // Basic info
+        const form = document.getElementById("createCharacterForm"); // Basic info
         form.name.value = character.name || "";
         form.age.value = character.age || "";
+        form.gender.value = character.gender || "";
         form.role.value = character.role || "";
         form.description.value = character.description || "";
         form.chat_background.value = character.chat_background || "";
@@ -835,17 +1045,16 @@
         form.initial_message.value = character.initial_message || "";
         form.completion_title.value = character.completion_messages?.title || "";
         form.completion_description.value = character.completion_messages?.description || "";
-        form.completion_icon.value = character.completion_messages?.icon || "";
-
-        // Chat display options
+        form.completion_icon.value = character.completion_messages?.icon || ""; // Chat display options        // Chat display options
         form.show_toolbar.checked = character.show_toolbar !== false; // Default true
         form.show_char_info.checked = character.show_char_info !== false; // Default true
+        form.show_wiki_page.checked = character.show_wiki_page === true; // Default false
+        form.show_wiki_page.checked = character.show_wiki_page === true; // Default false
 
         // Quick replies
         const container = document.getElementById("quickRepliesContainer");
         container.innerHTML = "";
         quickReplyIndex = 0;
-
         if (character.quick_replies && character.quick_replies.length > 0) {
           character.quick_replies.forEach((reply, index) => {
             const div = document.createElement("div");
@@ -861,6 +1070,21 @@
           });
         } else {
           resetQuickReplies();
+        }
+
+        // Video actions
+        const videoContainer = document.getElementById("videoActionsContainer");
+        videoContainer.innerHTML = "";
+        videoActionIndex = 0;
+
+        if (character.videoActions && Object.keys(character.videoActions).length > 0) {
+          Object.entries(character.videoActions).forEach(([actionName, actionData]) => {
+            const videoUrl = actionData.url || "";
+            const isDefault = actionName === "待机" || actionName === "说话";
+            addVideoActionItem(actionName, videoUrl, isDefault);
+          });
+        } else {
+          resetVideoActions();
         }
       }
 
@@ -908,6 +1132,7 @@
           const copiedCharacter = {
             name: character.name + " (副本)",
             age: character.age,
+            gender: character.gender,
             role: character.role,
             description: character.description,
             chat_background: character.chat_background,
@@ -928,6 +1153,7 @@
             show_toolbar: character.show_toolbar !== false,
             show_char_info: character.show_char_info !== false,
             tags: [...(character.tags || [])],
+            videoActions: character.videoActions ? JSON.parse(JSON.stringify(character.videoActions)) : {},
             type: "personal", // Always make copied characters personal
             pinned: false, // New copies are not pinned by default
           };
@@ -1013,11 +1239,10 @@
       async function submitCreateForm() {
         const form = document.getElementById("createCharacterForm");
         const formData = new FormData(form);
-        const characterData = {};
-
-        // Basic info
+        const characterData = {}; // Basic info
         characterData.name = formData.get("name");
         characterData.age = formData.get("age") ? parseInt(formData.get("age")) : null;
+        characterData.gender = formData.get("gender") || null;
         characterData.role = formData.get("role") || "";
         characterData.description = formData.get("description");
         characterData.chat_background = formData.get("chat_background") || null;
@@ -1040,25 +1265,34 @@
         characterData.wikiword = formData.get("wikiword") || null;
 
         // Messages
-        characterData.initial_message = formData.get("initial_message") || "";
-
-        // Quick replies
+        characterData.initial_message = formData.get("initial_message") || ""; // Quick replies
         characterData.quick_replies = [];
         for (let i = 0; i < quickReplyIndex; i++) {
           const reply = formData.get(`quick_reply_${i}`);
           if (reply && reply.trim()) {
             characterData.quick_replies.push(reply.trim());
           }
+        }
+
+        // Video actions
+        characterData.videoActions = {};
+        for (let i = 0; i < videoActionIndex; i++) {
+          const actionName = formData.get(`video_action_name_${i}`);
+          const actionUrl = formData.get(`video_action_url_${i}`);
+          if (actionName && actionName.trim()) {
+            characterData.videoActions[actionName.trim()] = {
+              url: actionUrl ? actionUrl.trim() : "",
+            };
+          }
         } // Completion messages
         characterData.completion_messages = {
           title: formData.get("completion_title") || "目标完成！",
           description: formData.get("completion_description") || "",
           icon: formData.get("completion_icon") || "🎉",
-        };
-
-        // Chat display options
+        }; // Chat display options
         characterData.show_toolbar = formData.get("show_toolbar") === "on";
         characterData.show_char_info = formData.get("show_char_info") === "on";
+        characterData.show_wiki_page = formData.get("show_wiki_page") === "on";
 
         // Tags (generate based on role and description)
         characterData.tags = characterData.role ? [characterData.role] : [];
@@ -1084,14 +1318,12 @@
         } catch (error) {
           showToast((isEditing ? "更新" : "创建") + "角色失败：" + error.message, "error");
         }
-      }
-
-      // Start chat with character
+      } // Start chat with character
       function startChat(characterId) {
         const character = characters.find((c) => c.id === characterId);
         if (!character) return;
 
-        // Build config URL parameter
+        // Build config URL parameter for regular chat
         const config = encodeURIComponent(
           JSON.stringify({
             character: {
@@ -1108,15 +1340,20 @@
             quick_replies: character.quick_replies || [],
             system_prompt: character.system_prompt,
             completion_messages: character.completion_messages,
+            videoActions: character.videoActions || {},
           })
         );
         // Set iframe source using URL replacement pattern to forward existing parameters
         let currentUrl = window.location.href;
         currentUrl = currentUrl.split("?")[0];
 
+        let targetPage = "characterAI";
+        if (character.show_wiki_page === true) {
+          targetPage = "wiki_dashboard";
+        }
         // Replace characterManager with characterAI
-        const iframeUrl = currentUrl.replace("characterManager", "characterAI"); // Forward all existing URL parameters and add config
-        const urlParams = new URLSearchParams(iframeUrl);
+        const iframeUrl = currentUrl.replace("characterManager", targetPage); // Forward all existing URL parameters and add config
+        const urlParams = new URLSearchParams();
         urlParams.set("config", config);
         urlParams.set("showClose", "true");
         urlParams.set("parent", "characterManager");
@@ -1174,6 +1411,16 @@
           console.error("Error initializing app:", error);
           showToast("应用初始化失败：" + error.message, "error");
         }
+
+        // Add keyboard event listener for ESC key to close video preview
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") {
+            const videoModal = document.getElementById("videoPreviewModal");
+            if (videoModal && !videoModal.classList.contains("hidden")) {
+              closeVideoPreview();
+            }
+          }
+        });
       }
 
       // Listen for messages from the iframe
