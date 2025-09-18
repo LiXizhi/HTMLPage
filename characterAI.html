@@ -19,7 +19,7 @@
   5. ?showCharInfo=false (hides the left character info panel)
   6. keepwork token: ?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   7. ?showClose=true (show close button on right top, and send OnCloseCharacterAI event to parent window)
-  8. ?showAvatar=auto should avatar on chat background (only useful when config.videoactions["待机|说话"] are both available.
+  8. ?showAvatar=auto whether show avatar on chat background (only useful when config.videoactions["待机|说话"] are both available.
   
   Complete examples:
   - Minimal UI: ?showToolbar=false&showCharInfo=false&objective=学习编程&config=%7B"character"%3A%7B"name"%3A"小红"%2C"age"%3A16%7D%7D
@@ -34,21 +34,22 @@
       .chat-bubble-left {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 18px 18px 18px 4px;
+        pointer-events: auto;
       }
 
       .chat-bubble-right {
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         border-radius: 18px 18px 4px 18px;
+        pointer-events: auto;
       }
       .action-text {
         color: rgba(255, 255, 255, 0.8);
         font-style: italic;
-      }
-
-      /* Chat container with reversed flex direction */
+      } /* Chat container with reversed flex direction */
       #chat-container {
         display: flex;
         flex-direction: column-reverse;
+        z-index: 3;
       }
 
       /* Add spacing between chat messages in reverse order */
@@ -598,9 +599,118 @@
       .close-button:hover {
         background: rgba(255, 255, 255, 0.3);
       }
-
       .close-button.hidden {
         display: none !important;
+      } /* Avatar background video styles */
+      .avatar-background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        overflow: hidden;
+        pointer-events: none;
+      } /* Make avatar background clickable and higher z-index when visible */
+      .avatar-background:not(.hidden) {
+        z-index: 2;
+        pointer-events: auto !important;
+        cursor: pointer;
+      }
+      .avatar-background.hidden {
+        pointer-events: none;
+      }
+
+      /* Hide avatar background by default */
+      .avatar-background.hidden {
+        display: none;
+      }
+
+      /* Chat content hiding animation */
+      #chat-container.fade-out {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.5s ease-in-out;
+      }
+
+      #chat-container.fade-in {
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 0.5s ease-in-out;
+      }
+
+      .avatar-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 1;
+      }
+      .avatar-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0);
+        z-index: 2;
+        pointer-events: none;
+      } /* Return to chat button styles */
+      .return-chat-btn {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        z-index: 6;
+        pointer-events: auto;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateX(-50%) translateY(20px);
+      }
+
+      .return-chat-btn.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .return-chat-btn:hover {
+        transform: translateX(-50%) translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      } /* Ensure chat container doesn't block avatar background when avatar is enabled */
+      #chat-container.avatar-enabled {
+        background: transparent !important;
+        z-index: 5 !important;
+        pointer-events: none !important;
+      } /* Re-enable pointer events for interactive elements when avatar is enabled, but keep chat bubbles click-through */
+      #chat-container.avatar-enabled > * {
+        pointer-events: none;
+      }
+
+      /* Re-enable pointer events for interactive elements only */
+      #chat-container.avatar-enabled button {
+        pointer-events: auto;
+      }
+
+      #chat-container.avatar-enabled input {
+        pointer-events: auto;
+      }
+
+      #chat-container.avatar-enabled select {
+        pointer-events: auto;
+      }
+
+      #chat-container.avatar-enabled a {
+        pointer-events: auto;
       }
     </style>
   </head>
@@ -678,8 +788,18 @@
           </div>
           <p id="chat-description" class="text-sm opacity-90">通过耐心的交流，帮助小明重新找回学习的乐趣</p>
         </div>
-        <div id="chat-container" class="flex-1 overflow-y-auto p-4 relative">
-          <!-- 对话内容将在这里动态生成 -->
+        <!-- Avatar background video positioned relative to the chat area -->
+        <div class="flex-1 relative">
+          <div id="avatar-background" class="avatar-background hidden">
+            <video id="avatar-video" class="avatar-video" muted loop playsinline>
+              <source src="" type="video/mp4" />
+            </video>
+            <div class="avatar-overlay"></div>
+          </div>
+          <div id="chat-container" class="absolute inset-0 overflow-y-auto p-4 fade-in">
+            <!-- 对话内容将在这里动态生成 -->
+          </div>
+          <button id="return-chat-btn" class="return-chat-btn">返回聊天</button>
         </div>
 
         <!-- 输入区域 -->
@@ -1196,10 +1316,11 @@
             }
           } catch (error) {
             console.error("Error loading dragon stage:", error);
-          }
-
-          // Dragon egg videos (>= 0 years)
+          } // Dragon egg videos (>= 0 years)
           if (characterAge < 4) {
+            this.config.videoActions["待机"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_small.mp4",
+            };
             this.config.videoActions["看着你"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_watching.mp4",
             };
@@ -1216,6 +1337,9 @@
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_sad.mp4",
             };
           } else if (characterAge <= 7) {
+            this.config.videoActions["待机"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            };
             this.config.videoActions["期待"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
             };
@@ -1229,6 +1353,9 @@
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_talk.mp4",
             };
           } else {
+            this.config.videoActions["待机"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_happy.mp4",
+            };
             this.config.videoActions["期待"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_happy.mp4",
             };
@@ -1243,8 +1370,7 @@
             };
           }
         }
-
-        loadDefaultConfig() {
+        async loadDefaultConfig() {
           this.config = {
             character: {
               name: "小明",
@@ -1298,7 +1424,7 @@
               icon: "🎉",
             },
           };
-          this.setVideoActionsByCharacter();
+          await this.setVideoActionsByCharacter();
         }
 
         changeChatBackground(background) {
@@ -1397,10 +1523,11 @@
             this.checkAndPlayVideoAction(this.config.initial?.message);
           } // 设置聊天背景
           this.changeChatBackground(this.config?.character?.chat_background);
-          this.saveProgress(this.config?.objective?.wikiword, false);
-
-          // 渲染进度条刻度标尺
+          this.saveProgress(this.config?.objective?.wikiword, false); // 渲染进度条刻度标尺
           this.renderProgressMarkers();
+
+          // Initialize avatar background video after ensuring video actions are ready
+          this.initializeAvatarBackground();
         }
 
         updateQuickReplies() {
@@ -1526,9 +1653,13 @@
           // 禁用输入控件
           this.elements.sendBtn.disabled = true;
           this.elements.userInput.disabled = true;
-
           this.addMessage(message, true);
           this.elements.userInput.value = "";
+
+          // Switch avatar to idle when user sends message
+          if (avatarManager.isEnabled) {
+            avatarManager.switchToIdle();
+          }
 
           // add current percentage to the message
           message = `[current progress: ${this.gameState.progress}%] ${message}`;
@@ -1553,6 +1684,11 @@
             this.removeTypingIndicator();
             this.updateLLMStatus(`错误: ${error.message}`);
             this.addMessage("抱歉，我现在有些困扰，可能需要一点时间来整理思绪...", false);
+
+            // Switch avatar to idle on error
+            if (avatarManager.isEnabled) {
+              avatarManager.switchToIdle();
+            }
           } finally {
             // 重新启用输入控件
             this.elements.sendBtn.disabled = false;
@@ -1765,13 +1901,22 @@
                                   🔊
                               </button>
                           `;
-          }
-
-          // Prepend the message to the top of the container (which appears at bottom due to flex-col-reverse)
+          } // Prepend the message to the top of the container (which appears at bottom due to flex-col-reverse)
           this.elements.chatContainer.insertBefore(messageDiv, this.elements.chatContainer.firstChild);
 
           // Scroll to bottom to show the latest message
           this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+
+          // Avatar video switching for AI messages
+          if (!isUser && avatarManager.isEnabled) {
+            // Switch to talking when AI responds
+            avatarManager.switchToTalking();
+
+            // Switch back to idle after a delay (simulate speaking duration)
+            setTimeout(() => {
+              avatarManager.switchToIdle();
+            }, Math.max(2000, message.length * 50)); // Minimum 2 seconds, or based on message length
+          }
         }
         processMessage(message) {
           return message.replace(/\(([^)]+)\)/g, '<span class="action-text">($1)</span>');
@@ -2715,6 +2860,22 @@
             this.elements.historyDropdown.value = "";
           }
         }
+
+        // Initialize avatar background video with proper timing
+        initializeAvatarBackground() {
+          if (!window.showAvatarBackground) {
+            console.log("Avatar background disabled by showAvatarBackground setting");
+            return;
+          }
+
+          if (!avatarManager) {
+            console.log("Avatar manager not available");
+            return;
+          }
+
+          // Initialize avatar manager after ensuring video actions are ready
+          avatarManager.init();
+        }
       }
       const aiToolbox = new AIToolboxManager();
       window.aiToolbox = aiToolbox;
@@ -2768,9 +2929,7 @@
               chatArea.classList.remove("no-toolbar-chat"); // Chat area will take remaining space naturally
             }
           }
-        }
-
-        // 4. Handle showClose parameter
+        } // 4. Handle showClose parameter
         const showClose = urlParams.get("showClose");
         if (showClose === "true") {
           const closeBtn = document.getElementById("close-btn");
@@ -2778,12 +2937,218 @@
             closeBtn.classList.remove("hidden");
           }
         }
+
+        // 5. Handle showAvatar parameter
+        const showAvatar = urlParams.get("showAvatar");
+        window.showAvatarBackground = showAvatar !== "false";
       }
 
       // Apply URL parameters immediately
       parseAndApplyURLParams();
 
-      const game = new LLMCharacterGame(); // Promise-based location response handler with timeout
+      const game = new LLMCharacterGame();
+
+      // Avatar Video Management
+      class AvatarVideoManager {
+        constructor() {
+          this.avatarVideo = document.getElementById("avatar-video");
+          this.avatarBackground = document.getElementById("avatar-background");
+          this.returnChatBtn = document.getElementById("return-chat-btn");
+          this.currentVideoType = null;
+          this.isVideoLoaded = false;
+          this.isEnabled = false;
+          this.hideTimeout = null;
+        }
+
+        // Initialize avatar background video
+        init() {
+          const chatContainer = document.getElementById("chat-container");
+
+          if (!window.showAvatarBackground) {
+            // Remove avatar-enabled class to allow normal backgrounds
+            chatContainer.classList.remove("avatar-enabled");
+            return;
+          }
+
+          // Check if both 待机 and 说话 video actions are available
+          if (!this.checkVideoActionsAvailable()) {
+            console.log("Video actions not available for avatar background");
+            // Remove avatar-enabled class to allow normal backgrounds
+            chatContainer.classList.remove("avatar-enabled");
+            return;
+          }
+
+          console.log("Initializing avatar background video");
+          this.isEnabled = true;
+          // Add avatar-enabled class to make chat container transparent
+          chatContainer.classList.add("avatar-enabled");
+          this.avatarBackground.classList.remove("hidden");
+
+          // Add click event listener to avatar background
+          this.addAvatarClickHandler(chatContainer);
+
+          // Verify the avatar background is clickable
+          console.log("Avatar background element:", this.avatarBackground);
+          console.log("Avatar background has pointer-events:", window.getComputedStyle(this.avatarBackground).pointerEvents);
+
+          this.loadIdleVideo();
+        } // Add click handler for avatar background
+        addAvatarClickHandler(chatContainer) {
+          console.log("Adding click handler to avatar background");
+
+          this.avatarBackground.addEventListener("click", (e) => {
+            console.log("Avatar background clicked - hiding chat content for 10 seconds");
+            console.log("Event target:", e.target);
+            console.log("Avatar background element:", this.avatarBackground);
+
+            // Clear any existing timeout
+            if (this.hideTimeout) {
+              clearTimeout(this.hideTimeout);
+            }
+
+            // Add fade-out class to hide chat content
+            chatContainer.classList.remove("fade-in");
+            chatContainer.classList.add("fade-out");
+
+            // Show return chat button
+            this.returnChatBtn.classList.add("show");
+
+            // Set timeout to show chat content again after 10 seconds
+            this.hideTimeout = setTimeout(() => {
+              console.log("Showing chat content again");
+              chatContainer.classList.remove("fade-out");
+              chatContainer.classList.add("fade-in");
+              this.returnChatBtn.classList.remove("show");
+              this.hideTimeout = null;
+            }, 10000); // 10 seconds
+          });
+
+          // Add click handler for return chat button
+          this.returnChatBtn.addEventListener("click", (e) => {
+            e.stopPropagation(); // Prevent avatar background click
+            console.log("Return chat button clicked - showing chat content immediately");
+
+            // Clear timeout
+            if (this.hideTimeout) {
+              clearTimeout(this.hideTimeout);
+              this.hideTimeout = null;
+            }
+
+            // Show chat content immediately
+            chatContainer.classList.remove("fade-out");
+            chatContainer.classList.add("fade-in");
+            this.returnChatBtn.classList.remove("show");
+          });
+
+          console.log("Click handler added to:", this.avatarBackground);
+        }
+
+        checkVideoActionsAvailable() {
+          const hasVideoActions = game.config && game.config.videoActions && game.config.videoActions["待机"] && game.config.videoActions["说话"];
+          console.log("Video actions available:", hasVideoActions);
+          return hasVideoActions;
+        }
+
+        async loadIdleVideo() {
+          if (!this.isEnabled || this.isVideoLoaded) return;
+
+          const idleAction = game.config.videoActions["待机"];
+          if (!idleAction || !idleAction.url) return;
+
+          console.log("Loading idle video:", idleAction.url);
+
+          const source = this.avatarVideo.querySelector("source");
+          source.src = idleAction.url;
+          this.currentVideoType = "待机";
+
+          this.avatarVideo.load();
+
+          return new Promise((resolve, reject) => {
+            this.avatarVideo.onloadeddata = () => {
+              this.isVideoLoaded = true;
+              console.log("Idle video loaded successfully");
+
+              // Auto-play idle video (muted)
+              this.avatarVideo.muted = true;
+              this.avatarVideo
+                .play()
+                .then(() => {
+                  console.log("Idle video started playing");
+                  resolve();
+                })
+                .catch((error) => {
+                  console.error("Error playing idle video:", error);
+                  reject(error);
+                });
+            };
+
+            this.avatarVideo.onerror = () => {
+              console.error("Error loading idle video");
+              reject(new Error("Video load failed"));
+            };
+          });
+        }
+
+        // Switch between video types
+        switchVideo(type) {
+          if (!this.isEnabled || !this.isVideoLoaded) return;
+
+          const videoAction = game.config.videoActions[type];
+          if (!videoAction || !videoAction.url) {
+            console.log(`No video action available for type: ${type}`);
+            return;
+          }
+
+          // If already playing the same video type, skip
+          if (this.currentVideoType === type) {
+            console.log(`Already playing ${type} video`);
+            return;
+          }
+
+          console.log(`Switching to ${type} video`);
+
+          const source = this.avatarVideo.querySelector("source");
+
+          // Check if we need to change video source
+          if (source.src !== videoAction.url) {
+            source.src = videoAction.url;
+            this.currentVideoType = type;
+            this.avatarVideo.load();
+
+            this.avatarVideo.onloadeddata = () => {
+              // For talking animation, unmute; for others, keep muted
+              this.avatarVideo.muted = type !== "说话";
+
+              this.avatarVideo
+                .play()
+                .then(() => {
+                  console.log(`${type} video started playing`);
+                })
+                .catch((error) => {
+                  console.error(`Error playing ${type} video:`, error);
+                });
+            };
+          } else {
+            // Same video URL, just update mute state
+            this.avatarVideo.muted = type !== "说话";
+            this.currentVideoType = type;
+            console.log(`Same video URL for ${type}, updating mute state only`);
+          }
+        }
+
+        // Switch to idle state
+        switchToIdle() {
+          this.switchVideo("待机");
+        }
+
+        // Switch to talking state
+        switchToTalking() {
+          this.switchVideo("说话");
+        }
+      }
+
+      // Create avatar video manager instance
+      const avatarManager = new AvatarVideoManager(); // Promise-based location response handler with timeout
 
       // Window message handling for host communication
       window.addEventListener("message", function (e) {

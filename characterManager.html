@@ -681,21 +681,30 @@
                     </div><div class="flex gap-2">
                         <button onclick="startChat('${character.id}')" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors text-sm">
                             对话
-                        </button>
-                        ${
-                          character.type === "personal"
-                            ? `
-                            <div class="relative">
-                                <button onclick="toggleCharacterMenu('${
-                                  character.id
-                                }')" class="px-3 py-2 bg-gray-200 text-gray-700 hover:text-gray-800 hover:bg-gray-300 rounded-lg transition-colors" title="更多操作">
-                                    设置...
-                                </button>
-                                <div id="menu-${character.id}" class="absolute right-0 mt-1 w-48 bg-white character-menu rounded-lg z-50 hidden">
+                        </button>                        <div class="relative">
+                            <button onclick="toggleCharacterMenu('${
+                              character.id
+                            }')" class="px-3 py-2 bg-gray-200 text-gray-700 hover:text-gray-800 hover:bg-gray-300 rounded-lg transition-colors" title="更多操作">
+                                设置...
+                            </button>
+                            <div id="menu-${character.id}" class="absolute right-0 mt-1 w-48 bg-white character-menu rounded-lg z-50 hidden">
+                                ${
+                                  character.type === "personal"
+                                    ? `
                                     <button onclick="editCharacter('${character.id}')" class="w-full px-4 py-3 text-left text-base text-gray-700 hover:bg-gray-100 flex items-center gap-3">
                                         <span class="text-lg">✏️</span>
                                         编辑
                                     </button>
+                                    `
+                                    : ""
+                                }
+                                <button onclick="copyCharacter('${character.id}')" class="w-full px-4 py-3 text-left text-base text-gray-700 hover:bg-gray-100 flex items-center gap-3">
+                                    <span class="text-lg">📋</span>
+                                    复制角色
+                                </button>
+                                ${
+                                  character.type === "personal"
+                                    ? `
                                     <button onclick="deleteCharacter('${character.id}')" class="w-full px-4 py-3 text-left text-base text-red-600 hover:bg-red-50 flex items-center gap-3">
                                         <span class="text-lg">🗑️</span>
                                         删除
@@ -704,11 +713,11 @@
                                         <span class="text-lg">${character.pinned ? "📌" : "📍"}</span>
                                         ${character.pinned ? "取消置顶" : "置顶"}
                                     </button>
-                                </div>
+                                    `
+                                    : ""
+                                }
                             </div>
-                            `
-                            : ""
-                        }
+                        </div>
                     </div>
                 </div>
             `;
@@ -874,9 +883,7 @@
         document.getElementById("createModal").classList.remove("hidden");
         document.body.style.overflow = "hidden";
         switchTab("basic");
-      }
-
-      // Delete character
+      } // Delete character
       function deleteCharacter(characterId) {
         const character = characters.find((c) => c.id === characterId);
         if (!character || character.type === "system") {
@@ -885,6 +892,62 @@
         }
         if (confirm(`确定要删除角色 "${character.name}" 吗？此操作不可撤销。`)) {
           deletePersonalCharacter(characterId);
+        }
+      }
+
+      // Copy character (for any character type)
+      async function copyCharacter(characterId) {
+        const character = characters.find((c) => c.id === characterId);
+        if (!character) {
+          showToast("找不到要复制的角色", "error");
+          return;
+        }
+
+        try {
+          // Create a copy of the character data
+          const copiedCharacter = {
+            name: character.name + " (副本)",
+            age: character.age,
+            role: character.role,
+            description: character.description,
+            chat_background: character.chat_background,
+            system_prompt: character.system_prompt,
+            avatar: character.avatar || "👤",
+            objective: {
+              title: character.objective?.title || "",
+              description: character.objective?.description || "",
+            },
+            wikiword: character.wikiword,
+            initial_message: character.initial_message || "",
+            quick_replies: [...(character.quick_replies || [])],
+            completion_messages: {
+              title: character.completion_messages?.title || "目标完成！",
+              description: character.completion_messages?.description || "",
+              icon: character.completion_messages?.icon || "🎉",
+            },
+            show_toolbar: character.show_toolbar !== false,
+            show_char_info: character.show_char_info !== false,
+            tags: [...(character.tags || [])],
+            type: "personal", // Always make copied characters personal
+            pinned: false, // New copies are not pinned by default
+          };
+
+          // Save the copied character
+          const savedCharacter = await savePersonalCharacter(copiedCharacter);
+
+          // Add to characters array
+          characters.push(savedCharacter);
+
+          // Re-render characters
+          renderCharacters();
+
+          // Close the menu
+          const menu = document.getElementById(`menu-${characterId}`);
+          menu.classList.add("hidden");
+
+          showToast(`成功复制角色 "${character.name}"！`, "success");
+        } catch (error) {
+          showToast("复制角色失败：" + error.message, "error");
         }
       }
 
