@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI角色管理器</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.8"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.10"></script>
     <style>
       /* Toast styles */
       .toast-container {
@@ -93,6 +93,12 @@
           <h2 class="text-xl font-bold text-gray-800">AI角色管理器</h2>
         </div>
         <div class="flex flex-wrap gap-4 items-center">
+          <!-- User Import Section -->
+          <div class="flex items-center p-1 gap-2 bg-gray-200 rounded-lg">
+            <input type="text" id="usernameInput" placeholder="输入用户名" class="px-3 text-base border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+            <button onclick="loadUserCharacters()" class="px-3 py-1 text-base bg-green-500 text-white rounded hover:bg-green-600 transition-colors">加载</button>
+          </div>
+
           <select id="filterSelect" onchange="filterCharacters()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
             <option value="all">全部角色</option>
             <option value="personal">我的角色</option>
@@ -296,13 +302,13 @@
       const sdk = new KeepworkSDK({
         timeout: 30000,
       });
-      console.log(`Keepwork SDK initialized token: ${sdk.token}`);
-
-      // Global variables
+      console.log(`Keepwork SDK initialized token: ${sdk.token}`); // Global variables
       let characters = [];
       let quickReplyIndex = 1;
       let isEditing = false;
       let editingCharacterId = null;
+      let importedUsers = new Set(); // Store imported usernames
+      let userCharacters = new Map(); // Store characters by username
 
       // Toast functionality
       function showToast(message, type = "info") {
@@ -529,6 +535,87 @@
           console.error("Error deleting character:", error);
           showToast("删除角色失败：" + error.message, "error");
         }
+      }
+
+      // Load characters from other users
+      async function loadUserCharacters() {
+        const usernameInput = document.getElementById("usernameInput");
+        const username = usernameInput.value.trim();
+
+        if (!username) {
+          showToast("请输入用户名", "warning");
+          return;
+        }
+
+        try {
+          console.log(`Loading characters from user: ${username}`);
+          showToast(`正在加载 ${username} 的角色...`, "info");
+
+          // Create a temporary SDK instance for the target user
+          const targetSdk = new KeepworkSDK({
+            timeout: 30000,
+          });
+          targetSdk.personalPageStore.setUsername(username);
+
+          // Load characters from the target user's personal page store
+          // Note: This assumes we have permission to read other users' data
+          // In practice, this might require special permissions or API calls
+          const userData = await targetSdk.personalPageStore.loadPageData("maisi_character_manager", "user-characters");
+
+          if (userData && userData.characters && Array.isArray(userData.characters)) {
+            const importedChars = userData.characters.map((char) => ({
+              ...char,
+              id: `imported_${username}_${char.id}`, // Prevent ID conflicts
+              type: "imported",
+              sourceUser: username,
+              original_id: char.id,
+            }));
+
+            // Store in userCharacters map
+            userCharacters.set(username, importedChars);
+
+            // Add to main characters array
+            characters = characters.concat(importedChars);
+
+            // Add username to imported users set
+            importedUsers.add(username);
+
+            // Update dropdown to include this user
+            updateFilterDropdown();
+
+            // Re-render characters
+            renderCharacters();
+
+            showToast(`成功加载 ${importedChars.length} 个来自 ${username} 的角色`, "success");
+            console.log(`Successfully loaded ${importedChars.length} characters from user: ${username}`);
+
+            // Clear input
+            usernameInput.value = "";
+          } else {
+            showToast(`用户 ${username} 没有可用的角色数据`, "warning");
+          }
+        } catch (error) {
+          console.error("Error loading user characters:", error);
+          showToast(`加载 ${username} 的角色失败: ${error.message}`, "error");
+        }
+      }
+
+      // Update filter dropdown to include imported users
+      function updateFilterDropdown() {
+        const filterSelect = document.getElementById("filterSelect");
+
+        // Remove existing imported user options
+        const existingImportedOptions = filterSelect.querySelectorAll('option[data-imported="true"]');
+        existingImportedOptions.forEach((option) => option.remove());
+
+        // Add options for each imported user
+        importedUsers.forEach((username) => {
+          const option = document.createElement("option");
+          option.value = `user:${username}`;
+          option.textContent = `${username} 的角色`;
+          option.setAttribute("data-imported", "true");
+          filterSelect.appendChild(option);
+        });
       } // Render characters
       function renderCharacters() {
         const grid = document.getElementById("charactersGrid");
@@ -560,15 +647,17 @@
           // Maintain original order for other cases
           return 0;
         });
-
         sortedCharacters.forEach((char) => {
           grid.appendChild(createCharacterCard(char));
         });
-      } // Create character card
+      }
+
+      // Create character card
       function createCharacterCard(character) {
         const card = document.createElement("div");
         card.className = `bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer character-card ${character.type === "personal" && character.pinned ? "pinned" : ""}`;
         card.dataset.type = character.type;
+        card.dataset.characterId = character.id;
 
         card.innerHTML = `
                 <div class="p-6">
@@ -581,10 +670,11 @@
                     </div>
                     <div class="text-gray-700 text-sm mb-4 h-16 flex items-start overflow-hidden">
                         <p class="line-clamp-3">${character.description}</p>
-                    </div>
-                      <div class="flex flex-wrap gap-1 mb-4">
-                        <span class="px-2 py-1 text-xs rounded-full ${character.type === "system" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}">
-                            ${character.type === "system" ? "系统" : "个人"}
+                    </div>                      <div class="flex flex-wrap gap-1 mb-4">
+                        <span class="px-2 py-1 text-xs rounded-full ${
+                          character.type === "system" ? "bg-blue-100 text-blue-800" : character.type === "imported" ? "bg-purple-100 text-purple-800" : "bg-green-100 text-green-800"
+                        }">
+                            ${character.type === "system" ? "系统" : character.type === "imported" ? `来自 ${character.sourceUser}` : "个人"}
                         </span>
                         ${character.type === "personal" && character.pinned ? '<span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">📌 置顶</span>' : ""}
                         ${(character.tags || []).map((tag) => `<span class="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded-full">${tag}</span>`).join("")}
@@ -623,15 +713,28 @@
                 </div>
             `;
         return card;
-      }
-
-      // Filter characters
+      } // Filter characters
       function filterCharacters() {
         const filter = document.getElementById("filterSelect").value;
         const cards = document.querySelectorAll(".character-card");
 
         cards.forEach((card) => {
-          if (filter === "all" || card.dataset.type === filter) {
+          let shouldShow = false;
+
+          if (filter === "all") {
+            shouldShow = true;
+          } else if (filter.startsWith("user:")) {
+            // Handle user-specific filtering
+            const username = filter.substring(5); // Remove "user:" prefix
+            const characterId = card.getAttribute("data-character-id");
+            const character = characters.find((c) => c.id === characterId);
+            shouldShow = character && character.type === "imported" && character.sourceUser === username;
+          } else {
+            // Handle standard type filtering
+            shouldShow = card.dataset.type === filter;
+          }
+
+          if (shouldShow) {
             card.classList.remove("hidden");
           } else {
             card.classList.add("hidden");
@@ -950,9 +1053,10 @@
 
         // Replace characterManager with characterAI
         const iframeUrl = currentUrl.replace("characterManager", "characterAI"); // Forward all existing URL parameters and add config
-        const urlParams = new URLSearchParams(window.location.search);
+        const urlParams = new URLSearchParams(iframeUrl);
         urlParams.set("config", config);
         urlParams.set("showClose", "true");
+        urlParams.set("parent", "characterManager");
         urlParams.set("showToolbar", character.show_toolbar !== false ? "true" : "false");
         urlParams.set("showCharInfo", character.show_char_info !== false ? "true" : "false");
 
