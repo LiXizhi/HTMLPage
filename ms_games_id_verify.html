@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>麦思星球 - 实名认证</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: "Microsoft YaHei", sans-serif;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 75%, #c850c0 100%);
+        position: relative;
+      }
+      .cloud { position: absolute; background: rgba(255,255,255,0.8); border-radius: 50px; opacity: 0.6; animation: float 6s ease-in-out infinite; }
+      .cloud:before, .cloud:after { content: ""; position: absolute; background: rgba(255,255,255,0.8); border-radius: 50px; }
+      .cloud1 { width: 80px; height: 30px; top: 10%; left: 10%; animation-delay: 0s; }
+      .cloud1:before { width: 30px; height: 30px; top: -15px; left: 10px; }
+      .cloud1:after { width: 40px; height: 40px; top: -20px; right: 10px; }
+      .cloud2 { width: 100px; height: 40px; top: 20%; right: 15%; animation-delay: 2s; }
+      .cloud2:before { width: 40px; height: 40px; top: -20px; left: 15px; }
+      .cloud2:after { width: 50px; height: 50px; top: -25px; right: 15px; }
+      .cloud3 { width: 60px; height: 25px; bottom: 20%; left: 20%; animation-delay: 4s; }
+      .cloud3:before { width: 25px; height: 25px; top: -12px; left: 8px; }
+      .cloud3:after { width: 30px; height: 30px; top: -15px; right: 8px; }
+      @keyframes float { 0%,100%{transform:translateY(0px)translateX(0px);}25%{transform:translateY(-10px)translateX(5px);}50%{transform:translateY(-5px)translateX(-5px);}75%{transform:translateY(-15px)translateX(3px);} }
+      .star { position: absolute; background: #ffd700; clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); animation: twinkle 2s ease-in-out infinite alternate; }
+      .star1 { width: 15px; height: 15px; top: 15%; left: 80%; animation-delay: 0s; }
+      .star2 { width: 12px; height: 12px; top: 30%; left: 5%; animation-delay: 0.5s; }
+      .star3 { width: 18px; height: 18px; bottom: 25%; right: 10%; animation-delay: 1s; }
+      @keyframes twinkle { 0%{opacity:0.4;transform:scale(0.8);}100%{opacity:1;transform:scale(1.2);} }
+      .card { background:rgba(255,255,255,0.95);backdrop-blur:sm; border-radius:2rem; padding:2rem 2.5rem; box-shadow:0 10px 30px rgba(0,0,0,0.15); max-width:400px; margin:auto; position:relative; z-index:2; }
+      .title { text-align:center; color:#764ba2; font-size:2rem; font-weight:bold; margin-bottom:1.5rem; }
+      .form-group { margin-bottom:1.5rem; }
+      .form-label { display:block; font-size:1rem; color:#333; margin-bottom:0.5rem; }
+      .form-input { width:100%; padding:0.75rem 1rem; border-radius:1rem; border:1px solid #c850c0; font-size:1rem; }
+      .form-input:focus { outline:none; border-color:#764ba2; }
+      .error { color:#ef4444; font-size:0.95rem; margin-top:0.25rem; }
+      .agreement { display:flex; align-items:center; margin-bottom:1rem; }
+      .agreement input[type="checkbox"] { margin-right:0.5rem; }
+      .agreement-text { font-size:0.95rem; color:#555; }
+      .agreement-link { color:#764ba2; text-decoration:underline; cursor:pointer; }
+      .submit-btn { width:100%; background:linear-gradient(135deg,#f093fb 0%,#c850c0 100%); color:#fff; font-weight:bold; font-size:1.2rem; border:none; border-radius:1.5rem; padding:0.75rem 0; margin-top:1rem; cursor:pointer; transition:box-shadow 0.2s; box-shadow:0 4px 15px rgba(200,80,192,0.15); opacity:0.7; }
+      .submit-btn.enabled { opacity:1; }
+      .toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(239,68,68,0.95); color:white; padding:12px 24px; border-radius:8px; z-index:1000; font-size:16px; font-weight:500; box-shadow:0 10px 25px rgba(0,0,0,0.3); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.2); }
+      .modal { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:2000; align-items:center; justify-content:center; }
+      .modal.show { display:flex; }
+      .modal-content { background:white; border-radius:1.5rem; padding:2rem; max-width:90vw; max-height:80vh; overflow:auto; }
+      .modal-title { font-size:1.2rem; font-weight:bold; color:#764ba2; margin-bottom:1rem; }
+      .modal-close { position:absolute; top:1rem; right:1.5rem; font-size:1.5rem; color:#c850c0; background:none; border:none; cursor:pointer; }
+      /* 实名认证弹框样式 */
+      .identity-modal { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); z-index:3000; align-items:center; justify-content:center; }
+      .identity-modal.show { display:flex; }
+      .identity-modal-content { background:white; border-radius:1.5rem; padding:2rem; max-width:90vw; max-height:80vh; overflow:auto; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+      .identity-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; }
+      .identity-modal-header h3 { font-size:1.5rem; font-weight:bold; color:#764ba2; }
+      .identity-modal-close { font-size:1.5rem; color:#c850c0; background:none; border:none; cursor:pointer; }
+      .identity-description { font-size:0.95rem; color:#555; margin-bottom:1.5rem; }
+      .identity-input-group { margin-bottom:1.5rem; }
+      .identity-input-label { display:block; font-size:1rem; color:#333; margin-bottom:0.5rem; }
+      .identity-input { width:100%; padding:0.75rem 1rem; border-radius:1rem; border:1px solid #c850c0; font-size:1rem; }
+      .identity-input:focus { outline:none; border-color:#764ba2; }
+      .identity-input-error { color:#ef4444; font-size:0.95rem; margin-top:0.25rem; }
+      .identity-agreement { display:flex; align-items:center; margin-bottom:1rem; }
+      .agreement-checkbox { display:flex; align-items:center; cursor:pointer; }
+      .checkmark { width:1rem; height:1rem; border:1px solid #c850c0; border-radius:0.25rem; margin-right:0.5rem; position:relative; }
+      .checkmark:after { content: ""; position: absolute; width: 0.5rem; height: 0.5rem; background: #764ba2; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); border-radius: 0.125rem; transition: transform 0.2s; }
+      input[type="checkbox"]:checked + .checkmark:after { transform: translate(-50%, -50%) scale(1); }
+      .agreement-text { font-size:0.95rem; color:#555; }
+      .agreement-link { color:#764ba2; text-decoration:underline; cursor:pointer; }
+      .identity-form-buttons { display:flex; justify-content:space-between; }
+      .identity-btn { flex:1; padding:0.75rem 1rem; border-radius:1rem; font-size:1rem; font-weight:bold; margin-top:1rem; cursor:pointer; transition:background 0.2s, transform 0.2s; }
+      .identity-btn-cancel { background:#f44336; color:white; border:none; }
+      .identity-btn-confirm { background:linear-gradient(135deg,#f093fb 0%,#c850c0 100%); color:white; border:none; }
+      .identity-btn:hover { transform:translateY(-2px); }
+      .identity-btn:active { transform:translateY(0); }
+    </style>
+  </head>
+  <body>
+    <div class="cloud cloud1"></div>
+    <div class="cloud cloud2"></div>
+    <div class="cloud cloud3"></div>
+    <div class="star star1"></div>
+    <div class="star star2"></div>
+    <div class="star star3"></div>
+    <!-- 实名认证弹框 -->
+    <div id="identityModal" class="identity-modal show">
+      <div class="identity-modal-content">
+        <div class="identity-modal-header">
+          <h3>实名认证</h3>
+          <button class="identity-modal-close" onclick="closeIdentityModal()">&times;</button>
+        </div>
+        <div class="identity-modal-body">
+          <div class="identity-description">
+            <p>请填写您的真实姓名和身份证号码，信息仅用于实名认证，平台将严格保护您的隐私。</p>
+          </div>
+          <form class="identity-form" id="identityForm" autocomplete="off">
+            <div class="identity-input-group">
+              <label class="identity-input-label" for="realNameInput">姓名</label>
+              <input class="identity-input" id="realNameInput" type="text" placeholder="请输入真实姓名" maxlength="12" />
+              <div class="identity-input-error" id="nameError"></div>
+            </div>
+            <div class="identity-input-group">
+              <label class="identity-input-label" for="idCardInput">身份证号</label>
+              <input class="identity-input" id="idCardInput" type="text" placeholder="请输入身份证号码" maxlength="18" />
+              <div class="identity-input-error" id="idCardError"></div>
+            </div>
+            <div class="identity-agreement">
+              <label class="agreement-checkbox">
+                <input type="checkbox" id="agreementCheckbox" />
+                <span class="checkmark"></span>
+                <span class="agreement-text">我已阅读并同意 <span class="agreement-link" onclick="openModal('privacy')">隐私政策</span> 和 <span class="agreement-link" onclick="openModal('license')">用户协议</span></span>
+              </label>
+            </div>
+            <div class="identity-form-buttons">
+              <button type="button" class="identity-btn identity-btn-cancel" onclick="closeIdentityModal()">取消</button>
+              <button type="submit" id="submitBtn" class="identity-btn identity-btn-confirm" disabled>提交认证</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <!-- 协议弹窗 -->
+    <div class="modal" id="privacyModal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('privacy')">&times;</button>
+        <div class="modal-title">隐私政策</div>
+        <div class="modal-body">这里是隐私政策内容...</div>
+      </div>
+    </div>
+    <div class="modal" id="licenseModal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('license')">&times;</button>
+        <div class="modal-title">用户协议</div>
+        <div class="modal-body">这里是用户协议内容...</div>
+      </div>
+    </div>
+    <script>
+      const realNameInput = document.getElementById('realNameInput');
+      const idCardInput = document.getElementById('idCardInput');
+      const nameError = document.getElementById('nameError');
+      const idCardError = document.getElementById('idCardError');
+      const agreementCheckbox = document.getElementById('agreementCheckbox');
+      const submitBtn = document.getElementById('submitBtn');
+      function validateName(name) {
+        if (!name) return '姓名不能为空';
+        if (!/^[\u4e00-\u9fa5]{2,12}$/.test(name)) return '请输入2-12位中文姓名';
+        return '';
+      }
+      function validateIdCard(idCard) {
+        if (!idCard) return '身份证号不能为空';
+        if (!/^\d{17}[\dXx]$/.test(idCard)) return '身份证号格式不正确';
+        return '';
+      }
+      function checkForm() {
+        const name = realNameInput.value.trim();
+        const idCard = idCardInput.value.trim();
+        const nameValidation = validateName(name);
+        const idCardValidation = validateIdCard(idCard);
+        nameError.textContent = nameValidation;
+        idCardError.textContent = idCardValidation;
+        if (!nameValidation && !idCardValidation && agreementCheckbox.checked) {
+          submitBtn.disabled = false;
+        } else {
+          submitBtn.disabled = true;
+        }
+      }
+      realNameInput.addEventListener('input', checkForm);
+      idCardInput.addEventListener('input', checkForm);
+      agreementCheckbox.addEventListener('change', checkForm);
+      function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => { document.body.removeChild(toast); }, 2000);
+      }
+      function openModal(type) {
+        document.getElementById(type + 'Modal').classList.add('show');
+      }
+      function closeModal(type) {
+        document.getElementById(type + 'Modal').classList.remove('show');
+      }
+      function closeIdentityModal() {
+        document.getElementById('identityModal').classList.remove('show');
+      }
+      document.getElementById('identityForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const name = realNameInput.value.trim();
+        const idCard = idCardInput.value.trim();
+        const nameValidation = validateName(name);
+        const idCardValidation = validateIdCard(idCard);
+        if (nameValidation || idCardValidation || !agreementCheckbox.checked) {
+          showToast('请正确填写信息并同意协议');
+          checkForm();
+          return;
+        }
+        // 通知父页面
+        if (window.parent && window.parent.postMessage) {
+          window.parent.postMessage({ realName: name, idCard: idCard, verified: true }, '*');
+        }
+        showToast('认证成功！');
+        closeIdentityModal();
+      });
+      // ESC关闭弹窗
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+          closeModal('privacy');
+          closeModal('license');
+          closeIdentityModal();
+        }
+      });
+      // 点击弹窗外部关闭
+      document.getElementById('privacyModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal('privacy');
+      });
+      document.getElementById('licenseModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal('license');
+      });
+      document.getElementById('identityModal').addEventListener('click', function(e) {
+        if (e.target === this) closeIdentityModal();
+      });
+    </script>
+  </body>
+</html>
