@@ -278,11 +278,40 @@
       .dropdown-item:last-child {
         border-radius: 0 0 12px 12px;
         border-bottom: none;
-      }
-
-      .dropdown-item:only-child {
+      }      .dropdown-item:only-child {
         border-radius: 12px;
         border-bottom: none;
+      }
+
+      /* Go Back Button 样式 */
+      .go-back-btn {
+        display: none;
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        color: #fff;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        padding: 8px 16px;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+        margin-right: 15px;
+      }
+
+      .go-back-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .go-back-btn:active {
+        transform: translateY(0);
+      }
+
+      .go-back-btn.show {
+        display: inline-block;
       }
 
       /* devMode 相关样式 */
@@ -2575,11 +2604,9 @@
 
       <!-- 主内容区域 -->
       <main class="main-content">
-        <!-- 顶部状态栏 -->
-        <div class="top-bar">
+        <!-- 顶部状态栏 -->        <div class="top-bar">
           <div class="logo"></div>
           <div class="status">
-            <!-- <div class="time" id="current-time">12:34</div> -->
             <button class="training-stats-btn" id="trainingStatsBtn">训练统计</button>
             <button class="game-rank-btn dev-only" id="gameRankBtn">排行榜</button>
             <div class="menu-dropdown dev-only">
@@ -2593,6 +2620,7 @@
                 <div class="dropdown-item" data-action="account">账号</div>
               </div>
             </div>
+            <button class="go-back-btn" id="goBackBtn">← 返回</button>
           </div>
         </div>
 
@@ -3181,9 +3209,7 @@
             })
           }
           window.parent.postMessage({ type: 'getMiniGameFinishInfo' }, '*')
-        }
-
-        async init() {
+        }        async init() {
           // this.initTime();
           await this.getUserInfo()
           await this.getDailyPracticeTasks()
@@ -3197,6 +3223,7 @@
           this.initTopMenuDropdown()
           this.initTrainingStatsButton()
           this.initGameRankButton()
+          this.initGoBackButton()
         }
 
         initTime() {
@@ -3409,24 +3436,38 @@
         }
 
         /**
+         * 清空测评iframe内容
+         */
+        clearTestIframe() {
+          const testIframe = document.getElementById('testIframe')
+          if (testIframe) {
+            testIframe.src = ''
+          }
+        }
+
+        /**
          * 加载测评iframe内容
          */
         loadTestIframe() {
           const testIframe = document.getElementById('testIframe')
 
-          // 如果iframe已经加载过，直接返回
-          if (!testIframe || testIframe.src !== '') return
+          // 如果iframe不存在，直接返回
+          if (!testIframe) return
 
           // 如果有maisiToken，添加到URL参数中
           const accessToken = this.maisiToken || ''
-          testIframe.src = `https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/ms_games_test?accessToken=${accessToken}`
+
+          let src = `https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/ms_games_test?accessToken=${accessToken}&dev=${this.isDevMode}`
+          // src = `http://127.0.0.1:5500/maisi/maisi/webgames/data/ms_games_test.html?accessToken=${accessToken}&dev=${this.isDevMode}`
+
           // check if url has isUseMaisiDevServer
-          const url = window.location.href
-          const urlParams = new URLSearchParams(url.search)
-          const isUseMaisiDevServer = urlParams.get('isUseMaisiDevServer')
+          const url = new URL(this.parentLocationHref ? decodeURIComponent(this.parentLocationHref) : window.location.href)
+          const isUseMaisiDevServer = url.searchParams.get('isUseMaisiDevServer')
           if (isUseMaisiDevServer === 'true') {
-            testIframe.src += `&isUseMaisiDevServer=true`
+            src += `&isUseMaisiDevServer=true`
           }
+          
+          testIframe.src = src;
         }
 
         /**
@@ -3875,7 +3916,7 @@
             try {
               const parentUrlObj = new URL(this.parentLocationHref ? decodeURIComponent(this.parentLocationHref) : window.location.href)
               this.taskTime = parentUrlObj.searchParams.get('taskTime') || taskTime
-              isFromDev = parentUrlObj.searchParams.get('from') === 'dev'
+              isFromDev = parentUrlObj.searchParams.get('isUseMaisiDevServer') === 'true'
             } catch (e) {
               console.warn('解析父页面URL获取 taskTime 参数失败:', e)
             }
@@ -4405,6 +4446,16 @@
             item.addEventListener('click', e => {
               const targetTab = item.dataset.tab
 
+              // 如果点击的是当前已经激活的tab，直接返回，不执行任何操作
+              if (this.currentTab === targetTab) {
+                return
+              }
+
+              // 如果当前是测评页面且要切换到其他页面，清空测评iframe
+              if (this.currentTab === 'test' && targetTab !== 'test') {
+                this.clearTestIframe()
+              }
+
               menuItems.forEach(menu => menu.classList.remove('active'))
               tabContents.forEach(content => content.classList.remove('active'))
 
@@ -4457,6 +4508,11 @@
          * 切换到首页
          */
         switchToHome() {
+          // 如果当前是测评页面，清空测评iframe
+          if (this.currentTab === 'test') {
+            this.clearTestIframe()
+          }
+
           const menuItems = document.querySelectorAll('.menu-item')
           const tabContents = document.querySelectorAll('.tab-content')
           const homeMenuItem = document.querySelector('.menu-item[data-tab="home"]')
@@ -4754,6 +4810,11 @@
          * 显示训练统计页面
          */
         showTrainingStats() {
+          // 如果当前是测评页面，清空测评iframe
+          if (this.currentTab === 'test') {
+            this.clearTestIframe()
+          }
+
           // 隐藏所有tab内容
           const tabContents = document.querySelectorAll('.tab-content')
           tabContents.forEach(content => content.classList.remove('active'))
@@ -4829,6 +4890,11 @@
          * 显示排行榜页面
          */
         showGameRank() {
+          // 如果当前是测评页面，清空测评iframe
+          if (this.currentTab === 'test') {
+            this.clearTestIframe()
+          }
+
           // 隐藏所有tab内容
           const tabContents = document.querySelectorAll('.tab-content')
           tabContents.forEach(content => content.classList.remove('active'))
@@ -4905,6 +4971,44 @@
           gameRankIframe.style.transform = `scale(${scale})`
           gameRankIframe.style.width = `${targetWidth}px`
           gameRankIframe.style.height = `${targetHeight}px`
+        }
+
+        /**
+         * 初始化返回按钮
+         */
+        initGoBackButton() {
+          const goBackBtn = document.getElementById('goBackBtn')
+          if (!goBackBtn) return
+
+          // 检查URL中是否有gobackurl参数
+          const urlParams = new URLSearchParams(window.location.search)
+          const parentUrl = new URL(this.parentLocationHref ? decodeURIComponent(this.parentLocationHref) : window.location.href)
+          const parentUrlParams = new URLSearchParams(parentUrl.search)
+          
+          const goBackUrl = urlParams.get('gobackurl') || parentUrlParams.get('gobackurl')
+          
+          if (goBackUrl) {
+            // 显示返回按钮
+            goBackBtn.classList.add('show')
+            
+            // 绑定点击事件
+            goBackBtn.addEventListener('click', () => {
+              this.handleGoBack(goBackUrl)
+            })
+          }
+        }
+
+        /**
+         * 处理返回按钮点击
+         * @param {string} goBackUrl - 返回的URL
+         */
+        handleGoBack(goBackUrl) {
+          try {
+            window.history.back()
+          } catch (error) {
+            console.error('返回失败:', error)
+            this.showMessage('返回失败，请重试')
+          }
         }
 
         initScrollIndicators(container) {

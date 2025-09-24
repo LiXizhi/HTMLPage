@@ -1,26 +1,62 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+  <!--
+  AI Character Chat Game - URL Parameters Documentation
+  
+  This HTML file supports various URL parameters to customize the game behavior:
+  
+  1. Example: ?objective=天空为何是蓝色？(wikiword)
+     Note: Text in parentheses will be extracted as wikiword for 百度百科 integration
+  
+  2. Example: ?objective=什么是人工智能？&customQuestionId=ai_basics_001
+     Note: customQuestionId is used by user defined objective in wiki_dashboard
+  
+  3. config - JSON configuration to override default character and game settings
+     Example: ?config=%7B%22character%22%3A%7B%22name%22%3A%22小红%22%2C%22age%22%3A16%7D%7D
+     (URL encoded JSON: {"character":{"name":"小红","age":16}})
+  
+  4. ?showToolbar=false (hides the right sidebar AI tools)
+  5. ?showCharInfo=false (hides the left character info panel)
+  6. keepwork token: ?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  7. ?showClose=true (show close button on right top, and send OnCloseCharacterAI event to parent window)
+  8. ?showAvatar=auto whether show avatar on chat background (only useful when config.videoactions["待机|说话"] are both available.
+  
+  Complete examples:
+  - Minimal UI: ?showToolbar=false&showCharInfo=false&objective=学习编程&config=%7B"character"%3A%7B"name"%3A"小红"%2C"age"%3A16%7D%7D
+-->
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>角色AI对话游戏</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.8"></script>
     <style>
       .chat-bubble-left {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 18px 18px 18px 4px;
+        pointer-events: auto;
       }
 
       .chat-bubble-right {
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         border-radius: 18px 18px 4px 18px;
+        pointer-events: auto;
       }
-
       .action-text {
         color: rgba(255, 255, 255, 0.8);
         font-style: italic;
+      } /* Chat container with reversed flex direction */
+      #chat-container {
+        display: flex;
+        flex-direction: column-reverse;
+        z-index: 3;
       }
+
+      /* Add spacing between chat messages in reverse order */
+      #chat-container > * + * {
+        margin-bottom: 1rem; /* equivalent to space-y-4 */
+      }
+
       .progress-bar {
         transition: width 0.5s ease-in-out;
         cursor: pointer;
@@ -122,7 +158,8 @@
         width: 100%;
         height: 100%;
         pointer-events: none;
-      }      .progress-marker {
+      }
+      .progress-marker {
         position: absolute;
         top: -5px;
         transform: translateX(-50%);
@@ -141,7 +178,7 @@
         border-top: 6px solid #6b7280;
         margin-bottom: 2px;
         transition: border-top-color 0.2s ease;
-      }      
+      }
       .progress-marker-text {
         font-size: 10px;
         color: #6b7280;
@@ -186,7 +223,7 @@
       }
 
       .progress-marker[title]:hover:before {
-        content: '';
+        content: "";
         position: absolute;
         bottom: 100%;
         left: 50%;
@@ -474,7 +511,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-      }      .character-video-element {
+      }
+      .character-video-element {
         border-radius: 15px;
         border: 3px solid #667eea;
         margin-bottom: 15px;
@@ -518,7 +556,6 @@
         display: flex;
         animation: fadeIn 0.3s ease-in-out;
       }
-
       @keyframes fadeIn {
         from {
           opacity: 0;
@@ -529,6 +566,175 @@
           opacity: 1;
           transform: scale(1);
         }
+      }
+
+      /* URL parameter control styles */
+      .hidden-toolbar {
+        display: none !important;
+      }
+
+      .hidden-char-info {
+        display: none !important;
+      }
+
+      .full-width-chat {
+        width: 100% !important;
+      }
+      .no-toolbar-chat {
+        width: calc(100% - 33.333333%) !important; /* w-2/3 equivalent when only char info is shown */
+      } /* Close button styles */
+      .close-button {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+      }
+
+      .close-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .close-button.hidden {
+        display: none !important;
+      } /* Avatar background video styles */
+      .avatar-background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        overflow: hidden;
+        pointer-events: none;
+      } /* Make avatar background clickable and higher z-index when visible */
+      .avatar-background:not(.hidden) {
+        z-index: 2;
+        pointer-events: auto !important;
+        cursor: pointer;
+      }
+      .avatar-background.hidden {
+        pointer-events: none;
+      }
+
+      /* Hide avatar background by default */
+      .avatar-background.hidden {
+        display: none;
+      }
+
+      /* Chat content hiding animation */
+      #chat-container.fade-out {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.5s ease-in-out;
+      }
+
+      #chat-container.fade-in {
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 0.5s ease-in-out;
+      }
+      .avatar-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        position: absolute;
+        top: 0;
+        left: 0;
+        transition: opacity 0.8s ease-in-out;
+        pointer-events: none;
+        /* iOS Safari 视频内嵌播放样式 */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+      }
+
+      .avatar-video.visible {
+        opacity: 1;
+      }
+
+      .avatar-video.hidden {
+        opacity: 0;
+      }
+
+      .avatar-video-idle {
+        z-index: 1;
+      }
+
+      .avatar-video-talk {
+        z-index: 2;
+      }
+      .avatar-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0);
+        z-index: 2;
+        pointer-events: none;
+      } /* Return to chat button styles */
+      .return-chat-btn {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        z-index: 6;
+        pointer-events: auto;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateX(-50%) translateY(20px);
+      }
+
+      .return-chat-btn.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .return-chat-btn:hover {
+        transform: translateX(-50%) translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      } /* Ensure chat container doesn't block avatar background when avatar is enabled */
+      #chat-container.avatar-enabled {
+        background: transparent !important;
+        z-index: 5 !important;
+        pointer-events: none !important;
+      } /* Re-enable pointer events for interactive elements when avatar is enabled, but keep chat bubbles click-through */
+      #chat-container.avatar-enabled > * {
+        pointer-events: none;
+      }
+
+      /* Re-enable pointer events for interactive elements only */
+      #chat-container.avatar-enabled button {
+        pointer-events: auto;
+      }
+
+      #chat-container.avatar-enabled input {
+        pointer-events: auto;
+      }
+
+      #chat-container.avatar-enabled select {
+        pointer-events: auto;
+      }
+
+      #chat-container.avatar-enabled a {
+        pointer-events: auto;
       }
     </style>
   </head>
@@ -569,11 +775,12 @@
             <div class="thoughts-content" id="thoughts-content">
               <!-- 想法内容将在这里显示 -->
             </div>
-          </div>        </div>
+          </div>
+        </div>
 
         <!-- AI声明和举报 -->
         <div class="flex-shrink-0 mt-4 text-center text-xs text-gray-400">
-          对话内容由AI生成. 
+          对话内容由AI生成.
           <a href="#" id="report-link" class="text-blue-400 hover:text-blue-600 underline ml-1">【举报】</a>
         </div>
 
@@ -599,12 +806,47 @@
               <button id="reset-chat-btn" class="bg-white bg-opacity-20 text-white px-3 py-1 rounded-lg border border-white border-opacity-30 hover:bg-opacity-30 transition-all text-sm font-medium">
                 重置对话
               </button>
+              <!-- Close button -->
+              <button id="close-btn" class="close-button hidden">返回</button>
             </div>
           </div>
           <p id="chat-description" class="text-sm opacity-90">通过耐心的交流，帮助小明重新找回学习的乐趣</p>
         </div>
-        <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4 relative">
-          <!-- 对话内容将在这里动态生成 -->
+        <!-- Avatar background video positioned relative to the chat area -->
+        <div class="flex-1 relative">
+          <div id="avatar-background" class="avatar-background hidden">
+            <video
+              id="avatar-video-idle"
+              class="avatar-video avatar-video-idle hidden"
+              muted
+              loop
+              playsinline
+              webkit-playsinline
+              x5-video-player-type="h5"
+              x5-video-player-fullscreen="false"
+              x5-video-orientation="portraint"
+            >
+              <source src="" type="video/mp4" />
+            </video>
+            <video
+              id="avatar-video-talk"
+              class="avatar-video avatar-video-talk hidden"
+              muted
+              loop
+              playsinline
+              webkit-playsinline
+              x5-video-player-type="h5"
+              x5-video-player-fullscreen="false"
+              x5-video-orientation="portraint"
+            >
+              <source src="" type="video/mp4" />
+            </video>
+            <div class="avatar-overlay"></div>
+          </div>
+          <div id="chat-container" class="absolute inset-0 overflow-y-auto p-4 fade-in">
+            <!-- 对话内容将在这里动态生成 -->
+          </div>
+          <button id="return-chat-btn" class="return-chat-btn">返回聊天</button>
         </div>
 
         <!-- 输入区域 -->
@@ -613,7 +855,7 @@
             <input
               type="text"
               id="user-input"
-              placeholder="输入你想说的话..."
+              placeholder="输入文字... (你可以通过右侧的工具箱搜索答案)"
               class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
             <button id="send-btn" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity font-medium">发送</button>
@@ -633,7 +875,8 @@
           <!-- AI工具按钮将在这里动态生成 -->
         </div>
       </div>
-    </div>    <!-- 角色动画视频播放器 -->
+    </div>
+    <!-- 角色动画视频播放器 -->
     <div id="character-video-overlay" class="character-video-overlay">
       <div class="character-video-container">
         <video id="character-video-element" class="character-video-element" muted autoplay loop></video>
@@ -704,7 +947,7 @@
           url: "user_report",
           width: 30, // 100% 宽度，覆盖模式
         },
-      ];// AI工具箱管理器
+      ]; // AI工具箱管理器
       class AIToolboxManager {
         constructor() {
           this.currentTool = null;
@@ -796,7 +1039,7 @@
 
           if (!iframe) {
             // 创建新的iframe
-            iframe = document.createElement("iframe");            // 特殊处理百度百科，如果有wikiword则使用特定URL
+            iframe = document.createElement("iframe"); // 特殊处理百度百科，如果有wikiword则使用特定URL
             let iframeUrl = tool.url;
             if (tool.id === "baike" && this.config && this.config.objective && this.config.objective.wikiword) {
               iframeUrl = `https://baike.baidu.com/item/${encodeURIComponent(this.config.objective.wikiword)}`;
@@ -806,8 +1049,7 @@
               url = url.split("?")[0];
               url = url.replace("characterAI", "characterAI_xiaomai");
               iframeUrl = `${url}?token=`;
-            }
-            else if (tool.id === "report") {
+            } else if (tool.id === "report") {
               let url = window.location.href;
               url = url.split("?")[0]; // 移除查询参数
               url = url.replace("characterAI", "user_report");
@@ -881,7 +1123,8 @@
       // Initialize AI Chat Session
       let aiChatSession;
 
-      class LLMCharacterGame {        constructor() {
+      class LLMCharacterGame {
+        constructor() {
           this.config = null;
           this.gameState = {
             progress: 0,
@@ -889,9 +1132,9 @@
             isObjectiveAchieved: false,
             hasCommitted: false, // 跟踪是否已经发送过gameCommit消息
           };
-          
+
           // 全局earnedPoints变量，只在真实对话返回且progress增大时增加
-          this.earnedPoints = 0;// 进度条刻度标尺配置
+          this.earnedPoints = 0; // 进度条刻度标尺配置
           this.progressMarkers = [
             {
               percent: 25,
@@ -948,29 +1191,54 @@
         }
         async start() {
           let urlObjective = game.urlObjective || new URLSearchParams(window.location.search).get("objective");
+          let customQuestionId = new URLSearchParams(window.location.search).get("customQuestionId");
           if (urlObjective) {
-            await this.loadConfigByObjective(urlObjective);
+            await this.loadConfigByObjective(urlObjective, customQuestionId);
           }
+
+          // Apply custom config from URL if available (after loadConfigByObjective to allow overriding)
+          if (window.customURLConfig) {
+            this.config.videoActions = {};
+            console.log("Applying custom URL config:", window.customURLConfig);
+            // Deep merge custom config with existing config
+            this.config = this.deepMerge(this.config, window.customURLConfig);
+            if (urlObjective) {
+              this.UpdateConfigByObjective(urlObjective, customQuestionId);
+            }
+          }
+
           console.log(`Keepwork SDK initialized token: ${sdk.token}`);
           this.initializeGame();
         }
+
+        // Deep merge utility function for combining configs
+        deepMerge(target, source) {
+          const result = { ...target };
+          for (const key in source) {
+            if (source[key] !== null && typeof source[key] === "object" && !Array.isArray(source[key])) {
+              result[key] = this.deepMerge(result[key] || {}, source[key]);
+            } else {
+              result[key] = source[key];
+            }
+          }
+          return result;
+        }
+
         initEventListeners() {
           // 发送消息
           this.elements.sendBtn.addEventListener("click", () => this.sendMessage());
           this.elements.userInput.addEventListener("keypress", (e) => {
             if (e.key === "Enter") this.sendMessage();
-          });          // 重置对话按钮
-          this.elements.resetChatBtn.addEventListener("click", () => this.resetChat()); 
-            // 聊天历史下拉菜单
+          }); // 重置对话按钮
+          this.elements.resetChatBtn.addEventListener("click", () => this.resetChat());
+          // 聊天历史下拉菜单
           this.elements.historyDropdown.addEventListener("change", (e) => {
             if (e.target.value === "clearHistory") {
               this.clearAllHistory();
             } else if (e.target.value) {
               this.loadSession(e.target.value);
             }
-          });
-
-          // 举报链接事件监听器
+          }); // 举报链接事件监听器
           const reportLink = document.getElementById("report-link");
           if (reportLink) {
             reportLink.addEventListener("click", (e) => {
@@ -981,27 +1249,55 @@
               }
             });
           }
+
+          // 关闭按钮事件监听器
+          const closeBtn = document.getElementById("close-btn");
+          if (closeBtn) {
+            closeBtn.addEventListener("click", (e) => {
+              e.preventDefault();
+              // 发送关闭事件给父窗口
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage(
+                  {
+                    type: "OnCloseCharacterAI",
+                    data: {},
+                  },
+                  "*"
+                );
+              }
+            });
+          }
         }
-        // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
-        async loadConfigByObjective(objective) {
-          if (!objective) {
-            console.error("Objective is required to load config.");
-            return;
-          } // find the first wikiword in (), remove it from the objective
+        UpdateConfigByObjective(objective, customQuestionId = null) {
+          // find the first wikiword in (), remove it from the objective
           const wikimatch = objective.match(/\(([^)]+)\)/);
           let wikiword = null;
           if (wikimatch) {
             wikiword = wikimatch[1]; // Extract just the word, not the match array
             objective = objective.replace(/\s*\([^)]*\)/, "").trim();
           }
+          this.config.objective.title = objective;
           this.config.objective.wikiword = wikiword;
+          this.config.objective.customQuestionId = customQuestionId; // Store custom question ID
+          this.config.objective.description = `通过耐心的交流, 解决问题: ${objective}`;
+          this.config.initial.message = `能帮我解决一个问题么：${objective}？ (期待地看着你)`;
+          return objective;
+        }
+
+        // @param objective: is a question like: "天空为何是蓝色？(wikiword)"
+        // @param customQuestionId: the ID of custom question if this is a custom question
+        async loadConfigByObjective(objective, customQuestionId = null) {
+          if (!objective) {
+            console.error("Objective is required to load config.");
+            return;
+          }
+          objective = this.UpdateConfigByObjective(objective, customQuestionId);
 
           this.config.character.name = "抱抱龙";
           this.config.character.age = 7;
           this.config.character.role = "宠物";
           this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
           this.config.character.chat_background = null;
-          this.config.objective.title = objective;
           this.config.objective.description = `通过耐心的交流, 解决问题: ${objective}`;
           this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
           this.config.quick_replies = [
@@ -1080,10 +1376,11 @@
             }
           } catch (error) {
             console.error("Error loading dragon stage:", error);
-          }
-
-          // Dragon egg videos (>= 0 years)
+          } // Dragon egg videos (>= 0 years)
           if (characterAge < 4) {
+            this.config.videoActions["待机"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_small.mp4",
+            };
             this.config.videoActions["看着你"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_watching.mp4",
             };
@@ -1100,6 +1397,9 @@
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_sad.mp4",
             };
           } else if (characterAge <= 7) {
+            this.config.videoActions["待机"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            };
             this.config.videoActions["期待"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
             };
@@ -1113,6 +1413,9 @@
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_talk.mp4",
             };
           } else {
+            this.config.videoActions["待机"] = {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_happy.mp4",
+            };
             this.config.videoActions["期待"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_big/dragon_big_happy.mp4",
             };
@@ -1127,8 +1430,7 @@
             };
           }
         }
-
-        loadDefaultConfig() {
+        async loadDefaultConfig() {
           this.config = {
             character: {
               name: "小明",
@@ -1182,7 +1484,7 @@
               icon: "🎉",
             },
           };
-          this.setVideoActionsByCharacter();
+          await this.setVideoActionsByCharacter();
         }
 
         changeChatBackground(background) {
@@ -1224,11 +1526,11 @@
           document.getElementById("character-description").textContent = this.config.character?.description || "";
           document.getElementById("objective-title").textContent = this.config.objective?.title || "目标进度";
           document.getElementById("chat-title").textContent = `与${this.config.character?.name || "角色"}对话`;
-          document.getElementById("chat-description").textContent = this.config.objective?.description || "";          // 重置游戏状态
+          document.getElementById("chat-description").textContent = this.config.objective?.description || ""; // 重置游戏状态
           this.gameState.progress = this.config.initial?.progress || 0;
           this.gameState.chatHistory = [];
           this.gameState.isObjectiveAchieved = false;
-          
+
           // 重置earnedPoints
           this.earnedPoints = 0;
 
@@ -1242,6 +1544,19 @@
           this.elements.progressBar.style.width = "0%";
           this.elements.progressText.textContent = "0/100";
 
+          // Ensure system prompt has JSON format requirements
+          if (this.config.system_prompt && !this.config.system_prompt.toLowerCase().includes("json")) {
+            this.config.system_prompt += `
+
+## 输出格式
+你必须严格按照以下JSON格式输出，不要有任何其他内容：
+{
+  "message": "你的回复内容，包含括号内的动作描述",
+  "progress_change": [-10, 30]之间的整数，相对于当前progress_percentage的变化,
+  "progress_reason": "当前对话进度百分比的原因说明",
+  "inner_thoughts": "你此刻真实的内心想法和感受"
+}`;
+          }
           // 添加初始消息
           if (this.config.initial?.message) {
             this.addMessage(this.config.initial.message, false);
@@ -1281,10 +1596,11 @@
             this.checkAndPlayVideoAction(this.config.initial?.message);
           } // 设置聊天背景
           this.changeChatBackground(this.config?.character?.chat_background);
-          this.saveProgress(this.config?.objective?.wikiword, false);
-
-          // 渲染进度条刻度标尺
+          this.saveProgress(this.config?.objective?.wikiword, false); // 渲染进度条刻度标尺
           this.renderProgressMarkers();
+
+          // Initialize avatar background video after ensuring video actions are ready
+          this.initializeAvatarBackground();
         }
 
         updateQuickReplies() {
@@ -1303,7 +1619,8 @@
             });
             container.appendChild(button);
           });
-        }        renderProgressMarkers() {
+        }
+        renderProgressMarkers() {
           if (!this.elements.progressMarkers) return;
 
           // 清空现有标尺
@@ -1314,7 +1631,7 @@
             const markerElement = document.createElement("div");
             markerElement.className = "progress-marker";
             markerElement.style.left = `${marker.percent}%`;
-            
+
             // 设置tooltip - 使用title属性
             markerElement.title = marker.tooltip || "";
 
@@ -1340,55 +1657,52 @@
             // 添加点击事件到文本元素 - 连续点击5次才跳转到对应进度（作弊功能）
             textElement.addEventListener("click", (e) => {
               e.stopPropagation();
-              
+
               // 初始化或重置点击计数器
               if (!this.markerClickCounts) {
                 this.markerClickCounts = {};
                 this.markerClickTimers = {};
               }
-              
+
               const markerId = `${marker.percent}_${marker.text}`;
-              
+
               // 增加点击计数
               this.markerClickCounts[markerId] = (this.markerClickCounts[markerId] || 0) + 1;
-              
+
               // 添加点击动画效果
               textElement.style.transform = "scale(1.2)";
               setTimeout(() => {
                 textElement.style.transform = "scale(1)";
               }, 150);
-              
+
               // 清除之前的计时器
               if (this.markerClickTimers[markerId]) {
                 clearTimeout(this.markerClickTimers[markerId]);
               }
-              
+
               // 设置2秒后重置点击计数
               this.markerClickTimers[markerId] = setTimeout(() => {
                 this.markerClickCounts[markerId] = 0;
               }, 2000);
-              
+
               console.log(`点击标尺：${marker.text} (${marker.percent}%) - 第${this.markerClickCounts[markerId]}次`);
-              
+
               // 如果连续点击5次，则执行跳转
               if (this.markerClickCounts[markerId] >= 5) {
                 this.markerClickCounts[markerId] = 0; // 重置计数
                 console.log(`标尺连续点击5次，执行跳转到${marker.text}阶段`);
-                  // 如果目标未达成，则跳转到该进度
+                // 如果目标未达成，则跳转到该进度
                 if (!this.gameState.isObjectiveAchieved) {
                   this.updateProgressToValue(marker.percent, `作弊跳转到${marker.text}阶段`);
                   this.updateLLMStatus(`🎮 作弊模式：已跳转到${marker.text}阶段 (${marker.percent}%)`);
-                  
-                  
+
                   // 如果跳转到100%，触发完成
                   if (marker.percent >= 100) {
                     this.handleObjectiveAchieved();
-                  }
-                  else if (marker.percent >= 80) {
+                  } else if (marker.percent >= 80) {
                     // 如果跳转到80%以上但没有到100%，触发基本完成
                     this.handleBasicCompletion();
                   }
-                  
                 } else {
                   this.updateLLMStatus("目标已完成");
                 }
@@ -1412,9 +1726,13 @@
           // 禁用输入控件
           this.elements.sendBtn.disabled = true;
           this.elements.userInput.disabled = true;
-
           this.addMessage(message, true);
           this.elements.userInput.value = "";
+
+          // Switch avatar to idle when user sends message
+          if (avatarManager.isEnabled) {
+            avatarManager.switchToIdle();
+          }
 
           // add current percentage to the message
           message = `[current progress: ${this.gameState.progress}%] ${message}`;
@@ -1439,6 +1757,11 @@
             this.removeTypingIndicator();
             this.updateLLMStatus(`错误: ${error.message}`);
             this.addMessage("抱歉，我现在有些困扰，可能需要一点时间来整理思绪...", false);
+
+            // Switch avatar to idle on error
+            if (avatarManager.isEnabled) {
+              avatarManager.switchToIdle();
+            }
           } finally {
             // 重新启用输入控件
             this.elements.sendBtn.disabled = false;
@@ -1448,17 +1771,17 @@
             // 自动保存聊天历史
             this.autoSaveHistory();
           }
-        }        // 应用LLM响应的UI效果
+        } // 应用LLM响应的UI效果
         applyLLMResponse(response, isReplay = false) {
           // 计算进度变化值
           const progressChange = response.progress_change || 0;
-          
+
           // 记录当前进度，用于判断是否增加
           const oldProgress = this.gameState.progress;
 
           // 更新进度
           this.updateProgress(progressChange, response.progress_reason);
-          
+
           // 只有在真实对话返回（非重播）且进度确实增加时才增加earnedPoints
           if (!isReplay && progressChange > 0 && this.gameState.progress > oldProgress) {
             const actualProgressIncrease = this.gameState.progress - oldProgress;
@@ -1482,7 +1805,7 @@
           if (!isReplay && this.gameState.progress >= this.config.objective.max_progress) {
             this.handleObjectiveAchieved();
           }
-        }// Helper function to extract all response fields using regex
+        } // Helper function to extract all response fields using regex
         extractResponseFields(text) {
           const fields = {
             message: "",
@@ -1651,9 +1974,10 @@
                                   🔊
                               </button>
                           `;
-          }
+          } // Prepend the message to the top of the container (which appears at bottom due to flex-col-reverse)
+          this.elements.chatContainer.insertBefore(messageDiv, this.elements.chatContainer.firstChild);
 
-          this.elements.chatContainer.appendChild(messageDiv);
+          // Scroll to bottom to show the latest message
           this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
         }
         processMessage(message) {
@@ -1681,7 +2005,8 @@
               break;
             }
           }
-        }        playVideoAction(actionKey, messageText) {
+        }
+        playVideoAction(actionKey, messageText) {
           const videoConfig = this.config.videoActions[actionKey];
           if (!videoConfig) return;
 
@@ -1724,7 +2049,8 @@
             }
           };
           overlay.addEventListener("click", handleOverlayClick);
-        }        async loadAndPlayVideo(videoElement, videoUrl) {
+        }
+        async loadAndPlayVideo(videoElement, videoUrl) {
           try {
             if (!videoElement) {
               console.error("Video element is null");
@@ -1735,6 +2061,16 @@
             videoElement.src = videoUrl;
             videoElement.loop = true;
             videoElement.muted = true; // 静音以允许自动播放
+
+            // iOS Safari 兼容性设置
+            videoElement.playsInline = true;
+            videoElement.setAttribute("playsinline", "");
+            videoElement.setAttribute("webkit-playsinline", "");
+            videoElement.setAttribute("x5-video-player-type", "h5");
+            videoElement.setAttribute("x5-video-player-fullscreen", "false");
+            videoElement.setAttribute("x5-video-orientation", "portraint");
+            videoElement.controls = false;
+            videoElement.autoplay = false; // 避免自动播放导致的全屏
 
             // Handle video load and play
             videoElement.addEventListener("loadeddata", () => {
@@ -1819,7 +2155,12 @@
             currentButton.title = "停止语音";
 
             // 保存当前播放信息
-            this.currentPlayingButton = currentButton; // 使用SDK播放语音
+            this.currentPlayingButton = currentButton;
+
+            // Switch avatar to talking when audio starts playing
+            if (avatarManager.isEnabled) {
+              avatarManager.switchToTalking();
+            } // 使用SDK播放语音
             try {
               let audio_url;
 
@@ -1852,9 +2193,7 @@
                 audio.loop = false;
 
                 // 保存音频控制器引用
-                this.currentAudioController = audio;
-
-                // 音频播放完成事件
+                this.currentAudioController = audio; // 音频播放完成事件
                 audio.addEventListener("ended", () => {
                   console.log("音频播放完成");
                   this.stopCurrentAudio();
@@ -1904,8 +2243,12 @@
             this.currentPlayingButton.title = "播放语音";
             this.currentPlayingButton = null;
           }
-        }
 
+          // Switch avatar back to idle when audio stops
+          if (avatarManager.isEnabled) {
+            avatarManager.switchToIdle();
+          }
+        }
         addStreamingMessage() {
           const messageDiv = document.createElement("div");
           messageDiv.className = "flex items-start space-x-2 streaming-message";
@@ -1918,8 +2261,10 @@
                               <span class="streaming-cursor">▋</span>
                           </div>
                       `;
-          this.elements.chatContainer.appendChild(messageDiv);
+          // Prepend streaming message (appears at bottom due to flex-col-reverse)
+          this.elements.chatContainer.insertBefore(messageDiv, this.elements.chatContainer.firstChild);
           this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+
           return messageDiv;
         }
 
@@ -1950,6 +2295,12 @@
             // 将按钮添加到最外层 div 的最后，与 addMessage 方法保持一致
             messageDiv.appendChild(audioBtn);
             this.checkAndPlayVideoAction(messageText);
+
+            // Switch avatar back to idle after streaming is complete
+            if (avatarManager.isEnabled) {
+              // Calculate speaking duration based on message length
+              const speakingDuration = Math.max(2000, messageText.length * 50); // Minimum 2 seconds
+            }
           }
         }
 
@@ -1970,14 +2321,14 @@
                               <p>正在思考...</p>
                           </div>
                       `;
-          this.elements.chatContainer.appendChild(typingDiv);
+          // Prepend typing indicator (appears at bottom due to flex-col-reverse)
+          this.elements.chatContainer.insertBefore(typingDiv, this.elements.chatContainer.firstChild);
           this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
         }
         removeTypingIndicator() {
           const indicator = document.getElementById("typing-indicator");
           if (indicator) indicator.remove();
         }
-
         addProgressIndicator(progressChange, progressReason) {
           if (!progressChange || progressChange === 0) return;
 
@@ -1993,7 +2344,8 @@
                           </div>
                       `;
 
-          this.elements.chatContainer.appendChild(progressDiv);
+          // Prepend progress indicator (appears at bottom due to flex-col-reverse)
+          this.elements.chatContainer.insertBefore(progressDiv, this.elements.chatContainer.firstChild);
           this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
         }
         updateProgress(change, reason) {
@@ -2042,9 +2394,15 @@
           }, 3000);
         }
         async saveProgress(wikiWord, isFinished = false) {
-          if (!wikiWord) return;
-
           try {
+            // Check if this is a custom question
+            const customQuestionId = this.config?.objective?.customQuestionId;
+
+            // Early return if there's nothing to save
+            if (!customQuestionId && !wikiWord) {
+              return;
+            }
+
             // Load current progress data from keepwork
             let progressData = await sdk.personalPageStore.loadPageData("maisi_dragon_wiki", "discussion-progress-data");
             // Ensure data structure exists
@@ -2056,57 +2414,92 @@
                 inprogress_times: [],
                 currentperiod_wikiwords: [],
                 currentperiod_times: [],
+                custom_questions: [], // Ensure custom_questions array exists
               };
             } else {
               progressData = JSON.parse(JSON.stringify(progressData));
+              // Ensure custom_questions array exists
+              if (!Array.isArray(progressData.custom_questions)) {
+                progressData.custom_questions = [];
+              }
             }
-            if (!isFinished) {
-              // If already completed, do not add to in-progress
-              if (progressData.completed_wikiwords.includes(wikiWord) || progressData.inprogress_wikiwords.includes(wikiWord)) return;
 
-              // Add to in-progress arrays if not already there
-              progressData.inprogress_wikiwords.push(wikiWord);
-              const now = new Date();
-              const year = now.getFullYear().toString().slice(-2);
-              const month = (now.getMonth() + 1).toString().padStart(2, "0");
-              const day = now.getDate().toString().padStart(2, "0");
-              const currentDateCode = parseInt(year + month + day);
-              progressData.inprogress_times.push(currentDateCode);
-              console.log(`Added ${wikiWord} to in-progress arrays with date ${currentDateCode}`);
-            } else {
-              // Remove wikiword from inprogress arrays if it exists
-              const progressIndex = progressData.inprogress_wikiwords.indexOf(wikiWord);
-              if (progressIndex > -1) {
-                progressData.inprogress_wikiwords.splice(progressIndex, 1);
-                // Also remove corresponding time entry
-                if (progressData.inprogress_times.length > progressIndex) {
-                  progressData.inprogress_times.splice(progressIndex, 1);
+            // Get current date in YYMMDD format
+            const now = new Date();
+            const year = now.getFullYear().toString().slice(-2);
+            const month = (now.getMonth() + 1).toString().padStart(2, "0");
+            const day = now.getDate().toString().padStart(2, "0");
+            const currentDateCode = parseInt(year + month + day);
+
+            if (customQuestionId) {
+              // Handle custom question progress
+              const customIndex = progressData.custom_questions.findIndex((q) => q.id === customQuestionId);
+
+              if (customIndex !== -1) {
+                if (!isFinished) {
+                  // Set to progress status
+                  progressData.custom_questions[customIndex].status = "progress";
+                  progressData.custom_questions[customIndex].progressTime = currentDateCode;
+                  console.log(`Updated custom question ${customQuestionId} to progress status`);
+                } else {
+                  // Set to completed status
+                  progressData.custom_questions[customIndex].status = "completed";
+                  progressData.custom_questions[customIndex].completedTime = currentDateCode;
+                  delete progressData.custom_questions[customIndex].progressTime;
+                  console.log(`Updated custom question ${customQuestionId} to completed status`);
                 }
-                console.log(`Removed ${wikiWord} from progress arrays`);
+              } else {
+                console.warn(`Custom question ${customQuestionId} not found in data`);
               }
 
-              // Add to completed arrays if not already there
-              if (!progressData.completed_wikiwords.includes(wikiWord)) {
-                progressData.completed_wikiwords.push(wikiWord);
-                // Get current date in YYMMDD format
-                const now = new Date();
-                const year = now.getFullYear().toString().slice(-2);
-                const month = (now.getMonth() + 1).toString().padStart(2, "0");
-                const day = now.getDate().toString().padStart(2, "0");
-                const currentDateCode = parseInt(year + month + day);
-
-                progressData.completed_times.push(currentDateCode);
-                console.log(`Added ${wikiWord} to completed arrays with date ${currentDateCode}`);
+              // Also handle wikiword if the custom question has one
+              if (wikiWord) {
+                this.handleWikiwordProgress(progressData, wikiWord, isFinished, currentDateCode);
               }
+            } else if (wikiWord) {
+              // Handle regular wikiword question
+              this.handleWikiwordProgress(progressData, wikiWord, isFinished, currentDateCode);
             }
 
             // Save updated data back to keepwork
             await sdk.personalPageStore.savePageData("maisi_dragon_wiki", "discussion-progress-data", progressData, true);
-            console.log(`Successfully saved progress for ${wikiWord}`);
+            console.log(`Successfully saved progress for ${customQuestionId || wikiWord}`);
           } catch (error) {
             console.error("Error saving progress:", error);
-          }        }
-        
+          }
+        }
+
+        // Helper function to handle wikiword progress
+        handleWikiwordProgress(progressData, wikiWord, isFinished, currentDateCode) {
+          if (!isFinished) {
+            // If already completed, do not add to in-progress
+            if (progressData.completed_wikiwords.includes(wikiWord) || progressData.inprogress_wikiwords.includes(wikiWord)) return;
+
+            // Add to in-progress arrays if not already there
+            progressData.inprogress_wikiwords.push(wikiWord);
+            progressData.inprogress_times.push(currentDateCode);
+            console.log(`Added ${wikiWord} to in-progress arrays with date ${currentDateCode}`);
+          } else {
+            // Remove wikiword from inprogress arrays if it exists
+            const progressIndex = progressData.inprogress_wikiwords.indexOf(wikiWord);
+            if (progressIndex > -1) {
+              progressData.inprogress_wikiwords.splice(progressIndex, 1);
+              // Also remove corresponding time entry
+              if (progressData.inprogress_times.length > progressIndex) {
+                progressData.inprogress_times.splice(progressIndex, 1);
+              }
+              console.log(`Removed ${wikiWord} from progress arrays`);
+            }
+
+            // Add to completed arrays if not already there
+            if (!progressData.completed_wikiwords.includes(wikiWord)) {
+              progressData.completed_wikiwords.push(wikiWord);
+              progressData.completed_times.push(currentDateCode);
+              console.log(`Added ${wikiWord} to completed arrays with date ${currentDateCode}`);
+            }
+          }
+        }
+
         handleBasicCompletion() {
           if (this.gameState.hasCommitted) return;
           this.gameState.hasCommitted = true;
@@ -2126,14 +2519,13 @@
             },
             "*"
           );
-          
+
           // 发送完gameCommit后立即清零earnedPoints
           this.earnedPoints = 0;
 
           setTimeout(() => {
             const congratsDiv = document.createElement("div");
             congratsDiv.className = "bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mt-4";
-
             congratsDiv.innerHTML = `
                               <div class="flex items-center">
                                   <span class="text-2xl mr-2">🎯</span>
@@ -2143,16 +2535,17 @@
                                   </div>
                               </div>
                           `;
-            this.elements.chatContainer.appendChild(congratsDiv);
+            // Prepend congratulations message (appears at bottom due to flex-col-reverse)
+            this.elements.chatContainer.insertBefore(congratsDiv, this.elements.chatContainer.firstChild);
             this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
           }, 1000);
         }
-        
+
         handleObjectiveAchieved() {
           if (this.gameState.isObjectiveAchieved) return;
           this.gameState.isObjectiveAchieved = true;
 
-          this.saveProgress(this.config?.objective?.wikiword, true);          // Send game finished event to host
+          this.saveProgress(this.config?.objective?.wikiword, true); // Send game finished event to host
           window.parent.postMessage(
             {
               type: "gameFinished",
@@ -2167,7 +2560,7 @@
             },
             "*"
           );
-          
+
           // 发送完gameFinished后立即清零earnedPoints
           this.earnedPoints = 0;
 
@@ -2179,7 +2572,6 @@
             const title = this.config.completion_messages?.title || "目标完成！";
             const description = (this.config.completion_messages?.description || "你成功帮助${character_name}找回了学习动力！").replace("${character_name}", this.config.character?.name || "角色");
             const icon = this.config.completion_messages?.icon || "🎉";
-
             congratsDiv.innerHTML = `
                               <div class="flex items-center">
                                   <span class="text-2xl mr-2">${icon}</span>
@@ -2189,7 +2581,8 @@
                                   </div>
                               </div>
                           `;
-            this.elements.chatContainer.appendChild(congratsDiv);
+            // Prepend congratulations message (appears at bottom due to flex-col-reverse)
+            this.elements.chatContainer.insertBefore(congratsDiv, this.elements.chatContainer.firstChild);
             this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
           }, 1000);
         }
@@ -2271,14 +2664,14 @@
           }
 
           // 清空当前session ID，确保创建新session
-          this.currentSessionId = null;          // 重置游戏状态
+          this.currentSessionId = null; // 重置游戏状态
           this.gameState = {
             progress: 0,
             chatHistory: [],
             isObjectiveAchieved: false,
             hasCommitted: false,
           };
-          
+
           // 重置earnedPoints
           this.earnedPoints = 0;
 
@@ -2408,7 +2801,7 @@
             // 保存当前session（如果有聊天记录且进度大于0的话）
             if (this.gameState.chatHistory.length > 0 && this.gameState.progress > 0) {
               this.saveCurrentSessionToHistory();
-            }            // 重置状态
+            } // 重置状态
             this.currentSessionId = session.id;
             this.gameState = {
               progress: 0,
@@ -2554,10 +2947,477 @@
             this.elements.historyDropdown.value = "";
           }
         }
+
+        // Initialize avatar background video with proper timing
+        initializeAvatarBackground() {
+          if (!window.showAvatarBackground) {
+            console.log("Avatar background disabled by showAvatarBackground setting");
+            return;
+          }
+
+          if (!avatarManager) {
+            console.log("Avatar manager not available");
+            return;
+          }
+
+          // Initialize avatar manager after ensuring video actions are ready
+          avatarManager.init();
+        }
       }
       const aiToolbox = new AIToolboxManager();
       window.aiToolbox = aiToolbox;
-      const game = new LLMCharacterGame(); // Promise-based location response handler with timeout
+
+      // URL Parameter Handler
+      function parseAndApplyURLParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+
+        // 1. Handle config parameter first
+        const configParam = urlParams.get("config");
+        if (configParam) {
+          try {
+            const decodedConfig = decodeURIComponent(configParam);
+            const customConfig = JSON.parse(decodedConfig);
+            console.log("Applying custom config from URL:", customConfig);
+            // Apply custom config to game (will be applied in game.start())
+            window.customURLConfig = customConfig;
+          } catch (error) {
+            console.error("Error parsing config parameter:", error);
+          }
+        } // 2. Handle showToolbar parameter
+        const showToolbar = urlParams.get("showToolbar");
+        if (showToolbar === "false") {
+          const toolbar = document.querySelector(".ai-toolbox");
+          const chatArea = document.querySelector(".flex-1.flex.flex-col.bg-white.shadow-lg");
+          if (toolbar) {
+            toolbar.classList.add("hidden-toolbar");
+          }
+          if (chatArea) {
+            chatArea.classList.add("no-toolbar-chat");
+          }
+          // Update placeholder text when toolbar is hidden
+          const userInput = document.getElementById("user-input");
+          if (userInput) {
+            userInput.placeholder = "输入文字...";
+          }
+        } else {
+          // Update placeholder text when toolbar is shown
+          const userInput = document.getElementById("user-input");
+          if (userInput) {
+            userInput.placeholder = "输入文字... (你可以通过右侧的工具箱搜索答案)";
+          }
+        }
+
+        // 3. Handle showCharInfo parameter
+        const showCharInfo = urlParams.get("showCharInfo");
+        if (showCharInfo === "false") {
+          const charInfo = document.querySelector(".w-1\\/3.bg-white.shadow-lg.p-6.flex.flex-col");
+          const chatArea = document.querySelector(".flex-1.flex.flex-col.bg-white.shadow-lg");
+          if (charInfo) {
+            charInfo.classList.add("hidden-char-info");
+          }
+          if (chatArea) {
+            // Check if toolbar is also hidden
+            const showToolbar = urlParams.get("showToolbar");
+            if (showToolbar === "false") {
+              chatArea.classList.remove("no-toolbar-chat");
+              chatArea.classList.add("full-width-chat");
+            } else {
+              chatArea.classList.remove("no-toolbar-chat"); // Chat area will take remaining space naturally
+            }
+          }
+        } // 4. Handle showClose parameter
+        const showClose = urlParams.get("showClose");
+        if (showClose === "true") {
+          const closeBtn = document.getElementById("close-btn");
+          if (closeBtn) {
+            closeBtn.classList.remove("hidden");
+          }
+        }
+
+        // 5. Handle showAvatar parameter
+        const showAvatar = urlParams.get("showAvatar");
+        window.showAvatarBackground = showAvatar !== "false";
+      }
+
+      // Apply URL parameters immediately
+      parseAndApplyURLParams();
+
+      const game = new LLMCharacterGame(); // Avatar Video Management
+      class AvatarVideoManager {
+        constructor() {
+          this.avatarVideoIdle = document.getElementById("avatar-video-idle");
+          this.avatarVideoTalk = document.getElementById("avatar-video-talk");
+          this.avatarBackground = document.getElementById("avatar-background");
+          this.returnChatBtn = document.getElementById("return-chat-btn");
+          this.currentVideoType = null;
+          this.isIdleVideoLoaded = false;
+          this.isTalkVideoLoaded = false;
+          this.isEnabled = false;
+          this.hideTimeout = null;
+          this.transitionTimeout = null;
+          this.loadingPromises = new Map();
+        }
+
+        // Initialize avatar background video
+        init() {
+          const chatContainer = document.getElementById("chat-container");
+
+          if (!window.showAvatarBackground) {
+            // Remove avatar-enabled class to allow normal backgrounds
+            chatContainer.classList.remove("avatar-enabled");
+            return;
+          }
+
+          // Check if both 待机 and 说话 video actions are available
+          if (!this.checkVideoActionsAvailable()) {
+            console.log("Video actions not available for avatar background");
+            // Remove avatar-enabled class to allow normal backgrounds
+            chatContainer.classList.remove("avatar-enabled");
+            return;
+          }
+
+          console.log("Initializing avatar background video system");
+          this.isEnabled = true;
+          // Add avatar-enabled class to make chat container transparent
+          chatContainer.classList.add("avatar-enabled");
+          this.avatarBackground.classList.remove("hidden");
+
+          // Add click event listener to avatar background
+          this.addAvatarClickHandler(chatContainer);
+
+          // Load both videos with proper sequencing
+          this.initializeVideos();
+        }
+
+        // Initialize both videos with proper loading sequence
+        async initializeVideos() {
+          try {
+            // First load and start idle video
+            await this.loadIdleVideo();
+            // Then preload talk video in background
+            this.preloadTalkVideo().catch((error) => {
+              console.warn("Talk video preload failed, will load on demand:", error);
+            });
+          } catch (error) {
+            console.error("Failed to initialize avatar videos:", error);
+          }
+        }
+
+        // Add click handler for avatar background
+        addAvatarClickHandler(chatContainer) {
+          console.log("Adding click handler to avatar background");
+
+          this.avatarBackground.addEventListener("click", (e) => {
+            console.log("Avatar background clicked - hiding chat content for 10 seconds");
+
+            // Clear any existing timeout
+            if (this.hideTimeout) {
+              clearTimeout(this.hideTimeout);
+            }
+
+            // Add fade-out class to hide chat content
+            chatContainer.classList.remove("fade-in");
+            chatContainer.classList.add("fade-out");
+
+            // Show return chat button
+            this.returnChatBtn.classList.add("show");
+
+            // Set timeout to show chat content again after 10 seconds
+            this.hideTimeout = setTimeout(() => {
+              console.log("Showing chat content again");
+              chatContainer.classList.remove("fade-out");
+              chatContainer.classList.add("fade-in");
+              this.returnChatBtn.classList.remove("show");
+              this.hideTimeout = null;
+            }, 10000); // 10 seconds
+          });
+
+          // Add click handler for return chat button
+          this.returnChatBtn.addEventListener("click", (e) => {
+            e.stopPropagation(); // Prevent avatar background click
+            console.log("Return chat button clicked - showing chat content immediately");
+
+            // Clear timeout
+            if (this.hideTimeout) {
+              clearTimeout(this.hideTimeout);
+              this.hideTimeout = null;
+            }
+
+            // Show chat content immediately
+            chatContainer.classList.remove("fade-out");
+            chatContainer.classList.add("fade-in");
+            this.returnChatBtn.classList.remove("show");
+          });
+
+          console.log("Click handler added to:", this.avatarBackground);
+        }
+
+        checkVideoActionsAvailable() {
+          const hasVideoActions = game.config && game.config.videoActions && game.config.videoActions["待机"] && game.config.videoActions["说话"];
+          console.log("Video actions available:", hasVideoActions);
+          return hasVideoActions;
+        }
+
+        async loadIdleVideo() {
+          if (!this.isEnabled || this.isIdleVideoLoaded) return;
+
+          const idleAction = game.config.videoActions["待机"];
+          if (!idleAction || !idleAction.url) return;
+
+          // Check if already loading
+          if (this.loadingPromises.has("idle")) {
+            return this.loadingPromises.get("idle");
+          }
+
+          console.log("Loading idle video:", idleAction.url);
+
+          const loadPromise = new Promise((resolve, reject) => {
+            const source = this.avatarVideoIdle.querySelector("source");
+            source.src = idleAction.url;
+
+            this.avatarVideoIdle.onloadeddata = () => {
+              this.isIdleVideoLoaded = true;
+              console.log("Idle video loaded successfully");
+
+              // Auto-play idle video (muted)
+              this.avatarVideoIdle.muted = true;
+              this.avatarVideoIdle
+                .play()
+                .then(() => {
+                  console.log("Idle video started playing");
+                  this.currentVideoType = "待机";
+                  // Show idle video with fade-in
+                  this.avatarVideoIdle.classList.remove("hidden");
+                  this.avatarVideoIdle.classList.add("visible");
+                  this.loadingPromises.delete("idle");
+                  resolve();
+                })
+                .catch((error) => {
+                  console.error("Error playing idle video:", error);
+                  this.loadingPromises.delete("idle");
+                  reject(error);
+                });
+            };
+
+            this.avatarVideoIdle.onerror = () => {
+              console.error("Error loading idle video");
+              this.loadingPromises.delete("idle");
+              reject(new Error("Idle video load failed"));
+            };
+
+            this.avatarVideoIdle.load();
+          });
+
+          this.loadingPromises.set("idle", loadPromise);
+          return loadPromise;
+        }
+
+        async preloadTalkVideo() {
+          if (!this.isEnabled || this.isTalkVideoLoaded) return;
+
+          const talkAction = game.config.videoActions["说话"];
+          if (!talkAction || !talkAction.url) return;
+
+          // Check if already loading
+          if (this.loadingPromises.has("talk")) {
+            return this.loadingPromises.get("talk");
+          }
+
+          console.log("Preloading talk video:", talkAction.url);
+
+          const loadPromise = new Promise((resolve, reject) => {
+            const source = this.avatarVideoTalk.querySelector("source");
+            source.src = talkAction.url;
+
+            this.avatarVideoTalk.onloadeddata = () => {
+              this.isTalkVideoLoaded = true;
+              console.log("Talk video preloaded successfully");
+              this.loadingPromises.delete("talk");
+              resolve();
+            };
+
+            this.avatarVideoTalk.onerror = () => {
+              console.error("Error preloading talk video");
+              this.loadingPromises.delete("talk");
+              reject(new Error("Talk video preload failed"));
+            };
+
+            this.avatarVideoTalk.load();
+          });
+
+          this.loadingPromises.set("talk", loadPromise);
+          return loadPromise;
+        }
+
+        // Switch between video types with smooth transition
+        switchVideo(type) {
+          if (!this.isEnabled) return;
+
+          // If already playing the same video type, skip
+          if (this.currentVideoType === type) {
+            console.log(`Already playing ${type} video`);
+            return;
+          }
+
+          console.log(`Switching to ${type} video`);
+
+          if (type === "待机") {
+            this.switchToIdle();
+          } else if (type === "说话") {
+            this.switchToTalking();
+          }
+        }
+
+        // Switch to idle state with smooth transition
+        switchToIdle() {
+          if (!this.isEnabled) {
+            console.log("Avatar manager not enabled");
+            return;
+          }
+
+          console.log("Switching to idle video");
+
+          // Clear any existing transition timeout
+          if (this.transitionTimeout) {
+            clearTimeout(this.transitionTimeout);
+          }
+
+          // If idle video is not loaded, load it first
+          if (!this.isIdleVideoLoaded) {
+            console.log("Idle video not loaded, loading now...");
+            this.loadIdleVideo().catch((error) => {
+              console.error("Error loading idle video:", error);
+            });
+            return;
+          }
+
+          // Start playing idle video immediately
+          this.avatarVideoIdle.muted = true;
+          this.avatarVideoIdle.currentTime = 0; // Reset to beginning
+
+          this.avatarVideoIdle
+            .play()
+            .then(() => {
+              console.log("Idle video started playing");
+
+              // Show idle video with smooth transition
+              this.avatarVideoIdle.classList.remove("hidden");
+              this.avatarVideoIdle.classList.add("visible");
+
+              // Hide talk video after transition delay to ensure smooth crossfade
+              this.transitionTimeout = setTimeout(() => {
+                this.avatarVideoTalk.classList.remove("visible");
+                this.avatarVideoTalk.classList.add("hidden");
+                // Pause talk video after it's hidden
+                setTimeout(() => {
+                  this.avatarVideoTalk.pause();
+                }, 800); // Wait for opacity transition
+              }, 100);
+
+              this.currentVideoType = "待机";
+            })
+            .catch((error) => {
+              console.error("Error playing idle video:", error);
+            });
+        }
+
+        // Switch to talking state with smooth transition
+        switchToTalking() {
+          if (!this.isEnabled) {
+            console.log("Avatar manager not enabled");
+            return;
+          }
+
+          console.log("Switching to talking video");
+
+          // If talk video is not loaded, load it first
+          if (!this.isTalkVideoLoaded) {
+            console.log("Talk video not loaded, loading now...");
+            this.preloadTalkVideo()
+              .then(() => {
+                this.performTalkTransition();
+              })
+              .catch((error) => {
+                console.error("Error loading talk video, falling back to idle:", error);
+                // Fallback to idle if talk video fails to load
+                this.switchToIdle();
+              });
+          } else {
+            this.performTalkTransition();
+          }
+        }
+
+        // Perform the actual transition to talk video
+        performTalkTransition() {
+          console.log("Performing transition to talk video");
+
+          // Clear any existing transition timeout
+          if (this.transitionTimeout) {
+            clearTimeout(this.transitionTimeout);
+          }
+
+          // Prepare talk video
+          this.avatarVideoTalk.muted = false; // Unmute for talking
+          this.avatarVideoTalk.currentTime = 0; // Reset to beginning
+
+          // Start playing talk video
+          this.avatarVideoTalk
+            .play()
+            .then(() => {
+              console.log("Talk video started playing");
+
+              // Show talk video immediately (it has higher z-index so will appear on top)
+              this.avatarVideoTalk.classList.remove("hidden");
+              this.avatarVideoTalk.classList.add("visible");
+
+              // The idle video will still be playing underneath, but talk video will be visible on top
+              // No need to hide idle video immediately since talk video has higher z-index
+
+              this.currentVideoType = "说话";
+            })
+            .catch((error) => {
+              console.error("Error playing talk video:", error);
+              // Fallback to idle video if talk video fails
+              this.switchToIdle();
+            });
+        }
+
+        // Cleanup method to clear timeouts and reset state
+        cleanup() {
+          if (this.hideTimeout) {
+            clearTimeout(this.hideTimeout);
+            this.hideTimeout = null;
+          }
+
+          if (this.transitionTimeout) {
+            clearTimeout(this.transitionTimeout);
+            this.transitionTimeout = null;
+          }
+
+          // Clear loading promises
+          this.loadingPromises.clear();
+
+          // Reset video states
+          if (this.avatarVideoIdle) {
+            this.avatarVideoIdle.pause();
+            this.avatarVideoIdle.classList.remove("visible");
+            this.avatarVideoIdle.classList.add("hidden");
+          }
+
+          if (this.avatarVideoTalk) {
+            this.avatarVideoTalk.pause();
+            this.avatarVideoTalk.classList.remove("visible");
+            this.avatarVideoTalk.classList.add("hidden");
+          }
+
+          this.currentVideoType = null;
+          this.isIdleVideoLoaded = false;
+          this.isTalkVideoLoaded = false;
+        }
+      }
+
+      // Create avatar video manager instance
+      const avatarManager = new AvatarVideoManager(); // Promise-based location response handler with timeout
 
       // Window message handling for host communication
       window.addEventListener("message", function (e) {
@@ -2593,7 +3453,14 @@
       function checkStartGame(timeoutMs) {
         if (!timeoutMs) {
           const urlParams = new URLSearchParams(window.location.search);
+
           timeoutMs = urlParams.get("parent") === "miniGameProxy" ? 3000 : 200;
+          // Check if URL parameters contain both config and token
+          const hasConfig = urlParams.get("config") !== null;
+          const hasToken = urlParams.get("token") !== null;
+          if (hasConfig && hasToken) {
+            timeoutMs = 0;
+          }
         }
         let gameStarted = false;
         const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {

@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI角色管理器</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.10"></script>
+    <style>
+      /* Toast styles */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .toast {
+        padding: 12px 16px;
+        border-radius: 8px;
+        color: white;
+        min-width: 250px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transform: translateX(100%);
+        opacity: 0;
+        transition: all 0.3s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .toast.show {
+        transform: translateX(0);
+        opacity: 1;
+      }
+
+      .toast.success {
+        background-color: #10b981;
+      }
+
+      .toast.error {
+        background-color: #ef4444;
+      }
+
+      .toast.info {
+        background-color: #3b82f6;
+      }
+
+      .toast.warning {
+        background-color: #f59e0b;
+      }
+      .toast-close {
+        cursor: pointer;
+        font-weight: bold;
+        margin-left: 10px;
+      }
+
+      /* Character menu dropdown styles */
+      .character-menu {
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+      }
+
+      .character-menu button:first-child {
+        border-top-left-radius: 0.5rem;
+        border-top-right-radius: 0.5rem;
+      }
+
+      .character-menu button:last-child {
+        border-bottom-left-radius: 0.5rem;
+        border-bottom-right-radius: 0.5rem;
+      }
+
+      .character-menu button:not(:last-child) {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      }      /* Pinned character card highlight */
+      .character-card.pinned {
+        border: 2px solid #fbbf24;
+        box-shadow: 0 4px 20px rgba(251, 191, 36, 0.1);
+      }
+
+      /* Action filter tab styles */
+      .action-filter-tab {
+        background-color: white;
+        border-color: #d1d5db;
+        color: #6b7280;
+      }
+
+      .action-filter-tab:hover {
+        background-color: #f9fafb;
+        border-color: #10b981;
+        color: #059669;
+      }
+
+      .action-filter-tab.active {
+        background-color: #10b981;
+        border-color: #10b981;
+        color: white;
+      }
+
+      .action-filter-tab.active:hover {
+        background-color: #059669;
+        border-color: #059669;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto">
+      <!-- Header and Action Bar -->
+      <div class="py-3 flex flex-wrap gap-4 justify-between items-center">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">AI角色管理器</h2>
+        </div>
+        <div class="flex flex-wrap gap-4 items-center">
+          <!-- User Import Section -->
+          <div class="flex items-center p-1 gap-2 bg-gray-200 rounded-lg">
+            <input type="text" id="usernameInput" placeholder="输入用户名" class="px-3 text-base border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+            <button onclick="loadUserCharacters()" class="px-3 py-1 text-base bg-green-500 text-white rounded hover:bg-green-600 transition-colors">加载</button>
+          </div>
+
+          <select id="filterSelect" onchange="filterCharacters()" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <option value="all">全部角色</option>
+            <option value="personal">我的角色</option>
+            <option value="system">系统角色</option>
+          </select>
+          <button onclick="openCreateModal()" class="flex items-center px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-lg">
+            ➕ <span class="ml-2">创建新角色</span>
+          </button>
+        </div>
+      </div>
+      <!-- Characters Grid -->
+      <div id="charactersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <!-- Characters will be loaded here -->
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Create/Edit Character Modal -->
+    <div id="createModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+      <div class="fixed inset-3 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="bg-blue-500 text-white p-2 flex justify-between items-center flex-shrink-0">
+          <h2 id="modalTitle" class="text-xl font-bold">创建AI角色</h2>
+          <button onclick="closeCreateModal()" class="text-white hover:text-gray-200 text-2xl">✖</button>
+        </div>
+        <!-- Tabs Navigation -->
+        <div class="flex bg-gray-100 border-b border-gray-200 flex-shrink-0">
+          <button onclick="switchTab('basic')" id="tab-basic" class="px-6 py-3 text-sm font-medium bg-white text-blue-600 border-b-2 border-blue-500">📝 基本信息</button>
+          <button onclick="switchTab('objective')" id="tab-objective" class="px-6 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">🎯 目标设定</button>
+          <button onclick="switchTab('display')" id="tab-display" class="px-6 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">💫 辅助显示</button>
+          <button onclick="switchTab('actions')" id="tab-actions" class="px-6 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">🎬 动作与视觉</button>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="flex-1 overflow-y-auto">
+          <!-- Tab Content Container - Scrollable -->
+          <form id="createCharacterForm">
+            <input type="hidden" id="editingCharacterId" name="editing_id" value="" />
+            <div class="p-4">
+              <!-- Basic Info Tab -->
+              <div id="tab-content-basic" class="tab-content space-y-6">
+                <!-- Basic Info -->
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex items-center gap-4">
+                      <label class="text-sm font-medium text-gray-700 min-w-24">角色名称 *</label>
+                      <input type="text" name="name" required class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <label class="text-sm font-medium text-gray-700 min-w-24">年龄</label>
+                      <input type="number" name="age" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <label class="text-sm font-medium text-gray-700 min-w-24">性别</label>
+                      <select name="gender" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">请选择</option>
+                        <option value="male">男性</option>
+                        <option value="female">女性</option>
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <label class="text-sm font-medium text-gray-700 min-w-24">角色职业/身份</label>
+                      <input type="text" name="role" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <label class="text-sm font-medium text-gray-700 min-w-24">聊天背景色/图</label>
+                      <input type="text" name="chat_background" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                  </div>
+                  <div class="mt-4 flex items-start gap-4">
+                    <label class="text-sm font-medium text-gray-700 min-w-24 mt-2">角色描述 *</label>
+                    <textarea name="description" required rows="2" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                  </div>
+                  <div class="mt-4">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-800">⚙ 系统提示词 *</h3>
+                    <textarea
+                      name="system_prompt"
+                      required
+                      rows="8"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="详细的系统提示词，定义角色行为和对话风格..."
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Objective Tab -->
+              <div id="tab-content-objective" class="tab-content space-y-6 hidden">
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div class="flex items-center gap-4">
+                        <label class="text-sm font-medium text-gray-700 min-w-24">目标标题</label>
+                        <input type="text" name="objective_title" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                      </div>
+                      <div class="flex items-center gap-4">
+                        <label class="text-sm font-medium text-gray-700 min-w-24">Wiki关键词</label>
+                        <input type="text" name="wikiword" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                      </div>
+                    </div>
+                    <div class="flex items-start gap-4">
+                      <label class="text-sm font-medium text-gray-700 min-w-24 mt-2">目标描述</label>
+                      <textarea name="objective_description" rows="4" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                    </div>
+                    <!-- Completion Messages -->
+                    <div class="bg-gray-50 rounded-lg">
+                      <h3 class="text-lg font-semibold mb-4 text-gray-800">🏁 目标完成时</h3>
+                      <div class="grid grid-cols-1 gap-4">
+                        <div class="flex items-center gap-4">
+                          <label class="text-sm font-medium text-gray-700 min-w-24">完成标题</label>
+                          <input type="text" name="completion_title" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                        </div>
+                        <div class="flex items-center gap-4">
+                          <label class="text-sm font-medium text-gray-700 min-w-24">完成图标</label>
+                          <input
+                            type="text"
+                            name="completion_icon"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="🎉"
+                          />
+                        </div>
+                        <div class="flex items-start gap-4">
+                          <label class="text-sm font-medium text-gray-700 min-w-24 mt-2">完成描述</label>
+                          <textarea
+                            name="completion_description"
+                            rows="2"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          ></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Display Tab -->
+              <div id="tab-content-display" class="tab-content space-y-6 hidden">
+                <!-- Initial Message -->
+                <div class="bg-gray-50 rounded-lg">
+                  <h3 class="text-lg font-semibold mb-4 text-gray-800">💬 初始消息</h3>
+                  <textarea
+                    name="initial_message"
+                    rows="3"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="角色的开场白..."
+                  ></textarea>
+                </div>
+
+                <!-- Quick Replies -->
+                <div class="bg-gray-50 rounded-lg">
+                  <h3 class="text-lg font-semibold mb-4 text-gray-800">⚡ 快捷回复</h3>
+                  <div id="quickRepliesContainer">
+                    <div class="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        name="quick_reply_0"
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="快捷回复 1"
+                      />
+                      <button type="button" onclick="removeQuickReply(0)" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg">🗑</button>
+                    </div>
+                  </div>
+                  <button type="button" onclick="addQuickReply()" class="mt-2 px-4 py-2 text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50 transition-colors">➕ 添加快捷回复</button>
+                </div>
+                <!-- Chat Display Options -->
+                <div class="bg-gray-50 rounded-lg">
+                  <h3 class="text-lg font-semibold mb-4 text-gray-800">🎛️ 对话显示选项</h3>
+                  <div class="space-y-4">
+                    <div class="flex items-center gap-4">
+                      <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="show_toolbar" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" checked />
+                        <span class="text-sm font-medium text-gray-700">显示工具栏</span>
+                      </label>
+                      <span class="text-xs text-gray-500">控制对话界面是否显示工具栏</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="show_char_info" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" checked />
+                        <span class="text-sm font-medium text-gray-700">显示角色信息</span>
+                      </label>
+                      <span class="text-xs text-gray-500">控制对话界面是否显示角色详细信息</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="show_wiki_page" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2" />
+                        <span class="text-sm font-medium text-gray-700">显示互动百科</span>
+                      </label>
+                      <span class="text-xs text-gray-500">点击对话时跳转到百科页面而不是角色AI</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Actions Tab -->
+              <div id="tab-content-actions" class="tab-content space-y-6 hidden">
+                <!-- Video Actions -->
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <h3 class="text-lg font-semibold mb-4 text-gray-800">🎬 视频动作配置</h3>
+                  <div class="space-y-4">
+                    <p class="text-sm text-gray-600 mb-4">配置角色在不同状态下的视频动作。"待机"和"说话"是默认动作，您可以添加更多自定义动作。</p>
+
+                    <!-- Video Actions Container -->
+                    <div id="videoActionsContainer" class="space-y-3">
+                      <!-- Default actions will be added here -->
+                    </div>
+
+                    <div class="flex gap-3 mt-4">
+                      <button type="button" onclick="addVideoAction()" class="px-4 py-2 text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50 transition-colors">➕ 添加动作</button>
+                      <button type="button" onclick="openActionImportModal()" class="px-4 py-2 text-green-500 border border-green-500 rounded-lg hover:bg-green-50 transition-colors">📥 导入动作模板</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Action Buttons - Always docked at bottom -->
+        <div class="flex justify-end gap-4 p-4 border-t border-gray-200 bg-white flex-shrink-0">
+          <button type="button" onclick="closeCreateModal()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+          <button type="button" onclick="submitCreateForm()" id="submitButton" class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">💾 创建角色</button>
+        </div>
+      </div>
+    </div>    <!-- Chat Modal -->
+    <div id="chatModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+      <div class="fixed inset-0 bg-white overflow-hidden">
+        <iframe id="chatFrame" src="" class="w-full h-full"></iframe>
+      </div>
+    </div>
+
+    <!-- Action Import Modal -->
+    <div id="actionImportModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+      <div class="fixed inset-4 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="bg-green-500 text-white p-4 flex justify-between items-center flex-shrink-0">
+          <h2 class="text-xl font-bold">📥 导入动作模板</h2>
+          <button onclick="closeActionImportModal()" class="text-white hover:text-gray-200 text-2xl">✖</button>
+        </div>
+        
+        <!-- Loading indicator -->
+        <div id="actionImportLoading" class="flex items-center justify-center p-8">
+          <div class="flex items-center gap-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+            <span class="text-gray-600">正在加载动作模板...</span>
+          </div>
+        </div>        <!-- Filter and Content -->
+        <div id="actionImportContent" class="flex-1 flex flex-col overflow-hidden hidden">
+          <!-- Filter Bar -->
+          <div class="border-b border-gray-200 bg-gray-50 flex-shrink-0">
+            <div class="p-3">
+              <div class="overflow-x-auto">
+                <div id="actionFilterTabs" class="flex gap-2 min-w-max pb-1">
+                  <button onclick="setActionFilter('all')" class="action-filter-tab active px-3 py-1.5 text-sm font-medium rounded-full border transition-all whitespace-nowrap" data-filter="all">全部</button>
+                  <button onclick="setActionFilter('男')" class="action-filter-tab px-3 py-1.5 text-sm font-medium rounded-full border transition-all whitespace-nowrap" data-filter="男">男</button>
+                  <button onclick="setActionFilter('女')" class="action-filter-tab px-3 py-1.5 text-sm font-medium rounded-full border transition-all whitespace-nowrap" data-filter="女">女</button>
+                  <button onclick="setActionFilter('小孩')" class="action-filter-tab px-3 py-1.5 text-sm font-medium rounded-full border transition-all whitespace-nowrap" data-filter="小孩">小孩</button>
+                  <button onclick="setActionFilter('古代名人')" class="action-filter-tab px-3 py-1.5 text-sm font-medium rounded-full border transition-all whitespace-nowrap" data-filter="古代名人">古代名人</button>
+                  <button onclick="setActionFilter('国外名人')" class="action-filter-tab px-3 py-1.5 text-sm font-medium rounded-full border transition-all whitespace-nowrap" data-filter="国外名人">国外名人</button>
+                  <button onclick="setActionFilter('宠物')" class="action-filter-tab px-3 py-1.5 text-sm font-medium rounded-full border transition-all whitespace-nowrap" data-filter="宠物">宠物</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Templates Grid -->
+          <div class="flex-1 overflow-y-auto p-4">
+            <div id="actionTemplatesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <!-- Templates will be loaded here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-end gap-4 p-4 border-t border-gray-200 bg-white flex-shrink-0">
+          <button type="button" onclick="closeActionImportModal()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Initialize SDK
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });      console.log(`Keepwork SDK initialized token: ${sdk.token}`); // Global variables
+      let characters = [];
+      let quickReplyIndex = 1;
+      let videoActionIndex = 0;
+      let isEditing = false;
+      let editingCharacterId = null;
+      let importedUsers = new Set(); // Store imported usernames
+      let userCharacters = new Map(); // Store characters by username
+      let actionTemplates = []; // Store loaded action templates
+
+      // Toast functionality
+      function showToast(message, type = "info") {
+        const toastContainer = document.getElementById("toastContainer");
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+
+        toast.innerHTML = `
+                <span>${message}</span>
+                <span class="toast-close" onclick="this.parentElement.remove()">×</span>
+            `;
+
+        toastContainer.appendChild(toast);
+
+        // Show toast
+        setTimeout(() => {
+          toast.classList.add("show");
+        }, 10);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+          if (toast.parentElement) {
+            toast.classList.remove("show");
+            setTimeout(() => {
+              if (toast.parentElement) {
+                toast.remove();
+              }
+            }, 300);
+          }
+        }, 5000);
+      }
+
+      // System built-in characters
+      const systemCharacters = [
+        {
+          id: "huggingdragon",
+          type: "system",
+          name: "抱抱龙",
+          age: 7,
+          gender: null,
+          role: "宠物",
+          description: "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪",
+          avatar: "🐲",
+          objective: {
+            title: "解决问题助手",
+            description: "通过耐心的交流, 解决问题",
+          },
+          tags: ["宠物", "问题解决", "互动"],
+          system_prompt: "你是抱抱龙，一个7岁的宠物角色。你喜欢和主人交流，总是提出一些奇怪的问题，有时还有小情绪。保持可爱、好奇的性格。",
+          initial_message: "主人！抱抱龙想你了～今天我们聊什么呀？",
+          quick_replies: ["今天心情怎么样？", "我们一起玩游戏吧！", "抱抱龙想听故事"],
+          completion_messages: {
+            title: "任务完成！",
+            description: "和抱抱龙的对话很愉快！",
+            icon: "🐲",
+          },
+          show_toolbar: true,
+          show_char_info: true,
+          show_wiki_page: true,
+          videoActions: {
+            待机: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            },
+            期待: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
+            },
+            高兴: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy02.mp4",
+            },
+            难过: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_sad.mp4",
+            },
+            说话: {
+              url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_talk.mp4",
+            },
+          },
+        },
+        {
+          id: "teacher",
+          type: "system",
+          name: "小麦老师",
+          age: 25,
+          gender: "female",
+          role: "老师",
+          description: "温和耐心的教育专家，擅长回答各种学习问题",
+          avatar: "👩‍🏫",
+          objective: {
+            title: "学习指导",
+            description: "帮助学生解决学习中的困难",
+          },
+          tags: ["教育", "学习", "指导"],
+          system_prompt: "你是小麦老师，一名25岁的温和耐心的教育专家。你擅长回答各种学习问题，用简单易懂的方式解释复杂概念。",
+          initial_message: "你好！我是小麦老师，很高兴认识你。有什么学习上的问题需要帮助吗？",
+          quick_replies: ["数学题不会做", "语文阅读理解", "英语语法问题"],
+          completion_messages: {
+            title: "学习完成！",
+            description: "今天的学习很有收获！",
+            icon: "📚",
+          },
+        },
+        {
+          id: "assistant",
+          type: "system",
+          name: "智能助手",
+          age: null,
+          gender: null,
+          role: "助手",
+          description: "全能的AI助手，可以帮助处理各种日常任务",
+          avatar: "🤖",
+          objective: {
+            title: "任务协助",
+            description: "协助完成各种工作和生活任务",
+          },
+          tags: ["助手", "效率", "多功能"],
+          system_prompt: "你是一个全能的AI智能助手，可以帮助用户处理各种日常任务。保持专业、高效、友好的服务态度。",
+          initial_message: "您好！我是您的智能助手，可以帮您处理各种任务。请告诉我您需要什么帮助？",
+          quick_replies: ["制定计划", "信息查询", "文档整理"],
+          completion_messages: {
+            title: "任务完成！",
+            description: "很高兴为您提供帮助！",
+            icon: "✅",
+          },
+        },
+      ]; // Load characters from storage and system
+      async function loadCharacters() {
+        try {
+          // Load personal characters from SDK storage
+          const personalChars = (await loadPersonalCharacters()) || [];
+
+          // Combine with system characters
+          characters = [...systemCharacters, ...personalChars];
+
+          renderCharacters();
+        } catch (error) {
+          console.error("Error loading characters:", error);
+          showToast("加载角色失败：" + error.message, "error");
+          characters = [...systemCharacters];
+          renderCharacters();
+        }
+      }
+
+      // Load personal characters from SDK personal page store
+      async function loadPersonalCharacters() {
+        try {
+          console.log("Loading personal characters from SDK...");
+          const data = await sdk.personalPageStore.loadPageData("maisi_character_manager", "user-characters");
+
+          if (data && data.characters && Array.isArray(data.characters)) {
+            console.log(`Loaded ${data.characters.length} personal characters from SDK`);
+            return data.characters;
+          } else {
+            console.log("No personal characters found in SDK storage");
+            return [];
+          }
+        } catch (error) {
+          console.warn("Failed to load characters from SDK, trying localStorage fallback:", error);
+          // Fallback to localStorage for backward compatibility
+          const stored = localStorage.getItem("personalCharacters");
+          if (stored) {
+            try {
+              const localChars = JSON.parse(stored);
+              console.log(`Loaded ${localChars.length} characters from localStorage fallback`);
+              // Migrate to SDK storage
+              if (localChars.length > 0) {
+                await savePersonalCharactersToSDK(localChars);
+                // Clear localStorage after successful migration
+                localStorage.removeItem("personalCharacters");
+              }
+              return localChars;
+            } catch (parseError) {
+              console.error("Error parsing localStorage data:", parseError);
+              return [];
+            }
+          }
+          return [];
+        }
+      }
+
+      // Save all personal characters to SDK storage
+      async function savePersonalCharactersToSDK(personalCharacters, bForceFlush = false) {
+        try {
+          const data = {
+            characters: personalCharacters,
+            lastModified: new Date().toISOString(),
+            version: "1.0",
+          };
+
+          await sdk.personalPageStore.savePageData("maisi_character_manager", "user-characters", data, bForceFlush);
+          console.log(`Saved ${personalCharacters.length} characters to SDK storage`);
+          return true;
+        } catch (error) {
+          console.error("Error saving characters to SDK:", error);
+          throw error;
+        }
+      } // Save personal character
+      async function savePersonalCharacter(character) {
+        try {
+          // Get current personal characters from memory (faster than reloading from SDK)
+          const personalChars = characters.filter((c) => c.type === "personal");
+
+          if (!character.id) {
+            // Creating new character
+            character.id = "personal_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+            character.type = "personal";
+            character.createdAt = new Date().toISOString();
+            personalChars.push(character);
+          } else {
+            // Updating existing character
+            const index = personalChars.findIndex((c) => c.id === character.id);
+            if (index !== -1) {
+              character.updatedAt = new Date().toISOString();
+              personalChars[index] = character;
+            } else {
+              // Character not found, add as new
+              character.type = "personal";
+              character.createdAt = new Date().toISOString();
+              personalChars.push(character);
+            }
+          }
+
+          // Save to SDK storage
+          await savePersonalCharactersToSDK(personalChars, true);
+
+          console.log(`Successfully saved character: ${character.name} (ID: ${character.id})`);
+          return character;
+        } catch (error) {
+          console.error("Error saving character:", error);
+          showToast("保存角色失败：" + error.message, "error");
+          throw error;
+        }
+      } // Delete personal character
+      async function deletePersonalCharacter(characterId) {
+        try {
+          // Get current personal characters and filter out the deleted one
+          const personalChars = characters.filter((c) => c.type === "personal" && c.id !== characterId);
+
+          // Save updated list to SDK storage
+          await savePersonalCharactersToSDK(personalChars, true);
+
+          // Remove from current characters array
+          characters = characters.filter((c) => c.id !== characterId);
+          renderCharacters();
+
+          console.log(`Successfully deleted character with ID: ${characterId}`);
+          showToast("角色删除成功！", "success");
+        } catch (error) {
+          console.error("Error deleting character:", error);
+          showToast("删除角色失败：" + error.message, "error");
+        }
+      }
+
+      // Load characters from other users
+      async function loadUserCharacters() {
+        const usernameInput = document.getElementById("usernameInput");
+        const username = usernameInput.value.trim();
+
+        if (!username) {
+          showToast("请输入用户名", "warning");
+          return;
+        }
+
+        try {
+          console.log(`Loading characters from user: ${username}`);
+          showToast(`正在加载 ${username} 的角色...`, "info");
+
+          // Create a temporary SDK instance for the target user
+          const targetSdk = new KeepworkSDK({
+            timeout: 30000,
+          });
+          targetSdk.personalPageStore.setUsername(username);
+
+          // Load characters from the target user's personal page store
+          // Note: This assumes we have permission to read other users' data
+          // In practice, this might require special permissions or API calls
+          const userData = await targetSdk.personalPageStore.loadPageData("maisi_character_manager", "user-characters");
+
+          if (userData && userData.characters && Array.isArray(userData.characters)) {
+            const importedChars = userData.characters.map((char) => ({
+              ...char,
+              id: `imported_${username}_${char.id}`, // Prevent ID conflicts
+              type: "imported",
+              sourceUser: username,
+              original_id: char.id,
+            }));
+
+            // Store in userCharacters map
+            userCharacters.set(username, importedChars);
+
+            // Add to main characters array
+            characters = characters.concat(importedChars);
+
+            // Add username to imported users set
+            importedUsers.add(username);
+
+            // Update dropdown to include this user
+            updateFilterDropdown();
+
+            // Re-render characters
+            renderCharacters();
+
+            showToast(`成功加载 ${importedChars.length} 个来自 ${username} 的角色`, "success");
+            console.log(`Successfully loaded ${importedChars.length} characters from user: ${username}`);
+
+            // Clear input
+            usernameInput.value = "";
+          } else {
+            showToast(`用户 ${username} 没有可用的角色数据`, "warning");
+          }
+        } catch (error) {
+          console.error("Error loading user characters:", error);
+          showToast(`加载 ${username} 的角色失败: ${error.message}`, "error");
+        }
+      }
+
+      // Update filter dropdown to include imported users
+      function updateFilterDropdown() {
+        const filterSelect = document.getElementById("filterSelect");
+
+        // Remove existing imported user options
+        const existingImportedOptions = filterSelect.querySelectorAll('option[data-imported="true"]');
+        existingImportedOptions.forEach((option) => option.remove());
+
+        // Add options for each imported user
+        importedUsers.forEach((username) => {
+          const option = document.createElement("option");
+          option.value = `user:${username}`;
+          option.textContent = `${username} 的角色`;
+          option.setAttribute("data-imported", "true");
+          filterSelect.appendChild(option);
+        });
+      } // Render characters
+      function renderCharacters() {
+        const grid = document.getElementById("charactersGrid");
+        grid.innerHTML = "";
+
+        // Sort characters: pinned personal first, then system, then unpinned personal
+        const sortedCharacters = [...characters].sort((a, b) => {
+          // Pinned personal characters come first
+          if (a.type === "personal" && a.pinned && !(b.type === "personal" && b.pinned)) {
+            return -1;
+          }
+          if (b.type === "personal" && b.pinned && !(a.type === "personal" && a.pinned)) {
+            return 1;
+          }
+
+          // Among pinned personal characters, maintain original order
+          if (a.type === "personal" && a.pinned && b.type === "personal" && b.pinned) {
+            return 0;
+          }
+
+          // System characters come after pinned personal but before unpinned personal
+          if (a.type === "system" && b.type === "personal" && !b.pinned) {
+            return -1;
+          }
+          if (b.type === "system" && a.type === "personal" && !a.pinned) {
+            return 1;
+          }
+
+          // Maintain original order for other cases
+          return 0;
+        });
+        sortedCharacters.forEach((char) => {
+          grid.appendChild(createCharacterCard(char));
+        });
+      }
+
+      // Create character card
+      function createCharacterCard(character) {
+        const card = document.createElement("div");
+        card.className = `bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer character-card ${character.type === "personal" && character.pinned ? "pinned" : ""}`;
+        card.dataset.type = character.type;
+        card.dataset.characterId = character.id;
+
+        card.innerHTML = `
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="text-4xl">${character.avatar}</div>
+                            <h3 class="text-xl font-bold text-gray-800">${character.name}</h3>
+                        </div>
+                        ${character.age ? `<span class="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full">${character.age}岁</span>` : ""}
+                    </div>
+                    <div class="text-gray-700 text-sm mb-4 h-16 flex items-start overflow-hidden">
+                        <p class="line-clamp-3">${character.description}</p>
+                    </div>                      <div class="flex flex-wrap gap-1 mb-4">
+                        <span class="px-2 py-1 text-xs rounded-full ${
+                          character.type === "system" ? "bg-blue-100 text-blue-800" : character.type === "imported" ? "bg-purple-100 text-purple-800" : "bg-green-100 text-green-800"
+                        }">
+                            ${character.type === "system" ? "系统" : character.type === "imported" ? `来自 ${character.sourceUser}` : "个人"}
+                        </span>                        ${
+                          character.type === "personal" && character.pinned ? '<span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">📌 置顶</span>' : ""
+                        }
+                        ${character.show_wiki_page === true ? '<span class="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded-full">百科</span>' : ""}
+                        ${(character.tags || []).map((tag) => `<span class="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded-full">${tag}</span>`).join("")}
+                    </div><div class="flex gap-2">
+                        <button onclick="startChat('${character.id}')" class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                            对话
+                        </button>                        <div class="relative">
+                            <button onclick="toggleCharacterMenu('${
+                              character.id
+                            }')" class="px-3 py-2 bg-gray-200 text-gray-700 hover:text-gray-800 hover:bg-gray-300 rounded-lg transition-colors" title="更多操作">
+                                设置...
+                            </button>
+                            <div id="menu-${character.id}" class="absolute right-0 mt-1 w-48 bg-white character-menu rounded-lg z-50 hidden">
+                                ${
+                                  character.type === "personal"
+                                    ? `
+                                    <button onclick="editCharacter('${character.id}')" class="w-full px-4 py-3 text-left text-base text-gray-700 hover:bg-gray-100 flex items-center gap-3">
+                                        <span class="text-lg">✏️</span>
+                                        编辑
+                                    </button>
+                                    `
+                                    : ""
+                                }
+                                <button onclick="copyCharacter('${character.id}')" class="w-full px-4 py-3 text-left text-base text-gray-700 hover:bg-gray-100 flex items-center gap-3">
+                                    <span class="text-lg">📋</span>
+                                    复制角色
+                                </button>
+                                ${
+                                  character.type === "personal"
+                                    ? `
+                                    <button onclick="deleteCharacter('${character.id}')" class="w-full px-4 py-3 text-left text-base text-red-600 hover:bg-red-50 flex items-center gap-3">
+                                        <span class="text-lg">🗑️</span>
+                                        删除
+                                    </button>
+                                    <button onclick="togglePinCharacter('${character.id}')" class="w-full px-4 py-3 text-left text-base text-gray-700 hover:bg-gray-100 flex items-center gap-3">
+                                        <span class="text-lg">${character.pinned ? "📌" : "📍"}</span>
+                                        ${character.pinned ? "取消置顶" : "置顶"}
+                                    </button>
+                                    `
+                                    : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        return card;
+      } // Filter characters
+      function filterCharacters() {
+        const filter = document.getElementById("filterSelect").value;
+        const cards = document.querySelectorAll(".character-card");
+
+        cards.forEach((card) => {
+          let shouldShow = false;
+
+          if (filter === "all") {
+            shouldShow = true;
+          } else if (filter.startsWith("user:")) {
+            // Handle user-specific filtering
+            const username = filter.substring(5); // Remove "user:" prefix
+            const characterId = card.getAttribute("data-character-id");
+            const character = characters.find((c) => c.id === characterId);
+            shouldShow = character && character.type === "imported" && character.sourceUser === username;
+          } else {
+            // Handle standard type filtering
+            shouldShow = card.dataset.type === filter;
+          }
+
+          if (shouldShow) {
+            card.classList.remove("hidden");
+          } else {
+            card.classList.add("hidden");
+          }
+        });
+      }
+
+      // Open create modal
+      function openCreateModal() {
+        isEditing = false;
+        editingCharacterId = null;
+        document.getElementById("modalTitle").textContent = "创建AI角色";
+        document.getElementById("submitButton").innerHTML = "💾 创建角色";
+        document.getElementById("editingCharacterId").value = "";
+        document.getElementById("createModal").classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+        resetQuickReplies();
+        resetVideoActions();
+      }
+
+      // Close create modal
+      function closeCreateModal() {
+        document.getElementById("createModal").classList.add("hidden");
+        document.body.style.overflow = "auto";
+        document.getElementById("createCharacterForm").reset();
+        // Reset to first tab
+        switchTab("basic");
+        isEditing = false;
+        editingCharacterId = null;
+      }
+
+      // Reset quick replies to initial state
+      function resetQuickReplies() {
+        const container = document.getElementById("quickRepliesContainer");
+        container.innerHTML = `
+          <div class="flex gap-2 mb-2">
+            <input
+              type="text"
+              name="quick_reply_0"
+              class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="快捷回复 1"
+            />
+            <button type="button" onclick="removeQuickReply(0)" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg">🗑</button>
+          </div>
+        `;
+        quickReplyIndex = 1;
+      }
+
+      // Add quick reply
+      function addQuickReply() {
+        const container = document.getElementById("quickRepliesContainer");
+        const div = document.createElement("div");
+        div.className = "flex gap-2 mb-2";
+        div.innerHTML = `
+                <input type="text" name="quick_reply_${quickReplyIndex}" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="快捷回复 ${
+          quickReplyIndex + 1
+        }">
+                <button type="button" onclick="removeQuickReply(${quickReplyIndex})" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg">
+                    🗑
+                </button>
+            `;
+        container.appendChild(div);
+        quickReplyIndex++;
+      } // Remove quick reply
+      function removeQuickReply(index) {
+        const input = document.querySelector(`input[name="quick_reply_${index}"]`);
+        if (input && input.parentElement) {
+          input.parentElement.remove();
+        }
+      }
+
+      // Reset video actions to initial state
+      function resetVideoActions() {
+        const container = document.getElementById("videoActionsContainer");
+        container.innerHTML = "";
+        videoActionIndex = 0;
+
+        // Add default actions: 待机 and 说话
+        addVideoActionItem("待机", "", true);
+        addVideoActionItem("说话", "", true);
+      }
+
+      // Add video action item
+      function addVideoActionItem(actionName = "", videoUrl = "", isDefault = false) {
+        const container = document.getElementById("videoActionsContainer");
+        const div = document.createElement("div");
+        div.className = "flex gap-2 mb-3 p-3 bg-white rounded-lg border border-gray-200";
+
+        const index = videoActionIndex;
+        div.innerHTML = `
+          <div class="flex-1 grid grid-cols-3 gap-3">
+            <div>
+              <input 
+                type="text" 
+                name="video_action_name_${index}" 
+                value="${actionName}"
+                ${isDefault ? "readonly" : ""}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDefault ? "bg-gray-100" : ""}"
+                placeholder="例如：高兴、难过、思考"
+              />
+            </div>            
+            <div class="col-span-2 flex gap-2">
+              <input 
+                type="text" 
+                name="video_action_url_${index}" 
+                value="${videoUrl}"
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="https://..."
+              />
+              <button 
+                type="button" 
+                onclick="previewVideo(${index})" 
+                class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200 flex items-center justify-center"
+                title="预览视频"
+              >
+                🎬
+              </button>
+            </div>
+          </div>
+          ${
+            !isDefault
+              ? `
+            <button type="button" onclick="removeVideoAction(${index})" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg self-start">
+              🗑
+            </button>
+          `
+              : `
+            <div class="px-3 py-2 text-gray-400 self-start" title="默认动作不可删除">
+              🔒
+            </div>
+          `
+          }
+        `;
+
+        container.appendChild(div);
+        videoActionIndex++;
+      }
+
+      // Add new video action
+      function addVideoAction() {
+        addVideoActionItem();
+      } // Remove video action
+      function removeVideoAction(index) {
+        const nameInput = document.querySelector(`input[name="video_action_name_${index}"]`);
+        if (nameInput && nameInput.closest(".flex")) {
+          nameInput.closest(".flex").remove();
+        }
+      }
+
+      // Preview video function
+      function previewVideo(index) {
+        const urlInput = document.querySelector(`input[name="video_action_url_${index}"]`);
+        if (!urlInput || !urlInput.value.trim()) {
+          showToast("请先输入视频链接", "warning");
+          return;
+        }
+
+        const videoUrl = urlInput.value.trim();
+
+        // Validate URL format
+        try {
+          new URL(videoUrl);
+        } catch {
+          showToast("视频链接格式不正确", "error");
+          return;
+        }
+
+        // Create and show video preview modal
+        showVideoPreview(videoUrl);
+      }
+
+      // Show video preview modal
+      function showVideoPreview(videoUrl) {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById("videoPreviewModal");
+        if (!modal) {
+          modal = document.createElement("div");
+          modal.id = "videoPreviewModal";
+          modal.className = "fixed inset-0 bg-black bg-opacity-75 hidden z-50 flex items-center justify-center";
+          modal.innerHTML = `
+            <div class="relative max-w-4xl max-h-[90vh] bg-black rounded-lg overflow-hidden">
+              <button 
+                onclick="closeVideoPreview()" 
+                class="absolute top-4 right-4 z-10 bg-black bg-opacity-50 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-opacity-75 transition-all"
+                title="关闭预览"
+              >
+                ✕
+              </button>
+              <video 
+                id="previewVideo" 
+                controls 
+                autoplay 
+                loop 
+                muted
+                class="max-w-full max-h-[90vh] object-contain"
+                style="background: #000;"
+              >
+                您的浏览器不支持视频播放
+              </video>
+            </div>
+          `;
+          document.body.appendChild(modal);
+        }
+
+        // Set video source and show modal
+        const video = modal.querySelector("#previewVideo");
+        video.src = videoUrl;
+        modal.classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+
+        // Handle video load error
+        video.onerror = function () {};
+      }      // Close video preview modal
+      function closeVideoPreview() {
+        const modal = document.getElementById("videoPreviewModal");
+        if (modal) {
+          modal.classList.add("hidden");
+          const video = modal.querySelector("#previewVideo");
+          if (video) {
+            video.pause();
+            video.src = "";
+          }
+        }
+        document.body.style.overflow = "auto";
+      }
+
+      // Play template video function
+      function playTemplateVideo(videoUrl, actionName) {
+        if (!videoUrl || !videoUrl.trim()) {
+          showToast(`${actionName}暂无视频文件`, "warning");
+          return;
+        }
+
+        // Validate URL format
+        try {
+          new URL(videoUrl);
+        } catch {
+          showToast("视频链接格式不正确", "error");
+          return;
+        }
+
+        // Use the existing video preview modal
+        showVideoPreview(videoUrl);
+      }
+
+      // Open action import modal
+      async function openActionImportModal() {
+        const modal = document.getElementById("actionImportModal");
+        const loading = document.getElementById("actionImportLoading");
+        const content = document.getElementById("actionImportContent");
+        
+        modal.classList.remove("hidden");
+        loading.classList.remove("hidden");
+        content.classList.add("hidden");
+        document.body.style.overflow = "hidden";
+        
+        try {
+          await loadActionTemplates();
+          renderActionTemplates();
+          loading.classList.add("hidden");
+          content.classList.remove("hidden");
+        } catch (error) {
+          console.error("Error loading action templates:", error);
+          showToast("加载动作模板失败：" + error.message, "error");
+          closeActionImportModal();
+        }
+      }
+
+      // Close action import modal
+      function closeActionImportModal() {
+        const modal = document.getElementById("actionImportModal");
+        modal.classList.add("hidden");
+        document.body.style.overflow = "auto";
+      }
+
+      // Load action templates from the config file
+      async function loadActionTemplates() {
+        try {
+          console.log("Loading action templates from config...");
+          
+          const configText = await sdk.getMarkdownByFullPath("official/online_settings/virtualhuman_list")
+          if(configText){
+            actionTemplates = parseActionTemplatesConfig(configText);
+            console.log(`Loaded ${actionTemplates.length} action templates`);
+            return actionTemplates;
+          }
+          
+        } catch (error) {
+          console.error("Error loading action templates:", error);
+          throw error;
+        }
+      }
+
+      // Parse the markdown config file
+      function parseActionTemplatesConfig(configText) {
+        const templates = [];
+        const lines = configText.split('\n');
+        let currentTemplate = null;
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          
+          // Parse template name (### Title)
+          if (line.startsWith('### ')) {
+            if (currentTemplate) {
+              templates.push(currentTemplate);
+            }
+            currentTemplate = {
+              name: line.substring(4).trim(),
+              portrait: '',
+              talk: '',
+              idle: '',
+              tags: []
+            };
+          }
+          // Parse image (![name](url))
+          else if (line.match(/^!\[.*\]\((.*)\)$/)) {
+            if (currentTemplate) {
+              const match = line.match(/^!\[.*\]\((.*)\)$/);
+              currentTemplate.portrait = match[1];
+            }
+          }
+          // Parse URLs and tags
+          else if (line.startsWith('- ')) {
+            if (currentTemplate) {
+              const content = line.substring(2).trim();
+              if (content.startsWith('https://') && content.includes('.mp4')) {
+                if (content.includes('talk')) {
+                  currentTemplate.talk = content;
+                } else if (content.includes('idle')) {
+                  currentTemplate.idle = content;
+                }
+              } else if (content.startsWith('https://') && content.includes('portrait')) {
+                // Alternative portrait URL
+                if (!currentTemplate.portrait) {
+                  currentTemplate.portrait = content;
+                }
+              } else {
+                // This is a tag
+                currentTemplate.tags.push(content);
+              }
+            }
+          }
+        }
+        
+        // Add the last template
+        if (currentTemplate) {
+          templates.push(currentTemplate);
+        }
+        
+        return templates;
+      }
+
+      // Render action templates in the grid
+      function renderActionTemplates() {
+        const grid = document.getElementById("actionTemplatesGrid");
+        grid.innerHTML = "";
+        
+        const filteredTemplates = getFilteredActionTemplates();
+        
+        filteredTemplates.forEach(template => {
+          const card = createActionTemplateCard(template);
+          grid.appendChild(card);
+        });
+        
+        if (filteredTemplates.length === 0) {
+          grid.innerHTML = `
+            <div class="col-span-full text-center py-8 text-gray-500">
+              <p class="text-lg">暂无匹配的动作模板</p>
+            </div>
+          `;
+        }
+      }      // Get filtered action templates based on current filter
+      function getFilteredActionTemplates() {
+        const activeTab = document.querySelector(".action-filter-tab.active");
+        const filter = activeTab ? activeTab.getAttribute("data-filter") : "all";
+        
+        if (filter === "all") {
+          return actionTemplates;
+        }
+        
+        return actionTemplates.filter(template => 
+          template.tags.some(tag => tag === filter)
+        );
+      }
+
+      // Set action filter and update active tab
+      function setActionFilter(filterValue) {
+        // Remove active class from all tabs
+        const allTabs = document.querySelectorAll(".action-filter-tab");
+        allTabs.forEach(tab => tab.classList.remove("active"));
+        
+        // Add active class to selected tab
+        const selectedTab = document.querySelector(`[data-filter="${filterValue}"]`);
+        if (selectedTab) {
+          selectedTab.classList.add("active");
+        }
+        
+        // Re-render templates
+        renderActionTemplates();
+      }
+
+      // Filter action templates (kept for compatibility)
+      function filterActionTemplates() {
+        renderActionTemplates();
+      }
+
+      // Create action template card
+      function createActionTemplateCard(template) {
+        const card = document.createElement("div");
+        card.className = "bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-200";
+        
+        card.innerHTML = `
+          <div class="p-4">
+            <div class="aspect-square mb-3 bg-gray-100 rounded-lg overflow-hidden">
+              ${template.portrait ? 
+                `<img src="${template.portrait}" alt="${template.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                 <div class="w-full h-full flex items-center justify-center text-gray-400 text-4xl hidden">🎭</div>` : 
+                `<div class="w-full h-full flex items-center justify-center text-gray-400 text-4xl">🎭</div>`
+              }
+            </div>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-gray-800">${template.name}</h3>
+              <div class="flex flex-wrap gap-1 justify-end">
+                ${template.tags.map(tag => 
+                  `<span class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full">${tag}</span>`
+                ).join('')}
+              </div>
+            </div>            <div class="flex gap-3 text-base text-gray-600">
+              ${template.talk ? `<div class="flex items-center gap-1 cursor-pointer hover:text-blue-600 transition-colors" onclick="playTemplateVideo('${template.talk}', '说话动作')" title="点击播放说话动作"><span>🗣️</span><span>说话动作</span></div>` : ''}
+              ${template.idle ? `<div class="flex items-center gap-1 cursor-pointer hover:text-blue-600 transition-colors" onclick="playTemplateVideo('${template.idle}', '待机动作')" title="点击播放待机动作"><span>⏸️</span><span>待机动作</span></div>` : ''}
+            </div>
+            <button 
+              onclick="importActionTemplate('${template.name}')" 
+              class="w-full mt-3 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors text-sm"
+            >
+              导入动作
+            </button>
+          </div>
+        `;
+        
+        return card;
+      }
+
+      // Import action template
+      function importActionTemplate(templateName) {
+        const template = actionTemplates.find(t => t.name === templateName);
+        if (!template) {
+          showToast("找不到指定的动作模板", "error");
+          return;
+        }
+        
+        try {
+          // Update the video actions in the form
+          updateVideoActionsFromTemplate(template);
+          showToast(`成功导入 ${templateName} 的动作模板！`, "success");
+          closeActionImportModal();
+        } catch (error) {
+          console.error("Error importing action template:", error);
+          showToast("导入动作模板失败：" + error.message, "error");
+        }
+      }
+
+      // Update video actions from template
+      function updateVideoActionsFromTemplate(template) {
+        // Clear existing video actions container
+        const container = document.getElementById("videoActionsContainer");
+        container.innerHTML = "";
+        videoActionIndex = 0;
+        
+        // Add talk action if available
+        if (template.talk) {
+          addVideoActionItem("说话", template.talk, true);
+        } else {
+          addVideoActionItem("说话", "", true);
+        }
+        
+        // Add idle action if available  
+        if (template.idle) {
+          addVideoActionItem("待机", template.idle, true);
+        } else {
+          addVideoActionItem("待机", "", true);
+        }
+      }
+
+      // Load character data into form for editing
+      function loadCharacterIntoForm(character) {
+        const form = document.getElementById("createCharacterForm"); // Basic info
+        form.name.value = character.name || "";
+        form.age.value = character.age || "";
+        form.gender.value = character.gender || "";
+        form.role.value = character.role || "";
+        form.description.value = character.description || "";
+        form.chat_background.value = character.chat_background || "";
+        form.system_prompt.value = character.system_prompt || "";
+
+        // Objective
+        form.objective_title.value = character.objective?.title || "";
+        form.objective_description.value = character.objective?.description || "";
+        form.wikiword.value = character.wikiword || ""; // Display
+        form.initial_message.value = character.initial_message || "";
+        form.completion_title.value = character.completion_messages?.title || "";
+        form.completion_description.value = character.completion_messages?.description || "";
+        form.completion_icon.value = character.completion_messages?.icon || ""; // Chat display options        // Chat display options
+        form.show_toolbar.checked = character.show_toolbar !== false; // Default true
+        form.show_char_info.checked = character.show_char_info !== false; // Default true
+        form.show_wiki_page.checked = character.show_wiki_page === true; // Default false
+        form.show_wiki_page.checked = character.show_wiki_page === true; // Default false
+
+        // Quick replies
+        const container = document.getElementById("quickRepliesContainer");
+        container.innerHTML = "";
+        quickReplyIndex = 0;
+        if (character.quick_replies && character.quick_replies.length > 0) {
+          character.quick_replies.forEach((reply, index) => {
+            const div = document.createElement("div");
+            div.className = "flex gap-2 mb-2";
+            div.innerHTML = `
+              <input type="text" name="quick_reply_${index}" value="${reply}" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="快捷回复 ${
+              index + 1
+            }">
+              <button type="button" onclick="removeQuickReply(${index})" class="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg">🗑</button>
+            `;
+            container.appendChild(div);
+            quickReplyIndex = index + 1;
+          });
+        } else {
+          resetQuickReplies();
+        }
+
+        // Video actions
+        const videoContainer = document.getElementById("videoActionsContainer");
+        videoContainer.innerHTML = "";
+        videoActionIndex = 0;
+
+        if (character.videoActions && Object.keys(character.videoActions).length > 0) {
+          Object.entries(character.videoActions).forEach(([actionName, actionData]) => {
+            const videoUrl = actionData.url || "";
+            const isDefault = actionName === "待机" || actionName === "说话";
+            addVideoActionItem(actionName, videoUrl, isDefault);
+          });
+        } else {
+          resetVideoActions();
+        }
+      }
+
+      // Edit character
+      function editCharacter(characterId) {
+        const character = characters.find((c) => c.id === characterId);
+        if (!character || character.type === "system") {
+          showToast("无法编辑系统角色", "warning");
+          return;
+        }
+
+        isEditing = true;
+        editingCharacterId = characterId;
+        document.getElementById("modalTitle").textContent = "编辑AI角色";
+        document.getElementById("submitButton").innerHTML = "💾 保存修改";
+        document.getElementById("editingCharacterId").value = characterId;
+
+        loadCharacterIntoForm(character);
+
+        document.getElementById("createModal").classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+        switchTab("basic");
+      } // Delete character
+      function deleteCharacter(characterId) {
+        const character = characters.find((c) => c.id === characterId);
+        if (!character || character.type === "system") {
+          showToast("无法删除系统角色", "warning");
+          return;
+        }
+        if (confirm(`确定要删除角色 "${character.name}" 吗？此操作不可撤销。`)) {
+          deletePersonalCharacter(characterId);
+        }
+      }
+
+      // Copy character (for any character type)
+      async function copyCharacter(characterId) {
+        const character = characters.find((c) => c.id === characterId);
+        if (!character) {
+          showToast("找不到要复制的角色", "error");
+          return;
+        }
+
+        try {
+          // Create a copy of the character data
+          const copiedCharacter = {
+            name: character.name + " (副本)",
+            age: character.age,
+            gender: character.gender,
+            role: character.role,
+            description: character.description,
+            chat_background: character.chat_background,
+            system_prompt: character.system_prompt,
+            avatar: character.avatar || "👤",
+            objective: {
+              title: character.objective?.title || "",
+              description: character.objective?.description || "",
+            },
+            wikiword: character.wikiword,
+            initial_message: character.initial_message || "",
+            quick_replies: [...(character.quick_replies || [])],
+            completion_messages: {
+              title: character.completion_messages?.title || "目标完成！",
+              description: character.completion_messages?.description || "",
+              icon: character.completion_messages?.icon || "🎉",
+            },
+            show_toolbar: character.show_toolbar !== false,
+            show_char_info: character.show_char_info !== false,
+            tags: [...(character.tags || [])],
+            videoActions: character.videoActions ? JSON.parse(JSON.stringify(character.videoActions)) : {},
+            type: "personal", // Always make copied characters personal
+            pinned: false, // New copies are not pinned by default
+          };
+
+          // Save the copied character
+          const savedCharacter = await savePersonalCharacter(copiedCharacter);
+
+          // Add to characters array
+          characters.push(savedCharacter);
+
+          // Re-render characters
+          renderCharacters();
+
+          // Close the menu
+          const menu = document.getElementById(`menu-${characterId}`);
+          menu.classList.add("hidden");
+
+          showToast(`成功复制角色 "${character.name}"！`, "success");
+        } catch (error) {
+          showToast("复制角色失败：" + error.message, "error");
+        }
+      }
+
+      // Toggle character dropdown menu
+      function toggleCharacterMenu(characterId) {
+        const menu = document.getElementById(`menu-${characterId}`);
+        const allMenus = document.querySelectorAll('[id^="menu-"]');
+
+        // Close all other menus
+        allMenus.forEach((m) => {
+          if (m.id !== `menu-${characterId}`) {
+            m.classList.add("hidden");
+          }
+        });
+
+        // Toggle current menu
+        menu.classList.toggle("hidden");
+      }
+
+      // Close menus when clicking outside
+      document.addEventListener("click", function (event) {
+        if (!event.target.closest('[onclick*="toggleCharacterMenu"]') && !event.target.closest('[id^="menu-"]')) {
+          const allMenus = document.querySelectorAll('[id^="menu-"]');
+          allMenus.forEach((menu) => menu.classList.add("hidden"));
+        }
+      });
+
+      // Toggle pin status of character
+      async function togglePinCharacter(characterId) {
+        const character = characters.find((c) => c.id === characterId);
+        if (!character || character.type === "system") {
+          showToast("无法置顶系统角色", "warning");
+          return;
+        }
+
+        try {
+          // Toggle pinned status
+          character.pinned = !character.pinned;
+
+          // Save the updated character
+          await savePersonalCharacter(character);
+
+          // Update characters in memory
+          const index = characters.findIndex((c) => c.id === characterId);
+          if (index !== -1) {
+            characters[index] = character;
+          }
+
+          // Re-render characters with new order
+          renderCharacters();
+
+          // Close the menu
+          const menu = document.getElementById(`menu-${characterId}`);
+          menu.classList.add("hidden");
+
+          showToast(character.pinned ? "角色已置顶" : "已取消置顶", "success");
+        } catch (error) {
+          showToast("置顶操作失败：" + error.message, "error");
+        }
+      }
+
+      // Submit create form function
+      async function submitCreateForm() {
+        const form = document.getElementById("createCharacterForm");
+        const formData = new FormData(form);
+        const characterData = {}; // Basic info
+        characterData.name = formData.get("name");
+        characterData.age = formData.get("age") ? parseInt(formData.get("age")) : null;
+        characterData.gender = formData.get("gender") || null;
+        characterData.role = formData.get("role") || "";
+        characterData.description = formData.get("description");
+        characterData.chat_background = formData.get("chat_background") || null;
+        characterData.system_prompt = formData.get("system_prompt"); // If editing, preserve the existing ID, type, and pinned state
+        if (isEditing && editingCharacterId) {
+          const existingChar = characters.find((c) => c.id === editingCharacterId);
+          characterData.id = editingCharacterId;
+          characterData.type = "personal";
+          characterData.pinned = existingChar ? existingChar.pinned : false;
+        }
+
+        // Set default avatar if not editing
+        characterData.avatar = characterData.avatar || "👤";
+
+        // Objective
+        characterData.objective = {
+          title: formData.get("objective_title"),
+          description: formData.get("objective_description") || "",
+        };
+        characterData.wikiword = formData.get("wikiword") || null;
+
+        // Messages
+        characterData.initial_message = formData.get("initial_message") || ""; // Quick replies
+        characterData.quick_replies = [];
+        for (let i = 0; i < quickReplyIndex; i++) {
+          const reply = formData.get(`quick_reply_${i}`);
+          if (reply && reply.trim()) {
+            characterData.quick_replies.push(reply.trim());
+          }
+        }
+
+        // Video actions
+        characterData.videoActions = {};
+        for (let i = 0; i < videoActionIndex; i++) {
+          const actionName = formData.get(`video_action_name_${i}`);
+          const actionUrl = formData.get(`video_action_url_${i}`);
+          if (actionName && actionName.trim()) {
+            characterData.videoActions[actionName.trim()] = {
+              url: actionUrl ? actionUrl.trim() : "",
+            };
+          }
+        } // Completion messages
+        characterData.completion_messages = {
+          title: formData.get("completion_title") || "目标完成！",
+          description: formData.get("completion_description") || "",
+          icon: formData.get("completion_icon") || "🎉",
+        }; // Chat display options
+        characterData.show_toolbar = formData.get("show_toolbar") === "on";
+        characterData.show_char_info = formData.get("show_char_info") === "on";
+        characterData.show_wiki_page = formData.get("show_wiki_page") === "on";
+
+        // Tags (generate based on role and description)
+        characterData.tags = characterData.role ? [characterData.role] : [];
+
+        try {
+          const savedCharacter = await savePersonalCharacter(characterData);
+
+          if (isEditing) {
+            // Update existing character in the array
+            const index = characters.findIndex((c) => c.id === editingCharacterId);
+            if (index !== -1) {
+              characters[index] = savedCharacter;
+            }
+            showToast("角色更新成功！", "success");
+          } else {
+            // Add new character to the array
+            characters.push(savedCharacter);
+            showToast("角色创建成功！", "success");
+          }
+
+          renderCharacters();
+          closeCreateModal();
+        } catch (error) {
+          showToast((isEditing ? "更新" : "创建") + "角色失败：" + error.message, "error");
+        }
+      } // Start chat with character
+      function startChat(characterId) {
+        const character = characters.find((c) => c.id === characterId);
+        if (!character) return;
+
+        // Build config URL parameter for regular chat
+        const config = encodeURIComponent(
+          JSON.stringify({
+            character: {
+              name: character.name,
+              age: character.age,
+              role: character.role,
+              description: character.description,
+              chat_background: character.chat_background,
+            },
+            objective: character.objective,
+            initial: {
+              message: character.initial_message,
+            },
+            quick_replies: character.quick_replies || [],
+            system_prompt: character.system_prompt,
+            completion_messages: character.completion_messages,
+            videoActions: character.videoActions || {},
+          })
+        );
+        // Set iframe source using URL replacement pattern to forward existing parameters
+        let currentUrl = window.location.href;
+        currentUrl = currentUrl.split("?")[0];
+
+        let targetPage = "characterAI";
+        if (character.show_wiki_page === true) {
+          targetPage = "wiki_dashboard";
+        }
+        // Replace characterManager with characterAI
+        const iframeUrl = currentUrl.replace("characterManager", targetPage); // Forward all existing URL parameters and add config
+        const urlParams = new URLSearchParams();
+        urlParams.set("config", config);
+        urlParams.set("showClose", "true");
+        urlParams.set("parent", "characterManager");
+        urlParams.set("showToolbar", character.show_toolbar !== false ? "true" : "false");
+        urlParams.set("showCharInfo", character.show_char_info !== false ? "true" : "false");
+
+        if (sdk.token) {
+          urlParams.set("token", sdk.token);
+        }
+
+        document.getElementById("chatFrame").src = `${iframeUrl}?${urlParams.toString()}`;
+
+        // Show modal
+        document.getElementById("chatModal").classList.remove("hidden");
+        document.body.style.overflow = "hidden";
+      }
+
+      // Close chat modal
+      function closeChatModal() {
+        document.getElementById("chatModal").classList.add("hidden");
+        document.body.style.overflow = "auto";
+        document.getElementById("chatFrame").src = "";
+      }
+
+      // Tab switching function
+      function switchTab(tabName) {
+        // Hide all tab contents
+        const tabContents = document.querySelectorAll(".tab-content");
+        tabContents.forEach((content) => {
+          content.classList.add("hidden");
+        });
+
+        // Remove active state from all tabs
+        const tabs = document.querySelectorAll('[id^="tab-"]');
+        tabs.forEach((tab) => {
+          tab.classList.remove("bg-white", "text-blue-600", "border-b-2", "border-blue-500");
+          tab.classList.add("text-gray-600", "hover:text-gray-900", "hover:bg-gray-50");
+        });
+
+        // Show selected tab content
+        document.getElementById(`tab-content-${tabName}`).classList.remove("hidden");
+
+        // Set active state for selected tab
+        const activeTab = document.getElementById(`tab-${tabName}`);
+        activeTab.classList.remove("text-gray-600", "hover:text-gray-900", "hover:bg-gray-50");
+        activeTab.classList.add("bg-white", "text-blue-600", "border-b-2", "border-blue-500");
+      } // Initialize page
+      async function initializeApp() {
+        window.parent.postMessage({ type: "gameLoaded" }, "*");
+        try {
+          console.log("Initializing Character Manager...");
+          await loadCharacters();
+          console.log("Character Manager initialized successfully");
+        } catch (error) {
+          console.error("Error initializing app:", error);
+          showToast("应用初始化失败：" + error.message, "error");
+        }
+
+        // Add keyboard event listener for ESC key to close video preview
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") {
+            const videoModal = document.getElementById("videoPreviewModal");
+            if (videoModal && !videoModal.classList.contains("hidden")) {
+              closeVideoPreview();
+            }
+          }
+        });
+      }
+
+      // Listen for messages from the iframe
+      window.addEventListener("message", function (e) {
+        if (e.data.type === "OnCloseCharacterAI") {
+          console.log("Received OnCloseCharacterAI event, closing chat modal");
+          closeChatModal();
+        }
+      });
+
+      initializeApp();
+    </script>
+  </body>
+</html>
+``` 
