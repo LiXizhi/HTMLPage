@@ -1478,6 +1478,30 @@
             this.game.elements.voiceBtn.classList.remove("recording");
           }
         }
+
+        // Reset voice input state (called when user sends message)
+        reset() {
+          // Stop any ongoing recognition
+          if (this.isListening) {
+            this.manualStop = true;
+            this.stopRecognition();
+          }
+
+          // Reset interim text length tracker
+          this.interimTextLength = 0;
+
+          // Reset press state
+          this.pressStartTime = 0;
+          this.isPressHold = false;
+
+          // Clear any pending timers
+          if (this.holdTimer) {
+            clearTimeout(this.holdTimer);
+            this.holdTimer = null;
+          }
+
+          console.log("Voice recognition state reset");
+        }
       }
 
       class LLMCharacterGame {
@@ -2082,7 +2106,6 @@
             this.elements.progressMarkers.appendChild(markerElement);
           });
         }
-
         async sendMessage() {
           let message = this.elements.userInput.value.trim();
           if (!message) return;
@@ -2092,6 +2115,11 @@
           this.elements.userInput.disabled = true;
           this.addMessage(message, true);
           this.elements.userInput.value = "";
+
+          // Reset voice recognition state when message is sent
+          if (this.voiceRecognition) {
+            this.voiceRecognition.reset();
+          }
 
           // Switch avatar to idle when user sends message
           if (avatarManager.isEnabled) {
