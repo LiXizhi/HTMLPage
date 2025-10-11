@@ -1,0 +1,401 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>语音转文本输入</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">语音转文本输入</h1>
+        
+        <div class="space-y-4">
+            <div class="relative">
+                <input 
+                    type="text" 
+                    id="speechInput" 
+                    placeholder="点击麦克风开始语音输入..."
+                    class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button 
+                    id="micButton" 
+                    class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-gray-500 hover:text-blue-500 transition-colors text-xl"
+                    title="点击开始语音输入"
+                >
+                    🎤
+                </button>
+            </div>
+            
+            <div id="status" class="text-sm text-gray-600 min-h-[40px] p-2 bg-gray-50 rounded border"></div>
+            
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-700">语言选择：</label>
+                <select id="languageSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="zh-CN">中文（普通话）</option>
+                    <option value="en-US">English (US)</option>
+                    <option value="ja-JP">日本語</option>
+                    <option value="ko-KR">한국어</option>
+                </select>
+            </div>
+            
+            <div class="flex space-x-2">
+                <button id="clearButton" class="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                    清空
+                </button>
+                <button id="startButton" class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    开始识别
+                </button>
+                <button id="stopButton" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors" style="display: none;">
+                    停止识别
+                </button>
+            </div>
+            
+            <div class="text-xs text-gray-500">
+                <p><strong>系统检测：</strong></p>
+                <div id="systemInfo" class="mt-1"></div>
+            </div>
+        </div>
+        
+        <div class="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400">
+            <p class="text-sm text-yellow-800">
+                <strong>注意：</strong>
+                <br>• 需要在HTTPS环境下使用（本地可使用localhost）
+                <br>• 需要允许浏览器访问麦克风权限
+                <br>• 推荐使用Chrome或Edge浏览器
+            </p>
+        </div>
+    </div>
+
+    <script>
+        class SpeechToText {
+            constructor() {
+                this.recognition = null;
+                this.isListening = false;
+                this.isSupported = false;
+                this.finalTranscript = '';
+                this.init();
+            }
+
+            init() {
+                this.checkSystemSupport();
+                this.setupRecognition();
+                this.bindEvents();
+                this.updateSystemInfo();
+            }
+
+            checkSystemSupport() {
+                // 检查HTTPS
+                const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+                
+                // 检查浏览器支持
+                const hasWebkitSpeechRecognition = 'webkitSpeechRecognition' in window;
+                const hasSpeechRecognition = 'SpeechRecognition' in window;
+                
+                this.isSupported = isSecure && (hasWebkitSpeechRecognition || hasSpeechRecognition);
+                
+                if (!isSecure) {
+                    this.showStatus('错误：语音识别需要HTTPS环境。请使用https://或localhost访问。', 'error');
+                    return false;
+                }
+                
+                if (!hasWebkitSpeechRecognition && !hasSpeechRecognition) {
+                    this.showStatus('错误：您的浏览器不支持语音识别。请使用Chrome、Edge等现代浏览器。', 'error');
+                    return false;
+                }
+                
+                return true;
+            }
+
+            setupRecognition() {
+                if (!this.isSupported) return;
+
+                try {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    this.recognition = new SpeechRecognition();
+
+                    // 配置参数
+                    this.recognition.continuous = false; // 改为false，避免自动停止问题
+                    this.recognition.interimResults = true;
+                    this.recognition.lang = document.getElementById('languageSelect').value;
+                    this.recognition.maxAlternatives = 1;
+
+                    this.setupRecognitionEvents();
+                    this.showStatus('语音识别已准备就绪，点击"开始识别"按钮开始使用', 'ready');
+                    
+                } catch (error) {
+                    this.showStatus('错误：无法初始化语音识别 - ' + error.message, 'error');
+                }
+            }
+
+            setupRecognitionEvents() {
+                this.recognition.onstart = () => {
+                    console.log('Recognition started');
+                    this.isListening = true;
+                    this.updateUI();
+                    this.showStatus('🔴 正在监听中... 请开始说话', 'listening');
+                };
+
+                this.recognition.onend = () => {
+                    console.log('Recognition ended');
+                    this.isListening = false;
+                    this.updateUI();
+                    
+                    // 如果用户主动停止，显示相应消息
+                    if (!this.manualStop) {
+                        this.showStatus('语音识别已结束，点击"开始识别"继续', 'ready');
+                        // 自动重新开始（可选）
+                        setTimeout(() => {
+                            if (!this.isListening) {
+                                this.startRecognition();
+                            }
+                        }, 1000);
+                    } else {
+                        this.showStatus('语音识别已停止', 'ready');
+                        this.manualStop = false;
+                    }
+                };
+
+                this.recognition.onresult = (event) => {
+                    console.log('Recognition result received');
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        const confidence = event.results[i][0].confidence;
+                        
+                        console.log(`Result ${i}: ${transcript} (confidence: ${confidence})`);
+                        
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+
+                    // 更新输入框
+                    const inputElement = document.getElementById('speechInput');
+                    if (finalTranscript) {
+                        inputElement.value += finalTranscript + ' ';
+                        this.showStatus(`✅ 识别完成: "${finalTranscript}"`, 'success');
+                    }
+
+                    // 显示临时结果
+                    if (interimTranscript) {
+                        this.showStatus(`🎯 识别中: "${interimTranscript}"`, 'interim');
+                    }
+                };
+
+                this.recognition.onerror = (event) => {
+                    console.error('Recognition error:', event.error);
+                    this.isListening = false;
+                    this.updateUI();
+                    
+                    let errorMessage = '识别出错: ';
+                    switch (event.error) {
+                        case 'no-speech':
+                            errorMessage += '没有检测到语音输入，请重新尝试';
+                            // 自动重新开始
+                            setTimeout(() => this.startRecognition(), 1500);
+                            break;
+                        case 'audio-capture':
+                            errorMessage += '无法访问麦克风，请检查设备连接';
+                            break;
+                        case 'not-allowed':
+                            errorMessage += '麦克风权限被拒绝，请允许访问麦克风';
+                            break;
+                        case 'network':
+                            errorMessage += '网络错误，请检查网络连接';
+                            break;
+                        case 'service-not-allowed':
+                            errorMessage += '语音服务不可用，请稍后重试';
+                            break;
+                        default:
+                            errorMessage += event.error;
+                    }
+                    this.showStatus(errorMessage, 'error');
+                };
+
+                this.recognition.onnomatch = () => {
+                    console.log('No match found');
+                    this.showStatus('未能识别语音，请重新尝试', 'warning');
+                };
+            }
+
+            bindEvents() {
+                const micButton = document.getElementById('micButton');
+                const startButton = document.getElementById('startButton');
+                const stopButton = document.getElementById('stopButton');
+                const clearButton = document.getElementById('clearButton');
+                const languageSelect = document.getElementById('languageSelect');
+
+                // 麦克风按钮
+                micButton.addEventListener('click', () => {
+                    if (this.isListening) {
+                        this.stopRecognition();
+                    } else {
+                        this.startRecognition();
+                    }
+                });
+
+                // 开始按钮
+                startButton.addEventListener('click', () => this.startRecognition());
+
+                // 停止按钮
+                stopButton.addEventListener('click', () => this.stopRecognition());
+
+                // 清空按钮
+                clearButton.addEventListener('click', () => {
+                    document.getElementById('speechInput').value = '';
+                    this.showStatus('输入内容已清空', 'info');
+                });
+
+                // 语言选择
+                languageSelect.addEventListener('change', (e) => {
+                    if (this.recognition) {
+                        this.recognition.lang = e.target.value;
+                        const selectedText = e.target.options[e.target.selectedIndex].text;
+                        this.showStatus(`语言已切换为: ${selectedText}`, 'info');
+                    }
+                });
+            }
+
+            startRecognition() {
+                if (!this.isSupported || !this.recognition) {
+                    this.showStatus('语音识别不可用', 'error');
+                    return;
+                }
+
+                if (this.isListening) {
+                    this.showStatus('语音识别已在运行中', 'warning');
+                    return;
+                }
+
+                try {
+                    this.manualStop = false;
+                    this.recognition.start();
+                    console.log('Starting recognition...');
+                } catch (error) {
+                    console.error('Error starting recognition:', error);
+                    this.showStatus('启动语音识别失败: ' + error.message, 'error');
+                }
+            }
+
+            stopRecognition() {
+                if (!this.recognition || !this.isListening) {
+                    return;
+                }
+
+                try {
+                    this.manualStop = true;
+                    this.recognition.stop();
+                    console.log('Stopping recognition...');
+                } catch (error) {
+                    console.error('Error stopping recognition:', error);
+                    this.showStatus('停止语音识别失败: ' + error.message, 'error');
+                }
+            }
+
+            updateUI() {
+                const micButton = document.getElementById('micButton');
+                const startButton = document.getElementById('startButton');
+                const stopButton = document.getElementById('stopButton');
+                
+                if (this.isListening) {
+                    micButton.textContent = '🔴';
+                    micButton.title = '点击停止语音输入';
+                    startButton.style.display = 'none';
+                    stopButton.style.display = 'block';
+                } else {
+                    micButton.textContent = '🎤';
+                    micButton.title = '点击开始语音输入';
+                    startButton.style.display = 'block';
+                    stopButton.style.display = 'none';
+                }
+            }
+
+            showStatus(message, type = 'info') {
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = message;
+                
+                // 清除之前的样式
+                statusElement.className = 'text-sm min-h-[40px] p-2 rounded border';
+                
+                switch (type) {
+                    case 'error':
+                        statusElement.className += ' text-red-700 bg-red-50 border-red-200';
+                        break;
+                    case 'listening':
+                        statusElement.className += ' text-green-700 bg-green-50 border-green-200 font-medium animate-pulse';
+                        break;
+                    case 'success':
+                        statusElement.className += ' text-green-700 bg-green-50 border-green-200';
+                        break;
+                    case 'interim':
+                        statusElement.className += ' text-blue-700 bg-blue-50 border-blue-200 italic';
+                        break;
+                    case 'warning':
+                        statusElement.className += ' text-yellow-700 bg-yellow-50 border-yellow-200';
+                        break;
+                    case 'ready':
+                        statusElement.className += ' text-blue-700 bg-blue-50 border-blue-200';
+                        break;
+                    default:
+                        statusElement.className += ' text-gray-700 bg-gray-50 border-gray-200';
+                }
+            }
+
+            updateSystemInfo() {
+                const systemInfo = document.getElementById('systemInfo');
+                const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+                const hasAPI = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+                const userAgent = navigator.userAgent;
+                
+                let info = '';
+                info += `🌐 协议: ${location.protocol} ${isSecure ? '✅' : '❌'}<br>`;
+                info += `🎙️ 语音API: ${hasAPI ? '✅' : '❌'}<br>`;
+                info += `💻 浏览器: ${this.getBrowserName(userAgent)}<br>`;
+                info += `📍 支持状态: ${this.isSupported ? '✅ 可用' : '❌ 不可用'}`;
+                
+                systemInfo.innerHTML = info;
+            }
+
+            getBrowserName(userAgent) {
+                if (userAgent.includes('Chrome')) return 'Chrome';
+                if (userAgent.includes('Firefox')) return 'Firefox';
+                if (userAgent.includes('Safari')) return 'Safari';
+                if (userAgent.includes('Edge')) return 'Edge';
+                return '未知';
+            }
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Initializing Speech-to-Text...');
+            window.speechToText = new SpeechToText();
+        });
+
+        // 添加权限请求功能
+        async function requestMicrophonePermission() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('Microphone permission granted');
+                stream.getTracks().forEach(track => track.stop()); // 停止流
+                return true;
+            } catch (error) {
+                console.error('Microphone permission denied:', error);
+                return false;
+            }
+        }
+
+        // 页面可见性改变时的处理
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && window.speechToText && window.speechToText.isListening) {
+                window.speechToText.stopRecognition();
+            }
+        });
+    </script>
+</body>
+</html>
