@@ -1,0 +1,2135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>model world</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.10"></script>
+    <style>
+      .drawer {
+        transform: translateY(100%);
+        transition: transform 0.3s ease-in-out;
+      }
+      .drawer.open {
+        transform: translateY(0);
+      }
+      .model-card {
+        transition: all 0.3s ease;
+      }
+      .model-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+      }
+      /* 自定义确认弹框样式 */
+      #customConfirmModal {
+        backdrop-filter: blur(4px);
+      }
+      #customConfirmModal.show {
+        display: flex !important;
+      }
+      #customConfirmModal.show .bg-white {
+        transform: scale(1);
+      }
+      #customConfirmModal .bg-white {
+        animation: modalSlideIn 0.3s ease-out;
+      }
+      @keyframes modalSlideIn {
+        from {
+          opacity: 0;
+          transform: scale(0.9) translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+      .btn-secondary {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      }
+      .btn-secondary:hover {
+        background: linear-gradient(135deg, #e081e9 0%, #e3455a 100%);
+      }
+      /* Tab样式 */
+      .tab-btn {
+        color: #6b7280;
+        background: transparent;
+      }
+      .tab-btn:hover {
+        color: #374151;
+        background: rgba(255, 255, 255, 0.5);
+      }
+      .tab-btn.active {
+        color: #1f2937;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      .loading {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f4f6;
+        border-radius: 50%;
+        border-top-color: #3b82f6;
+        animation: spin 1s ease-in-out infinite;
+      }
+      .loading-small {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+      }
+
+      .loading-dots {
+        display: inline-block;
+        position: relative;
+        width: 80px;
+        height: 20px;
+      }
+
+      .loading-dots div {
+        position: absolute;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #3b82f6;
+        animation: loading-dots 1.2s linear infinite;
+        transform: translateY(-50%);
+      }
+
+      .loading-dots div:nth-child(1) {
+        left: 8px;
+        animation-delay: 0s;
+      }
+      .loading-dots div:nth-child(2) {
+        left: 32px;
+        animation-delay: -0.4s;
+      }
+      .loading-dots div:nth-child(3) {
+        left: 56px;
+        animation-delay: -0.8s;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes loading-dots {
+        0%,
+        80%,
+        100% {
+          transform: translateY(-50%) scale(0);
+          opacity: 0.5;
+        }
+        40% {
+          transform: translateY(-50%) scale(1);
+          opacity: 1;
+        }
+      }
+      /* Loading overlay for better UX */
+      .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        backdrop-filter: blur(2px);
+      }
+
+      /* Enhanced loading animations */
+      @keyframes shimmer {
+        0% {
+          background-position: -200px 0;
+        }
+        100% {
+          background-position: calc(200px + 100%) 0;
+        }
+      }
+
+      @keyframes pulse-glow {
+        0%,
+        100% {
+          opacity: 0.7;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.02);
+        }
+      }
+
+      .skeleton-card {
+        background: #f3f4f6;
+        border-radius: 8px;
+        padding: 16px;
+        position: relative;
+        overflow: hidden;
+        animation: pulse-glow 2s ease-in-out infinite;
+        border: 1px solid #e5e7eb;
+      }
+
+      .skeleton-card::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 0, rgba(255, 255, 255, 0.6) 20%, rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 0.6) 80%, rgba(255, 255, 255, 0) 100%);
+        animation: shimmer 2.5s infinite;
+      }
+
+      .skeleton-line {
+        height: 16px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        margin-bottom: 8px;
+      }
+
+      .skeleton-line.short {
+        width: 60%;
+      }
+
+      .skeleton-line.medium {
+        width: 80%;
+      }
+
+      .skeleton-line.long {
+        width: 100%;
+      }
+
+      .skeleton-button {
+        height: 32px;
+        background: #e5e7eb;
+        border-radius: 6px;
+        margin: 4px;
+        flex: 1;
+      }
+
+      /* Loading text animations */
+      .loading-text-animated {
+        animation: loading-text-fade 3s ease-in-out infinite;
+      }
+
+      @keyframes loading-text-fade {
+        0%,
+        100% {
+          opacity: 0.6;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      /* Progress bar for loading */
+      .loading-progress {
+        width: 100%;
+        max-width: 300px;
+        height: 4px;
+        background: #e5e7eb;
+        border-radius: 2px;
+        overflow: hidden;
+        margin: 16px auto;
+      }
+
+      .loading-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6, #6366f1);
+        border-radius: 2px;
+        animation: loading-progress 2s ease-in-out infinite;
+      }
+
+      @keyframes loading-progress {
+        0% {
+          transform: translateX(-100%);
+        }
+        50% {
+          transform: translateX(0%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <!-- 主页面 -->
+    <div class="w-full">
+      <!-- 头部区域 -->
+      <div class="bg-white shadow-[0_1px_3px_0_rgba(0,0,0,0.1)] px-6 py-4 mb-6 w-full">
+        <!-- 搜索和操作区域 -->
+        <div class="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <!-- 搜索框 -->
+          <div class="flex gap-2 items-center">
+            <!-- Tab切换按钮 -->
+            <div class="flex bg-gray-100 rounded-lg p-1">
+              <button id="allModelsBtn" class="px-6 py-2 rounded-md transition-all duration-200 font-medium tab-btn active">📋 全部</button>
+              <button id="likeRecordBtn" class="px-6 py-2 rounded-md transition-all duration-200 font-medium tab-btn">❤️ 收藏</button>
+              <button id="downloadRecordBtn" class="px-6 py-2 rounded-md transition-all duration-200 font-medium tab-btn">📥 历史</button>
+            </div>
+            <input type="text" id="searchInput" placeholder="搜索存档世界..." class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-48" />
+            <button id="searchBtn" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">🔍</button>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="flex gap-2 flex-nowrap">
+            <button
+              id="uploadBtn"
+              class="px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all shadow-lg font-semibold whitespace-nowrap"
+            >
+              ☁️ 我的云存档
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- 存档列表区域 -->
+      <div class="px-6">
+        <!-- 排序选择器 -->
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-600">排序：</span>
+            <button id="sortByTime" class="px-3 py-1 border border-gray-300 rounded-md text-sm hover:bg-gray-50 transition-colors">修改时间</button>
+            <button id="sortByLikes" class="px-3 py-1 border border-gray-300 rounded-md text-sm hover:bg-gray-50 transition-colors">收藏数</button>
+            <button id="sortByDownloads" class="px-3 py-1 border border-gray-300 rounded-md text-sm hover:bg-gray-50 transition-colors">下载数</button>
+          </div>
+        </div>
+        <!-- 加载状态 -->
+        <div id="loadingState" class="text-center py-12 hidden">
+          <div class="loading mx-auto mb-4"></div>
+          <div class="loading-dots mx-auto mb-4">
+            <div></div>
+            <div></div>
+            <div></div>
+          </div>
+          <p id="loadingText" class="text-gray-600 text-lg font-medium">正在加载存档...</p>
+          <p class="text-gray-400 text-sm mt-2">请稍候，正在获取最新数据</p>
+
+          <!-- Enhanced loading animation with skeleton cards -->
+          <div id="loadingSkeletons" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+            <!-- Skeleton cards will be generated by JavaScript -->
+          </div>
+        </div>
+
+        <!-- 存档列表容器 -->
+        <div class="relative">
+          <!-- 加载更多的覆盖层 -->
+          <div id="loadingMoreOverlay" class="loading-overlay hidden">
+            <div class="bg-white rounded-lg p-6 shadow-lg text-center">
+              <div class="loading mx-auto mb-3"></div>
+              <p class="text-gray-600 font-medium">加载更多存档...</p>
+            </div>
+          </div>
+
+          <!-- 存档列表 -->
+          <div id="modelList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- 存档卡片将在这里动态生成 -->
+          </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div id="emptyState" class="text-center py-12 hidden">
+          <div class="text-gray-400 text-6xl mb-4">📦</div>
+          <p class="text-gray-500 text-lg">暂无存档数据</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 上传分享抽屉 -->
+    <div id="uploadDrawer" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+      <div class="drawer fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl h-[60vh] overflow-hidden">
+        <div class="px-6 py-4 h-full flex flex-col">
+          <!-- 抽屉头部 -->
+          <div class="flex justify-between items-center mb-4 flex-shrink-0">
+            <h2 class="text-2xl font-bold text-gray-800">我的云存档</h2>
+            <button id="closeDrawer" class="text-gray-500 hover:text-gray-700 text-3xl">×</button>
+          </div>
+          <!-- 个人存档列表容器 -->
+          <div class="flex-1 overflow-y-auto">
+            <div id="personalModelList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <!-- 个人存档卡片将在这里动态生成 -->
+            </div>
+
+            <!-- 个人存档空状态 -->
+            <div id="personalEmptyState" class="text-center py-8 hidden">
+              <div class="text-gray-400 text-4xl mb-2">📁</div>
+              <p class="text-gray-500">还没有上传任何存档</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 自定义确认弹框 -->
+    <div id="customConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] hidden">
+      <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4 transform transition-all duration-300 scale-95">
+        <div class="text-center">
+          <!-- 图标 -->
+          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+            <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
+            </svg>
+          </div>
+          <!-- 标题 -->
+          <h3 class="text-lg font-medium text-gray-900 mb-2" id="confirmTitle">确认删除</h3>
+          <!-- 内容 -->
+          <p class="text-sm text-gray-500 mb-6" id="confirmMessage">确定要删除这个存档吗？此操作不可撤销。</p>
+          <!-- 按钮 -->
+          <div class="flex gap-3 justify-center">
+            <button
+              id="confirmCancelBtn"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              id="confirmOkBtn"
+              class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+            >
+              确定删除
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 存档编辑模态框 -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 z-[70] hidden">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+          <h3 class="text-lg font-semibold mb-4">编辑存档信息</h3>
+          <form id="editForm">
+            <input type="hidden" id="editModelId" />
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">存档名称</label>
+              <input type="text" id="editModelName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">存档URL</label>
+              <input type="text" id="editModelUrl" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 focus:outline-none" readonly />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">存档大小</label>
+              <input type="url" id="editModelSize" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 focus:outline-none" readonly />
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">标签</label>
+              <input type="text" id="editModelTag" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 focus:outline-none" value="maisiAI" readonly />
+            </div>
+            <div class="flex gap-2">
+              <button type="submit" class="flex-1 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">💾保存</button>
+              <button type="button" id="cancelEdit" class="flex-1 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">❌取消</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 保存存档确认弹框 -->
+    <div id="saveConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 z-[75] hidden">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+          <div class="text-center">
+            <!-- 图标 -->
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+              <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+            </div>
+            <!-- 标题 -->
+            <h3 class="text-lg font-medium text-gray-900 mb-2">保存存档</h3>
+            <!-- 内容 -->
+            <div class="text-sm text-gray-600 mb-6">
+              <p class="mb-3">确认要保存当前游戏状态到存档吗？</p>
+              <div class="bg-gray-50 rounded-lg p-4 text-left">
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">存档名称：</span>
+                    <input type="text" id="saveConfirmName" class="text-gray-900 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none text-right" readonly />
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">存档URL：</span>
+                    <span id="saveConfirmUrl" class="text-gray-900 text-xs truncate max-w-[200px]">获取中...</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">文件大小：</span>
+                    <span id="saveConfirmSize" class="text-gray-900">获取中...</span>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 text-xs text-gray-500">
+                <p>💡 只能修改存档名称，URL和大小将自动从当前游戏状态获取</p>
+              </div>
+            </div>
+            <!-- 按钮 -->
+            <div class="flex gap-3 justify-center">
+              <button
+                id="saveConfirmCancelBtn"
+                class="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                id="saveConfirmOkBtn"
+                class="px-6 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              >
+                <span class="flex items-center">
+                  <span id="saveConfirmBtnText">确认保存</span>
+                  <div id="saveConfirmLoading" class="loading-small ml-2 hidden"></div>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通用消息弹框 -->
+    <div id="messageToast" class="fixed top-4 right-4 z-[80] transform translate-x-full opacity-0 transition-all duration-300 ease-in-out pointer-events-none">
+      <div class="bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[300px] max-w-[400px]">
+        <div class="flex items-start space-x-3">
+          <div id="toastIcon" class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center">
+            <!-- 图标将通过JavaScript动态设置 -->
+          </div>
+          <div class="flex-1">
+            <p id="toastMessage" class="text-sm text-gray-800 font-medium"></p>
+          </div>
+          <button id="closeToast" class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Initialize SDK
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+      const maxHistory = 100;
+      // API配置
+      const API_BASE = "https://api.keepwork.com/core/v0";
+      const DEFAULT_TAG = "maisiAI";
+      const pageName = "modelWorld";      // 页面状态
+      let USER_ID = 1; // 示例用户ID，实际应用中应从登录状态获取
+      let currentView = "all"; // 'all', 'liked', 'downloaded'
+      let currentModels = [];
+      let personalModels = [];
+      let likeModels = [];
+      let downloadModels = [];
+      let currentTag = DEFAULT_TAG; // 从URL获取当前标签
+      let keepworkToken = "";
+      let keepworkUserInfo = {};
+      
+      // 缓存的收藏数据
+      let cachedLikedModels = null;
+      let likedModelsLoading = false;
+
+      // 分页和排序状态
+      let currentPage = 1;
+      let perPage = 20;
+      let isLoading = false;
+      let hasMoreData = true;
+      let currentSort = { field: "", order: "desc" }; // DOM元素
+      const elements = {
+        searchInput: document.getElementById("searchInput"),
+        searchBtn: document.getElementById("searchBtn"),
+        allModelsBtn: document.getElementById("allModelsBtn"),
+        uploadBtn: document.getElementById("uploadBtn"),
+        likeRecordBtn: document.getElementById("likeRecordBtn"),
+        downloadRecordBtn: document.getElementById("downloadRecordBtn"),
+        modelList: document.getElementById("modelList"),
+        loadingState: document.getElementById("loadingState"),
+        loadingMoreOverlay: document.getElementById("loadingMoreOverlay"),
+        emptyState: document.getElementById("emptyState"),
+        sortByTime: document.getElementById("sortByTime"),
+        sortByLikes: document.getElementById("sortByLikes"),
+        sortByDownloads: document.getElementById("sortByDownloads"),
+        uploadDrawer: document.getElementById("uploadDrawer"),
+        closeDrawer: document.getElementById("closeDrawer"),
+        personalModelList: document.getElementById("personalModelList"),
+        personalEmptyState: document.getElementById("personalEmptyState"),
+        editModal: document.getElementById("editModal"),
+        editForm: document.getElementById("editForm"),
+        cancelEdit: document.getElementById("cancelEdit"),
+        messageToast: document.getElementById("messageToast"),
+        toastIcon: document.getElementById("toastIcon"),
+        toastMessage: document.getElementById("toastMessage"),
+        closeToast: document.getElementById("closeToast"),
+      };
+
+      // 通用消息弹框函数
+      function showToast(message, type = "info", duration = 2000) {
+        const toast = elements.messageToast;
+        const icon = elements.toastIcon;
+        const messageEl = elements.toastMessage;
+
+        // 设置消息内容
+        messageEl.textContent = message;
+
+        // 根据类型设置图标和颜色
+        switch (type) {
+          case "success":
+            icon.innerHTML = "✅";
+            icon.className = "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-green-100 text-green-600";
+            break;
+          case "error":
+            icon.innerHTML = "❌";
+            icon.className = "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-red-100 text-red-600";
+            break;
+          case "warning":
+            icon.innerHTML = "⚠️";
+            icon.className = "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-yellow-100 text-yellow-600";
+            break;
+          default: // info
+            icon.innerHTML = "ℹ️";
+            icon.className = "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-blue-100 text-blue-600";
+        }
+
+        // 显示弹框
+        toast.classList.remove("translate-x-full", "opacity-0", "pointer-events-none");
+        toast.classList.add("translate-x-0", "opacity-100", "pointer-events-auto");
+
+        // 自动隐藏
+        if (duration > 0) {
+          setTimeout(() => {
+            hideToast();
+          }, duration);
+        }
+      }
+
+      // 隐藏弹框
+      function hideToast() {
+        const toast = elements.messageToast;
+        toast.classList.remove("translate-x-0", "opacity-100", "pointer-events-auto");
+        toast.classList.add("translate-x-full", "opacity-0", "pointer-events-none");
+      }
+
+      // 设置活跃的tab
+      function setActiveTab(activeTabId) {
+        // 移除所有tab的active类
+        document.querySelectorAll(".tab-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        // 为当前tab添加active类
+        document.getElementById(activeTabId).classList.add("active");
+      }
+
+      // API调用函数
+      async function apiCall(endpoint, options = {}, needToken = true) {
+        try {
+          // 准备headers
+          let headers = {
+            ...options.headers, // 先展开传入的headers
+          };
+          if (options.body && !headers["Content-Type"] && !headers["content-type"]) {
+            headers["Content-Type"] = "application/json";
+          }
+          if (needToken) {
+            if (needToken) {
+              headers["Authorization"] = `Bearer ${keepworkToken}`;
+            }
+          }
+
+          const response = await fetch(`${API_BASE}${endpoint}`, {
+            headers: headers,
+            ...options,
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          // 尝试解析JSON，如果失败则返回原始文本
+          const responseText = await response.text();
+          try {
+            return JSON.parse(responseText);
+          } catch (jsonError) {
+            return responseText;
+          }
+        } catch (error) {
+          console.error("API调用失败:", error);
+          showToast("网络请求失败，请稍后重试", "error");
+          throw error;
+        }
+      }
+
+      async function startUploadModel() {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error("获取当前存档URL超时"));
+          }, 5000);
+
+          const handleMessage = (e) => {
+            if (e.data && e.data.type === "setGameConfig" && e.data.data && e.data.data.type === "modelUrlResponse") {
+              clearTimeout(timeout);
+              // 检查模型URL是否为空
+              window.removeEventListener("message", handleMessage);
+              if (!e.data.data.modelUrl || e.data.data.result === false) {
+                reject(new Error("获取当前存档URL失败，请先返回游戏保存当前存档"));
+                return;
+              }
+              resolve({
+                modelUrl: e.data.data.modelUrl,
+                size: e.data.data.size,
+              });
+            }
+          };
+
+          window.addEventListener("message", handleMessage);
+          window.parent.postMessage({ type: "requestModelUrl" }, "*");
+        });
+      }
+
+      // 获取存档列表
+      async function loadModels(tag = null, userId = null, page = 1, append = false) {
+        if (isLoading) return;
+        isLoading = true;
+
+        if (!append) {
+          showLoading(true);
+          currentPage = 1;
+          hasMoreData = true;
+        }
+
+        try {
+          // 如果没有传入tag参数，使用当前标签
+          const tagToUse = tag || currentTag;
+          const params = new URLSearchParams({
+            tag: tagToUse,
+            "x-page": page,
+            "x-per-page": perPage,
+          });
+
+          if (userId) params.append("userId", userId);
+
+          // 添加排序参数
+          if (currentSort.field) {
+            params.append("x-order", `${currentSort.field}-${currentSort.order}`);
+          }
+
+          const result = await apiCall(`/mall/getModelsByTag?${params}`);
+          const newModels = result?.rows || [];
+
+          if (append) {
+            currentModels = [...currentModels, ...newModels];
+          } else {
+            currentModels = newModels;
+          }
+
+          // 检查是否还有更多数据
+          hasMoreData = newModels.length === perPage;
+          currentPage = page;
+
+          await renderModelList(currentModels, append);
+        } catch (error) {
+          if (!append) {
+            showEmptyState();
+          }
+        } finally {
+          isLoading = false;
+          if (!append) {
+            showLoading(false);
+          }
+        }
+      }      // 渲染存档列表
+      async function renderModelList(models, append = false) {
+        if (!models || models.length === 0) {
+          if (!append) {
+            showEmptyState();
+          }
+          return;
+        }
+
+        // 获取收藏状态数据（只在第一次渲染或非追加模式时获取）
+        let likedModels = cachedLikedModels;
+        if (!append || !cachedLikedModels) {
+          likedModels = await loadLikedModelsCache();
+        }
+
+        if (append) {
+          // 追加模式：只添加新的存档卡片
+          const newCards = models.slice(currentModels.length - (models.length - currentModels.length));
+          const newCardsHtml = newCards.map((model) => createModelCard(model, likedModels)).join("");
+          elements.modelList.insertAdjacentHTML("beforeend", newCardsHtml);
+        } else {
+          // 替换模式：重新渲染所有存档
+          const cardsHtml = models.map((model) => createModelCard(model, likedModels)).join("");
+          elements.modelList.innerHTML = cardsHtml;
+        }        elements.emptyState.classList.add("hidden");
+      }
+
+      // 加载收藏模型缓存
+      async function loadLikedModelsCache() {
+        if (likedModelsLoading) {
+          // 如果正在加载，等待加载完成
+          while (likedModelsLoading) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          return cachedLikedModels || [];
+        }
+
+        if (cachedLikedModels !== null) {
+          return cachedLikedModels;
+        }
+
+        likedModelsLoading = true;
+        try {
+          cachedLikedModels = (await sdk.personalPageStore.loadPageData(pageName, "liked")) || [];
+          return cachedLikedModels;
+        } catch (error) {
+          console.error("Failed to load liked models:", error);
+          cachedLikedModels = [];
+          return [];
+        } finally {
+          likedModelsLoading = false;
+        }
+      }
+
+      // 刷新收藏缓存
+      function refreshLikedModelsCache() {
+        cachedLikedModels = null;
+      }
+
+      // 更新单个卡片的收藏状态
+      function updateCardLikedStatus(modelId, isLiked) {
+        const card = document.querySelector(`button[onclick="likeModel(${modelId})"]`);
+        if (card) {
+          if (isLiked) {
+            card.className = "flex-1 py-2 bg-gray-100 text-gray-400 cursor-not-allowed rounded transition-colors text-sm";
+            card.disabled = true;
+            card.innerHTML = "❤️已收藏";
+          } else {
+            card.className = "flex-1 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded transition-colors text-sm";
+            card.disabled = false;
+            card.innerHTML = "❤️收藏";
+          }
+        }
+      }
+
+      // 创建存档卡片
+      function createModelCard(model, likedModels = []) {
+        // 检查是否已收藏
+        const isLiked = likedModels.some((likedModel) => likedModel.id === model.id);
+
+        return `
+                <div class="model-card bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-semibold text-gray-800 truncate flex-1">${model.name || "未命名存档"}</h3>
+                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">#${model.id || "0"}</span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between text-sm text-gray-600 mb-4">
+                        <div class="flex items-center gap-4">
+                            <span class="flex items-center gap-1">
+                                ❤️ ${model.likes || 0}
+                            </span>
+                            <span class="flex items-center gap-1">
+                                📥 ${model.downloads || 0}
+                            </span>
+                        </div>
+                        <span class="text-xs text-gray-400">大小：${formatFileSize(model.size)}</span>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button 
+                            onclick="likeModel(${model.id})" 
+                            class="flex-1 py-2 ${isLiked ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-red-50 text-red-600 hover:bg-red-100"} rounded transition-colors text-sm"
+                            ${isLiked ? "disabled" : ""}
+                        >
+                            ${isLiked ? "❤️已收藏" : "❤️收藏"}
+                        </button>
+                        <button 
+                            onclick="downloadModel(${model.id})" 
+                            class="flex-1 py-2 bg-green-50 text-green-600 rounded hover:bg-green-100 transition-colors text-sm"
+                        >
+                            📥下载
+                        </button>
+                    </div>
+                </div>
+            `;
+      }
+
+      // 创建个人存档卡片
+      function createPersonalModelCard(model) {
+        return `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 relative">
+                    <!-- 删除按钮 - 右上角 -->
+                    <button 
+                        onclick="confirmDeleteModel(${model.id})" 
+                        class="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-red-500 hover:bg-red-100 rounded-full transition-colors text-sm"
+                        title="删除模型"
+                    >
+                        🗑️
+                    </button>
+                    
+                    <div class="flex items-center justify-between mb-2 pr-8">
+                        <div class="flex items-center gap-2 flex-1">
+                            <h4 id="modelName_${model.id}" class="font-medium text-gray-800 truncate">${model.name || "未命名存档"}</h4>
+                            <button 
+                                onclick="editModelName(${model.id})" 
+                                class="text-gray-400 hover:text-blue-500 transition-colors"
+                                title="编辑名称"
+                            >
+                                ✏️
+                            </button>
+                        </div>
+                        <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">#${model.id || "0"}</span>
+                    </div>
+                    
+                    <!-- 名称编辑框 - 默认隐藏 -->
+                    <div id="editNameBox_${model.id}" class="mb-2 pr-8 hidden">
+                        <div class="flex gap-2">
+                            <input 
+                                type="text" 
+                                id="editNameInput_${model.id}" 
+                                value="${model.name || "未命名存档"}"
+                                class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder="输入模型名称"
+                            >
+                            <button 
+                                onclick="saveModelName(${model.id})" 
+                                class="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                            >
+                                确定
+                            </button>
+                            <button 
+                                onclick="cancelEditName(${model.id})" 
+                                class="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
+                            >
+                                取消
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between text-sm text-gray-600 mb-3">
+                        <div class="flex items-center gap-3">
+                            <span>❤️ ${model.likes || 0}</span>
+                            <span>📥 ${model.downloads || 0}</span>
+                        </div>
+                        <span class="text-xs">大小：${formatFileSize(model.size)}</span>
+                        <span class="text-xs">更新时间：${formatTimeAgo(model.updatedAt)}</span>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button 
+                            onclick="loadPersonalModel(${model.id})" 
+                            class="flex-1 py-1 bg-green-50 text-green-600 rounded hover:bg-green-100 transition-colors text-sm"
+                        >
+                            📂 加载
+                        </button>
+                        <button 
+                            onclick="savePersonalModel(${model.id})" 
+                            class="flex-1 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors text-sm"
+                        >
+                            💾 保存
+                        </button>
+                    </div>
+                </div>
+            `;
+      }
+
+      // 创建上传新存档的占位UI卡片
+      function createUploadPlaceholderCard() {
+        return `
+                <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-dashed border-blue-300 rounded-lg p-4 relative hover:from-blue-100 hover:to-indigo-100 transition-all cursor-pointer" onclick="handleUploadClick()">
+                    <div class="flex flex-col items-center justify-center">
+                        <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-2 hover:bg-blue-600 transition-colors">
+                            <span class="text-white text-2xl font-light">+</span>
+                        </div>
+                        <h4 class="font-medium text-blue-700 text-sm mb-1">上传新存档</h4>
+                        <p class="text-xs text-blue-500 text-center">点击自动上传当前存档</p>
+                    </div>
+                </div>
+            `;
+      } // 显示/隐藏加载状态
+      function showLoading(show) {
+        elements.loadingState.classList.toggle("hidden", !show);
+        elements.modelList.classList.toggle("hidden", show);
+
+        if (show) {
+          // Generate skeleton cards and animate loading text
+          generateSkeletonCards();
+          animateLoadingText();
+          // Add progress bar
+          addLoadingProgress();
+        } else {
+          // Clear skeleton cards when hiding
+          clearSkeletonCards();
+          clearLoadingAnimations();
+        }
+      }
+
+      // Generate skeleton loading cards
+      function generateSkeletonCards() {
+        const skeletonsContainer = document.getElementById("loadingSkeletons");
+        if (!skeletonsContainer) return;
+
+        // Clear existing skeletons
+        skeletonsContainer.innerHTML = "";
+
+        // Generate 6 skeleton cards
+        for (let i = 0; i < 6; i++) {
+          const skeletonCard = document.createElement("div");
+          skeletonCard.className = "skeleton-card";
+          skeletonCard.innerHTML = `
+            <div class="flex items-center justify-between mb-3">
+              <div class="skeleton-line medium"></div>
+              <div class="skeleton-line short" style="width: 40px; height: 20px;"></div>
+            </div>
+            <div class="flex items-center justify-between text-sm text-gray-600 mb-4">
+              <div class="flex items-center gap-4">
+                <div class="skeleton-line short" style="width: 30px; height: 14px;"></div>
+                <div class="skeleton-line short" style="width: 30px; height: 14px;"></div>
+              </div>
+              <div class="skeleton-line short" style="width: 60px; height: 14px;"></div>
+            </div>
+            <div class="flex gap-2">
+              <div class="skeleton-button"></div>
+              <div class="skeleton-button"></div>
+            </div>
+          `;
+
+          // Add staggered animation delay
+          skeletonCard.style.animationDelay = `${i * 0.2}s`;
+          skeletonsContainer.appendChild(skeletonCard);
+        }
+      }
+
+      // Clear skeleton cards
+      function clearSkeletonCards() {
+        const skeletonsContainer = document.getElementById("loadingSkeletons");
+        if (skeletonsContainer) {
+          skeletonsContainer.innerHTML = "";
+        }
+      }
+
+      // Animate loading text
+      function animateLoadingText() {
+        const loadingText = document.getElementById("loadingText");
+        if (!loadingText) return;
+
+        const loadingMessages = ["正在加载存档...", "正在获取数据...", "正在解析内容...", "即将完成加载..."];
+
+        let messageIndex = 0;
+
+        // Clear any existing interval
+        if (window.loadingTextInterval) {
+          clearInterval(window.loadingTextInterval);
+        }
+
+        // Set initial animation class
+        loadingText.classList.add("loading-text-animated");
+
+        // Change text every 2 seconds
+        window.loadingTextInterval = setInterval(() => {
+          messageIndex = (messageIndex + 1) % loadingMessages.length;
+          loadingText.textContent = loadingMessages[messageIndex];
+        }, 2000);
+      }
+
+      // Add loading progress bar
+      function addLoadingProgress() {
+        const loadingState = document.getElementById("loadingState");
+        if (!loadingState) return;
+
+        // Check if progress bar already exists
+        let progressContainer = loadingState.querySelector(".loading-progress");
+        if (progressContainer) return;
+
+        // Create progress bar
+        progressContainer = document.createElement("div");
+        progressContainer.className = "loading-progress";
+
+        const progressBar = document.createElement("div");
+        progressBar.className = "loading-progress-bar";
+
+        progressContainer.appendChild(progressBar);
+        loadingState.appendChild(progressContainer);
+      }
+
+      // Clear loading animations
+      function clearLoadingAnimations() {
+        // Clear loading text interval
+        if (window.loadingTextInterval) {
+          clearInterval(window.loadingTextInterval);
+          window.loadingTextInterval = null;
+        }
+
+        // Reset loading text
+        const loadingText = document.getElementById("loadingText");
+        if (loadingText) {
+          loadingText.classList.remove("loading-text-animated");
+          loadingText.textContent = "正在加载存档...";
+        }
+
+        // Remove progress bar
+        const loadingState = document.getElementById("loadingState");
+        if (loadingState) {
+          const progressContainer = loadingState.querySelector(".loading-progress");
+          if (progressContainer) {
+            progressContainer.remove();
+          }
+        }
+      }
+
+      // 显示空状态
+      function showEmptyState() {
+        elements.emptyState.classList.remove("hidden");
+        elements.modelList.classList.add("hidden");
+      }
+
+      // 格式化文件大小
+      function formatFileSize(bytes) {
+        if (!bytes) return "未知";
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i];
+      }
+
+      // 格式化时间为相对时间显示
+      function formatTimeAgo(utcTimeString) {
+        if (!utcTimeString || utcTimeString === "未知") return "未知";
+
+        try {
+          const now = new Date();
+          const time = new Date(utcTimeString);
+          const diffMs = now - time;
+
+          // 如果时间差为负数或无效，返回未知
+          if (diffMs < 0 || isNaN(diffMs)) return "未知";
+
+          const diffSeconds = Math.floor(diffMs / 1000);
+          const diffMinutes = Math.floor(diffSeconds / 60);
+          const diffHours = Math.floor(diffMinutes / 60);
+          const diffDays = Math.floor(diffHours / 24);
+          const diffMonths = Math.floor(diffDays / 30);
+          const diffYears = Math.floor(diffDays / 365);
+
+          if (diffYears > 0) {
+            return `${diffYears}年前`;
+          } else if (diffMonths > 0) {
+            return `${diffMonths}个月前`;
+          } else if (diffDays > 0) {
+            return `${diffDays}天前`;
+          } else if (diffHours > 0) {
+            return `${diffHours}小时前`;
+          } else if (diffMinutes > 0) {
+            return `${diffMinutes}分钟前`;
+          } else if (diffSeconds > 30) {
+            return `${diffSeconds}秒前`;
+          } else {
+            return "刚刚";
+          }
+        } catch (error) {
+          console.error("时间格式化错误:", error);
+          return "未知";
+        }
+      }
+
+      // 解析文件大小字符串为字节数
+      function parseFileSize(sizeStr) {
+        if (!sizeStr || sizeStr === "未知") return 0;
+
+        const sizes = ["B", "KB", "MB", "GB"];
+        const regex = /^([\d.]+)\s*(B|KB|MB|GB)$/i;
+        const match = sizeStr.trim().match(regex);
+
+        if (!match) return 0;
+
+        const value = parseFloat(match[1]);
+        const unit = match[2].toUpperCase();
+        const unitIndex = sizes.indexOf(unit);
+
+        if (unitIndex === -1) return 0;
+
+        return Math.round(value * Math.pow(1024, unitIndex));
+      } // 点赞存档
+      async function likeModel(modelId) {
+        // Find the like button and show loading state
+        const likeButton = document.querySelector(`button[onclick="likeModel(${modelId})"]`);
+        const originalText = likeButton ? likeButton.innerHTML : "";
+
+        if (likeButton) {
+          likeButton.disabled = true;
+          likeButton.innerHTML = '<div class="loading-small mr-1"></div>收藏中...';
+        }        try {
+          // 检查是否已经收藏过（使用缓存）
+          let likedModels = await loadLikedModelsCache();
+          let likedModelsCopy = JSON.parse(JSON.stringify(likedModels));
+          const alreadyLiked = likedModelsCopy.find((model) => model.id === modelId);
+
+          if (alreadyLiked) {
+            showToast("已经收藏过了！", "warning");
+            return;
+          }
+
+          await apiCall(`/mall/personalModels/${modelId}/likes`, { method: "POST" });
+
+          // 获取完整的模型数据并添加到收藏列表
+          const result = await apiCall(`/mall/getModelsByTag?tag=${currentTag}`);
+          const allModels = result?.rows || [];
+          const modelToLike = allModels.find((model) => model.id === modelId);
+
+          if (modelToLike) {
+            // 添加收藏时间戳
+            modelToLike.likedAt = new Date().toISOString();
+
+            // 检查是否超过maxHistory条限制
+            if (likedModelsCopy.length >= maxHistory) {
+              // 按收藏时间排序，移除最早的记录
+              likedModelsCopy.sort((a, b) => {
+                const timeA = new Date(a.likedAt || a.created_at || 0).getTime();
+                const timeB = new Date(b.likedAt || b.created_at || 0).getTime();
+                return timeA - timeB;
+              });
+              // 移除最早的记录
+              likedModelsCopy.shift();
+            }
+
+            likedModelsCopy.push(modelToLike);
+            await sdk.personalPageStore.savePageData(pageName, "liked", likedModelsCopy);
+            
+            // 刷新缓存
+            cachedLikedModels = likedModelsCopy;
+            
+            // 立即更新当前卡片的收藏状态
+            updateCardLikedStatus(modelId, true);
+          }
+
+          showToast("收藏成功！", "success");
+
+          // 重新加载当前视图（只有在收藏视图时才需要完全重新加载）
+          if (currentView === "liked") {
+            loadLikedModels();
+          }
+        } catch (error) {
+          // 错误已在apiCall中处理
+        } finally {
+          // Restore button state
+          if (likeButton) {
+            likeButton.disabled = false;
+            likeButton.innerHTML = originalText;
+          }
+        }
+      } // 下载存档
+      async function downloadModel(modelId) {
+        // Find the download button and show loading state
+        const downloadButton = document.querySelector(`button[onclick="downloadModel(${modelId})"]`);
+        const originalText = downloadButton ? downloadButton.innerHTML : "";
+
+        if (downloadButton) {
+          downloadButton.disabled = true;
+          downloadButton.innerHTML = '<div class="loading-small mr-1"></div>下载中...';
+        }
+
+        try {
+          await apiCall(`/mall/personalModels/${modelId}/downloads`, { method: "POST" });
+
+          // 获取完整的模型数据并添加到下载列表
+          let personalDatas = (await sdk.personalPageStore.loadPageData(pageName, "downloaded")) || [];
+          let downloadedModels = JSON.parse(JSON.stringify(personalDatas));
+          let existingModel = downloadedModels.find((model) => model.id === modelId);
+          let currentModel;
+          if (existingModel) {
+            // 如果已存在，更新下载次数和时间
+            existingModel.downloads = (existingModel.downloads || 0) + 1;
+            existingModel.lastDownloadedAt = new Date().toISOString();
+            currentModel = existingModel;
+          } else {
+            // 如果不存在，获取完整模型数据并添加
+            const result = await apiCall(`/mall/getModelsByTag?tag=${currentTag}`);
+            const allModels = result?.rows || [];
+            const modelToDownload = allModels.find((model) => model.id === modelId);
+
+            if (modelToDownload) {
+              modelToDownload.downloads = 1;
+              modelToDownload.lastDownloadedAt = new Date().toISOString();
+
+              // 检查是否超过maxHistory条限制
+              if (downloadedModels.length >= maxHistory) {
+                // 按下载时间排序，移除最早的记录
+                downloadedModels.sort((a, b) => {
+                  const timeA = new Date(a.lastDownloadedAt || a.created_at || 0).getTime();
+                  const timeB = new Date(b.lastDownloadedAt || b.created_at || 0).getTime();
+                  return timeA - timeB;
+                });
+                // 移除最早的记录
+                downloadedModels.shift();
+              }
+              currentModel = modelToDownload;
+              downloadedModels.push(modelToDownload);
+            }
+          }
+
+          showToast("下载记录已保存！", "success");
+          await sdk.personalPageStore.savePageData(pageName, "downloaded", downloadedModels, true);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          // 发送loadModel消息给父窗口
+          console.log("Loading public model:", v);
+          window.parent.postMessage(
+            {
+              type: "loadModel",
+              modelId: currentModel.id,
+              modelData: {
+                id: currentModel.id,
+                name: currentModel.name,
+                modelUrl: currentModel.modelUrl,
+                size: currentModel.size,
+                tag: currentModel.tag,
+                likes: currentModel.likes,
+                downloads: currentModel.downloads,
+                updatedAt: currentModel.updatedAt,
+              },
+            },
+            "*"
+          );
+          if (currentView === "all") {
+            loadModels();
+          } else if (currentView === "downloaded") {
+            loadDownloadedModels();
+          }
+        } catch (error) {
+          // 错误已在apiCall中处理
+        } finally {
+          // Restore button state
+          if (downloadButton) {
+            downloadButton.disabled = false;
+            downloadButton.innerHTML = originalText;
+          }
+        }
+      }
+
+      // 自定义确认弹框函数
+      function showCustomConfirm(title, message, onConfirm, onCancel) {
+        const modal = document.getElementById("customConfirmModal");
+        const titleEl = document.getElementById("confirmTitle");
+        const messageEl = document.getElementById("confirmMessage");
+        const confirmBtn = document.getElementById("confirmOkBtn");
+        const cancelBtn = document.getElementById("confirmCancelBtn");
+
+        // 设置内容
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+
+        // 显示弹框
+        modal.classList.remove("hidden");
+        setTimeout(() => modal.classList.add("show"), 10);
+
+        // 绑定事件
+        const handleConfirm = () => {
+          hideCustomConfirm();
+          if (onConfirm) onConfirm();
+        };
+
+        const handleCancel = () => {
+          hideCustomConfirm();
+          if (onCancel) onCancel();
+        };
+
+        // 移除之前的事件监听器
+        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+
+        // 重新获取元素并添加事件监听器
+        const newConfirmBtn = document.getElementById("confirmOkBtn");
+        const newCancelBtn = document.getElementById("confirmCancelBtn");
+
+        newConfirmBtn.addEventListener("click", handleConfirm);
+        newCancelBtn.addEventListener("click", handleCancel);
+
+        // 点击背景关闭
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) {
+            handleCancel();
+          }
+        });
+
+        // ESC键关闭
+        const handleEsc = (e) => {
+          if (e.key === "Escape") {
+            handleCancel();
+            document.removeEventListener("keydown", handleEsc);
+          }
+        };
+        document.addEventListener("keydown", handleEsc);
+      }
+
+      function hideCustomConfirm() {
+        const modal = document.getElementById("customConfirmModal");
+        modal.classList.remove("show");
+        setTimeout(() => modal.classList.add("hidden"), 300);
+      }
+
+      // 确认删除存档
+      function confirmDeleteModel(modelId) {
+        showCustomConfirm("确认删除", "确定要删除这个存档吗？此操作不可撤销。", () => deleteModel(modelId), null);
+      }
+
+      // 删除存档
+      async function deleteModel(modelId) {
+        try {
+          await apiCall(`/mall/personalModels/${modelId}`, { method: "DELETE" });
+          showToast("删除成功！", "success");
+          loadPersonalModels();
+        } catch (error) {
+          // 错误已在apiCall中处理
+        }
+      }
+
+      // 加载个人模型
+      async function loadPersonalModel(modelId) {
+        const model = personalModels.find((m) => m.id === modelId);
+        if (!model) {
+          showToast("模型不存在", "error");
+          return;
+        }
+
+        try {
+           console.log("Loading personal model:", model);
+          // 发送loadModel消息给父窗口
+          window.parent.postMessage(
+            {
+              type: "loadModel",
+              modelId: model.id,
+              modelData: {
+                id: model.id,
+                name: model.name,
+                modelUrl: model.modelUrl,
+                size: model.size,
+                tag: model.tag,
+                likes: model.likes,
+                downloads: model.downloads,
+                updatedAt: model.updatedAt,
+              },
+            },
+            "*"
+          );
+
+          showToast(`已加载模型：${model.name}`, "success");
+        } catch (error) {
+          showToast("加载模型失败", "error");
+        }
+      }
+
+      // 保存个人模型
+      async function savePersonalModel(modelId) {
+        const model = personalModels.find((m) => m.id === modelId);
+        if (!model) {
+          showToast("模型不存在", "error");
+          return;
+        }
+
+        // 显示保存确认弹框
+        await showSaveConfirmModal(model);
+      }
+
+      // 编辑模型名称
+      function editModelName(modelId) {
+        const nameElement = document.getElementById(`modelName_${modelId}`);
+        const editBox = document.getElementById(`editNameBox_${modelId}`);
+        const input = document.getElementById(`editNameInput_${modelId}`);
+
+        if (nameElement && editBox && input) {
+          nameElement.style.display = "none";
+          editBox.classList.remove("hidden");
+          input.focus();
+          input.select();
+        }
+      }
+
+      // 保存模型名称
+      async function saveModelName(modelId) {
+        const input = document.getElementById(`editNameInput_${modelId}`);
+        const newName = input.value.trim();
+
+        if (!newName) {
+          showToast("名称不能为空", "error");
+          return;
+        }
+
+        try {
+          await apiCall(`/mall/personalModels/${modelId}`, {
+            method: "PUT",
+            body: JSON.stringify({ name: newName }),
+          });
+
+          showToast("名称修改成功！", "success");
+          loadPersonalModels(); // 重新加载列表
+        } catch (error) {
+          // 错误已在apiCall中处理
+        }
+      }
+
+      // 取消编辑名称
+      function cancelEditName(modelId) {
+        const nameElement = document.getElementById(`modelName_${modelId}`);
+        const editBox = document.getElementById(`editNameBox_${modelId}`);
+        const input = document.getElementById(`editNameInput_${modelId}`);
+
+        if (nameElement && editBox && input) {
+          // 恢复原始值
+          const model = personalModels.find((m) => m.id === modelId);
+          if (model) {
+            input.value = model.name || "未命名存档";
+          }
+
+          nameElement.style.display = "block";
+          editBox.classList.add("hidden");
+        }
+      }
+
+      // 编辑存档
+      function editModel(modelId) {
+        const model = personalModels.find((m) => m.id === modelId);
+        if (!model) return;
+
+        document.getElementById("editModelId").value = model.id;
+        document.getElementById("editModelName").value = model.name || "";
+        document.getElementById("editModelUrl").value = model.modelUrl || "";
+        document.getElementById("editModelSize").value = formatFileSize(model.size || 0);
+        document.getElementById("editModelTag").value = model.tag || currentTag; // 使用存档的标签或当前标签
+
+        elements.editModal.classList.remove("hidden");
+      }
+
+      // 加载个人存档
+      async function loadPersonalModels() {
+        try {
+          const result = await apiCall(`/mall/getModelsByTag?tag=${currentTag}&userId=${USER_ID}`);
+          personalModels = result?.rows || [];
+          renderPersonalModels(personalModels);
+        } catch (error) {
+          elements.personalEmptyState.classList.remove("hidden");
+          elements.personalModelList.innerHTML = "";
+        }
+      }
+
+      // 渲染个人存档列表
+      function renderPersonalModels(models) {
+        // 创建占位UI卡片作为第一个元素
+        const placeholderCard = createUploadPlaceholderCard();
+
+        if (!models || models.length === 0) {
+          elements.personalEmptyState.classList.add("hidden");
+          elements.personalModelList.innerHTML = placeholderCard;
+          return;
+        }
+
+        elements.personalEmptyState.classList.add("hidden");
+        const modelCards = models.map((model) => createPersonalModelCard(model)).join("");
+        elements.personalModelList.innerHTML = placeholderCard + modelCards;
+      }
+
+      // 加载所有存档
+      async function loadAllModels() {
+        currentView = "all";
+        resetPagination();
+        loadModels(); // 不传参数，使用当前标签
+      }
+
+      // 加载点赞记录
+      async function loadLikedModels() {
+        currentView = "liked";
+        resetPagination();
+        showLoading(true);
+
+        try {
+          let likedModels = (await sdk.personalPageStore.loadPageData(pageName, "liked")) || [];
+
+          // 应用排序逻辑
+          likedModels = applySortToPersonalData(likedModels);
+
+          currentModels = likedModels;
+
+          if (likedModels.length === 0) {
+            // 清除原有的在线数据列表UI
+            elements.modelList.innerHTML = "";
+            showEmptyState();
+          } else {
+            await renderModelList(likedModels);
+          }
+        } catch (error) {
+          console.error("加载收藏记录失败:", error);
+          showToast("加载收藏记录失败", "error");
+          // 清除原有的在线数据列表UI
+          elements.modelList.innerHTML = "";
+          showEmptyState();
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // 加载下载记录
+      async function loadDownloadedModels() {
+        currentView = "downloaded";
+        resetPagination();
+        showLoading(true);
+
+        try {
+          let downloadedModels = (await sdk.personalPageStore.loadPageData(pageName, "downloaded")) || [];
+
+          // 应用排序逻辑
+          downloadedModels = applySortToPersonalData(downloadedModels);
+
+          currentModels = downloadedModels;
+
+          if (downloadedModels.length === 0) {
+            // 清除原有的在线数据列表UI
+            elements.modelList.innerHTML = "";
+            showEmptyState();
+          } else {
+            await renderModelList(downloadedModels);
+          }
+        } catch (error) {
+          console.error("加载下载记录失败:", error);
+          showToast("加载下载记录失败", "error");
+          // 清除原有的在线数据列表UI
+          elements.modelList.innerHTML = "";
+          showEmptyState();
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // 重置分页状态
+      function resetPagination() {
+        currentPage = 1;
+        hasMoreData = true;
+        currentModels = [];
+      }
+
+      // 应用排序
+      function applySort() {
+        resetPagination();
+        reloadCurrentView();
+      }
+
+      // 重新加载当前视图
+      function reloadCurrentView() {
+        if (currentView === "all") {
+          loadModels();
+        } else if (currentView === "liked") {
+          loadLikedModels();
+        } else if (currentView === "downloaded") {
+          loadDownloadedModels();
+        }
+      }
+
+      // 为个人数据应用排序逻辑
+      function applySortToPersonalData(models) {
+        if (!models || models.length === 0) return models;
+
+        const sortedModels = [...models];
+
+        switch (currentSort.field) {
+          case "name":
+            sortedModels.sort((a, b) => {
+              const nameA = (a.name || "").toLowerCase();
+              const nameB = (b.name || "").toLowerCase();
+              return currentSort.order === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+            });
+            break;
+          case "likes":
+            sortedModels.sort((a, b) => {
+              const likesA = a.likes || 0;
+              const likesB = b.likes || 0;
+              return currentSort.order === "asc" ? likesA - likesB : likesB - likesA;
+            });
+            break;
+          case "downloads":
+            sortedModels.sort((a, b) => {
+              const downloadsA = a.downloads || 0;
+              const downloadsB = b.downloads || 0;
+              return currentSort.order === "asc" ? downloadsA - downloadsB : downloadsB - downloadsA;
+            });
+            break;
+          case "size":
+            sortedModels.sort((a, b) => {
+              const sizeA = a.size || 0;
+              const sizeB = b.size || 0;
+              return currentSort.order === "asc" ? sizeA - sizeB : sizeB - sizeA;
+            });
+            break;
+          case "created_at":
+            sortedModels.sort((a, b) => {
+              const timeA = new Date(a.created_at || 0).getTime();
+              const timeB = new Date(b.created_at || 0).getTime();
+              return currentSort.order === "asc" ? timeA - timeB : timeB - timeA;
+            });
+            break;
+          default:
+            // 默认按添加时间倒序排列（最新的在前）
+            if (currentView === "liked") {
+              sortedModels.sort((a, b) => {
+                const timeA = new Date(a.likedAt || a.created_at || 0).getTime();
+                const timeB = new Date(b.likedAt || b.created_at || 0).getTime();
+                return timeB - timeA;
+              });
+            } else if (currentView === "downloaded") {
+              sortedModels.sort((a, b) => {
+                const timeA = new Date(a.lastDownloadedAt || a.created_at || 0).getTime();
+                const timeB = new Date(b.lastDownloadedAt || b.created_at || 0).getTime();
+                return timeB - timeA;
+              });
+            }
+            break;
+        }
+
+        return sortedModels;
+      }
+
+      // 搜索功能
+      async function searchModels() {
+        const query = elements.searchInput.value.trim().toLowerCase();
+        if (!query) {
+          await renderModelList(currentModels);
+          return;
+        }
+        let modelId = parseInt(query);
+        const filteredModels = currentModels.filter(
+          (model) => (model.name || "").toLowerCase().includes(query) || (model.tag || "").toLowerCase().includes(query) || (model.id || "").includes(query) || (modelId && model.id === modelId)
+        );
+        await renderModelList(filteredModels);
+      }
+
+      // 事件监听器
+      elements.searchBtn.addEventListener("click", searchModels);
+      elements.searchInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") searchModels();
+      });
+
+      elements.uploadBtn.addEventListener("click", () => {
+        elements.uploadDrawer.classList.remove("hidden");
+        setTimeout(() => {
+          elements.uploadDrawer.querySelector(".drawer").classList.add("open");
+        }, 10);
+        loadPersonalModels();
+      });
+
+      elements.closeDrawer.addEventListener("click", () => {
+        elements.uploadDrawer.querySelector(".drawer").classList.remove("open");
+        setTimeout(() => {
+          elements.uploadDrawer.classList.add("hidden");
+        }, 300);
+      });
+
+      elements.likeRecordBtn.addEventListener("click", () => {
+        setActiveTab("likeRecordBtn");
+        currentSort = { field: "", order: "desc" };
+        updateSortButtonText(); // 更新按钮显示状态
+        loadLikedModels();
+      });
+      elements.downloadRecordBtn.addEventListener("click", () => {
+        setActiveTab("downloadRecordBtn");
+        currentSort = { field: "", order: "desc" };
+        updateSortButtonText(); // 更新按钮显示状态
+        loadDownloadedModels();
+      });
+      elements.allModelsBtn.addEventListener("click", () => {
+        setActiveTab("allModelsBtn");
+        currentSort = { field: "", order: "desc" };
+        updateSortButtonText(); // 更新按钮显示状态
+        loadAllModels();
+      });
+
+      // 更新按钮文字显示
+      function updateSortButtonText() {
+        const buttons = [
+          { element: elements.sortByTime, field: "updatedAt", name: "修改时间" },
+          { element: elements.sortByLikes, field: "likes", name: "收藏数" },
+          { element: elements.sortByDownloads, field: "downloads", name: "下载数" },
+        ];
+
+        buttons.forEach(({ element, field, name }) => {
+          if (currentSort.field === field) {
+            const arrow = currentSort.order === "desc" ? "↓" : "↑";
+            element.textContent = `${name} ${arrow}`;
+            element.classList.add("bg-blue-100", "text-blue-700", "border-blue-300");
+            element.classList.remove("hover:bg-gray-50");
+          } else {
+            element.textContent = name;
+            element.classList.remove("bg-blue-100", "text-blue-700", "border-blue-300");
+            element.classList.add("hover:bg-gray-50");
+          }
+        });
+      }
+
+      // 排序按钮事件监听
+      elements.sortByTime.addEventListener("click", () => {
+        if (currentSort.field === "updatedAt") {
+          // 切换排序顺序
+          currentSort.order = currentSort.order === "desc" ? "asc" : "desc";
+        } else {
+          // 设置新的排序字段
+          currentSort.field = "updatedAt";
+          currentSort.order = "desc";
+        }
+        updateSortButtonText();
+        applySort();
+      });
+
+      elements.sortByLikes.addEventListener("click", () => {
+        if (currentSort.field === "likes") {
+          // 切换排序顺序
+          currentSort.order = currentSort.order === "desc" ? "asc" : "desc";
+        } else {
+          // 设置新的排序字段
+          currentSort.field = "likes";
+          currentSort.order = "desc";
+        }
+        updateSortButtonText();
+        applySort();
+      });
+
+      elements.sortByDownloads.addEventListener("click", () => {
+        if (currentSort.field === "downloads") {
+          // 切换排序顺序
+          currentSort.order = currentSort.order === "desc" ? "asc" : "desc";
+        } else {
+          // 设置新的排序字段
+          currentSort.field = "downloads";
+          currentSort.order = "desc";
+        }
+        updateSortButtonText();
+        applySort();
+      });
+
+      // 处理上传新存档的点击事件
+      async function handleUploadClick() {
+        // 清空表单
+        document.getElementById("editModelId").value = "";
+        document.getElementById("editModelName").value = "";
+        document.getElementById("editModelUrl").value = "";
+        document.getElementById("editModelSize").value = "";
+        document.getElementById("editModelTag").value = currentTag; // 使用URL参数中的标签
+        elements.editModal.classList.remove("hidden");
+        try {
+          const modelUrlResponse = await startUploadModel();
+          if (!modelUrlResponse.modelUrl) {
+            showToast("获取当前存档URL失败，请先返回游戏保存当前存档", "error");
+            return;
+          }
+          document.getElementById("editModelUrl").value = modelUrlResponse.modelUrl;
+          document.getElementById("editModelSize").value = formatFileSize(modelUrlResponse.size || 0);
+        } catch (error) {
+          showToast("上传模型失败", "error");
+        }
+      }
+
+      elements.cancelEdit.addEventListener("click", () => {
+        elements.editModal.classList.add("hidden");
+      });
+
+      elements.editForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const modelName = document.getElementById("editModelName").value;
+        if (!modelName) {
+          showToast("请输入存档名称", "warning");
+          return;
+        }
+        const modelUrl = document.getElementById("editModelUrl").value;
+        if (!modelUrl || !modelUrl.startsWith("https://")) {
+          showToast("请返回游戏保存当前存档，重新获取当前存档URL", "warning");
+          return;
+        }
+        const modelId = document.getElementById("editModelId").value;
+        const modelData = {
+          name: modelName,
+          tag: currentTag, // 使用URL参数中的标签
+        };
+
+        if (modelId) {
+          // 编辑现有存档，只更新名称
+          modelData.id = parseInt(modelId);
+        } else {
+          // 新建存档，需要URL等完整信息
+          modelData.modelUrl = document.getElementById("editModelUrl").value;
+          modelData.modelType = "blocks"; // 默认类型
+          modelData.size = parseFileSize(document.getElementById("editModelSize").value) || 0;
+        }
+
+        try {
+          await apiCall(
+            "/mall/personalModels/upsert",
+            {
+              method: "PUT",
+              body: JSON.stringify(modelData),
+            },
+            true
+          );
+
+          showToast(modelId ? "更新成功！" : "创建成功！", "success");
+          elements.editModal.classList.add("hidden");
+          loadPersonalModels();
+        } catch (error) {
+          // 错误已在apiCall中处理
+        }
+      });
+
+      // 关闭弹框事件监听器
+      elements.closeToast.addEventListener("click", hideToast);
+      elements.uploadDrawer.addEventListener("click", (e) => {
+        if (e.target === elements.uploadDrawer) {
+          elements.closeDrawer.click();
+        }
+      });
+
+      // 点击模态框背景关闭
+      elements.editModal.addEventListener("click", (e) => {
+        if (e.target === elements.editModal) {
+          elements.editModal.classList.add("hidden");
+        }
+      });
+
+      // 保存确认弹框相关逻辑
+      const saveConfirmModal = document.getElementById("saveConfirmModal");
+      const saveConfirmCancelBtn = document.getElementById("saveConfirmCancelBtn");
+      const saveConfirmOkBtn = document.getElementById("saveConfirmOkBtn");
+      const saveConfirmName = document.getElementById("saveConfirmName");
+      const saveConfirmUrl = document.getElementById("saveConfirmUrl");
+      const saveConfirmSize = document.getElementById("saveConfirmSize");
+      const saveConfirmBtnText = document.getElementById("saveConfirmBtnText");
+      const saveConfirmLoading = document.getElementById("saveConfirmLoading");
+
+      // 显示保存确认弹框
+      async function showSaveConfirmModal(model) {
+        // 设置存档名称（可编辑）
+        saveConfirmName.value = model.name;
+        saveConfirmName.readOnly = false;
+
+        // 重置URL和大小显示
+        saveConfirmUrl.textContent = "获取中...";
+        saveConfirmSize.textContent = "获取中...";
+
+        // 显示弹框
+        saveConfirmModal.classList.remove("hidden");
+
+        // 异步获取最新的模型数据
+        try {
+          const modelUrlResponse = await startUploadModel();
+          if (!modelUrlResponse.modelUrl) {
+            showToast("获取当前存档URL失败，请先返回游戏保存当前存档", "error");
+            return;
+          }
+          saveConfirmUrl.textContent = modelUrlResponse.modelUrl || "无";
+          saveConfirmSize.textContent = formatFileSize(modelUrlResponse.size || 0);
+
+          // 存储获取到的数据供确认时使用
+          saveConfirmModal.dataset.modelUrl = modelUrlResponse.modelUrl || "";
+          saveConfirmModal.dataset.modelSize = modelUrlResponse.size || 0;
+          saveConfirmModal.dataset.modelId = model.id;
+        } catch (error) {
+          saveConfirmUrl.textContent = "获取失败";
+          saveConfirmSize.textContent = "获取失败";
+          showToast("获取模型数据失败", "error");
+        }
+      }
+
+      // 隐藏保存确认弹框
+      function hideSaveConfirmModal() {
+        saveConfirmModal.classList.add("hidden");
+        // 重置按钮状态
+        saveConfirmBtnText.textContent = "确认保存";
+        saveConfirmLoading.classList.add("hidden");
+        saveConfirmOkBtn.disabled = false;
+      }
+
+      // 保存确认弹框事件监听
+      saveConfirmCancelBtn.addEventListener("click", hideSaveConfirmModal);
+
+      saveConfirmOkBtn.addEventListener("click", async () => {
+        const modelId = saveConfirmModal.dataset.modelId;
+        const modelUrl = saveConfirmModal.dataset.modelUrl;
+        const modelSize = parseInt(saveConfirmModal.dataset.modelSize) || 0;
+        const modelName = saveConfirmName.value.trim();
+
+        if (!modelName) {
+          showToast("请输入存档名称", "warning");
+          return;
+        }
+
+        if (!modelUrl) {
+          showToast("没有可保存的模型数据", "error");
+          return;
+        }
+
+        // 显示加载状态
+        saveConfirmBtnText.textContent = "保存中...";
+        saveConfirmLoading.classList.remove("hidden");
+        saveConfirmOkBtn.disabled = true;
+
+        try {
+          // 找到原始模型数据
+          const originalModel = personalModels.find((m) => m.id == modelId);
+
+          const updateData = {
+            name: modelName, // 使用用户输入的名称
+            modelUrl: modelUrl, // 使用获取到的最新URL
+            size: modelSize, // 使用获取到的最新大小
+            tag: originalModel?.tag || DEFAULT_TAG, // 保持原有标签
+            updatedAt: new Date().toISOString(),
+          };
+
+          await apiCall(`/mall/personalModels/${modelId}`, {
+            method: "PUT",
+            body: JSON.stringify(updateData),
+          });
+
+          showToast("保存成功！", "success");
+          hideSaveConfirmModal();
+          loadPersonalModels(); // 重新加载列表
+        } catch (error) {
+          showToast("保存失败", "error");
+          // 恢复按钮状态
+          saveConfirmBtnText.textContent = "确认保存";
+          saveConfirmLoading.classList.add("hidden");
+          saveConfirmOkBtn.disabled = false;
+        }
+      });
+
+      // 点击弹框背景关闭
+      saveConfirmModal.addEventListener("click", (e) => {
+        if (e.target === saveConfirmModal) {
+          hideSaveConfirmModal();
+        }
+      });
+
+      // 滚动加载监听器
+      elements.modelList.addEventListener("scroll", () => {
+        const { scrollTop, scrollHeight, clientHeight } = elements.modelList;
+        // 当滚动到距离底部50px时触发加载
+        if (scrollTop + clientHeight >= scrollHeight - 50 && hasMoreData && !isLoading) {
+          loadMoreModels();
+        }
+      }); // 加载更多存档
+      async function loadMoreModels() {
+        if (!hasMoreData || isLoading) return;
+
+        // Show loading overlay for loading more
+        elements.loadingMoreOverlay.classList.remove("hidden");
+
+        try {
+          if (currentView === "all") {
+            await loadModels(currentTag, null, currentPage + 1, true);
+          } else if (currentView === "liked") {
+            await loadModels(currentTag, USER_ID, currentPage + 1, true);
+          } else if (currentView === "downloaded") {
+            await loadModels(currentTag, USER_ID, currentPage + 1, true);
+          }
+        } finally {
+          // Hide loading overlay
+          elements.loadingMoreOverlay.classList.add("hidden");
+        }
+      }
+
+      async function initializeApp() {
+        // Initialize sort button text
+        updateSortButtonText();
+        // Load all models by default
+        loadAllModels();
+        window.parent.postMessage({ type: "gameLoaded" }, "*");
+        console.log("App initialized, currentTag:", currentTag);
+      }
+
+      function checkStartGame(timeoutMs) {
+        if (!timeoutMs) {
+          const urlParams = new URLSearchParams(window.location.search);
+          timeoutMs = urlParams.get("parent") === "miniGameProxy" ? 3000 : 200;
+          if (urlParams.get("parent") != "miniGameProxy") {
+            currentTag = urlParams.get("tag") || DEFAULT_TAG;
+          }
+        }
+
+        let gameStarted = false;
+        const waitForMinigameProxyWithTimeout = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (!gameStarted) {
+              resolve(null);
+            }
+          }, timeoutMs);
+          let miniGameProxyReceived = false;
+          let locationReceived = false;
+
+          const messageHandler = function (e) {
+            if (!e.data || !e.data.type) {
+              return;
+            }
+
+            try {
+              switch (e.data.type) {
+                case "miniGameProxyDataResponse":
+                  keepworkToken = e.data.keepworkToken || "";
+                  keepworkUserInfo = e.data.keepworkUserInfo || {};
+                  USER_ID = keepworkUserInfo?.id || 1;
+                  sdk.setToken(keepworkToken);
+                  miniGameProxyReceived = true;
+                  break;
+                case "locationResponse":
+                  const locationParams = e.data;
+                  if (locationParams?.search) {
+                    const urlParams = new URLSearchParams(locationParams.search);
+                    currentTag = urlParams.get("tag") || DEFAULT_TAG;
+                  }
+                  locationReceived = true;
+                  break;
+              }
+
+              if (miniGameProxyReceived && locationReceived) {
+                window.removeEventListener("message", messageHandler);
+                clearTimeout(timeout);
+                resolve(e.data);
+              }
+            } catch (error) {
+              console.error("Error processing message:", error);
+            }
+          };
+
+          window.addEventListener("message", messageHandler);
+          window.parent.postMessage({ type: "getLocation" }, "*");
+          window.parent.postMessage({ type: "getMiniGameProxyData" }, "*");
+        });
+
+        waitForMinigameProxyWithTimeout
+          .then(async () => {
+            if (!gameStarted) {
+              gameStarted = true;
+              await initializeApp();
+            }
+          })
+          .catch(async (error) => {
+            if (!gameStarted) {
+              gameStarted = true;
+              await initializeApp();
+            }
+          });
+      }
+
+      checkStartGame();
+    </script>
+  </body>
+</html>

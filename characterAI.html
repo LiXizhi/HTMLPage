@@ -29,7 +29,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>角色AI对话游戏</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.8"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.10"></script>
     <style>
       .chat-bubble-left {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -736,6 +736,55 @@
       #chat-container.avatar-enabled a {
         pointer-events: auto;
       }
+
+      /* Voice input button styles */
+      .voice-btn {
+        background: linear-gradient(135deg, #dedfe2 0%, #a8a9aa 100%);
+        border: none;
+        color: white;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 20px;
+        flex-shrink: 0;
+      }
+
+      .voice-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      }
+
+      .voice-btn:active,
+      .voice-btn.recording {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        animation: voice-pulse 1s infinite;
+      }
+
+      .voice-btn:disabled {
+        background: #d1d5db;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      @keyframes voice-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+        }
+
+        50% {
+          box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+        }
+      }
+
+      .voice-btn.hidden {
+        display: none;
+      }
     </style>
   </head>
 
@@ -852,6 +901,7 @@
         <!-- 输入区域 -->
         <div class="border-t border-gray-200 p-4">
           <div class="flex space-x-2">
+            <button id="voice-btn" class="voice-btn hidden" title="点击开始语音输入 / 按住说话后松开">🎤</button>
             <input
               type="text"
               id="user-input"
@@ -1122,6 +1172,337 @@
 
       // Initialize AI Chat Session
       let aiChatSession;
+      // Voice Recognition Class
+      class VoiceRecognition {
+        constructor(game) {
+          this.game = game;
+          this.recognition = null;
+          this.isListening = false;
+          this.isSupported = false;
+          this.manualStop = false;
+          this.pressStartTime = 0;
+          this.isPressHold = false;
+          this.holdThreshold = 1000; // 1 second threshold for hold mode
+          this.holdTimer = null;
+          this.interimTextLength = 0; // Track length of interim text to replace it
+          this.init();
+        }
+
+        init() {
+          if (!this.checkSystemSupport()) {
+            console.warn("Voice recognition not supported");
+            return;
+          }
+          this.setupRecognition();
+          this.bindEvents();
+        }
+
+        checkSystemSupport() {
+          // Check HTTPS
+          const isSecure = location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1";
+
+          // Check browser support
+          const hasWebkitSpeechRecognition = "webkitSpeechRecognition" in window;
+          const hasSpeechRecognition = "SpeechRecognition" in window;
+
+          this.isSupported = isSecure && (hasWebkitSpeechRecognition || hasSpeechRecognition);
+
+          if (!isSecure) {
+            console.warn("Voice recognition requires HTTPS environment");
+            return false;
+          }
+
+          if (!hasWebkitSpeechRecognition && !hasSpeechRecognition) {
+            console.warn("Browser does not support speech recognition");
+            return false;
+          }
+
+          return true;
+        }
+        setupRecognition() {
+          if (!this.isSupported) return;
+
+          try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            this.recognition = new SpeechRecognition();
+
+            // Configure parameters - will be set dynamically based on mode
+            this.recognition.continuous = false;
+            this.recognition.interimResults = true;
+            this.recognition.lang = "zh-CN";
+            this.recognition.maxAlternatives = 1;
+
+            this.setupRecognitionEvents();
+            console.log("Voice recognition initialized");
+
+            // Show voice button if supported
+            if (this.game.elements.voiceBtn) {
+              this.game.elements.voiceBtn.classList.remove("hidden");
+            }
+          } catch (error) {
+            console.error("Error initializing voice recognition:", error);
+          }
+        }
+
+        setupRecognitionEvents() {
+          this.recognition.onstart = () => {
+            console.log("Recognition started");
+            this.isListening = true;
+            this.updateUI();
+            this.game.updateLLMStatus("🔴 正在监听中... 请开始说话");
+          };
+          this.recognition.onend = () => {
+            console.log("Recognition ended");
+            this.isListening = false;
+            this.updateUI();
+
+            // 如果是按住模式且未手动停止，自动重新开始
+            if (this.isPressHold && !this.manualStop) {
+              console.log("Hold mode: auto-restarting recognition");
+              setTimeout(() => {
+                if (this.isPressHold && !this.manualStop) {
+                  this.startRecognition();
+                }
+              }, 100);
+            } else if (!this.manualStop) {
+              this.game.updateLLMStatus("语音识别已结束");
+            } else {
+              this.game.updateLLMStatus("语音识别已停止");
+              this.manualStop = false;
+            }
+          };
+          this.recognition.onresult = (event) => {
+            console.log("Recognition result received");
+            let interimTranscript = "";
+            let finalTranscript = "";
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript;
+
+              if (event.results[i].isFinal) {
+                finalTranscript += transcript;
+              } else {
+                interimTranscript += transcript;
+              }
+            }
+
+            const inputElement = this.game.elements.userInput;
+            const currentValue = inputElement.value;
+
+            // Update input field
+            if (finalTranscript) {
+              // Remove any interim text first
+              if (this.interimTextLength > 0) {
+                inputElement.value = currentValue.substring(0, currentValue.length - this.interimTextLength);
+              }
+              // Append final transcript
+              inputElement.value += finalTranscript;
+              this.interimTextLength = 0; // Reset interim text length
+              this.game.updateLLMStatus(`✅ 识别完成: "${finalTranscript}"`);
+            } else if (interimTranscript) {
+              // Remove previous interim text
+              if (this.interimTextLength > 0) {
+                inputElement.value = currentValue.substring(0, currentValue.length - this.interimTextLength);
+              }
+              // Append new interim text
+              inputElement.value += interimTranscript;
+              this.interimTextLength = interimTranscript.length; // Track new interim text length
+              this.game.updateLLMStatus(`🎯 识别中: "${interimTranscript}"`);
+            }
+          };
+
+          this.recognition.onerror = (event) => {
+            console.error("Recognition error:", event.error);
+            this.isListening = false;
+            this.updateUI();
+
+            let errorMessage = "识别出错: ";
+            switch (event.error) {
+              case "no-speech":
+                errorMessage += "没有检测到语音输入";
+                break;
+              case "audio-capture":
+                errorMessage += "无法访问麦克风，请检查设备连接";
+                break;
+              case "not-allowed":
+                errorMessage += "麦克风权限被拒绝，请允许访问麦克风";
+                break;
+              case "network":
+                errorMessage += "网络错误，请检查网络连接";
+                break;
+              default:
+                errorMessage += event.error;
+            }
+            this.game.updateLLMStatus(errorMessage);
+          };
+
+          this.recognition.onnomatch = () => {
+            console.log("No match found");
+            this.game.updateLLMStatus("未能识别语音，请重新尝试");
+          };
+        }
+        bindEvents() {
+          if (!this.game.elements.voiceBtn) return;
+
+          // Mouse/Touch down - start timer
+          this.game.elements.voiceBtn.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            this.handlePressStart();
+          });
+
+          this.game.elements.voiceBtn.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            this.handlePressStart();
+          });
+
+          // Mouse/Touch up - check if hold mode or click mode
+          this.game.elements.voiceBtn.addEventListener("mouseup", (e) => {
+            e.preventDefault();
+            this.handlePressEnd();
+          });
+
+          this.game.elements.voiceBtn.addEventListener("touchend", (e) => {
+            e.preventDefault();
+            this.handlePressEnd();
+          });
+
+          // Mouse/Touch leave - treat as release
+          this.game.elements.voiceBtn.addEventListener("mouseleave", (e) => {
+            if (this.pressStartTime > 0) {
+              this.handlePressEnd();
+            }
+          });
+
+          this.game.elements.voiceBtn.addEventListener("touchcancel", (e) => {
+            if (this.pressStartTime > 0) {
+              this.handlePressEnd();
+            }
+          });
+        }
+        handlePressStart() {
+          this.pressStartTime = Date.now();
+
+          // Visual feedback - show pressing
+          this.game.elements.voiceBtn.style.transform = "scale(0.95)";
+
+          // If already listening from a previous click, don't interfere
+          if (this.isListening) {
+            return;
+          }
+
+          // Set a timer - if held for 1 second, start recording in hold mode
+          this.holdTimer = setTimeout(() => {
+            console.log("Hold threshold reached, starting hold mode recording");
+            this.isPressHold = true;
+            this.startRecognition();
+          }, this.holdThreshold);
+        }
+        handlePressEnd() {
+          const pressDuration = Date.now() - this.pressStartTime;
+          this.pressStartTime = 0;
+
+          // Clear the hold timer if it hasn't fired yet
+          if (this.holdTimer) {
+            clearTimeout(this.holdTimer);
+            this.holdTimer = null;
+          }
+
+          // Reset visual feedback
+          this.game.elements.voiceBtn.style.transform = "";
+
+          // If we were in hold mode, stop recording on release
+          if (this.isPressHold) {
+            console.log("Hold mode: stopping recording on release");
+            this.isPressHold = false;
+            this.manualStop = true; // Mark as manual stop to prevent auto-restart
+
+            if (this.isListening) {
+              this.stopRecognition();
+            }
+          } else if (pressDuration < this.holdThreshold) {
+            // Click mode: toggle recognition
+            console.log("Click mode detected");
+            if (this.isListening) {
+              this.stopRecognition();
+            } else {
+              this.startRecognition();
+            }
+          }
+        }
+
+        startRecognition() {
+          if (!this.isSupported || !this.recognition) {
+            this.game.updateLLMStatus("语音识别不可用");
+            return;
+          }
+
+          if (this.isListening) {
+            this.game.updateLLMStatus("语音识别已在运行中");
+            return;
+          }
+
+          try {
+            this.manualStop = false;
+            this.recognition.start();
+            console.log("Starting recognition...");
+          } catch (error) {
+            console.error("Error starting recognition:", error);
+            this.game.updateLLMStatus("启动语音识别失败: " + error.message);
+          }
+        }
+
+        stopRecognition() {
+          if (!this.recognition || !this.isListening) {
+            return;
+          }
+
+          try {
+            this.manualStop = true;
+            this.recognition.stop();
+            console.log("Stopping recognition...");
+          } catch (error) {
+            console.error("Error stopping recognition:", error);
+            this.game.updateLLMStatus("停止语音识别失败: " + error.message);
+          }
+        }
+        updateUI() {
+          if (!this.game.elements.voiceBtn) return;
+
+          if (this.isListening) {
+            this.game.elements.voiceBtn.textContent = "🔴";
+            this.game.elements.voiceBtn.title = "点击停止 / 松开按钮停止";
+            this.game.elements.voiceBtn.classList.add("recording");
+          } else {
+            this.game.elements.voiceBtn.textContent = "🎤";
+            this.game.elements.voiceBtn.title = "点击开始语音输入 / 按住说话后松开";
+            this.game.elements.voiceBtn.classList.remove("recording");
+          }
+        }
+
+        // Reset voice input state (called when user sends message)
+        reset() {
+          // Stop any ongoing recognition
+          if (this.isListening) {
+            this.manualStop = true;
+            this.stopRecognition();
+          }
+
+          // Reset interim text length tracker
+          this.interimTextLength = 0;
+
+          // Reset press state
+          this.pressStartTime = 0;
+          this.isPressHold = false;
+
+          // Clear any pending timers
+          if (this.holdTimer) {
+            clearTimeout(this.holdTimer);
+            this.holdTimer = null;
+          }
+
+          console.log("Voice recognition state reset");
+        }
+      }
 
       class LLMCharacterGame {
         constructor() {
@@ -1178,6 +1559,7 @@
             chatContainer: document.getElementById("chat-container"),
             userInput: document.getElementById("user-input"),
             sendBtn: document.getElementById("send-btn"),
+            voiceBtn: document.getElementById("voice-btn"),
             progressBar: document.getElementById("progress-bar"),
             progressText: document.getElementById("progress-text"),
             innerThoughts: document.getElementById("thoughts-content"),
@@ -1186,6 +1568,10 @@
             historyDropdown: document.getElementById("history-dropdown"),
             progressMarkers: document.getElementById("progress-markers"),
           };
+
+          // Initialize voice recognition
+          this.voiceRecognition = new VoiceRecognition(this);
+
           this.initEventListeners();
           this.loadDefaultConfig();
         }
@@ -1370,14 +1756,15 @@
             if (stage === "egg" || stage === "baby") {
               characterAge = 0;
             } else if (stage === "adult") {
-              characterAge = 10;
-            } else {
               characterAge = 7;
+            } else {
+              characterAge = 4;
             }
+            this.config.character.age = characterAge;
           } catch (error) {
             console.error("Error loading dragon stage:", error);
           } // Dragon egg videos (>= 0 years)
-          if (characterAge < 4) {
+          if (characterAge < 1) {
             this.config.videoActions["待机"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_small.mp4",
             };
@@ -1396,7 +1783,7 @@
             this.config.videoActions["难过"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_egg/dragon_egg_sad.mp4",
             };
-          } else if (characterAge <= 7) {
+          } else if (characterAge <= 4) {
             this.config.videoActions["待机"] = {
               url: "https://cdn.keepwork.com/digitalhuman/v1/dragon/dragon_small/dragon_small_happy01.mp4",
             };
@@ -1440,6 +1827,7 @@
               chat_background: null,
               description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！",
             },
+            voice_language: "", // 语音识别语言，空字符串表示使用系统默认
             objective: {
               title: "学习动力恢复进度",
               description: "通过耐心的交流，帮助小明重新找回学习的乐趣",
@@ -1718,7 +2106,6 @@
             this.elements.progressMarkers.appendChild(markerElement);
           });
         }
-
         async sendMessage() {
           let message = this.elements.userInput.value.trim();
           if (!message) return;
@@ -1728,6 +2115,11 @@
           this.elements.userInput.disabled = true;
           this.addMessage(message, true);
           this.elements.userInput.value = "";
+
+          // Reset voice recognition state when message is sent
+          if (this.voiceRecognition) {
+            this.voiceRecognition.reset();
+          }
 
           // Switch avatar to idle when user sends message
           if (avatarManager.isEnabled) {
@@ -2170,9 +2562,17 @@
                 console.log("使用缓存的音频URL");
               } else {
                 // 从SDK获取新的音频URL
+
+                // 如果传入了gender和age参数，自动映射per参数
+                const options = {};
+                if (this.config.character?.gender || this.config.character?.age !== undefined) {
+                  const age = this.config.character?.age || 25;
+                  const gender = this.config.character?.gender || "female";
+                  options.per = sdk.speech.getVoiceIdByAgeGender(age, gender);
+                }
+
                 const result = await sdk.speech.textToAudio(textToRead, {
-                  gender: this.config.character?.gender,
-                  age: this.config.character?.age,
+                  ...options,
                 });
 
                 if (result && result.data) {
@@ -2631,16 +3031,19 @@
               }
             }
           });
+        } // ========== Session管理方法 ==========
+        // Get the LLM model name from config, defaulting to "keepwork-pro"
+        getLLMModel() {
+          return this.config?.llm_model || "keepwork-pro";
         }
 
-        // ========== Session管理方法 ==========
         createNewSession() {
           this.currentSessionId = this.generateSessionId();
 
           // 重新初始化AI聊天会话
           if (sdk && sdk.aiChat) {
             aiChatSession = sdk.aiChat.createSession({
-              model: "keepwork-pro",
+              model: this.getLLMModel(),
               stream: true,
             });
 
@@ -2827,12 +3230,10 @@
               // 取出最后一条用户消息
               const lastMessage = chatHistoryToReplay.pop();
               lastUserMessage = lastMessage.content;
-            }
-
-            // 重新初始化AI聊天会话
+            } // 重新初始化AI聊天会话
             if (sdk && sdk.aiChat) {
               aiChatSession = sdk.aiChat.createSession({
-                model: "keepwork-pro",
+                model: this.getLLMModel(),
                 stream: true,
               });
 
@@ -3153,7 +3554,15 @@
         }
 
         checkVideoActionsAvailable() {
-          const hasVideoActions = game.config && game.config.videoActions && game.config.videoActions["待机"] && game.config.videoActions["说话"];
+          const hasVideoActions =
+            game.config &&
+            game.config.videoActions &&
+            game.config.videoActions["待机"] &&
+            game.config.videoActions["待机"].url &&
+            game.config.videoActions["待机"].url !== "" &&
+            game.config.videoActions["说话"] &&
+            game.config.videoActions["说话"].url &&
+            game.config.videoActions["说话"].url !== "";
           console.log("Video actions available:", hasVideoActions);
           return hasVideoActions;
         }
