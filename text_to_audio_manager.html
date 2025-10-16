@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<!--
+Text to Audio Manager - Translation Audio Generation Tool
+
+URL Parameters:
+- token: Keepwork authentication token
+- lang: Language preference (zhCN/enUS)
+- project: Auto-load specific project on startup
+
+Features:
+- Manage multiple translation projects
+- Batch import line-separated text
+- Generate audio with different voice types (age/gender)
+- Download individual or batch audio files
+- Store data in Keepwork personal page store
+-->
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Text to Audio Manager</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <style>
+        .table-container {
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+        }
+
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .audio-player {
+            width: 100%;
+            max-width: 200px;
+            height: 30px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-generating {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-completed {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .btn-primary {
+            background-color: #8b5cf6;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: #7c3aed;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background-color: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background-color: #6b7280;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 20px;
+            background-color: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: 500;
+        }
+
+        .voice-option {
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .voice-option:hover {
+            border-color: #8b5cf6;
+            background-color: #f5f3ff;
+        }
+
+        .voice-option.selected {
+            border-color: #8b5cf6;
+            background-color: #ede9fe;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #1f2937;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 2000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .import-textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: monospace;
+            resize: vertical;
+        }
+
+        .import-textarea:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-purple-50 to-pink-50">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-3xl font-bold text-purple-600">🎵 文本转语音管理器</h1>
+                <div class="text-sm text-gray-600" id="user-info">加载中...</div>
+            </div>
+
+            <!-- Project Selection and Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">当前项目</label>
+                    <select id="project-select" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        <option value="">选择项目</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <input type="radio" name="voice-mode" value="voice" id="voice-mode-radio" checked class="mr-2">
+                        语音类型
+                    </label>
+                    <select id="voice-select" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        <optgroup label="推荐 - 按年龄性别">
+                            <option value="20011">晓悠（女童）</option>
+                            <option value="20008">晓双（女童）</option>
+                            <option value="20012">云希（男童）</option>
+                            <option value="20001">晓晓（女青）</option>
+                            <option value="20013">云野（男青）</option>
+                            <option value="20003">晓辰（女中）</option>
+                            <option value="20002">云扬（男中）</option>
+                            <option value="20006">晓秋（女老）</option>
+                            <option value="106">度博文（男老）</option>
+                        </optgroup>
+                        <optgroup label="女声">
+                            <option value="0">百度（女声）</option>
+                            <option value="20001">晓晓（女）</option>
+                            <option value="20003">晓辰（女）</option>
+                            <option value="20004">晓涵（女）</option>
+                            <option value="20005">晓墨（女）</option>
+                            <option value="20006">晓秋（女）</option>
+                            <option value="20007">晓睿（女）</option>
+                            <option value="20008">晓双（女童）</option>
+                            <option value="20009">晓萱（女）</option>
+                            <option value="20010">晓颜（女）</option>
+                            <option value="20011">晓悠（女童）</option>
+                            <option value="20014">曉曼（女）</option>
+                            <option value="20015">曉佳（女）</option>
+                            <option value="5">度小娇</option>
+                            <option value="103">度米朵</option>
+                            <option value="5118">度小鹿</option>
+                        </optgroup>
+                        <optgroup label="男声">
+                            <option value="1">百度（男声）</option>
+                            <option value="20002">云扬（男）</option>
+                            <option value="20012">云希（男童）</option>
+                            <option value="20013">云野（男）</option>
+                            <option value="20016">雲龍（男）</option>
+                            <option value="20019">雲哲</option>
+                            <option value="106">度博文</option>
+                        </optgroup>
+                        <optgroup label="情感/特色">
+                            <option value="3">情感合成-度逍遥</option>
+                            <option value="4">情感合成-度丫丫</option>
+                            <option value="5003">度逍遥（精品）</option>
+                            <option value="110">度小童</option>
+                            <option value="111">度小萌</option>
+                            <option value="20017">曉臻</option>
+                            <option value="20018">曉雨</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <input type="radio" name="voice-mode" value="age-gender" id="age-gender-mode-radio" class="mr-2">
+                        年龄/性别
+                    </label>
+                    <select id="age-gender-select" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" disabled>
+                        <option value="child-female">4-8岁 女</option>
+                        <option value="child-male">4-8岁 男</option>
+                        <option value="teen-female">9-20岁 女</option>
+                        <option value="teen-male">9-20岁 男</option>
+                        <option value="adult-female">20-45岁 女</option>
+                        <option value="adult-male">20-45岁 男</option>
+                        <option value="senior-female">45岁以上 女</option>
+                        <option value="senior-male">45岁以上 男</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">语速 (<span id="speed-value">5</span>)</label>
+                    <input type="range" id="speed-slider" min="0" max="9" value="5" class="w-full">
+                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>慢</span>
+                        <span>正常</span>
+                        <span>快</span>
+                    </div>
+                </div>
+                <div class="flex items-end">
+                    <button id="new-project-btn" class="btn-primary w-full">+ 新建项目</button>
+                </div>
+                <div class="flex items-end">
+                    <button id="import-text-btn" class="btn-secondary w-full">📥 导入文本</button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap gap-3 mt-4">
+                <button id="generate-all-btn" class="btn-primary">🎤 生成全部音频</button>
+                <button id="generate-missing-btn" class="btn-primary">🔄 生成缺失音频</button>
+                <button id="download-all-btn" class="btn-secondary">💾 下载全部</button>
+                <button id="clear-table-btn" class="btn-danger">🗑️ 清空表格</button>
+                <button id="delete-project-btn" class="btn-danger">❌ 删除项目</button>
+            </div>
+
+            <!-- Progress -->
+            <div class="mt-4" id="progress-container" style="display: none;">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar" style="width: 0%">0%</div>
+                </div>
+                <p class="text-sm text-gray-600 mt-2" id="progress-text">准备就绪</p>
+            </div>
+        </div>
+
+        <!-- Translation Table -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-800">翻译音频列表</h2>
+                <span class="text-sm text-gray-600" id="item-count">0 项</span>
+            </div>
+
+            <div class="table-container">
+                <table class="w-full">
+                    <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                                <input type="checkbox" id="select-all-checkbox" class="rounded">
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">序号</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">文本</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">状态</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">音频</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="translation-table-body" class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+                                暂无数据。导入文本或创建新项目以开始使用。
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Project Modal -->
+    <div id="new-project-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">创建新项目</h3>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">项目名称</label>
+                <input type="text" id="new-project-name" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="例如：英语课程、故事旁白">
+            </div>
+            <div class="flex justify-end gap-3">
+                <button id="cancel-new-project-btn" class="btn-secondary">取消</button>
+                <button id="confirm-new-project-btn" class="btn-primary">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Text Modal -->
+    <div id="import-text-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">导入文本</h3>
+            <p class="text-sm text-gray-600 mb-3">每行输入一条文本。空行将被忽略。</p>
+            <textarea id="import-textarea" class="import-textarea" placeholder="你好，世界！&#10;Hello, World!&#10;Bonjour le monde!"></textarea>
+            <div class="flex items-center justify-between mt-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="import-append-checkbox" class="rounded mr-2">
+                    <span class="text-sm text-gray-700">追加到现有数据</span>
+                </label>
+                <div class="flex gap-3">
+                    <button id="cancel-import-btn" class="btn-secondary">取消</button>
+                    <button id="confirm-import-btn" class="btn-primary">导入</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Translations
+        const translations = {
+            zhCN: {
+                loading: '加载中...',
+                ready: '准备就绪',
+                generating: '正在生成音频...',
+                downloading: '正在下载...',
+                success: '操作成功',
+                error: '操作失败',
+                noProject: '请先选择或创建项目',
+                noData: '没有数据',
+                confirmDelete: '确定要删除此项目吗？',
+                confirmClear: '确定要清空当前表格吗？',
+                items: '项',
+            },
+            enUS: {
+                loading: 'Loading...',
+                ready: 'Ready',
+                generating: 'Generating audio...',
+                downloading: 'Downloading...',
+                success: 'Success',
+                error: 'Failed',
+                noProject: 'Please select or create a project first',
+                noData: 'No data',
+                confirmDelete: 'Are you sure you want to delete this project?',
+                confirmClear: 'Are you sure you want to clear the current table?',
+            }
+        };
+
+        // Detect language
+        const urlParams = new URLSearchParams(window.location.search);
+        const langParam = urlParams.get('lang');
+        const currentLanguage = langParam || (navigator.language.startsWith('zh') ? 'zhCN' : 'enUS');
+        const t = translations[currentLanguage];
+
+        // Initialize SDK
+        let sdk;
+        try {
+            sdk = new KeepworkSDK({
+                timeout: 30000
+            });
+            console.log(`Keepwork SDK initialized, token: ${sdk.token}`);
+        } catch (error) {
+            console.error('Failed to initialize Keepwork SDK:', error);
+        }
+
+        // Application State
+        class TextToAudioManager {
+            constructor() {
+                this.currentProject = null;
+                this.projects = [];
+                this.translations = [];
+                this.currentVoice = 20001; // Default: 女青 (9-20岁)
+                this.currentSpeed = 5; // 0-9, 5 is normal
+                this.currentAgeGender = 'child-female'; // Default age-gender
+                this.voiceMode = 'voice'; // 'voice' or 'age-gender'
+                this.isGenerating = false;
+                this.initializeElements();
+                this.bindEvents();
+                this.init();
+            }
+
+            initializeElements() {
+                // Buttons
+                this.elements = {
+                    projectSelect: document.getElementById('project-select'),
+                    voiceSelect: document.getElementById('voice-select'),
+                    ageGenderSelect: document.getElementById('age-gender-select'),
+                    voiceModeRadio: document.getElementById('voice-mode-radio'),
+                    ageGenderModeRadio: document.getElementById('age-gender-mode-radio'),
+                    speedSlider: document.getElementById('speed-slider'),
+                    speedValue: document.getElementById('speed-value'),
+                    newProjectBtn: document.getElementById('new-project-btn'),
+                    importTextBtn: document.getElementById('import-text-btn'),
+                    generateAllBtn: document.getElementById('generate-all-btn'),
+                    generateMissingBtn: document.getElementById('generate-missing-btn'),
+                    downloadAllBtn: document.getElementById('download-all-btn'),
+                    clearTableBtn: document.getElementById('clear-table-btn'),
+                    deleteProjectBtn: document.getElementById('delete-project-btn'),
+                    tableBody: document.getElementById('translation-table-body'),
+                    itemCount: document.getElementById('item-count'),
+                    progressContainer: document.getElementById('progress-container'),
+                    progressBar: document.getElementById('progress-bar'),
+                    progressText: document.getElementById('progress-text'),
+                    selectAllCheckbox: document.getElementById('select-all-checkbox'),
+                    userInfo: document.getElementById('user-info'),
+
+                    // Modals
+                    newProjectModal: document.getElementById('new-project-modal'),
+                    newProjectName: document.getElementById('new-project-name'),
+                    confirmNewProjectBtn: document.getElementById('confirm-new-project-btn'),
+                    cancelNewProjectBtn: document.getElementById('cancel-new-project-btn'),
+
+                    importTextModal: document.getElementById('import-text-modal'),
+                    importTextarea: document.getElementById('import-textarea'),
+                    importAppendCheckbox: document.getElementById('import-append-checkbox'),
+                    confirmImportBtn: document.getElementById('confirm-import-btn'),
+                    cancelImportBtn: document.getElementById('cancel-import-btn'),
+
+                    toast: document.getElementById('toast')
+                };
+            }
+
+            bindEvents() {
+                // Project selection
+                this.elements.projectSelect.addEventListener('change', () => this.loadProject());
+                
+                // Voice mode radio buttons
+                this.elements.voiceModeRadio.addEventListener('change', () => {
+                    this.voiceMode = 'voice';
+                    this.updateVoiceModeUI();
+                    this.saveProjectData();
+                });
+                this.elements.ageGenderModeRadio.addEventListener('change', () => {
+                    this.voiceMode = 'age-gender';
+                    this.updateVoiceModeUI();
+                    this.saveProjectData();
+                });
+                
+                this.elements.voiceSelect.addEventListener('change', (e) => {
+                    this.currentVoice = parseInt(e.target.value);
+                    this.saveProjectData();
+                });
+                this.elements.ageGenderSelect.addEventListener('change', (e) => {
+                    this.currentAgeGender = e.target.value;
+                    this.saveProjectData();
+                });
+                this.elements.speedSlider.addEventListener('input', (e) => {
+                    this.currentSpeed = parseInt(e.target.value);
+                    this.elements.speedValue.textContent = this.currentSpeed;
+                    this.saveProjectData();
+                });
+
+                // Buttons
+                this.elements.newProjectBtn.addEventListener('click', () => this.showNewProjectModal());
+                this.elements.importTextBtn.addEventListener('click', () => this.showImportTextModal());
+                this.elements.generateAllBtn.addEventListener('click', () => this.generateAllAudio());
+                this.elements.generateMissingBtn.addEventListener('click', () => this.generateMissingAudio());
+                this.elements.downloadAllBtn.addEventListener('click', () => this.downloadAllAudio());
+                this.elements.clearTableBtn.addEventListener('click', () => this.clearTable());
+                this.elements.deleteProjectBtn.addEventListener('click', () => this.deleteProject());
+                this.elements.selectAllCheckbox.addEventListener('change', (e) => this.selectAll(e.target.checked));
+
+                // Modal buttons
+                this.elements.confirmNewProjectBtn.addEventListener('click', () => this.createNewProject());
+                this.elements.cancelNewProjectBtn.addEventListener('click', () => this.hideNewProjectModal());
+                this.elements.confirmImportBtn.addEventListener('click', () => this.importText());
+                this.elements.cancelImportBtn.addEventListener('click', () => this.hideImportTextModal());
+
+                // Close modals on overlay click
+                this.elements.newProjectModal.addEventListener('click', (e) => {
+                    if (e.target === this.elements.newProjectModal) this.hideNewProjectModal();
+                });
+                this.elements.importTextModal.addEventListener('click', (e) => {
+                    if (e.target === this.elements.importTextModal) this.hideImportTextModal();
+                });
+            }
+
+            async init() {
+                this.showToast('正在加载项目...', 'info');
+                await this.loadProjects();
+                
+                // Check URL parameter for auto-load project
+                const projectParam = urlParams.get('project');
+                if (projectParam && this.projects.includes(projectParam)) {
+                    this.elements.projectSelect.value = projectParam;
+                    await this.loadProject();
+                } else if (this.projects.length > 0) {
+                    this.elements.projectSelect.value = this.projects[0];
+                    await this.loadProject();
+                }
+
+                // Update user info
+                if (sdk && sdk.token) {
+                    this.elements.userInfo.textContent = `令牌: ${sdk.token.substring(0, 20)}...`;
+                } else {
+                    this.elements.userInfo.textContent = '未认证';
+                }
+            }
+
+            async loadProjects() {
+                try {
+                    if (!sdk || !sdk.personalPageStore) {
+                        this.showToast('SDK未初始化', 'error');
+                        return;
+                    }
+
+                    const projectsData = await sdk.personalPageStore.loadPageData('text_to_audio_manager', 'projects');
+                    this.projects = projectsData || [];
+                    
+                    // Update project select dropdown
+                    this.elements.projectSelect.innerHTML = '<option value="">选择项目</option>';
+                    this.projects.forEach(project => {
+                        const option = document.createElement('option');
+                        option.value = project;
+                        option.textContent = project;
+                        this.elements.projectSelect.appendChild(option);
+                    });
+
+                    console.log('Loaded projects:', this.projects);
+                } catch (error) {
+                    console.error('Failed to load projects:', error);
+                    this.showToast('加载项目失败', 'error');
+                }
+            }
+
+            async saveProjects() {
+                try {
+                    if (!sdk || !sdk.personalPageStore) return;
+                    await sdk.personalPageStore.savePageData('text_to_audio_manager', 'projects', this.projects, true);
+                    console.log('Saved projects:', this.projects);
+                } catch (error) {
+                    console.error('Failed to save projects:', error);
+                    this.showToast('保存项目失败', 'error');
+                }
+            }
+
+            showNewProjectModal() {
+                this.elements.newProjectName.value = '';
+                this.elements.newProjectModal.classList.add('show');
+            }
+
+            hideNewProjectModal() {
+                this.elements.newProjectModal.classList.remove('show');
+            }
+
+            async createNewProject() {
+                const projectName = this.elements.newProjectName.value.trim();
+                if (!projectName) {
+                    this.showToast('请输入项目名称', 'error');
+                    return;
+                }
+
+                if (this.projects.includes(projectName)) {
+                    this.showToast('项目已存在', 'error');
+                    return;
+                }
+
+                this.projects.push(projectName);
+                await this.saveProjects();
+
+                // Add to dropdown and select it
+                const option = document.createElement('option');
+                option.value = projectName;
+                option.textContent = projectName;
+                this.elements.projectSelect.appendChild(option);
+                this.elements.projectSelect.value = projectName;
+
+                this.hideNewProjectModal();
+                this.showToast(`项目 "${projectName}" 已创建`, 'success');
+                
+                await this.loadProject();
+            }
+
+            async loadProject() {
+                const projectName = this.elements.projectSelect.value;
+                if (!projectName) {
+                    this.currentProject = null;
+                    this.translations = [];
+                    this.renderTable();
+                    return;
+                }
+
+                try {
+                    this.currentProject = projectName;
+                    
+                    if (!sdk || !sdk.personalPageStore) {
+                        this.showToast('SDK未初始化', 'error');
+                        return;
+                    }
+
+                    const projectData = await sdk.personalPageStore.loadPageData('text_to_audio_manager', projectName);
+                    if (projectData) {
+                        this.translations = projectData.translations || [];
+                        this.currentVoice = projectData.voice || 20001;
+                        this.currentSpeed = projectData.speed !== undefined ? projectData.speed : 5;
+                        this.currentAgeGender = projectData.ageGender || 'child-female';
+                        this.voiceMode = projectData.voiceMode || 'voice';
+                        this.elements.voiceSelect.value = this.currentVoice;
+                        this.elements.speedSlider.value = this.currentSpeed;
+                        this.elements.speedValue.textContent = this.currentSpeed;
+                        this.elements.ageGenderSelect.value = this.currentAgeGender;
+                        this.updateVoiceModeUI();
+                    } else {
+                        this.translations = [];
+                    }
+
+                    this.renderTable();
+                    this.showToast(`已加载项目: ${projectName}`, 'success');
+                } catch (error) {
+                    console.error('Failed to load project:', error);
+                    this.showToast('加载项目失败', 'error');
+                }
+            }
+
+            async saveProjectData() {
+                if (!this.currentProject) return;
+
+                try {
+                    const projectData = {
+                        translations: this.translations,
+                        voice: this.currentVoice,
+                        speed: this.currentSpeed,
+                        ageGender: this.currentAgeGender,
+                        voiceMode: this.voiceMode,
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    if (!sdk || !sdk.personalPageStore) {
+                        this.showToast('SDK未初始化', 'error');
+                        return;
+                    }
+
+                    await sdk.personalPageStore.savePageData('text_to_audio_manager', this.currentProject, projectData, true);
+                    console.log('Saved project data:', this.currentProject);
+                } catch (error) {
+                    console.error('Failed to save project data:', error);
+                    this.showToast('保存项目数据失败', 'error');
+                }
+            }
+
+            async deleteProject() {
+                if (!this.currentProject) {
+                    this.showToast(t.noProject, 'error');
+                    return;
+                }
+
+                if (!confirm(t.confirmDelete)) return;
+
+                try {
+                    if (!sdk || !sdk.personalPageStore) {
+                        this.showToast('SDK未初始化', 'error');
+                        return;
+                    }
+
+                    // Remove from projects list (note: data remains in storage but won't be listed)
+                    this.projects = this.projects.filter(p => p !== this.currentProject);
+                    await this.saveProjects();
+
+                    // Clear UI
+                    this.currentProject = null;
+                    this.translations = [];
+                    this.elements.projectSelect.value = '';
+                    this.renderTable();
+
+                    // Reload projects dropdown
+                    await this.loadProjects();
+
+                    this.showToast('项目已删除', 'success');
+                } catch (error) {
+                    console.error('Failed to delete project:', error);
+                    this.showToast('删除项目失败', 'error');
+                }
+            }
+
+            showImportTextModal() {
+                if (!this.currentProject) {
+                    this.showToast(t.noProject, 'error');
+                    return;
+                }
+                this.elements.importTextarea.value = '';
+                this.elements.importAppendCheckbox.checked = false;
+                this.elements.importTextModal.classList.add('show');
+            }
+
+            hideImportTextModal() {
+                this.elements.importTextModal.classList.remove('show');
+            }
+
+            async importText() {
+                const text = this.elements.importTextarea.value;
+                const append = this.elements.importAppendCheckbox.checked;
+
+                if (!text.trim()) {
+                    this.showToast('请输入文本', 'error');
+                    return;
+                }
+
+                const lines = text.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
+
+                if (lines.length === 0) {
+                    this.showToast('未找到有效文本', 'error');
+                    return;
+                }
+
+                if (!append) {
+                    this.translations = [];
+                }
+
+                lines.forEach(line => {
+                    this.translations.push({
+                        id: Date.now() + Math.random(),
+                        text: line,
+                        status: 'pending',
+                        audioUrl: null,
+                        audioData: null,
+                        error: null
+                    });
+                });
+
+                await this.saveProjectData();
+                this.renderTable();
+                this.hideImportTextModal();
+                this.showToast(`已导入 ${lines.length} 条文本`, 'success');
+            }
+
+            renderTable() {
+                const tbody = this.elements.tableBody;
+                tbody.innerHTML = '';
+
+                if (this.translations.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+                                暂无数据。导入文本或创建新项目以开始使用。
+                            </td>
+                        </tr>
+                    `;
+                    this.elements.itemCount.textContent = '0 项';
+                    return;
+                }
+
+                this.translations.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50';
+                    
+                    const statusClass = `status-${item.status}`;
+                    const statusText = {
+                        'pending': '⏳ 待处理',
+                        'generating': '🔄 生成中',
+                        'completed': '✅ 已完成',
+                        'error': '❌ 错误'
+                    }[item.status] || item.status;
+
+                    row.innerHTML = `
+                        <td class="px-4 py-3">
+                            <input type="checkbox" class="row-checkbox rounded" data-index="${index}">
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500">${index + 1}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${this.escapeHtml(item.text)}</td>
+                        <td class="px-4 py-3">
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                            ${item.error ? `<div class="text-xs text-red-600 mt-1">${this.escapeHtml(item.error)}</div>` : ''}
+                        </td>
+                        <td class="px-4 py-3">
+                            ${item.audioUrl ? `<audio controls class="audio-player" src="${item.audioUrl}"></audio>` : '<span class="text-gray-400 text-sm">无音频</span>'}
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex gap-2">
+                                <button class="btn-primary text-xs px-3 py-1" onclick="manager.generateSingleAudio(${index})">生成</button>
+                                ${item.audioUrl ? `<button class="btn-secondary text-xs px-3 py-1" onclick="manager.downloadSingle(${index})">下载</button>` : ''}
+                                <button class="btn-danger text-xs px-3 py-1" onclick="manager.deleteItem(${index})">删除</button>
+                            </div>
+                        </td>
+                    `;
+
+                    tbody.appendChild(row);
+                });
+
+                this.elements.itemCount.textContent = `${this.translations.length} 项`;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            selectAll(checked) {
+                document.querySelectorAll('.row-checkbox').forEach(cb => {
+                    cb.checked = checked;
+                });
+            }
+
+            getSelectedIndices() {
+                const indices = [];
+                document.querySelectorAll('.row-checkbox:checked').forEach(cb => {
+                    indices.push(parseInt(cb.dataset.index));
+                });
+                return indices;
+            }
+
+            updateVoiceModeUI() {
+                if (this.voiceMode === 'voice') {
+                    this.elements.voiceSelect.disabled = false;
+                    this.elements.ageGenderSelect.disabled = true;
+                    this.elements.voiceModeRadio.checked = true;
+                } else {
+                    this.elements.voiceSelect.disabled = true;
+                    this.elements.ageGenderSelect.disabled = false;
+                    this.elements.ageGenderModeRadio.checked = true;
+                }
+            }
+
+            updateVoiceModeUI() {
+                if (this.voiceMode === 'voice') {
+                    this.elements.voiceSelect.disabled = false;
+                    this.elements.ageGenderSelect.disabled = true;
+                    this.elements.voiceModeRadio.checked = true;
+                } else {
+                    this.elements.voiceSelect.disabled = true;
+                    this.elements.ageGenderSelect.disabled = false;
+                    this.elements.ageGenderModeRadio.checked = true;
+                }
+            }
+
+            /**
+             * 播放Keepwork合成音频
+             * 4-8 男 20012 女 20011
+             * 9-20 男 20013 女 20001
+             * 20-45 男 20002 女 20003
+             * 45+ 男 106 女 20006
+             */
+            getVoiceConfig() {
+                return {
+                    // 4-8岁
+                    child: {
+                        male: 20012,
+                        female: 20011
+                    },
+                    // 9-20岁
+                    teen: {
+                        male: 20013,
+                        female: 20001
+                    },
+                    // 20-45岁
+                    adult: {
+                        male: 20002,
+                        female: 20003
+                    },
+                    // 45岁以上
+                    senior: {
+                        male: 106,
+                        female: 20006
+                    }
+                };
+            }
+
+            mapAgeGenderToVoice(ageGender) {
+                const config = this.getVoiceConfig();
+                const mapping = {
+                    'child-female': config.child.female,
+                    'child-male': config.child.male,
+                    'teen-female': config.teen.female,
+                    'teen-male': config.teen.male,
+                    'adult-female': config.adult.female,
+                    'adult-male': config.adult.male,
+                    'senior-female': config.senior.female,
+                    'senior-male': config.senior.male
+                };
+                return mapping[ageGender] || null;
+            }
+
+            getEffectiveVoice() {
+                if (this.voiceMode === 'age-gender') {
+                    return this.mapAgeGenderToVoice(this.currentAgeGender);
+                }
+                return this.currentVoice;
+            }
+
+            async generateSingleAudio(index) {
+                if (this.isGenerating) {
+                    this.showToast('正在生成音频', 'error');
+                    return;
+                }
+
+                const item = this.translations[index];
+                if (!item) return;
+
+                try {
+                    this.isGenerating = true;
+                    item.status = 'generating';
+                    this.renderTable();
+
+                    const effectiveVoice = this.getEffectiveVoice();
+                    const audioData = await this.textToSpeech(item.text, effectiveVoice, this.currentSpeed);
+                    
+                    if (audioData) {
+                        item.audioData = audioData;
+                        item.audioUrl = `data:audio/mp3;base64,${audioData}`;
+                        item.status = 'completed';
+                        item.error = null;
+                    } else {
+                        item.status = 'error';
+                        item.error = '生成音频失败';
+                    }
+
+                    await this.saveProjectData();
+                    this.renderTable();
+                    this.showToast('音频生成成功', 'success');
+                } catch (error) {
+                    console.error('Failed to generate audio:', error);
+                    item.status = 'error';
+                    item.error = error.message;
+                    this.renderTable();
+                    this.showToast('音频生成失败', 'error');
+                } finally {
+                    this.isGenerating = false;
+                }
+            }
+
+            async generateAllAudio() {
+                if (!this.currentProject) {
+                    this.showToast(t.noProject, 'error');
+                    return;
+                }
+
+                await this.generateAudioBatch(this.translations.map((_, i) => i));
+            }
+
+            async generateMissingAudio() {
+                if (!this.currentProject) {
+                    this.showToast(t.noProject, 'error');
+                    return;
+                }
+
+                const missingIndices = this.translations
+                    .map((item, index) => item.status !== 'completed' ? index : null)
+                    .filter(i => i !== null);
+
+                if (missingIndices.length === 0) {
+                    this.showToast('所有音频已生成', 'info');
+                    return;
+                }
+
+                await this.generateAudioBatch(missingIndices);
+            }
+
+            async generateAudioBatch(indices) {
+                if (this.isGenerating) {
+                    this.showToast('正在生成音频', 'error');
+                    return;
+                }
+
+                if (indices.length === 0) {
+                    this.showToast('没有需要生成的项目', 'error');
+                    return;
+                }
+
+                this.isGenerating = true;
+                this.elements.progressContainer.style.display = 'block';
+                this.updateProgress(0, `正在生成 0/${indices.length}...`);
+
+                let completed = 0;
+
+                for (let i = 0; i < indices.length; i++) {
+                    const index = indices[i];
+                    const item = this.translations[index];
+
+                    try {
+                        item.status = 'generating';
+                        this.renderTable();
+
+                        const effectiveVoice = this.getEffectiveVoice();
+                        const audioData = await this.textToSpeech(item.text, effectiveVoice, this.currentSpeed);
+                        
+                        if (audioData) {
+                            item.audioData = audioData;
+                            item.audioUrl = `data:audio/mp3;base64,${audioData}`;
+                            item.status = 'completed';
+                            item.error = null;
+                            completed++;
+                        } else {
+                            item.status = 'error';
+                            item.error = '生成音频失败';
+                        }
+                    } catch (error) {
+                        console.error('Failed to generate audio:', error);
+                        item.status = 'error';
+                        item.error = error.message;
+                    }
+
+                    const progress = Math.round(((i + 1) / indices.length) * 100);
+                    this.updateProgress(progress, `已生成 ${i + 1}/${indices.length}...`);
+                    this.renderTable();
+
+                    // Small delay to prevent rate limiting
+                    if (i < indices.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+
+                await this.saveProjectData();
+                this.isGenerating = false;
+                this.elements.progressContainer.style.display = 'none';
+                this.showToast(`已生成 ${completed}/${indices.length} 个音频文件`, 'success');
+            }
+
+            async textToSpeech(text, voice, speed = 5) {
+                try {
+                    if (!sdk || !sdk.speech) {
+                        throw new Error('SDK speech not available');
+                    }
+
+                    // voice is now directly the per parameter (numeric ID)
+                    const result = await sdk.speech.textToAudio(text, {
+                        per: voice,  // 直接使用语音ID
+                        spd: speed   // 语速: 0-9, 5为正常语速
+                    });
+
+                    if (result && result.data) {
+                        // Fetch the audio file from the URL and convert to base64
+                        const response = await fetch(result.data);
+                        const blob = await response.blob();
+                        const base64 = await this.blobToBase64(blob);
+                        // Remove data URL prefix to get pure base64
+                        return base64.split(',')[1];
+                    }
+
+                    throw new Error('文本转语音返回无效响应');
+                } catch (error) {
+                    console.error('Text to speech error:', error);
+                    throw error;
+                }
+            }
+
+            blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            async downloadSingle(index) {
+                const item = this.translations[index];
+                if (!item || !item.audioData) {
+                    this.showToast('没有可下载的音频', 'error');
+                    return;
+                }
+
+                try {
+                    const blob = this.base64ToBlob(item.audioData, 'audio/mp3');
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `audio_${index + 1}_${this.sanitizeFilename(item.text.substring(0, 30))}.mp3`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    this.showToast('音频已下载', 'success');
+                } catch (error) {
+                    console.error('Download failed:', error);
+                    this.showToast('下载失败', 'error');
+                }
+            }
+
+            async downloadAllAudio() {
+                const completedItems = this.translations.filter(item => item.status === 'completed' && item.audioData);
+                
+                if (completedItems.length === 0) {
+                    this.showToast('没有可下载的音频文件', 'error');
+                    return;
+                }
+
+                this.elements.progressContainer.style.display = 'block';
+                this.updateProgress(0, `正在下载 0/${completedItems.length}...`);
+
+                for (let i = 0; i < completedItems.length; i++) {
+                    const item = completedItems[i];
+                    const index = this.translations.indexOf(item);
+                    
+                    try {
+                        const blob = this.base64ToBlob(item.audioData, 'audio/mp3');
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `audio_${index + 1}_${this.sanitizeFilename(item.text.substring(0, 30))}.mp3`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+
+                        // Small delay between downloads
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    } catch (error) {
+                        console.error('Download failed:', error);
+                    }
+
+                    const progress = Math.round(((i + 1) / completedItems.length) * 100);
+                    this.updateProgress(progress, `已下载 ${i + 1}/${completedItems.length}...`);
+                }
+
+                this.elements.progressContainer.style.display = 'none';
+                this.showToast(`已下载 ${completedItems.length} 个音频文件`, 'success');
+            }
+
+            base64ToBlob(base64, mimeType) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                return new Blob([byteArray], { type: mimeType });
+            }
+
+            sanitizeFilename(text) {
+                return text.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
+            }
+
+            async clearTable() {
+                if (!this.currentProject) {
+                    this.showToast(t.noProject, 'error');
+                    return;
+                }
+
+                if (!confirm(t.confirmClear)) return;
+
+                this.translations = [];
+                await this.saveProjectData();
+                this.renderTable();
+                this.showToast('表格已清空', 'success');
+            }
+
+            async deleteItem(index) {
+                if (!confirm('确定删除此项？')) return;
+
+                this.translations.splice(index, 1);
+                await this.saveProjectData();
+                this.renderTable();
+                this.showToast('项目已删除', 'success');
+            }
+
+            updateProgress(percent, text) {
+                this.elements.progressBar.style.width = `${percent}%`;
+                this.elements.progressBar.textContent = `${percent}%`;
+                this.elements.progressText.textContent = text;
+            }
+
+            showToast(message, type = 'info') {
+                const toast = this.elements.toast;
+                toast.textContent = message;
+                toast.style.backgroundColor = {
+                    'success': '#10b981',
+                    'error': '#ef4444',
+                    'info': '#3b82f6',
+                    'warning': '#f59e0b'
+                }[type] || '#1f2937';
+
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Initialize the application
+        const manager = new TextToAudioManager();
+        window.manager = manager;
+
+        // Send game loaded event to parent
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+    </script>
+</body>
+</html>
