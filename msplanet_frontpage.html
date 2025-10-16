@@ -12,6 +12,10 @@
         box-sizing: border-box;
       }
 
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         background: #0a0e27;
@@ -26,6 +30,15 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
+      }
+
+      /* On mobile portrait, limit hero height to maintain good image ratio */
+      @media (max-width: 768px) and (orientation: portrait) {
+        .hero-section {
+          /* Ensure at least 1:1 ratio, but cap at 70vh on very tall screens */
+          min-height: min(100vw, 70vh);
+          max-height: 70vh;
+        }
       }
 
       .hero-bg {
@@ -45,7 +58,16 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        object-position: center center;
         z-index: 0;
+      }
+
+      /* On mobile portrait, use contain to show more of the image */
+      @media (max-width: 768px) and (orientation: portrait) {
+        .hero-bg-image {
+          object-fit: contain;
+          object-position: center top;
+        }
       }
 
       .hero-content {
@@ -120,7 +142,6 @@
 
       .feature-card:hover {
         background: rgba(255, 255, 255, 0.1);
-        transform: translateY(-5px);
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
       }
 
@@ -159,6 +180,11 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
+      }
+
+      /* Section Scroll Alignment */
+      section {
+        scroll-margin-top: var(--header-height, 80px);
       }
 
       /* Review Card */
@@ -284,6 +310,8 @@
 
       .feature-thumbnails {
         position: relative;
+        padding: 0.5rem 0;
+        overflow: visible;
       }
 
       .feature-thumbnail {
@@ -628,10 +656,10 @@
             <h1 class="text-2xl font-bold gradient-text">麦思星球</h1>
           </div>
           <nav class="hidden md:flex space-x-8">
-            <a href="#home" class="text-white hover:text-purple-400 transition">首页</a>
-            <a href="#features" class="text-white hover:text-purple-400 transition">游戏特色</a>
-            <a href="#tutorial" class="text-white hover:text-purple-400 transition">创作教学</a>
-            <a href="#reviews" class="text-white hover:text-purple-400 transition">玩家评价</a>
+            <a href="#home" class="text-white hover:text-purple-400 transition" onclick="smoothScrollToSection(event, 'home')">首页</a>
+            <a href="#features" class="text-white hover:text-purple-400 transition" onclick="smoothScrollToSection(event, 'features')">游戏特色</a>
+            <a href="#tutorial" class="text-white hover:text-purple-400 transition" onclick="smoothScrollToSection(event, 'tutorial')">创作教学</a>
+            <a href="#reviews" class="text-white hover:text-purple-400 transition" onclick="smoothScrollToSection(event, 'reviews')">玩家评价</a>
           </nav>
           <button class="hidden md:block bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-full font-semibold transition">立即下载</button>
         </div>
@@ -658,7 +686,6 @@
           -->
         </div>
       </div>
-      
 
       <!-- Bottom section with download button and age rating -->
       <div class="hero-bottom">
@@ -672,7 +699,7 @@
 
             <!-- Download Button centered -->
             <div class="flex-1 flex justify-center">
-              <button class="download-btn text-white font-bold py-4 px-16 rounded-full text-xl inline-block">立即下载 (iOS/安卓/网页)</button>
+              <button class="download-btn text-white font-bold py-4 px-16 rounded-full text-xl inline-block">立即下载 (移动端/PC)</button>
             </div>
 
             <!-- Spacer for balance -->
@@ -752,7 +779,7 @@
 
           <!-- Feature Thumbnails Row -->
           <div class="feature-thumbnails">
-            <div id="thumbnailsContainer" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+            <div id="thumbnailsContainer" class="flex gap-4 overflow-x-auto pb-4 scrollbar-hide" style="overflow-y: visible; padding: 0.5rem;">
               <!-- Thumbnails will be dynamically generated from featureData -->
             </div>
           </div>
@@ -771,7 +798,7 @@
               <div class="text-sm text-purple-400 mb-2">基础教程</div>
               <h4 class="text-xl font-bold mb-3">建筑入门指南</h4>
               <p class="text-gray-400 mb-4">从零开始学习建造系统，掌握基础建筑技巧，创造你的第一个作品</p>
-              <a href="#" class="text-purple-400 hover:text-purple-300">查看教程 →</a>
+              <a href="https://www.bilibili.com/video/BV1f7xHz6EGb/" class="text-purple-400 hover:text-purple-300">查看教程 →</a>
             </div>
           </div>
 
@@ -1080,8 +1107,8 @@
           description: "数百种建筑材料和装饰品，从简单的小屋到宏伟的城堡，打造属于你的梦想世界。支持多人协作建造，与朋友一起创造奇迹。",
           tags: ["创意建造", "多人协作", "无限可能"],
           media: {
-            type: "video",
-            src: "https://cdn.keepwork.com/maisi/launcher/demo_video.mp4",
+            type: "iframe",
+            src: "//player.bilibili.com/player.html?isOutside=true&aid=115313295229371&bvid=BV1f7xHz6EGb&cid=32826066816&p=1",
             poster: "https://cdn.keepwork.com/maisi/launcher/launcher01.jpg",
           },
         },
@@ -1133,15 +1160,13 @@
         },
       ];
 
-      let currentFeatureIndex = 0;
+      let currentFeatureIndex = -1; // Start with -1 so first switch works
 
       // Initialize features
       function initializeFeatures() {
         generateThumbnails();
-        const firstThumbnail = document.querySelector(".feature-thumbnail");
-        if (firstThumbnail) {
-          firstThumbnail.classList.add("active");
-        }
+        // Load the first feature immediately
+        switchMainFeature(0);
       }
 
       // Generate thumbnails from featureData
@@ -1151,9 +1176,9 @@
 
         container.innerHTML = featureData
           .map((feature, index) => {
-            const mediaHTML =
-              feature.media.type === "video"
-                ? `<video class="w-full h-full object-cover lazy-video" poster="${feature.media.poster}" muted preload="none" loading="lazy">
+            let mediaHTML;
+            if (feature.media.type === "video") {
+              mediaHTML = `<video class="w-full h-full object-cover lazy-video" poster="${feature.media.poster}" muted preload="none" loading="lazy">
                  <source data-src="${feature.media.src}" type="video/mp4" />
                  <img data-src="${feature.media.poster}" alt="${feature.title}" class="w-full h-full object-cover lazy-image" loading="lazy" />
                </video>
@@ -1161,8 +1186,17 @@
                  <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
                    <path d="M8 5v14l11-7z" />
                  </svg>
-               </div>`
-                : `<img data-src="${feature.media.src}" alt="${feature.title}" class="w-full h-full object-cover lazy-image" loading="lazy" />`;
+               </div>`;
+            } else if (feature.media.type === "iframe") {
+              mediaHTML = `<img data-src="${feature.media.poster}" alt="${feature.title}" class="w-full h-full object-cover lazy-image" loading="lazy" />
+               <div class="absolute top-2 left-2">
+                 <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                   <path d="M8 5v14l11-7z" />
+                 </svg>
+               </div>`;
+            } else {
+              mediaHTML = `<img data-src="${feature.media.src}" alt="${feature.title}" class="w-full h-full object-cover lazy-image" loading="lazy" />`;
+            }
 
             return `
             <div class="flex-shrink-0 cursor-pointer feature-thumbnail" onclick="switchMainFeature(${index})">
@@ -1243,6 +1277,20 @@
               </div>
             </div>
           `;
+        } else if (feature.media.type === "iframe") {
+          videoContainer.innerHTML = `
+            <iframe 
+              id="mainFeatureIframe"
+              class="w-full h-full" 
+              src="${feature.media.src}"
+              scrolling="no" 
+              border="0" 
+              frameborder="no" 
+              framespacing="0" 
+              allowfullscreen="true"
+              loading="lazy"
+            ></iframe>
+          `;
         } else {
           videoContainer.innerHTML = `
             <img src="${feature.media.src}" alt="${feature.title}" class="w-full h-full object-cover" loading="lazy">
@@ -1277,6 +1325,25 @@
       // Initialize features and lazy loading
       initializeFeatures();
       initializeLazyLoading();
+
+      // Smooth scroll to section with header offset
+      function smoothScrollToSection(event, sectionId) {
+        event?.preventDefault();
+        const section = document.getElementById(sectionId);
+        if (!section) return;
+
+        const headerHeight = document.querySelector(".sticky-header")?.offsetHeight || 0;
+        const sectionTop = section.getBoundingClientRect().top + window.pageYOffset;
+        const offsetPosition = sectionTop - headerHeight;
+
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: "smooth",
+        });
+      }
+
+      // Make function globally available
+      window.smoothScrollToSection = smoothScrollToSection;
     </script>
   </body>
 </html>

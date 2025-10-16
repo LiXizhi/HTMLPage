@@ -8,7 +8,7 @@
     <script>
       // Global Configuration - 全局配置
       const GLOBAL_CONFIG = {
-        apkDownloadUrl: "https://cdn.keepwork.com/dist/maseai/maseai-v1.2-6-20250909-1008-release.apk",
+        apkDownloadUrl: "https://cdn.keepwork.com/dist/maseai/maseai-v1.3-7-20250917-1923-release.apk",
         webUrl: "https://play.maseai.com",
         iosAppStoreUrl: "https://apps.apple.com/app/6749035691",
         androidPlayStoreUrl: "https://play.google.com/store/apps/details?id=com.maixi.planet",
@@ -79,9 +79,14 @@
                 </div>
               </div>
             </div>
-            <button class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-medium transition-colors" onclick="downloadAPK()" id="apkDownloadButton">
+            <a
+              href="https://cdn.keepwork.com/dist/maseai/maseai-v1.4-8-20250928-1652-release.apk"
+              class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center"
+              id="apkDownloadButton"
+              download
+            >
               下载APK
-            </button>
+            </a>
           </div>
         </div>
 
@@ -109,11 +114,13 @@
                 <p class="text-sm text-blue-600 font-mono bg-blue-50 px-2 py-1 rounded mt-1" id="webUrlDisplay"></p>
                 <div class="flex items-center mt-1">
                   <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">推荐</span>
-                  <span class="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded ml-1">最佳体验</span>
+                  <span class="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded ml-1">支持鼠标/键盘</span>
                 </div>
               </div>
             </div>
-            <button class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-medium transition-colors" onclick="copyWebUrl()">复制网址</button>
+            <div class="flex flex-col gap-2" id="webButtonContainer">
+              <button class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-medium transition-colors" onclick="copyWebUrl()">复制网址</button>
+            </div>
           </div>
         </div>
         <!-- WeChat Mini Program -->
@@ -125,10 +132,7 @@
                 <h3 class="text-xl font-semibold text-gray-800">微信服务号</h3>
                 <p class="text-gray-600">支持微信PC版/手机多端登录</p>
                 <div class="flex items-center mt-2 space-x-3">
-                  <div
-                    class="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center border cursor-pointer hover:bg-gray-100 transition-colors maixi-qrcode"
-                    onclick="showQRCode()"
-                  ></div>
+                  <div class="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center border cursor-pointer hover:bg-gray-100 transition-colors maixi-qrcode" onclick="showQRCode()"></div>
                   <div class="text-sm">
                     <p class="text-gray-500">扫描二维码关注</p>
                     <p class="text-blue-600 font-medium">麦思星球</p>
@@ -381,59 +385,16 @@
 
         // 检测微信浏览器
         if (device.isWeChat) {
-          alert(
-            '检测到您正在使用微信浏览器\n\n为了正常下载APK安装包，请：\n1. 点击右上角"..."菜单\n2. 选择"在浏览器中打开"\n3. 然后重新点击下载按钮\n\n或者复制链接到系统浏览器中打开：\n' +
-              apkUrl
-          );
+          alert('检测到您正在使用微信浏览器\n\n为了正常下载APK安装包，请：\n1. 点击右上角"..."菜单\n2. 选择"在浏览器中打开"\n3. 然后重新点击下载按钮\n\n或者复制链接到系统浏览器中打开：\n' + apkUrl);
           return;
         }
 
-        // 对于移动端浏览器，使用多种方法尝试下载
-        if (device.isMobile) {
-          // 显示下载开始提示
-          showDownloadTip();
+        // 显示下载开始提示
+        showDownloadTip();
 
-          // 方法1: 尝试创建隐藏的a标签下载
-          const link = document.createElement("a");
-          link.href = apkUrl;
-          link.download = "maseai-release.apk";
-          link.style.display = "none";
-          link.rel = "noopener";
-
-          // 添加到DOM
-          document.body.appendChild(link);
-
-          // 延迟点击以确保DOM已更新
-          setTimeout(() => {
-            try {
-              // 尝试触发下载
-              link.click();
-
-              // 备用方法：如果click不工作，尝试其他方式
-              setTimeout(() => {
-                if (!document.hidden) {
-                  // 如果页面仍然可见，可能下载没有开始
-                  window.location.href = apkUrl;
-                }
-              }, 2000);
-            } catch (e) {
-              console.log("Click download failed:", e);
-              // 方法2: 直接使用window.location
-              window.location.href = apkUrl;
-            }
-
-            // 清理DOM
-            setTimeout(() => {
-              if (document.body.contains(link)) {
-                document.body.removeChild(link);
-              }
-            }, 1000);
-          }, 100);
-        } else {
-          // 桌面端直接打开链接
-          window.open(apkUrl, "_blank");
-          showDownloadTip();
-        }
+        // 对于所有设备，直接使用window.location.href触发下载
+        // 这种方法比创建隐藏链接更可靠
+        window.location.href = apkUrl;
       }
 
       // 显示下载提示
@@ -529,12 +490,31 @@
         }
       }
 
+      // 启动网页版函数
+      function launchWebVersion() {
+        const webGameUrl = "https://keepwork.com/public/resource/miniGameProxy.html?projectPath=maisi/maisi/webgames/data&gameName=ms_games_login&ver=11";
+        window.open(webGameUrl, "_blank");
+      }
+
       // 初始化配置
       function initializeConfig() {
         // 设置网页版URL显示
         const webUrlDisplay = document.getElementById("webUrlDisplay");
         if (webUrlDisplay) {
           webUrlDisplay.textContent = GLOBAL_CONFIG.webUrl;
+        }
+
+        // 为PC平台添加"启动网页版"按钮
+        const device = detectDevice();
+        if (device.isPC) {
+          const webButtonContainer = document.getElementById("webButtonContainer");
+          if (webButtonContainer) {
+            const launchButton = document.createElement("button");
+            launchButton.className = "bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors";
+            launchButton.textContent = "启动网页版";
+            launchButton.onclick = launchWebVersion;
+            webButtonContainer.appendChild(launchButton);
+          }
         }
       }
 
