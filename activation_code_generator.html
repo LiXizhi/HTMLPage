@@ -1,0 +1,401 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏激活码生成与验证系统</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-bold text-center text-indigo-900 mb-8">🎮 激活码管理系统</h1>
+        
+        <!-- 标签切换 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex border-b border-gray-200 mb-6">
+                <button onclick="switchTab('generate')" id="tab-generate" class="px-6 py-3 font-semibold text-indigo-600 border-b-2 border-indigo-600">
+                    生成激活码
+                </button>
+                <button onclick="switchTab('verify')" id="tab-verify" class="px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600">
+                    验证激活码
+                </button>
+            </div>
+
+            <!-- 生成激活码面板 -->
+            <div id="panel-generate" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Encoded Secret
+                    </label>
+                    <input type="text" id="encodedSecret" value="paracraft" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            生成日期
+                        </label>
+                        <input type="date" id="generateDate" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            生成数量
+                        </label>
+                        <input type="number" id="quantity" value="10" min="1" max="1000"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <button onclick="generateCodes()" 
+                        class="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                        🎯 生成激活码
+                    </button>
+                    <button onclick="exportToCSV()" id="exportBtn" disabled
+                        class="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        📊 导出CSV
+                    </button>
+                </div>
+
+                <div id="generatedCodes" class="hidden">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">生成的激活码：</h3>
+                    <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                        <div id="codesList" class="space-y-2"></div>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">
+                        共生成 <span id="totalCodes" class="font-bold text-indigo-600">0</span> 个激活码
+                    </p>
+                </div>
+            </div>
+
+            <!-- 验证激活码面板 -->
+            <div id="panel-verify" class="space-y-6 hidden">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Encoded Secret (用于验证)
+                    </label>
+                    <input type="text" id="verifyEncodedSecret" value="paracraft" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        激活码
+                    </label>
+                    <input type="text" id="activationCode" placeholder="XXXX-XXXX-XXXX-XXXX" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase">
+                </div>
+
+                <button onclick="verifyCode()" 
+                    class="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                    🔍 验证激活码
+                </button>
+
+                <div id="verifyResult" class="hidden">
+                    <div id="resultContent" class="p-4 rounded-lg"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ActivationCodeGenerator - 激活码生成与验证类
+         * 无依赖的独立类，可在任何地方复用
+         * 
+         * 编码格式（固定16字符 XXXX-XXXX-XXXX-XXXX）：
+         * - 前4位：日期编码+随机盐（base36）
+         * - 中4位：索引编码+随机盐（base36）
+         * - 后8位：校验和（基于encodedSecret+date+index+randomSalt）
+         * 
+         * 使用示例：
+         * const generator = new ActivationCodeGenerator();
+         * const code = generator.generate('paracraft', '2024-10-17', 0);
+         * const result = generator.verify(code, 'paracraft');
+         */
+        class ActivationCodeGenerator {
+            constructor() {
+                this.BASE_DATE = '2020-01-01';
+                this.SALT_MIN = 1;
+                this.SALT_MAX = 100;
+            }
+
+            /**
+             * 生成激活码
+             * @param {string} encodedSecret - 编码密钥
+             * @param {string} date - 日期字符串 (YYYY-MM-DD)
+             * @param {number} index - 索引号
+             * @returns {string} 格式化的激活码 (XXXX-XXXX-XXXX-XXXX)
+             */
+            generate(encodedSecret, date, index) {
+                const randomSalt = Math.floor(Math.random() * (this.SALT_MAX - this.SALT_MIN + 1)) + this.SALT_MIN;
+                
+                const dayNum = this._dateToNumber(date);
+                const datePart = this._toBase36(dayNum + randomSalt, 4);
+                const indexPart = this._toBase36(index + randomSalt, 4);
+                
+                const checksumSeed = `${encodedSecret}|${date}|${index}|${randomSalt}`;
+                const checksum = this._hashString(checksumSeed);
+                const checksumPart = this._toBase36(checksum, 8);
+                
+                const code = datePart + indexPart + checksumPart;
+                
+                return `${code.substr(0,4)}-${code.substr(4,4)}-${code.substr(8,4)}-${code.substr(12,4)}`;
+            }
+
+            /**
+             * 验证激活码
+             * @param {string} code - 激活码
+             * @param {string} expectedEncodedSecret - 期望的编码密钥
+             * @returns {object} 验证结果 { valid: boolean, encodedSecret?, date?, index?, salt?, reason? }
+             */
+            verify(code, expectedEncodedSecret) {
+                try {
+                    const cleanCode = code.replace(/-/g, '').toUpperCase();
+                    
+                    if (cleanCode.length !== 16) {
+                        return { valid: false, reason: '激活码长度错误' };
+                    }
+                    
+                    const datePart = cleanCode.substr(0, 4);
+                    const indexPart = cleanCode.substr(4, 4);
+                    const checksumPart = cleanCode.substr(8, 8);
+                    
+                    const dayNumWithSalt = this._fromBase36(datePart);
+                    const indexWithSalt = this._fromBase36(indexPart);
+                    const receivedChecksum = checksumPart;
+                    
+                    for (let salt = this.SALT_MIN; salt <= this.SALT_MAX; salt++) {
+                        const dayNum = dayNumWithSalt - salt;
+                        const index = indexWithSalt - salt;
+                        const date = this._numberToDate(dayNum);
+                        
+                        const checksumSeed = `${expectedEncodedSecret}|${date}|${index}|${salt}`;
+                        const expectedChecksum = this._toBase36(this._hashString(checksumSeed), 8);
+                        
+                        if (receivedChecksum === expectedChecksum) {
+                            return {
+                                valid: true,
+                                encodedSecret: expectedEncodedSecret,
+                                date: date,
+                                index: index,
+                                salt: salt
+                            };
+                        }
+                    }
+                    
+                    return { valid: false, reason: '校验和不匹配（编码密钥错误）' };
+                    
+                } catch (e) {
+                    return { valid: false, reason: '验证异常: ' + e.message };
+                }
+            }
+
+            // 私有方法：计算字符串哈希值
+            _hashString(text) {
+                let hash = 0;
+                for (let i = 0; i < text.length; i++) {
+                    hash = ((hash << 5) - hash) + text.charCodeAt(i);
+                    hash = hash & hash;
+                }
+                return Math.abs(hash);
+            }
+
+            // 私有方法：数字转36进制字符串
+            _toBase36(num, length) {
+                let result = num.toString(36).toUpperCase();
+                while (result.length < length) {
+                    result = '0' + result;
+                }
+                return result.substr(-length);
+            }
+
+            // 私有方法：36进制字符串转数字
+            _fromBase36(str) {
+                return parseInt(str, 36);
+            }
+
+            // 私有方法：日期转换为天数
+            _dateToNumber(dateStr) {
+                const baseDate = new Date(this.BASE_DATE);
+                const targetDate = new Date(dateStr);
+                const days = Math.floor((targetDate - baseDate) / (1000 * 60 * 60 * 24));
+                return days;
+            }
+
+            // 私有方法：天数转换为日期
+            _numberToDate(days) {
+                const baseDate = new Date(this.BASE_DATE);
+                const targetDate = new Date(baseDate.getTime() + days * 1000 * 60 * 60 * 24);
+                return targetDate.toISOString().split('T')[0];
+            }
+        }
+
+        // ========== 以下是页面交互代码 ==========
+        
+        const codeGenerator = new ActivationCodeGenerator();
+        let generatedCodesData = [];
+
+        // 设置默认日期为今天
+        document.getElementById('generateDate').valueAsDate = new Date();
+
+        // 切换标签
+        function switchTab(tab) {
+            const generateTab = document.getElementById('tab-generate');
+            const verifyTab = document.getElementById('tab-verify');
+            const generatePanel = document.getElementById('panel-generate');
+            const verifyPanel = document.getElementById('panel-verify');
+
+            if (tab === 'generate') {
+                generateTab.className = 'px-6 py-3 font-semibold text-indigo-600 border-b-2 border-indigo-600';
+                verifyTab.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600';
+                generatePanel.classList.remove('hidden');
+                verifyPanel.classList.add('hidden');
+            } else {
+                verifyTab.className = 'px-6 py-3 font-semibold text-indigo-600 border-b-2 border-indigo-600';
+                generateTab.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600';
+                verifyPanel.classList.remove('hidden');
+                generatePanel.classList.add('hidden');
+            }
+        }
+
+        // 生成多个激活码
+        function generateCodes() {
+            const encodedSecret = document.getElementById('encodedSecret').value;
+            const date = document.getElementById('generateDate').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+
+            if (!encodedSecret || !date || !quantity) {
+                alert('请填写所有必填字段！');
+                return;
+            }
+
+            generatedCodesData = [];
+            const codesList = document.getElementById('codesList');
+            codesList.innerHTML = '';
+
+            for (let i = 0; i < quantity; i++) {
+                const code = codeGenerator.generate(encodedSecret, date, i);
+                generatedCodesData.push({
+                    序号: i + 1,
+                    激活码: code,
+                    生成日期: date,
+                    EncodedSecret: encodedSecret
+                });
+
+                const codeItem = document.createElement('div');
+                codeItem.className = 'flex items-center justify-between bg-white p-3 rounded border border-gray-200';
+                codeItem.innerHTML = `
+                    <span class="font-mono text-sm">${i + 1}. ${code}</span>
+                    <button onclick="copyCode('${code}')" class="text-indigo-600 hover:text-indigo-800 text-sm">复制</button>
+                `;
+                codesList.appendChild(codeItem);
+            }
+
+            document.getElementById('generatedCodes').classList.remove('hidden');
+            document.getElementById('totalCodes').textContent = quantity;
+            document.getElementById('exportBtn').disabled = false;
+        }
+
+        // 复制激活码
+        function copyCode(code) {
+            navigator.clipboard.writeText(code).then(() => {
+                alert('激活码已复制: ' + code);
+            });
+        }
+
+        // 导出到CSV
+        function exportToCSV() {
+            if (generatedCodesData.length === 0) {
+                alert('没有可导出的激活码！');
+                return;
+            }
+
+            // Generate CSV content with one activation code per line
+            const csvContent = generatedCodesData.map(item => item.激活码).join('\n');
+
+            // Create blob and download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            const date = document.getElementById('generateDate').value;
+            link.setAttribute('href', url);
+            link.setAttribute('download', `激活码_${date}_${generatedCodesData.length}个.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 验证激活码
+        function verifyCode() {
+            const code = document.getElementById('activationCode').value.toUpperCase().trim();
+            const encodedSecret = document.getElementById('verifyEncodedSecret').value;
+
+            if (!code || !encodedSecret) {
+                alert('请填写所有必填字段！');
+                return;
+            }
+
+            // 移除连字符
+            const cleanCode = code.replace(/-/g, '');
+
+            if (cleanCode.length !== 16) {
+                showVerifyResult(false, '激活码格式错误！');
+                return;
+            }
+
+            // 使用类方法验证
+            const result = codeGenerator.verify(code, encodedSecret);
+
+            if (result.valid) {
+                showVerifyResult(true, 
+                    `激活码有效！<br>` +
+                    `生成日期: ${result.date}<br>` +
+                    `序号: ${result.index + 1}<br>` +
+                    `随机盐: ${result.salt}<br>` +
+                    `Encoded Secret: ${result.encodedSecret}`
+                );
+            } else {
+                showVerifyResult(false, `激活码无效: ${result.reason}`);
+            }
+        }
+
+        // 显示验证结果
+        function showVerifyResult(success, message) {
+            const resultDiv = document.getElementById('verifyResult');
+            const contentDiv = document.getElementById('resultContent');
+
+            if (success) {
+                contentDiv.className = 'p-4 rounded-lg bg-green-100 border border-green-300';
+                contentDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">✅</span>
+                        <div>
+                            <p class="font-semibold text-green-800">验证成功</p>
+                            <p class="text-sm text-green-700">${message}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                contentDiv.className = 'p-4 rounded-lg bg-red-100 border border-red-300';
+                contentDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">❌</span>
+                        <div>
+                            <p class="font-semibold text-red-800">验证失败</p>
+                            <p class="text-sm text-red-700">${message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            resultDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
