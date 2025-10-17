@@ -223,12 +223,21 @@
                       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="flex items-center gap-4">
                           <label class="text-sm font-medium text-gray-700 min-w-24">模型名称</label>
-                          <input
-                            type="text"
-                            name="llm_model"
-                            placeholder="keepwork-pro"
-                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
+                          <div class="flex-1 flex gap-2">
+                            <input
+                              type="text"
+                              name="llm_model"
+                              placeholder="keepwork-pro"
+                              class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <button
+                              type="button"
+                              onclick="openModelSelector()"
+                              class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm flex items-center gap-2 whitespace-nowrap"
+                            >
+                              🤖 选择模型
+                            </button>
+                          </div>
                         </div>
                         <div class="flex items-center gap-4">
                           <label class="text-sm font-medium text-gray-700 min-w-24">Temperature</label>
@@ -262,13 +271,22 @@
                             placeholder="每行一个知识库代码，例如：&#10;lixizhi/paracraft-(来自official（official）)&#10;lixizhi/人大附中深圳学校公开数据-(来自rdfzszxxezp（rdfzszxxezp）)"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                           ></textarea>
-                          <button
-                            type="button"
-                            onclick="openKnowledgeBaseSelector()"
-                            class="self-start px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm flex items-center gap-2"
-                          >
-                            📚 从知识库选择
-                          </button>
+                          <div class="flex gap-2">
+                            <button
+                              type="button"
+                              onclick="openKnowledgeBaseSelector()"
+                              class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm flex items-center gap-2"
+                            >
+                              📚 从知识库选择
+                            </button>
+                            <button
+                              type="button"
+                              onclick="window.open('https://keepwork.com/know/list', '_blank')"
+                              class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm flex items-center gap-2"
+                            >
+                              ✏️ 编辑知识库
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -474,6 +492,43 @@
             <button type="button" onclick="closeKnowledgeBaseSelector()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
             <button type="button" onclick="confirmKnowledgeBaseSelection()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">确认选择</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Selector Modal -->
+    <div id="modelSelectorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+      <div class="fixed inset-4 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="bg-purple-500 text-white p-4 flex justify-between items-center flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">🤖</span>
+            <h2 class="text-xl font-bold">选择AI模型</h2>
+          </div>
+          <button onclick="closeModelSelector()" class="text-white hover:text-gray-200 text-2xl">✖</button>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="modelSelectorLoading" class="flex items-center justify-center p-8">
+          <div class="flex items-center gap-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+            <span class="text-gray-600">正在加载模型列表...</span>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div id="modelSelectorContent" class="flex-1 overflow-y-auto p-4 hidden">
+          <div class="mb-4 text-sm text-gray-600">
+            <p>💡 选择适合您需求的AI模型</p>
+          </div>
+          <div id="modelList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <!-- Model items will be inserted here -->
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-end gap-4 p-4 border-t border-gray-200 bg-white flex-shrink-0">
+          <button type="button" onclick="closeModelSelector()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
         </div>
       </div>
     </div>
@@ -2135,6 +2190,111 @@
         
         showToast(`已选择 ${selectedKnowledgeBases.size} 个知识库`, 'success');
         closeKnowledgeBaseSelector();
+      }
+
+      // Model Selector Functions
+      let availableModels = [];
+
+      // Open model selector modal
+      async function openModelSelector() {
+        const modal = document.getElementById('modelSelectorModal');
+        const loading = document.getElementById('modelSelectorLoading');
+        const content = document.getElementById('modelSelectorContent');
+        
+        modal.classList.remove('hidden');
+        loading.classList.remove('hidden');
+        content.classList.add('hidden');
+        document.body.style.overflow = 'hidden';
+        
+        try {
+          await loadAvailableModels();
+          renderModelList();
+          loading.classList.add('hidden');
+          content.classList.remove('hidden');
+        } catch (error) {
+          console.error('Error loading models:', error);
+          showToast('加载模型列表失败：' + error.message, 'error');
+          closeModelSelector();
+        }
+      }
+
+      // Close model selector modal
+      function closeModelSelector() {
+        const modal = document.getElementById('modelSelectorModal');
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+      }
+
+      // Load available models from API
+      async function loadAvailableModels() {
+        try {
+          console.log('Loading available models from API...');
+          
+          if (!sdk.token) {
+            throw new Error('未登录，无法加载模型列表');
+          }
+          
+          const data = await sdk.get("/paracraftConfigs/gptModelForFrontend");
+          
+          availableModels = data.data?.config || [];
+          console.log(`Loaded ${availableModels.length} available models`);
+          return availableModels;
+        } catch (error) {
+          console.error('Error loading models:', error);
+          throw error;
+        }
+      }
+
+      // Render model list
+      function renderModelList() {
+        const list = document.getElementById('modelList');
+        list.innerHTML = '';
+        
+        if (availableModels.length === 0) {
+          list.innerHTML = '<div class="col-span-full text-center py-8 text-gray-500">暂无可用的模型</div>';
+          return;
+        }
+        
+        availableModels.forEach(model => {
+          const item = createModelItem(model);
+          list.appendChild(item);
+        });
+      }
+
+      // Create model item
+      function createModelItem(model) {
+        const div = document.createElement('div');
+        
+        div.className = 'p-4 border rounded-lg cursor-pointer transition-all border-gray-200 hover:border-purple-400 hover:bg-purple-50 hover:shadow-md';
+        div.onclick = () => selectModel(model.name, model.displayName);
+        
+        // Build feature badges
+        const badges = [];
+        if (model.isFree) badges.push('<span class="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">免费</span>');
+        if (model.canVision) badges.push('<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">视觉</span>');
+        if (model.canToolUse) badges.push('<span class="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">工具</span>');
+        if (model.canSearch) badges.push('<span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">搜索</span>');
+        
+        div.innerHTML = `
+          <div class="space-y-2">
+            <div class="font-semibold text-gray-800">${model.displayName}</div>
+            <div class="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded break-all">${model.name}</div>
+            ${badges.length > 0 ? `<div class="flex flex-wrap gap-1 mt-2">${badges.join('')}</div>` : ''}
+          </div>
+        `;
+        
+        return div;
+      }
+
+      // Select a model
+      function selectModel(modelName, displayName) {
+        const input = document.querySelector('input[name="llm_model"]');
+        if (input) {
+          input.value = modelName;
+        }
+        
+        showToast(`已选择模型: ${displayName}`, 'success');
+        closeModelSelector();
       }
 
       // Initialize page
