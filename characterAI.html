@@ -1828,6 +1828,19 @@
               description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！",
             },
             voice_language: "", // 语音识别语言，空字符串表示使用系统默认
+            
+            // LLM Model Configuration - supports RAG (Retrieval-Augmented Generation)
+            /*
+            "llm_model": {
+              "model": "doubao-pro",              // LLM model name
+              "temperature": 0,                     // 0 = deterministic, 1 = creative
+              "knowledgeUsername": "lixizhi",       // Username for knowledge base access
+              "knowledgeBaseCodes": [                // Knowledge base identifiers
+                "lixizhi/paracraft-(来自official（official）)",
+                "lixizhi/人大附中深圳学校公开数据-(来自rdfzszxxezp（rdfzszxxezp）)"
+              ]
+            },
+            */
             objective: {
               title: "学习动力恢复进度",
               description: "通过耐心的交流，帮助小明重新找回学习的乐趣",
@@ -3032,9 +3045,35 @@
             }
           });
         } // ========== Session管理方法 ==========
-        // Get the LLM model name from config, defaulting to "keepwork-pro"
+        // Get the LLM configuration object from config, supporting RAG parameters
+        getLLMConfig() {
+          // Backward compatibility: if llm_model is a string, convert to object
+          if (typeof this.config?.llm_model === 'string') {
+            return { model: this.config.llm_model };
+          }
+          
+          // Return full configuration object with defaults
+          const llmConfig = {
+            model: this.config?.llm_model?.model || "keepwork-pro"
+          };
+          
+          // Add optional RAG parameters if provided
+          if (this.config?.llm_model?.temperature !== undefined) {
+            llmConfig.temperature = this.config.llm_model.temperature;
+          }
+          if (this.config?.llm_model?.knowledgeUsername) {
+            llmConfig.knowledgeUsername = this.config.llm_model.knowledgeUsername;
+          }
+          if (this.config?.llm_model?.knowledgeBaseCodes) {
+            llmConfig.knowledgeBaseCodes = this.config.llm_model.knowledgeBaseCodes;
+          }
+          
+          return llmConfig;
+        }
+        
+        // Legacy method for backward compatibility
         getLLMModel() {
-          return this.config?.llm_model || "keepwork-pro";
+          return this.getLLMConfig().model;
         }
 
         createNewSession() {
@@ -3042,8 +3081,9 @@
 
           // 重新初始化AI聊天会话
           if (sdk && sdk.aiChat) {
+            const llmConfig = this.getLLMConfig();
             aiChatSession = sdk.aiChat.createSession({
-              model: this.getLLMModel(),
+              ...llmConfig,
               stream: true,
             });
 
@@ -3232,8 +3272,9 @@
               lastUserMessage = lastMessage.content;
             } // 重新初始化AI聊天会话
             if (sdk && sdk.aiChat) {
+              const llmConfig = this.getLLMConfig();
               aiChatSession = sdk.aiChat.createSession({
-                model: this.getLLMModel(),
+                ...llmConfig,
                 stream: true,
               });
 

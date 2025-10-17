@@ -212,6 +212,67 @@
                       placeholder="详细的系统提示词，定义角色行为和对话风格..."
                     ></textarea>
                   </div>
+                  
+                  <!-- LLM Model Configuration -->
+                  <div class="mt-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-800">🤖 LLM模型配置 (可选)</h3>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <p class="text-sm text-blue-800">💡 配置RAG (检索增强生成) 功能，让AI基于知识库回答问题</p>
+                    </div>
+                    <div class="space-y-4">
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex items-center gap-4">
+                          <label class="text-sm font-medium text-gray-700 min-w-24">模型名称</label>
+                          <input
+                            type="text"
+                            name="llm_model"
+                            placeholder="keepwork-pro"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div class="flex items-center gap-4">
+                          <label class="text-sm font-medium text-gray-700 min-w-24">Temperature</label>
+                          <input
+                            type="number"
+                            name="llm_temperature"
+                            placeholder="0"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <span class="text-xs text-gray-500">0=确定性, 1=创造性</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-4">
+                        <label class="text-sm font-medium text-gray-700 min-w-24">知识库用户名</label>
+                        <input
+                          type="text"
+                          name="llm_knowledge_username"
+                          placeholder="lixizhi"
+                          class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div class="flex items-start gap-4">
+                        <label class="text-sm font-medium text-gray-700 min-w-24 mt-2">知识库代码</label>
+                        <div class="flex-1 flex flex-col gap-2">
+                          <textarea
+                            name="llm_knowledge_base_codes"
+                            rows="3"
+                            placeholder="每行一个知识库代码，例如：&#10;lixizhi/paracraft-(来自official（official）)&#10;lixizhi/人大附中深圳学校公开数据-(来自rdfzszxxezp（rdfzszxxezp）)"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                          ></textarea>
+                          <button
+                            type="button"
+                            onclick="openKnowledgeBaseSelector()"
+                            class="self-start px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm flex items-center gap-2"
+                          >
+                            📚 从知识库选择
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -371,6 +432,49 @@
     <div id="chatModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
       <div class="fixed inset-0 bg-white overflow-hidden">
         <iframe id="chatFrame" src="" class="w-full h-full"></iframe>
+      </div>
+    </div>
+
+    <!-- Knowledge Base Selector Modal -->
+    <div id="knowledgeBaseModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+      <div class="fixed inset-4 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="bg-green-500 text-white p-4 flex justify-between items-center flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">📚</span>
+            <h2 class="text-xl font-bold">选择知识库</h2>
+          </div>
+          <button onclick="closeKnowledgeBaseSelector()" class="text-white hover:text-gray-200 text-2xl">✖</button>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="knowledgeBaseLoading" class="flex items-center justify-center p-8">
+          <div class="flex items-center gap-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+            <span class="text-gray-600">正在加载知识库...</span>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div id="knowledgeBaseContent" class="flex-1 overflow-y-auto p-4 hidden">
+          <div class="mb-4 text-sm text-gray-600">
+            <p>✅ 选择需要的知识库，可多选</p>
+          </div>
+          <div id="knowledgeBaseList" class="space-y-2">
+            <!-- Knowledge base items will be inserted here -->
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-between gap-4 p-4 border-t border-gray-200 bg-white flex-shrink-0">
+          <div class="text-sm text-gray-600">
+            已选择: <span id="selectedCount" class="font-semibold text-green-600">0</span> 个知识库
+          </div>
+          <div class="flex gap-2">
+            <button type="button" onclick="closeKnowledgeBaseSelector()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">取消</button>
+            <button type="button" onclick="confirmKnowledgeBaseSelection()" class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">确认选择</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1434,6 +1538,20 @@
         form.show_char_info.checked = character.show_char_info !== false; // Default true
         form.show_wiki_page.checked = character.show_wiki_page === true; // Default false
         form.show_wiki_page.checked = character.show_wiki_page === true; // Default false
+        
+        // LLM Model Configuration
+        if (character.llm_model) {
+          if (typeof character.llm_model === 'string') {
+            form.llm_model.value = character.llm_model;
+          } else if (typeof character.llm_model === 'object') {
+            form.llm_model.value = character.llm_model.model || '';
+            form.llm_temperature.value = character.llm_model.temperature !== undefined ? character.llm_model.temperature : '';
+            form.llm_knowledge_username.value = character.llm_model.knowledgeUsername || '';
+            if (character.llm_model.knowledgeBaseCodes && Array.isArray(character.llm_model.knowledgeBaseCodes)) {
+              form.llm_knowledge_base_codes.value = character.llm_model.knowledgeBaseCodes.join('\n');
+            }
+          }
+        }
 
         // Quick replies
         const container = document.getElementById("quickRepliesContainer");
@@ -1565,6 +1683,8 @@
       function buildCharacterConfig(character, extraParams = {}) {
         // Build config object
         const config = {
+          // LLM Model Configuration (if available)
+          ...(character.llm_model && { llm_model: character.llm_model }),
           character: {
             name: character.name,
             age: character.age,
@@ -1751,6 +1871,38 @@
         characterData.show_toolbar = formData.get("show_toolbar") === "on";
         characterData.show_char_info = formData.get("show_char_info") === "on";
         characterData.show_wiki_page = formData.get("show_wiki_page") === "on";
+        
+        // LLM Model Configuration
+        const llmModel = formData.get("llm_model");
+        const llmTemperature = formData.get("llm_temperature");
+        const llmKnowledgeUsername = formData.get("llm_knowledge_username");
+        const llmKnowledgeBaseCodes = formData.get("llm_knowledge_base_codes");
+        
+        if (llmModel || llmTemperature || llmKnowledgeUsername || llmKnowledgeBaseCodes) {
+          characterData.llm_model = {};
+          
+          if (llmModel) {
+            characterData.llm_model.model = llmModel;
+          }
+          
+          if (llmTemperature !== null && llmTemperature !== '') {
+            characterData.llm_model.temperature = parseFloat(llmTemperature);
+          }
+          
+          if (llmKnowledgeUsername) {
+            characterData.llm_model.knowledgeUsername = llmKnowledgeUsername;
+          }
+          
+          if (llmKnowledgeBaseCodes) {
+            // Split by newlines and filter out empty lines
+            const codes = llmKnowledgeBaseCodes.split('\n')
+              .map(code => code.trim())
+              .filter(code => code.length > 0);
+            if (codes.length > 0) {
+              characterData.llm_model.knowledgeBaseCodes = codes;
+            }
+          }
+        }
 
         // Tags (generate based on role and description)
         characterData.tags = characterData.role ? [characterData.role] : [];
@@ -1835,7 +1987,157 @@
         const activeTab = document.getElementById(`tab-${tabName}`);
         activeTab.classList.remove("text-gray-600", "hover:text-gray-900", "hover:bg-gray-50");
         activeTab.classList.add("bg-white", "text-blue-600", "border-b-2", "border-blue-500");
-      } // Initialize page
+      }
+
+      // Knowledge Base Selector Functions
+      let knowledgeBases = [];
+      let selectedKnowledgeBases = new Set();
+
+      // Open knowledge base selector modal
+      async function openKnowledgeBaseSelector() {
+        const modal = document.getElementById('knowledgeBaseModal');
+        const loading = document.getElementById('knowledgeBaseLoading');
+        const content = document.getElementById('knowledgeBaseContent');
+        
+        modal.classList.remove('hidden');
+        loading.classList.remove('hidden');
+        content.classList.add('hidden');
+        document.body.style.overflow = 'hidden';
+        
+        // Load currently selected knowledge bases from textarea
+        const textarea = document.querySelector('textarea[name="llm_knowledge_base_codes"]');
+        if (textarea && textarea.value) {
+          const currentCodes = textarea.value.split('\n')
+            .map(code => code.trim())
+            .filter(code => code.length > 0);
+          selectedKnowledgeBases = new Set(currentCodes);
+        } else {
+          selectedKnowledgeBases = new Set();
+        }
+        
+        try {
+          await loadKnowledgeBases();
+          renderKnowledgeBases();
+          loading.classList.add('hidden');
+          content.classList.remove('hidden');
+        } catch (error) {
+          console.error('Error loading knowledge bases:', error);
+          showToast('加载知识库失败：' + error.message, 'error');
+          closeKnowledgeBaseSelector();
+        }
+      }
+
+      // Close knowledge base selector modal
+      function closeKnowledgeBaseSelector() {
+        const modal = document.getElementById('knowledgeBaseModal');
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+      }
+
+      // Load knowledge bases from API
+      async function loadKnowledgeBases() {
+        try {
+          console.log('Loading knowledge bases from API...');
+          
+          if (!sdk.token) {
+            throw new Error('未登录，无法加载知识库');
+          }
+          
+          const data = await sdk.get("/knowledgeBases", "?page=1&pageSize=100");
+          
+          knowledgeBases = data.rows || [];
+          console.log(`Loaded ${knowledgeBases.length} knowledge bases`);
+          return knowledgeBases;
+        } catch (error) {
+          console.error('Error loading knowledge bases:', error);
+          throw error;
+        }
+      }
+
+      // Render knowledge bases list
+      function renderKnowledgeBases() {
+        const list = document.getElementById('knowledgeBaseList');
+        list.innerHTML = '';
+        
+        if (knowledgeBases.length === 0) {
+          list.innerHTML = '<div class="text-center py-8 text-gray-500">暂无可用的知识库</div>';
+          return;
+        }
+        
+        knowledgeBases.forEach(kb => {
+          const item = createKnowledgeBaseItem(kb);
+          list.appendChild(item);
+        });
+        
+        updateSelectedCount();
+      }
+
+      // Create knowledge base item
+      function createKnowledgeBaseItem(kb) {
+        const div = document.createElement('div');
+        const isSelected = selectedKnowledgeBases.has(kb.code);
+        
+        div.className = `p-4 border rounded-lg cursor-pointer transition-all ${
+          isSelected ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
+        }`;
+        div.onclick = () => toggleKnowledgeBase(kb.code, div);
+        
+        div.innerHTML = `
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 mt-1">
+              <div class="w-5 h-5 border-2 rounded flex items-center justify-center ${
+                isSelected ? 'border-green-500 bg-green-500' : 'border-gray-300'
+              }">
+                ${isSelected ? '<span class="text-white text-xs">✓</span>' : ''}
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold text-gray-800 mb-1">${kb.name}</div>
+              <div class="text-sm font-mono text-gray-600 bg-gray-100 px-2 py-1 rounded break-all">${kb.code}</div>
+              ${kb.desc ? `<div class="text-sm text-gray-500 mt-2">${kb.desc}</div>` : ''}
+              <div class="flex gap-3 mt-2 text-xs text-gray-500">
+                <span>类型: ${kb.type === 'webpage' ? '网页' : kb.type === 'doc' ? '文档' : kb.type}</span>
+                ${kb.isUsed ? '<span class="text-green-600">✓ 使用中</span>' : ''}
+              </div>
+            </div>
+          </div>
+        `;
+        
+        return div;
+      }
+
+      // Toggle knowledge base selection
+      function toggleKnowledgeBase(code, element) {
+        if (selectedKnowledgeBases.has(code)) {
+          selectedKnowledgeBases.delete(code);
+        } else {
+          selectedKnowledgeBases.add(code);
+        }
+        
+        // Re-render to update UI
+        renderKnowledgeBases();
+      }
+
+      // Update selected count display
+      function updateSelectedCount() {
+        const countElement = document.getElementById('selectedCount');
+        if (countElement) {
+          countElement.textContent = selectedKnowledgeBases.size;
+        }
+      }
+
+      // Confirm knowledge base selection
+      function confirmKnowledgeBaseSelection() {
+        const textarea = document.querySelector('textarea[name="llm_knowledge_base_codes"]');
+        if (textarea) {
+          textarea.value = Array.from(selectedKnowledgeBases).join('\n');
+        }
+        
+        showToast(`已选择 ${selectedKnowledgeBases.size} 个知识库`, 'success');
+        closeKnowledgeBaseSelector();
+      }
+
+      // Initialize page
       async function initializeApp() {
         window.parent.postMessage({ type: "gameLoaded" }, "*");
         try {
