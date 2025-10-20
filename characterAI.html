@@ -29,7 +29,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>角色AI对话游戏</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.10"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.15"></script>
     <style>
       .chat-bubble-left {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -715,26 +715,39 @@
         background: transparent !important;
         z-index: 5 !important;
         pointer-events: none !important;
-      } /* Re-enable pointer events for interactive elements when avatar is enabled, but keep chat bubbles click-through */
+      } /* Re-enable pointer events for interactive elements when avatar is enabled */
       #chat-container.avatar-enabled > * {
-        pointer-events: none;
+        pointer-events: auto;
+        position: relative;
+        z-index: 10;
       }
 
-      /* Re-enable pointer events for interactive elements only */
+      /* Ensure all interactive elements are clickable */
       #chat-container.avatar-enabled button {
-        pointer-events: auto;
+        pointer-events: auto !important;
+        z-index: 11;
       }
 
       #chat-container.avatar-enabled input {
-        pointer-events: auto;
+        pointer-events: auto !important;
       }
 
       #chat-container.avatar-enabled select {
-        pointer-events: auto;
+        pointer-events: auto !important;
       }
 
       #chat-container.avatar-enabled a {
-        pointer-events: auto;
+        pointer-events: auto !important;
+      }
+
+      #chat-container.avatar-enabled .reasoning-header {
+        pointer-events: auto !important;
+        z-index: 11;
+      }
+
+      #chat-container.avatar-enabled .message-group {
+        pointer-events: auto !important;
+        z-index: 10;
       }
 
       /* Voice input button styles */
@@ -784,6 +797,56 @@
 
       .voice-btn.hidden {
         display: none;
+      }
+
+      /* Reasoning section styles */
+      .reasoning-section {
+        overflow: hidden;
+        transition: all 0.3s ease;
+        position: relative;
+        z-index: 10;
+      }
+
+      .reasoning-section .toggle-icon {
+        transition: transform 0.3s ease;
+      }
+
+      .reasoning-section.collapsed .toggle-icon {
+        transform: rotate(-90deg);
+      }
+
+      .reasoning-section.collapsed .reasoning-content {
+        display: none;
+      }
+
+      .reasoning-header {
+        position: relative;
+        z-index: 11;
+        pointer-events: auto !important;
+      }
+
+      .reasoning-header:hover {
+        background-color: rgba(196, 181, 253, 0.3);
+      }
+
+      .reasoning-content {
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        position: relative;
+        z-index: 10;
+      }
+
+      /* Message group styles */
+      .message-group {
+        position: relative;
+        z-index: 10;
+      }
+
+      /* Ensure chat bubbles are clickable */
+      .chat-bubble-left,
+      .chat-bubble-right {
+        position: relative;
+        z-index: 10;
       }
     </style>
   </head>
@@ -1828,7 +1891,7 @@
               description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！",
             },
             voice_language: "", // 语音识别语言，空字符串表示使用系统默认
-            
+
             // LLM Model Configuration - supports RAG (Retrieval-Augmented Generation)
             /*
             "llm_model": {
@@ -2224,7 +2287,9 @@
           const messageMatch = messageRegex.exec(text);
           if (messageMatch) {
             fields.message = messageMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
-          } // Extract progress_change field
+          }
+
+          // Extract progress_change field
           const progressChangeRegex = /"progress_change"\s*:\s*(-?\d+)/;
           const progressChangeMatch = progressChangeRegex.exec(text);
           if (progressChangeMatch) {
@@ -2245,6 +2310,12 @@
             fields.inner_thoughts = thoughtsMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
           }
 
+          // Fallback: If no JSON fields were found and text has meaningful content,
+          // treat the entire text as the message (LLM failed to format properly)
+          if (!fields.message && !fields.progress_change && !fields.progress_reason && !fields.inner_thoughts && text.trim().length > 40) {
+            fields.message = text.trim();
+          }
+
           return fields;
         }
         updateStreamingStatus(fields) {
@@ -2253,6 +2324,7 @@
             // 可以在这里添加临时的流式显示效果，如果需要的话
           }
         }
+
         async callLLM(userMessage) {
           if (!aiChatSession) {
             throw new Error("AI聊天会话未初始化");
@@ -2281,41 +2353,70 @@
 
           try {
             let streamingMessageDiv = null;
+            let reasoningMessageDiv = null;
+            let messageGroupDiv = null;
             let accumulatedText = "";
             let jsonResponse = null;
 
             const finalText = await aiChatSession.send(userMessage, {
-              onMessage: (text) => {
-                accumulatedText = text;
-                this.updateLLMStatus("接收响应中...");
-
-                // 使用helper函数提取所有字段
-                const fields = this.extractResponseFields(text);
-
-                // 尝试解析完整JSON
-                try {
-                  jsonResponse = JSON.parse(text);
-                } catch (e) {
-                  // JSON可能不完整，继续等待
+              onMessage: (partialText, fullResponse) => {
+                // Handle reasoning_content from fullResponse if available
+                if (fullResponse && fullResponse.reasoning_content) {
+                  // Create message group if it doesn't exist
+                  if (!messageGroupDiv) {
+                    this.removeTypingIndicator();
+                    messageGroupDiv = this.createMessageGroup();
+                  }
+                  // Create or update reasoning section within the group
+                  if (!reasoningMessageDiv) {
+                    reasoningMessageDiv = this.addReasoningToGroup(messageGroupDiv);
+                  }
+                  this.updateReasoningContent(reasoningMessageDiv, fullResponse.reasoning_content);
+                  this.updateLLMStatus("AI正在推理中...");
                 }
 
-                // 移除打字指示器（如果还在）
-                if (!streamingMessageDiv) {
-                  this.removeTypingIndicator();
-                  // 创建流式消息容器
-                  streamingMessageDiv = this.addStreamingMessage();
-                }
+                // partialText is the streamed result so far; fullResponse may contain reasoning_content
+                if (partialText !== undefined && partialText !== null) {
+                  accumulatedText = partialText;
+                  this.updateLLMStatus("接收响应中...");
 
-                // 更新流式消息内容，只显示message部分
-                if (fields.message) {
-                  this.updateStreamingMessage(streamingMessageDiv, fields.message);
-                }
+                  // 使用helper函数提取所有字段
+                  const fields = this.extractResponseFields(partialText);
 
-                // 更新流式状态显示
-                this.updateStreamingStatus(fields);
+                  // 尝试解析完整JSON
+                  try {
+                    jsonResponse = JSON.parse(partialText);
+                  } catch (e) {
+                    // JSON可能不完整，继续等待
+                  }
+
+                  // 移除打字指示器（如果还在）
+                  if (!streamingMessageDiv) {
+                    if (!messageGroupDiv) {
+                      this.removeTypingIndicator();
+                      messageGroupDiv = this.createMessageGroup();
+                    }
+                    // 创建流式消息容器
+                    streamingMessageDiv = this.addStreamingMessageToGroup(messageGroupDiv);
+                  }
+
+                  // 更新流式消息内容，只显示message部分
+                  if (fields.message) {
+                    this.updateStreamingMessage(streamingMessageDiv, fields.message);
+                  }
+
+                  // 更新流式状态显示
+                  this.updateStreamingStatus(fields);
+                }
               },
               onComplete: (finalText) => {
                 this.updateLLMStatus("响应完成");
+
+                // Finalize reasoning content if it exists
+                if (reasoningMessageDiv) {
+                  this.finalizeReasoningContent(reasoningMessageDiv);
+                  reasoningMessageDiv = null;
+                }
 
                 // 确保使用最终文本解析JSON
                 if (!jsonResponse) {
@@ -2326,8 +2427,8 @@
                     jsonResponse = {
                       message: fields.message || finalText,
                       progress_change: fields.progress_change !== null ? fields.progress_change : 0,
-                      progress_reason: fields.progress_reason || "积极交流",
-                      inner_thoughts: fields.inner_thoughts || "正在思考",
+                      progress_reason: fields.progress_reason || "",
+                      inner_thoughts: fields.inner_thoughts || "",
                     };
                   }
                 }
@@ -2338,8 +2439,8 @@
                 }
               },
               onError: (error) => {
-                if (streamingMessageDiv) {
-                  this.removeStreamingMessage(streamingMessageDiv);
+                if (messageGroupDiv) {
+                  this.removeMessageGroup(messageGroupDiv);
                 }
                 throw error;
               },
@@ -2662,6 +2763,73 @@
             avatarManager.switchToIdle();
           }
         }
+        // Create a message group container that can hold reasoning + main message
+        createMessageGroup() {
+          const groupDiv = document.createElement("div");
+          groupDiv.className = "flex items-start space-x-2 message-group";
+          groupDiv.innerHTML = `
+            <div class="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">${
+              this.config.character?.name?.[0] || "角"
+            }</div>
+            <div class="flex flex-col space-y-2 flex-1 max-w-xs">
+              <!-- Reasoning and message content will be added here -->
+            </div>
+          `;
+          this.elements.chatContainer.insertBefore(groupDiv, this.elements.chatContainer.firstChild);
+          this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+          return groupDiv;
+        }
+
+        // Add reasoning section to message group
+        addReasoningToGroup(groupDiv) {
+          const contentContainer = groupDiv.querySelector(".flex.flex-col");
+          const reasoningDiv = document.createElement("div");
+          reasoningDiv.className = "reasoning-section";
+          reasoningDiv.innerHTML = `
+            <div class="reasoning-header cursor-pointer bg-purple-100 bg-opacity-90 rounded-t-lg px-3 py-2 flex justify-between items-center" onclick="this.parentElement.classList.toggle('collapsed')">
+              <span class="text-purple-700 text-sm font-medium">🧠 思考过程</span>
+              <span class="toggle-icon text-purple-700">▼</span>
+            </div>
+            <div class="reasoning-content bg-white bg-opacity-95 rounded-b-lg px-3 py-2 text-purple-900 text-sm">
+              <p class="streaming-content"></p>
+              <span class="streaming-cursor">▋</span>
+            </div>
+          `;
+          contentContainer.appendChild(reasoningDiv);
+          return reasoningDiv;
+        }
+
+        // Update reasoning content
+        updateReasoningContent(reasoningDiv, text) {
+          const contentElement = reasoningDiv.querySelector(".streaming-content");
+          if (contentElement) {
+            contentElement.textContent = text;
+            this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+          }
+        }
+
+        // Finalize reasoning content
+        finalizeReasoningContent(reasoningDiv) {
+          const cursor = reasoningDiv.querySelector(".streaming-cursor");
+          if (cursor) {
+            cursor.remove();
+          }
+        }
+
+        // Add streaming message to a message group
+        addStreamingMessageToGroup(groupDiv) {
+          const contentContainer = groupDiv.querySelector(".flex.flex-col");
+          const messageDiv = document.createElement("div");
+          messageDiv.className = "chat-bubble-left text-white p-3 streaming-message";
+          messageDiv.innerHTML = `
+            <p class="streaming-content"></p>
+            <span class="streaming-cursor">▋</span>
+          `;
+          contentContainer.appendChild(messageDiv);
+          this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
+          return messageDiv;
+        }
+
         addStreamingMessage() {
           const messageDiv = document.createElement("div");
           messageDiv.className = "flex items-start space-x-2 streaming-message";
@@ -2682,7 +2850,15 @@
         }
 
         updateStreamingMessage(messageDiv, text) {
-          const contentElement = messageDiv.querySelector(".streaming-content");
+          // Handle both standalone message and message within a group
+          let contentElement = messageDiv.querySelector(".streaming-content");
+          if (!contentElement) {
+            // If messageDiv is the message group, find the content in the nested structure
+            const chatBubble = messageDiv.querySelector(".chat-bubble-left");
+            if (chatBubble) {
+              contentElement = chatBubble.querySelector(".streaming-content");
+            }
+          }
           if (contentElement) {
             contentElement.innerHTML = this.processMessage(text);
             this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
@@ -2699,14 +2875,27 @@
           const contentElement = messageDiv.querySelector(".streaming-content");
           if (contentElement) {
             const messageText = contentElement.textContent || contentElement.innerText;
-            const audioBtn = document.createElement("button");
-            audioBtn.className = "audio-btn";
-            audioBtn.title = "播放语音";
-            audioBtn.innerHTML = "🔊";
-            audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
 
-            // 将按钮添加到最外层 div 的最后，与 addMessage 方法保持一致
-            messageDiv.appendChild(audioBtn);
+            // Check if messageDiv is part of a message group
+            const messageGroup = messageDiv.closest(".message-group");
+            if (messageGroup) {
+              // Add audio button to the group level
+              const audioBtn = document.createElement("button");
+              audioBtn.className = "audio-btn";
+              audioBtn.title = "播放语音";
+              audioBtn.innerHTML = "🔊";
+              audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
+              messageGroup.appendChild(audioBtn);
+            } else {
+              // Original behavior for standalone messages
+              const audioBtn = document.createElement("button");
+              audioBtn.className = "audio-btn";
+              audioBtn.title = "播放语音";
+              audioBtn.innerHTML = "🔊";
+              audioBtn.onclick = () => this.playMessageAudio(messageText, audioBtn);
+              messageDiv.appendChild(audioBtn);
+            }
+
             this.checkAndPlayVideoAction(messageText);
 
             // Switch avatar back to idle after streaming is complete
@@ -2720,6 +2909,12 @@
         removeStreamingMessage(messageDiv) {
           if (messageDiv && messageDiv.parentNode) {
             messageDiv.parentNode.removeChild(messageDiv);
+          }
+        }
+
+        removeMessageGroup(groupDiv) {
+          if (groupDiv && groupDiv.parentNode) {
+            groupDiv.parentNode.removeChild(groupDiv);
           }
         }
         addTypingIndicator() {
@@ -3048,15 +3243,15 @@
         // Get the LLM configuration object from config, supporting RAG parameters
         getLLMConfig() {
           // Backward compatibility: if llm_model is a string, convert to object
-          if (typeof this.config?.llm_model === 'string') {
+          if (typeof this.config?.llm_model === "string") {
             return { model: this.config.llm_model };
           }
-          
+
           // Return full configuration object with defaults
           const llmConfig = {
-            model: this.config?.llm_model?.model || "keepwork-pro"
+            model: this.config?.llm_model?.model || "keepwork-pro",
           };
-          
+
           // Add optional RAG parameters if provided
           if (this.config?.llm_model?.temperature !== undefined) {
             llmConfig.temperature = this.config.llm_model.temperature;
@@ -3067,10 +3262,10 @@
           if (this.config?.llm_model?.knowledgeBaseCodes) {
             llmConfig.knowledgeBaseCodes = this.config.llm_model.knowledgeBaseCodes;
           }
-          
+
           return llmConfig;
         }
-        
+
         // Legacy method for backward compatibility
         getLLMModel() {
           return this.getLLMConfig().model;
