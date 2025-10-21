@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>会员页 - 麦思星球</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.10"></script>
+    <script src="https://cdn.keepwork.com/sdk/libs/qrcode.min.js"></script>
+    <style>
+        .gradient-text {
+            background: linear-gradient(45deg, #fbbf24, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* 横屏布局样式 */
+        .landscape-layout {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .left-panel {
+            flex: 0.7;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+        }
+
+        .right-panel {
+            flex: 2;
+            padding: 20px;
+            background-image: url('https://cdn.keepwork.com/maisi/launcher/frontpage_maisi_clean.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow-y: auto;
+        }
+
+        .qr-section {
+            text-align: center;
+            color: white;
+        }
+
+        .qr-code-container {
+            width: 180px;
+            height: 180px;
+            background-color: white;
+            border-radius: 12px;
+            margin: 0 auto 16px;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .vip-benefits-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .benefit-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+            border-radius: 12px;
+            padding: 16px;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s ease;
+        }
+
+        .benefit-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .compact-text {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .header-compact {
+            color: white;
+            padding: 12px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .steps-list {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: white;
+        }
+
+        .step-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .age-rating-badge {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+
+        .vip-status-banner {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .vip-status-banner h2 {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .vip-status-banner p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Age Rating Badge on the left -->
+    <div class="age-rating-badge feature-card p-1 rounded-lg flex items-center bg-white/60 border-2 border-white/50">
+        <div class="text-2xl font-bold text-white bg-green-600 px-3 py-3 rounded-lg">6+</div>
+        <div class="text-sm font-semibold text-black px-2 py-2">适龄提示</div>
+    </div>
+    
+    <!-- 横屏布局容器 -->
+    <div class="landscape-layout">
+        <!-- 左侧面板 - 二维码区域 -->
+        <div class="left-panel">
+            <div class="qr-section">
+                <!-- 顶部标题 -->
+                <div class="header-compact">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-lg font-bold">麦思星球（内测版）会员</h1>
+                            <div class="text-base opacity-90">让每个孩子在自己的世界里自由发光</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fade-in mt-4">
+                    <!-- 会员状态显示 -->
+                    <div id="vipStatusDisplay" class="vip-status-banner" style="display: none;">
+                        <h2>✨ 您已是会员 ✨</h2>
+                        <p id="vipExpireDate">有效期到：加载中...</p>
+                    </div>
+
+                    <!-- 非会员提示 -->
+                    <div id="nonVipPrompt" class="bg-white/90 rounded-lg px-4 py-2 mb-6 inline-block">
+                        <p class="text-lg text-gray-800 font-medium">请找家长扫码开通会员</p>
+                    </div>
+
+                    <div class="qr-code-container">
+                        <div id="qrcodeContainer" class="flex items-center justify-center"></div>
+                    </div>
+
+                    <!-- 用户ID显示 -->
+                    <div class="bg-white/20 rounded-lg px-4 py-2 mb-4 inline-block">
+                        <span class="text-white/70 text-sm mr-2">当前用户ID:</span>
+                        <span id="userIdDisplay" class="text-white font-mono font-bold">加载中...</span>
+                    </div>
+
+                    <div class="steps-list">
+                        <div class="step-item">
+                            <span class="mr-3">1️⃣</span>
+                            <span>请使用其它设备的微信扫码</span>
+                        </div>
+                        <div class="step-item">
+                            <span class="mr-3">2️⃣</span>
+                            <span>或者截图保存二维码用本机微信扫码</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <button
+                            onclick="clickVipResult()"
+                            class="bg-gradient-to-r from-yellow-400 to-yellow-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-yellow-500 hover:to-yellow-600 transform hover:scale-105 transition-all duration-200"
+                        >
+                            我已开通
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧面板 - VIP权益展示 -->
+        <div class="right-panel">
+            <!-- VIP奖励横幅 -->
+            <div class="relative bg-gradient-to-r from-purple-500 to-blue-600 rounded-xl p-4 text-white overflow-hidden mb-5">
+                <div class="relative z-10">
+                    <h2 class="text-xl font-bold mb-3">👑 内测版会员专属特权</h2>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-white/20 rounded-lg p-2 backdrop-blur-sm">
+                            <p class="text-sm font-semibold">炫彩装备</p>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-2 backdrop-blur-sm">
+                            <p class="text-sm font-semibold">训练任务全解锁</p>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-2 backdrop-blur-sm">
+                            <p class="text-sm font-semibold">无限云存档</p>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-2 backdrop-blur-sm">
+                            <p class="text-sm font-semibold">每日知识币翻倍</p>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-2 backdrop-blur-sm">
+                            <p class="text-sm font-semibold">专属多人动作</p>
+                        </div>
+                        <div class="bg-white/20 rounded-lg p-2 backdrop-blur-sm">
+                            <p class="text-sm font-semibold">AI编程创作</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Handle VIP result button click
+        function clickVipResult() {
+            window.parent.postMessage({ type: "vipPayResult" }, "*");
+        }
+
+        // Generate QR code using external library
+        function generateQRCode(text, container) {
+            // Clear previous QR code
+            container.innerHTML = '';
+            
+            // Generate new QR code
+            new QRCode(container, {
+                text: text,
+                width: 160,
+                height: 160,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+
+        // Initialize Keepwork SDK
+        const sdk = new KeepworkSDK({
+            timeout: 30000
+        });
+        console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+
+        // Render initial QR code with placeholder
+        function renderInitialQRCode() {
+            // Generate QR code with placeholder URL
+            const placeholderUrl = `https://keepwork.com/api/raw/maisi/maisi/webgames/data/msplanet_vip_wechat`;
+            const container = document.getElementById('qrcodeContainer');
+            generateQRCode(placeholderUrl, container);
+        }
+
+        // Fetch user profile and update page
+        async function fetchUserProfileAndUpdate() {
+            try {
+                // Get user profile from SDK
+                const userInfo = await sdk.getUserProfile();
+                console.log('User info:', userInfo);
+                
+                const userId = userInfo.id;
+                console.log('User ID:', userId);
+                
+                // Update user ID display
+                const userIdDisplay = document.getElementById('userIdDisplay');
+                if (userIdDisplay) {
+                    userIdDisplay.textContent = userId;
+                }
+                
+                // Update QR code with actual user ID
+                const vipUrl = `https://keepwork.com/api/raw/maisi/maisi/webgames/data/msplanet_vip_wechat?userid=${userId}`;
+                console.log('Generating QR code for:', vipUrl);
+                
+                const container = document.getElementById('qrcodeContainer');
+                generateQRCode(vipUrl, container);
+                
+                // Check VIP status
+                if (userInfo.vipDeadline) {
+                    const expireDate = new Date(userInfo.vipDeadline);
+                    const now = new Date();
+                    
+                    // Check if VIP is still valid
+                    if (expireDate > now) {
+                        // Format date as YYYY-MM-DD
+                        const formattedDate = expireDate.getFullYear() + '-' + 
+                            String(expireDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                            String(expireDate.getDate()).padStart(2, '0');
+                        
+                        // Show VIP status
+                        document.getElementById('vipStatusDisplay').style.display = 'block';
+                        document.getElementById('vipExpireDate').textContent = '有效期到：' + formattedDate;
+                        document.getElementById('nonVipPrompt').style.display = 'none';
+                        
+                        console.log('User is VIP until:', formattedDate);
+                    } else {
+                        // VIP expired
+                        document.getElementById('vipStatusDisplay').style.display = 'none';
+                        document.getElementById('nonVipPrompt').style.display = 'block';
+                    }
+                } else {
+                    // Not VIP
+                    document.getElementById('vipStatusDisplay').style.display = 'none';
+                    document.getElementById('nonVipPrompt').style.display = 'block';
+                }
+                
+            } catch (error) {
+                console.error('Error fetching user profile:', error);
+                // On error, show non-VIP prompt and keep placeholder
+                document.getElementById('vipStatusDisplay').style.display = 'none';
+                document.getElementById('nonVipPrompt').style.display = 'block';
+            }
+        }
+
+        // Initialize page
+        async function initPage() {
+            // First render the page immediately with placeholder
+            renderInitialQRCode();
+            
+            // Then fetch user profile and update
+            await fetchUserProfileAndUpdate();
+        }
+
+        // Start initialization
+        initPage();
+
+        // Send messages to parent window
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+    </script>
+</body>
+</html>

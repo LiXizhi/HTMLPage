@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>创作学堂</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.10"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      .video-item {
+        transition: all 0.3s ease;
+      }
+      .video-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 min-h-screen">
+    <!-- 头部 -->
+    <header class="bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg">
+      <div class="container mx-auto px-4 py-4">
+        <div class="flex justify-between items-center">
+          <h1 class="text-2xl font-bold">🎬《3D动画与编程》教学视频</h1>
+          <div class="flex items-center gap-4">
+            <span id="vipStatus" class="px-4 py-2 bg-white bg-opacity-20 rounded-lg">普通用户</span>
+            <button onclick="showActivationModal()" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg font-semibold transition">输入激活码</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主容器 -->
+    <div class="container mx-auto px-4 py-6">
+      <!-- 搜索栏 -->
+      <div class="mb-6 bg-white rounded-lg shadow-md p-4">
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="搜索视频..."
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          oninput="filterVideos()"
+        />
+      </div>
+
+      <!-- 视频播放器区域 -->
+      <div id="playerSection" class="hidden mb-6">
+        <div class="bg-white rounded-lg shadow-lg p-4">
+          <div class="flex justify-between items-center mb-4">
+            <h2 id="currentVideoTitle" class="text-xl font-bold text-gray-800"></h2>
+            <button onclick="closePlayer()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">关闭播放器</button>
+          </div>
+          <div class="flex justify-center">
+            <div class="relative" style="width: calc((100vh - 200px) * 4 / 3); height: calc(100vh - 200px); max-width: 100%">
+              <iframe id="videoPlayer" class="absolute top-0 left-0 w-full h-full rounded-lg" frameborder="0" allowfullscreen></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 视频列表 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="videoList"></div>
+    </div>
+
+    <!-- 激活码弹窗 -->
+    <div id="activationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full mx-4">
+        <h3 class="text-2xl font-bold mb-4 text-gray-800">激活全部课程</h3>
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <p class="text-gray-700 font-semibold mb-2">💡 激活方式有两种：</p>
+          <ul class="text-sm text-gray-600 space-y-2 ml-4">
+            <li>1️⃣ 成为麦思会员（则自动激活）</li>
+            <li>2️⃣ 输入课程激活码</li>
+          </ul>
+        </div>
+        <input
+          type="text"
+          id="activationCodeInput"
+          placeholder="请输入激活码 (16位字符)"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+        <p class="text-sm text-gray-500 mb-4">
+          提示：激活码为16位字符，可以包含或不包含连字符，不区分大小写<br />
+          例如：<code class="bg-gray-200 px-2 py-1 rounded">XXXX-XXXX-XXXX-XXXX</code> 或 <code class="bg-gray-200 px-2 py-1 rounded">XXXXXXXXXXXXXXXX</code>
+        </p>
+        <div id="activationMessage" class="hidden mb-4"></div>
+        <div class="flex gap-3">
+          <button onclick="activateWithCode()" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold">激活</button>
+          <button onclick="closeActivationModal()" class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Keepwork SDK 初始化
+      const sdk = new KeepworkSDK({
+        timeout: 30000,
+      });
+      console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+
+      /**
+       * ActivationCodeGenerator - 激活码生成与验证类
+       * 编码格式（固定16字符 XXXX-XXXX-XXXX-XXXX）：
+       * - 前4位：日期编码+随机盐（base36）
+       * - 中4位：索引编码+随机盐（base36）
+       * - 后8位：校验和（基于encodedSecret+date+index+randomSalt）
+       */
+      class ActivationCodeGenerator {
+        constructor() {
+          this.BASE_DATE = "2020-01-01";
+          this.SALT_MIN = 1;
+          this.SALT_MAX = 100;
+        }
+
+        /**
+         * 生成激活码
+         * @param {string} encodedSecret - 编码密钥
+         * @param {string} date - 日期字符串 (YYYY-MM-DD)
+         * @param {number} index - 索引号
+         * @returns {string} 格式化的激活码 (XXXX-XXXX-XXXX-XXXX)
+         */
+        generate(encodedSecret, date, index) {
+          const randomSalt = Math.floor(Math.random() * (this.SALT_MAX - this.SALT_MIN + 1)) + this.SALT_MIN;
+
+          const dayNum = this._dateToNumber(date);
+          const datePart = this._toBase36(dayNum + randomSalt, 4);
+          const indexPart = this._toBase36(index + randomSalt, 4);
+
+          const checksumSeed = `${encodedSecret}|${date}|${index}|${randomSalt}`;
+          const checksum = this._hashString(checksumSeed);
+          const checksumPart = this._toBase36(checksum, 8);
+
+          const code = datePart + indexPart + checksumPart;
+
+          return `${code.substr(0, 4)}-${code.substr(4, 4)}-${code.substr(8, 4)}-${code.substr(12, 4)}`;
+        }
+
+        /**
+         * 验证激活码
+         * @param {string} code - 激活码
+         * @param {string} expectedEncodedSecret - 期望的编码密钥
+         * @returns {object} 验证结果 { valid: boolean, encodedSecret?, date?, index?, salt?, reason? }
+         */
+        verify(code, expectedEncodedSecret) {
+          try {
+            const cleanCode = code.replace(/-/g, "").toUpperCase();
+
+            if (cleanCode.length !== 16) {
+              return { valid: false, reason: "激活码长度错误" };
+            }
+
+            const datePart = cleanCode.substr(0, 4);
+            const indexPart = cleanCode.substr(4, 4);
+            const checksumPart = cleanCode.substr(8, 8);
+
+            const dayNumWithSalt = this._fromBase36(datePart);
+            const indexWithSalt = this._fromBase36(indexPart);
+            const receivedChecksum = checksumPart;
+
+            for (let salt = this.SALT_MIN; salt <= this.SALT_MAX; salt++) {
+              const dayNum = dayNumWithSalt - salt;
+              const index = indexWithSalt - salt;
+              const date = this._numberToDate(dayNum);
+
+              const checksumSeed = `${expectedEncodedSecret}|${date}|${index}|${salt}`;
+              const expectedChecksum = this._toBase36(this._hashString(checksumSeed), 8);
+
+              if (receivedChecksum === expectedChecksum) {
+                return {
+                  valid: true,
+                  encodedSecret: expectedEncodedSecret,
+                  date: date,
+                  index: index,
+                  salt: salt,
+                };
+              }
+            }
+
+            return { valid: false, reason: "校验和不匹配（激活码无效）" };
+          } catch (e) {
+            return { valid: false, reason: "验证异常: " + e.message };
+          }
+        }
+
+        // 私有方法：计算字符串哈希值
+        _hashString(text) {
+          let hash = 0;
+          for (let i = 0; i < text.length; i++) {
+            hash = (hash << 5) - hash + text.charCodeAt(i);
+            hash = hash & hash;
+          }
+          return Math.abs(hash);
+        }
+
+        // 私有方法：数字转36进制字符串
+        _toBase36(num, length) {
+          let result = num.toString(36).toUpperCase();
+          while (result.length < length) {
+            result = "0" + result;
+          }
+          return result.substr(-length);
+        }
+
+        // 私有方法：36进制字符串转数字
+        _fromBase36(str) {
+          return parseInt(str, 36);
+        }
+
+        // 私有方法：日期转换为天数
+        _dateToNumber(dateStr) {
+          const baseDate = new Date(this.BASE_DATE);
+          const targetDate = new Date(dateStr);
+          const days = Math.floor((targetDate - baseDate) / (1000 * 60 * 60 * 24));
+          return days;
+        }
+
+        // 私有方法：天数转换为日期
+        _numberToDate(days) {
+          const baseDate = new Date(this.BASE_DATE);
+          const targetDate = new Date(baseDate.getTime() + days * 1000 * 60 * 60 * 24);
+          return targetDate.toISOString().split("T")[0];
+        }
+      }
+
+      // 创建激活码生成器实例
+      const codeGenerator = new ActivationCodeGenerator();
+      const ENCODED_SECRET = "paracraft";
+
+      // 视频配置文件（将从markdown加载）
+      let videoConfig = [];
+
+      // 状态管理
+      let isVIP = false;
+      let watchedVideos = [];
+      let allVideos = [];
+      let markdownConfig = "";
+      let dataLoaded = false;
+
+      // Load user data from personal page store
+      async function loadUserData() {
+        try {
+          // Check Keepwork VIP membership status
+          let isKeepworkVIP = false;
+          try {
+            // Try to get user info from SDK
+            if (sdk.user && typeof sdk.user.getUser === "function") {
+              const userInfo = await sdk.user.getUser();
+              isKeepworkVIP = userInfo && userInfo.vip && userInfo.vip > 0;
+              console.log("Keepwork VIP status:", isKeepworkVIP, userInfo);
+            } else if (sdk.userinfo) {
+              // Alternative: check if userinfo is directly available
+              isKeepworkVIP = sdk.userinfo.vip && sdk.userinfo.vip > 0;
+              console.log("Keepwork VIP status from userinfo:", isKeepworkVIP);
+            }
+          } catch (userError) {
+            console.log("Could not check VIP status:", userError.message);
+          }
+
+          const data = await sdk.personalPageStore.loadPageData("paracraft_tips", "user-progress");
+          if (data && typeof data === "object") {
+            // If user is Keepwork VIP, automatically activate
+            isVIP = isKeepworkVIP || data.isVIP || false;
+            watchedVideos = Array.isArray(data.watchedVideos) ? data.watchedVideos : [];
+            console.log("Loaded user data from personal page store:", data);
+
+            // If Keepwork VIP but not saved, save the VIP status
+            if (isKeepworkVIP && !data.isVIP) {
+              await saveUserData();
+              console.log("Auto-activated via Keepwork VIP membership");
+            }
+          } else {
+            isVIP = isKeepworkVIP;
+            console.log("No existing user data found, checking Keepwork VIP:", isKeepworkVIP);
+            if (isKeepworkVIP) {
+              await saveUserData();
+            }
+          }
+        } catch (error) {
+          console.error("Error loading user data:", error);
+        }
+        dataLoaded = true;
+      }
+
+      // Save user data to personal page store
+      async function saveUserData() {
+        try {
+          const data = {
+            isVIP: isVIP,
+            watchedVideos: watchedVideos,
+            lastUpdated: new Date().toISOString(),
+          };
+          await sdk.personalPageStore.savePageData("paracraft_tips", "user-progress", data, true);
+          console.log("Saved user data to personal page store:", data);
+        } catch (error) {
+          console.error("Error saving user data:", error);
+        }
+      }
+
+      // 解析markdown配置
+      function parseMarkdownConfig(markdown) {
+        const videos = [];
+        const lines = markdown.split("\n");
+        let currentSeries = "";
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+
+          // 解析系列标题 (# 第X期)
+          if (line.startsWith("# ")) {
+            currentSeries = line.substring(2).trim();
+            continue;
+          }
+
+          // 解析视频标题 (## 第X天)
+          if (line.startsWith("## ")) {
+            const title = line.substring(3).trim();
+
+            // 查找下一行的URL
+            if (i + 1 < lines.length) {
+              const nextLine = lines[i + 1].trim();
+              if (nextLine.startsWith("http")) {
+                // 将keepwork URL转换为嵌入式播放URL
+                let embedUrl = nextLine;
+                if (nextLine.includes("keepwork.com")) {
+                  // 转换为iframe嵌入格式
+                  embedUrl = nextLine;
+                }
+
+                // 检查是否在免费列表中
+                const isFree = freeTitles.has(title);
+
+                videos.push({
+                  name: title,
+                  url: embedUrl,
+                  free: isFree,
+                  series: currentSeries,
+                });
+              }
+            }
+          }
+        }
+
+        return videos;
+      }
+
+      // 从postMessage接收配置
+      window.addEventListener("message", function (e) {
+        if (e.data.type === "setGameConfig") {
+          
+        }
+      });
+
+      // 默认配置示例
+      const freeList = `
+## 第0天：《程序员爸爸成长日记》介绍        
+## 第1天：关于移动
+## 第2天：F3信息状态栏
+## 第3天：关于选择
+`;
+
+      // 解析免费列表，提取视频标题
+      function parseFreeList(markdown) {
+        const freeTitles = new Set();
+        const lines = markdown.split("\n");
+
+        for (let line of lines) {
+          line = line.trim();
+          if (line.startsWith("## ")) {
+            const title = line.substring(3).trim();
+            freeTitles.add(title);
+          }
+        }
+
+        return freeTitles;
+      }
+
+      const freeTitles = parseFreeList(freeList);
+
+      const defaultMarkdown = `
+## 第0天：《程序员爸爸成长日记》介绍
+https://keepwork.com/official/tips/s1/1_0
+
+## 第1天：关于移动
+https://keepwork.com/official/tips/s1/1_1
+
+## 第2天：F3信息状态栏
+https://keepwork.com/official/tips/s1/1_2
+
+## 第3天：关于选择
+https://keepwork.com/official/tips/s1/1_3
+
+## 第4天：跳转
+https://keepwork.com/official/tips/s1/1_4
+
+## 第5天：命令
+https://keepwork.com/official/tips/s1/1_5
+
+## 第6天：电影方块
+https://keepwork.com/official/tips/s1/1_6
+
+## 第7天：代码方块
+https://keepwork.com/official/tips/s1/1_7
+
+## 第8天：获得帮助
+https://keepwork.com/official/tips/s1/1_8
+
+## 第9天：日志文件
+https://keepwork.com/official/tips/s1/1_9
+
+## 第10天：过山车的开头
+https://keepwork.com/official/tips/s1/1_10
+
+## 第11天：过山车的中间
+https://keepwork.com/official/tips/s1/1_11
+
+## 第12天：过山车的结束
+https://keepwork.com/official/tips/s1/1_12
+
+## 第13天：空气墙
+https://keepwork.com/official/tips/s1/1_13
+
+## 第14天：/blockimage
+https://keepwork.com/official/tips/s1/1_14
+
+## 第15天：禁止跳跃
+https://keepwork.com/official/tips/s1/1_15
+
+## 第16天：防止作弊
+https://keepwork.com/official/tips/s1/1_16
+
+## 第17天：联机创作
+https://keepwork.com/official/tips/s1/1_17
+
+## 第18天：彩色告示牌
+https://keepwork.com/official/tips/s1/1_18
+
+## 第19天：HTML与用户UI
+https://keepwork.com/official/tips/s1/1_19
+
+## 第20天：录制视频F9
+https://keepwork.com/official/tips/s1/1_20
+
+## 第21天：/tip 命令
+https://keepwork.com/official/tips/s1/1_21
+
+## 第22天：机关与/sendevent
+https://keepwork.com/official/tips/s1/1_22
+
+## 第23天：代码方块控制电影播放
+https://keepwork.com/official/tips/s1/1_23
+
+## 第24天：删除电影方块中的摄影机
+https://keepwork.com/official/tips/s1/1_24
+
+## 第25天：写出工整的代码
+https://keepwork.com/official/tips/s1/1_25
+
+## 第26天：代码和命令中的注释
+https://keepwork.com/official/tips/s1/1_26
+
+## 第27天：/avatar 命令
+https://keepwork.com/official/tips/s1/1_27
+
+## 第28天：让电影控制主角
+https://keepwork.com/official/tips/s1/1_28
+
+## 第29天：/shader命令
+https://keepwork.com/official/tips/s1/1_29
+
+## 第30天：查看图块的源代码
+https://keepwork.com/official/tips/s1/1_30
+
+## 第31天：学会看命令说明
+https://keepwork.com/official/tips/s1/1_31
+
+## 第32天：代码的英文发音
+https://keepwork.com/official/tips/s1/1_32
+
+## 第33天：全文搜索(上)
+https://keepwork.com/official/tips/s1/1_33
+
+## 第34天：全文搜索(下)
+https://keepwork.com/official/tips/s1/1_34
+
+## 第35天：复制电影角色
+https://keepwork.com/official/tips/s1/1_35
+
+## 第36天：选择性复制角色关键帧
+https://keepwork.com/official/tips/s1/1_36
+
+## 第37天：到镜头的距离
+https://keepwork.com/official/tips/s1/1_37
+
+## 第38天：响应HTML中的按钮事件(上）
+https://keepwork.com/official/tips/s1/1_38
+
+## 第39天：响应HTML中的按钮事件(下）
+https://keepwork.com/official/tips/s1/1_39
+
+## 第40天：HTML中的数据绑定 （上）
+https://keepwork.com/official/tips/s1/1_40
+
+## 第41天：HTML中的数据绑定 （下）
+https://keepwork.com/official/tips/s1/1_41
+
+## 第42天：中继器的几个用处
+https://keepwork.com/official/tips/s1/1_42
+
+## 第43天：隐藏的含羞草
+https://keepwork.com/official/tips/s1/1_43
+
+## 第44天：出生点的作用
+https://keepwork.com/official/tips/s1/1_44
+
+## 第45天：方块的颜色
+https://keepwork.com/official/tips/s1/1_45
+
+## 第46天：初识CAD方块
+https://keepwork.com/official/tips/s1/1_46
+
+## 第47天：查看CAD教程
+https://keepwork.com/official/tips/s1/1_47
+
+## 第48天：CAD与3D打印
+https://keepwork.com/official/tips/s1/1_48
+
+## 第49天：如何摆放箭头和有方向的物品
+https://keepwork.com/official/tips/s1/1_49
+
+## 第50天：代码方块中的角色（上）
+https://keepwork.com/official/tips/s1/1_50
+
+## 第51天：代码方块中的角色（中）
+https://keepwork.com/official/tips/s1/1_51
+
+## 第52天：代码方块中的角色（下）
+https://keepwork.com/official/tips/s1/1_52
+
+## 第53天：更加精细的bmax模型
+https://keepwork.com/official/tips/s1/1_53
+
+## 第54天：物理模型与/lod命令
+https://keepwork.com/official/tips/s1/1_54
+
+## 第55天：用骨骼方块制作电风扇（上）
+https://keepwork.com/official/tips/s1/1_55
+
+## 第56天：用骨骼方块制作电风扇（下）
+https://keepwork.com/official/tips/s1/1_56
+
+## 第57天：控制CAD模型的面数
+https://keepwork.com/official/tips/s1/1_57
+
+## 第58天：CAD中建立骨骼绑定
+https://keepwork.com/official/tips/s1/1_58
+
+## 第59天：点光源
+https://keepwork.com/official/tips/s1/1_59
+
+## 第60天：电影方块中加入光源
+https://keepwork.com/official/tips/s1/1_60
+
+## 第61天：代码方块中加入光源
+https://keepwork.com/official/tips/s1/1_61
+
+## 第62天：绑定光源到骨骼
+https://keepwork.com/official/tips/s1/1_62
+
+## 第63天：主角手中的光源
+https://keepwork.com/official/tips/s1/1_63
+
+## 第64天：聚光灯
+https://keepwork.com/official/tips/s1/1_64
+
+## 第65天：地形笔刷的技巧
+https://keepwork.com/official/tips/s1/1_65
+
+## 第66天：地形画笔的技巧
+https://keepwork.com/official/tips/s1/1_66
+
+## 第67天：CodeBlockTest (上）
+https://keepwork.com/official/tips/s1/1_67
+
+## 第68天：CodeBlockTest (下）
+https://keepwork.com/official/tips/s1/1_68
+
+## 第69天：骨骼动画的RST快捷键
+https://keepwork.com/official/tips/s1/1_69
+
+## 第70天：骨骼与反向动力学（上）
+https://keepwork.com/official/tips/s1/1_70
+
+## 第71天：骨骼与反向动力学（下）
+https://keepwork.com/official/tips/s1/1_71
+
+## 第72天：电影方块中的图层角色
+https://keepwork.com/official/tips/s1/1_72
+
+## 第73天：代码方块控制图层角色
+https://keepwork.com/official/tips/s1/1_73
+
+## 第74天：3D立体输出
+https://keepwork.com/official/tips/s1/1_74
+
+## 第75天：CodeBlockLesson（上）
+https://keepwork.com/official/tips/s1/1_75
+
+## 第76天：CodeBlockLesson（下）
+https://keepwork.com/official/tips/s1/1_76
+
+## 第77天：生成独立应用程序
+https://keepwork.com/official/tips/s1/1_77
+
+## 第78天：Paracraft作者写的教材
+https://keepwork.com/official/tips/s1/1_78
+
+## 第79天：相似原理介绍
+https://keepwork.com/official/tips/s1/1_79
+
+## 第80天：MindManager
+https://keepwork.com/official/tips/s1/1_80
+
+## 第81天：学习的本质
+https://keepwork.com/official/tips/s1/1_81
+
+## 第82天：我的童年
+https://keepwork.com/official/tips/s1/1_82
+
+## 第83天：教育的本质
+https://keepwork.com/official/tips/s1/1_83
+
+## 第84天：如何保持有事可做？
+https://keepwork.com/official/tips/s1/1_84
+
+## 第85天：从自然界到虚拟世界
+https://keepwork.com/official/tips/s1/1_85
+
+## 第86天：从虚拟世界到物理世界
+https://keepwork.com/official/tips/s1/1_86
+
+## 第87天：自学编程：从零到无穷大
+https://keepwork.com/official/tips/s1/1_87
+
+## 第88天：学以致用：科学篇
+https://keepwork.com/official/tips/s1/1_88
+
+## 第89天：学以致用：英语篇
+https://keepwork.com/official/tips/s1/1_89
+
+## 第90天：学生要做的最重要的事情是什么？
+https://keepwork.com/official/tips/s1/1_90
+
+## 第91天：作品就是你自己
+https://keepwork.com/official/tips/s1/1_91
+
+## 第92天：作品是最好的老师
+https://keepwork.com/official/tips/s1/1_92
+
+## 第93天：寻找一位导师
+https://keepwork.com/official/tips/s1/1_93
+
+## 第94天：作品历史记录与备份
+https://keepwork.com/official/tips/s1/1_94
+
+## 第95天：未来教育的评估方式
+https://keepwork.com/official/tips/s1/1_95
+
+## 第96天：随心所欲的创作
+https://keepwork.com/official/tips/s1/1_96
+
+## 第97天：Scratch与Paracraft的区别
+https://keepwork.com/official/tips/s1/1_97
+
+## 第98天：Minecraft与Paracraft的区别
+https://keepwork.com/official/tips/s1/1_98
+
+## 第99天：孩子应该学习什么编程语言？
+https://keepwork.com/official/tips/s1/1_99
+
+## 第100天：NPL语言简介
+https://keepwork.com/official/tips/s1/1_100
+
+## 第101天：代码方块教学1
+https://keepwork.com/official/tips/s1/1_101
+
+## 第102天：Paracraft由多少行代码构成的
+https://keepwork.com/official/tips/s1/1_102
+
+## 第103天：代码方块教学2
+https://keepwork.com/official/tips/s1/1_103
+
+## 第104天：语法、注释、Log语句
+https://keepwork.com/official/tips/s1/1_104
+
+## 第105天：代码方块教学3《乒乓球游戏》
+https://keepwork.com/official/tips/s1/1_105
+
+## 第106天：什么是编译？
+https://keepwork.com/official/tips/s1/1_106
+
+## 第107天：代码方块教学4《钢琴》
+https://keepwork.com/official/tips/s1/1_107
+
+## 第108天：程序的本质
+https://keepwork.com/official/tips/s1/1_108
+
+## 第109天：代码方块教学5《迷宫小游戏》
+https://keepwork.com/official/tips/s1/1_109
+
+## 第110天：数字与数学
+https://keepwork.com/official/tips/s1/1_110
+
+## 第111天：代码方块教学6《全局变量》
+https://keepwork.com/official/tips/s1/1_111
+
+## 第112天：变量与名字
+https://keepwork.com/official/tips/s1/1_112
+
+## 第113天：代码方块教学7《双重机关与事件》
+https://keepwork.com/official/tips/s1/1_113
+
+## 第114天：变量的作用域
+https://keepwork.com/official/tips/s1/1_114
+
+## 第115天：代码方块教学8《制作图形界面》
+https://keepwork.com/official/tips/s1/1_115
+
+## 第116天：变量的使用方法
+https://keepwork.com/official/tips/s1/1_116
+
+## 第117天：代码方块教学9《代码方块的输出》
+https://keepwork.com/official/tips/s1/1_117
+
+## 第118天：变量举例
+https://keepwork.com/official/tips/s1/1_118
+
+## 第119天：字符串与文字
+https://keepwork.com/official/tips/s1/1_119
+
+## 第120天：字符串常用操作
+https://keepwork.com/official/tips/s1/1_120
+
+## 第121天：字符串练习
+https://keepwork.com/official/tips/s1/1_121
+
+## 第122天：表的基本概念
+https://keepwork.com/official/tips/s1/1_122
+
+## 第123天：表与数组的创建方法
+https://keepwork.com/official/tips/s1/1_123
+
+## 第124天：表的用法举例
+https://keepwork.com/official/tips/s1/1_124
+
+## 第125天：如何定义函数
+https://keepwork.com/official/tips/s1/1_125
+
+## 第126天：调用函数
+https://keepwork.com/official/tips/s1/1_126
+
+## 第127天：有返回值的函数
+https://keepwork.com/official/tips/s1/1_127
+
+## 第128天：内置函数 and or
+https://keepwork.com/official/tips/s1/1_128
+
+## 第129天：内置函数 if
+https://keepwork.com/official/tips/s1/1_129
+
+## 第130天：如何避免 if
+https://keepwork.com/official/tips/s1/1_130
+
+## 第131天：内置函数 while for
+https://keepwork.com/official/tips/s1/1_131
+
+## 第132天：学习NPL语言的总结
+https://keepwork.com/official/tips/s1/1_132
+
+## 第133天：学习编程的建议
+https://keepwork.com/official/tips/s1/1_133
+
+## 第134天：打字练习1
+https://keepwork.com/official/tips/s1/1_134
+
+## 第135天：打字练习2
+https://keepwork.com/official/tips/s1/1_135
+
+## 第136天：打字练习3
+https://keepwork.com/official/tips/s1/1_136
+
+## 第137天：打字练习4
+https://keepwork.com/official/tips/s1/1_137
+
+## 第138天：打字练习5
+https://keepwork.com/official/tips/s1/1_138
+
+## 第139天：打字练习6
+https://keepwork.com/official/tips/s1/1_139
+
+## 第140天：跟随我
+https://keepwork.com/official/tips/s1/1_140
+
+## 第141天：示教系统（上）
+https://keepwork.com/official/tips/s1/1_141
+
+## 第142天：示教系统（下）
+https://keepwork.com/official/tips/s1/1_142
+
+## 第143天：人工智能冬令营
+https://keepwork.com/official/tips/s1/1_143
+
+## 第144天：隐形方块
+https://keepwork.com/official/tips/s1/1_144
+
+## 第145天：text命令
+https://keepwork.com/official/tips/s1/1_145
+
+## 第146天：多人联网ggs命令
+https://keepwork.com/official/tips/s1/1_146
+
+## 第147天：ggs同步消息
+https://keepwork.com/official/tips/s1/1_147
+
+## 第148天：关卡与事件
+https://keepwork.com/official/tips/s1/1_148
+
+## 第149天：人物头顶文字
+https://keepwork.com/official/tips/s1/1_149
+
+## 第150天：ask提问
+https://keepwork.com/official/tips/s1/1_150
+
+## 第151天：loadworld命令
+https://keepwork.com/official/tips/s1/1_151
+
+## 第152天：sky命令
+https://keepwork.com/official/tips/s1/1_152
+
+## 第153天：time命令
+https://keepwork.com/official/tips/s1/1_153
+
+## 第154天：可换装人物
+https://keepwork.com/official/tips/s1/1_154
+
+## 第155天：say头顶说话
+https://keepwork.com/official/tips/s1/1_155
+
+## 第156天：设置角色的感知半径
+https://keepwork.com/official/tips/s1/1_156
+
+## 第157天：用感知半径配合电影播放
+https://keepwork.com/official/tips/s1/1_157
+
+## 第158天：anim函数
+https://keepwork.com/official/tips/s1/1_158
+
+## 第159天：hide隐藏角色
+https://keepwork.com/official/tips/s1/1_159
+
+## 第160天：宏示教舞台（上）
+https://keepwork.com/official/tips/s1/1_160
+
+## 第161天：宏示教舞台（下）
+https://keepwork.com/official/tips/s1/1_161
+
+## 第162天：自定义物品AgentItem（上）
+https://keepwork.com/official/tips/s1/1_162
+
+## 第163天：自定义物品AgentItem（中）
+https://keepwork.com/official/tips/s1/1_163
+
+## 第164天：自定义物品AgentItem（下）
+https://keepwork.com/official/tips/s1/1_164
+
+## 第165天：playSound播放音乐(上）
+https://keepwork.com/official/tips/s1/1_165
+
+## 第166天：playSound播放音乐(下）
+https://keepwork.com/official/tips/s1/1_166
+
+## 第167天：playText朗读文字
+https://keepwork.com/official/tips/s1/1_167
+
+## 第168天：在电影方块中朗读字幕
+https://keepwork.com/official/tips/s1/1_168
+
+## 第169天：playBone骨骼动画
+https://keepwork.com/official/tips/s1/1_169
+
+## 第170天：自定义动画anim（上）
+https://keepwork.com/official/tips/s1/1_170
+
+## 第171天：自定义动画anim（下）
+https://keepwork.com/official/tips/s1/1_171
+
+## 第172天：Clone命令上升的气球
+https://keepwork.com/official/tips/s1/1_172
+
+## 第173天：运动的可换装方块
+https://keepwork.com/official/tips/s1/1_173
+
+## 第174天：教学模式与地基方块
+https://keepwork.com/official/tips/s1/1_174
+
+## 第175天：限制可创作的方块数
+https://keepwork.com/official/tips/s1/1_175
+
+## 第176天：看不见的可点击区域
+https://keepwork.com/official/tips/s1/1_176
+
+## 第177天：激活代码方块编辑器(上)
+https://keepwork.com/official/tips/s1/1_177
+
+## 第178天：激活代码方块编辑器(下)
+https://keepwork.com/official/tips/s1/1_178
+
+## 第179天：相对位置播放动画
+https://keepwork.com/official/tips/s1/1_179
+
+## 第180天：用命令生成地形
+https://keepwork.com/official/tips/s1/1_180
+
+## 第181天：预加载地形上的代码
+https://keepwork.com/official/tips/s1/1_181
+
+## 第182天：接收键盘消息
+https://keepwork.com/official/tips/s1/1_182
+
+## 第183天：接收任意键盘消息
+https://keepwork.com/official/tips/s1/1_183
+
+## 第184天：处理并发的键盘消息
+https://keepwork.com/official/tips/s1/1_184
+
+## 第185天：接收鼠标消息
+https://keepwork.com/official/tips/s1/1_185
+
+## 第186天：取消接收消息
+https://keepwork.com/official/tips/s1/1_186
+
+## 第187天：并行执行：边走边跳
+https://keepwork.com/official/tips/s1/1_187
+
+## 第188天：自动启动代码方块
+https://keepwork.com/official/tips/s1/1_188
+
+## 第189天：用代码方块自动加载房间内景
+https://keepwork.com/official/tips/s1/1_189
+
+## 第190天：NPL图块
+https://keepwork.com/official/tips/s1/1_190
+
+## 第191天：NPL图块自动生成宏示教
+https://keepwork.com/official/tips/s1/1_191
+
+## 第192天：NPL自定义世界图块
+https://keepwork.com/official/tips/s1/1_192
+
+## 第193天：选择非方块物体
+https://keepwork.com/official/tips/s1/1_193
+
+## 第194天：批量替换方块
+https://keepwork.com/official/tips/s1/1_194
+
+## 第195天：不可编辑方块
+https://keepwork.com/official/tips/s1/1_195
+
+## 第196天：彩色的提问按钮
+https://keepwork.com/official/tips/s1/1_196
+
+## 第197天：可点击的相册
+https://keepwork.com/official/tips/s1/1_197
+
+## 第198天：密室解锁逻辑（上）
+https://keepwork.com/official/tips/s1/1_198
+
+## 第199天：密室解锁逻辑（下）
+https://keepwork.com/official/tips/s1/1_199
+
+## 第200天：将电脑使用权还给孩子
+https://keepwork.com/official/tips/s1/1_200
+
+## 第201天：禁止世界另存为
+https://keepwork.com/official/tips/s1/1_201
+
+## 第202天：设置世界的多人编辑权限
+https://keepwork.com/official/tips/s1/1_202
+
+## 第203天：世界权限分组与只读权限
+https://keepwork.com/official/tips/s1/1_203
+
+## 第204天：更改光源颜色
+https://keepwork.com/official/tips/s1/1_204
+
+## 第205天：新手模板 F1
+https://keepwork.com/official/tips/s1/1_205
+
+## 第206天：创建新手模板（上）
+https://keepwork.com/official/tips/s1/1_206
+
+## 第207天：创建新手模板（下）
+https://keepwork.com/official/tips/s1/1_207
+
+## 第208天：分享作品视频和点赞
+https://keepwork.com/official/tips/s1/1_208
+
+## 第209天：搜索官方文档
+https://keepwork.com/official/tips/s1/1_209
+
+## 第210天：给图块添加注释
+https://keepwork.com/official/tips/s1/1_210
+
+## 第211天：相册的使用
+https://keepwork.com/official/tips/s1/1_211
+
+## 第212天：永远面向摄影机
+https://keepwork.com/official/tips/s1/1_212
+
+## 第213天：会员种类和权限说明
+https://keepwork.com/official/tips/s1/1_213
+
+## 第214天：免费用户的世界访问权限
+https://keepwork.com/official/tips/s1/1_214
+
+## 第215天：角色连接到角色
+https://keepwork.com/official/tips/s1/1_215
+
+## 第216天：玩家连接到电梯
+https://keepwork.com/official/tips/s1/1_216
+
+## 第217天：《创意空间》与教育3.0
+https://keepwork.com/official/tips/s1/1_217
+
+## 第218天：自我检测表
+https://keepwork.com/official/tips/s1/1_218
+
+## 第219天：clone一群随机角色
+https://keepwork.com/official/tips/s1/1_219
+
+## 第220天：录音与ogg音频文件
+https://keepwork.com/official/tips/s1/1_220
+
+## 第221天：给电影方块添加声音
+https://keepwork.com/official/tips/s1/1_221
+
+## 第222天：clone电影方块中的多个角色
+https://keepwork.com/official/tips/s1/1_222
+
+## 第223天：如何使用PPT教学
+https://keepwork.com/official/tips/s1/1_223
+
+## 第224天：如何做1v1辅导
+https://keepwork.com/official/tips/s1/1_224
+
+## 第225天：编程教学中模仿的重要性
+https://keepwork.com/official/tips/s1/1_225
+
+## 第226天：参观机构样板校
+https://keepwork.com/official/tips/s1/1_226
+
+## 第227天：离线模式与个人电脑
+https://keepwork.com/official/tips/s1/1_227
+
+## 第228天：全国创意大赛列表
+https://keepwork.com/official/tips/s1/1_228
+
+## 第229天：代码方块的字体大小
+https://keepwork.com/official/tips/s1/1_229
+
+## 第230天：多窗口编辑代码方块中的代码
+https://keepwork.com/official/tips/s1/1_230
+
+## 第231天：开启代码方块高性能模式
+https://keepwork.com/official/tips/s1/1_231
+
+## 第232天：代码方块设置断点(上)
+https://keepwork.com/official/tips/s1/1_232
+
+## 第233天：代码方块设置断点(下)
+https://keepwork.com/official/tips/s1/1_233
+
+## 第234天：架设私服与多人合作
+https://keepwork.com/official/tips/s1/1_234
+
+## 第235天：允许客户端执行代码
+https://keepwork.com/official/tips/s1/1_235
+
+`;
+
+      // 使用默认配置初始化
+      videoConfig = parseMarkdownConfig(defaultMarkdown);
+      allVideos = videoConfig;
+
+      // 初始化页面
+      async function init() {
+        await loadUserData();
+        updateVIPStatus();
+        renderVideos(allVideos);
+        // 通知父窗口游戏已加载
+        window.parent.postMessage({ type: "gameLoaded" }, "*");
+      }
+
+      // 更新激活状态显示
+      function updateVIPStatus() {
+        const statusEl = document.getElementById("vipStatus");
+        if (isVIP) {
+          statusEl.textContent = "⭐ 已经激活全部课程";
+          statusEl.classList.add("bg-yellow-500");
+        } else {
+          statusEl.textContent = "👤 免费用户";
+          statusEl.classList.remove("bg-yellow-500");
+        }
+      }
+
+      // 检查视频是否已观看
+      function isWatched(index) {
+        return watchedVideos.includes(index);
+      }
+
+      // 标记视频为已观看
+      async function markAsWatched(index) {
+        if (!watchedVideos.includes(index)) {
+          watchedVideos.push(index);
+          await saveUserData();
+        }
+      }
+
+      // 渲染视频列表
+      function renderVideos(videos) {
+        const videoList = document.getElementById("videoList");
+        videoList.innerHTML = "";
+
+        videos.forEach((video, index) => {
+          const isLocked = !video.free && !isVIP;
+          const watched = isWatched(index);
+          const card = document.createElement("div");
+          card.className = "video-item bg-white rounded-lg shadow-md overflow-hidden cursor-pointer";
+
+          card.innerHTML = `
+                    <div class="p-4 flex items-center gap-3 relative">
+                        <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br ${
+                          isLocked ? "from-gray-400 to-gray-500" : watched ? "from-green-400 to-green-500" : "from-purple-400 to-blue-500"
+                        } flex items-center justify-center text-white ${isLocked ? "text-2xl" : "text-xs font-bold"} relative">
+                            ${isLocked ? "🔒" : watched ? "已完成" : "未开始"}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-gray-800 truncate text-sm">${video.name}</h3>
+                            <div class="flex items-center gap-2 mt-1">
+                                ${video.series ? `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">${video.series}</span>` : ""}
+                                ${
+                                  video.free
+                                    ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">免费</span>'
+                                    : '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">需激活</span>'
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+          card.onclick = () => playVideo(index);
+          videoList.appendChild(card);
+        });
+      }
+
+      // 播放视频
+      async function playVideo(index) {
+        const video = allVideos[index];
+
+        if (!video.free && !isVIP) {
+          showActivationModal();
+          return;
+        }
+
+        // 标记为已观看
+        await markAsWatched(index);
+
+        // 处理视频URL，添加?layout=none参数
+        let videoUrl = video.url;
+        if (video.url.includes("keepwork.com")) {
+          // 添加?layout=none参数
+          videoUrl = video.url.includes("?") ? video.url + "&layout=none" : video.url + "?layout=none";
+        }
+
+        // 在iframe中播放
+        document.getElementById("playerSection").classList.remove("hidden");
+        document.getElementById("currentVideoTitle").textContent = video.name;
+        document.getElementById("videoPlayer").src = videoUrl;
+
+        // 重新渲染列表以更新已观看状态
+        renderVideos(allVideos);
+
+        // 滚动到播放器
+        document.getElementById("playerSection").scrollIntoView({ behavior: "smooth" });
+      }
+
+      // 关闭播放器
+      function closePlayer() {
+        document.getElementById("playerSection").classList.add("hidden");
+        document.getElementById("videoPlayer").src = "";
+      }
+
+      // 显示激活弹窗
+      function showActivationModal() {
+        document.getElementById("activationModal").classList.remove("hidden");
+      }
+
+      // 关闭激活弹窗
+      function closeActivationModal() {
+        document.getElementById("activationModal").classList.add("hidden");
+        document.getElementById("activationCodeInput").value = "";
+        document.getElementById("activationMessage").classList.add("hidden");
+      }
+
+      // 显示激活消息
+      function showActivationMessage(message, type = "error") {
+        const messageDiv = document.getElementById("activationMessage");
+        messageDiv.classList.remove("hidden");
+
+        if (type === "success") {
+          messageDiv.className = "mb-4 p-4 rounded-lg bg-green-100 border border-green-300";
+          messageDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">✅</span>
+                        <div class="text-sm text-green-800">${message}</div>
+                    </div>
+                `;
+        } else {
+          messageDiv.className = "mb-4 p-4 rounded-lg bg-red-100 border border-red-300";
+          messageDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3">❌</span>
+                        <div class="text-sm text-red-800">${message}</div>
+                    </div>
+                `;
+        }
+      }
+
+      // 使用激活码激活全部课程
+      async function activateWithCode() {
+        const rawCode = document.getElementById("activationCodeInput").value.trim();
+
+        if (!rawCode) {
+          showActivationMessage("请输入激活码");
+          return;
+        }
+
+        // 清理输入：移除所有非字母数字字符（连字符、空格、换行等）
+        const cleanCode = rawCode.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+        if (cleanCode.length !== 16) {
+          showActivationMessage(`激活码长度错误，应为16位字符，当前为${cleanCode.length}位`);
+          return;
+        }
+
+        // 格式化为标准格式进行验证
+        const formattedCode = `${cleanCode.substr(0, 4)}-${cleanCode.substr(4, 4)}-${cleanCode.substr(8, 4)}-${cleanCode.substr(12, 4)}`;
+
+        // 使用ActivationCodeGenerator验证激活码
+        const result = codeGenerator.verify(formattedCode, ENCODED_SECRET);
+
+        if (result.valid) {
+          isVIP = true;
+          await saveUserData();
+          updateVIPStatus();
+          renderVideos(allVideos);
+          console.log("激活码验证成功:", result);
+          showActivationMessage(`<strong>恭喜！已激活全部课程！</strong><br>生成日期: ${result.date}<br>序号: ${result.index + 1}`, "success");
+          // 3秒后自动关闭弹窗
+          setTimeout(() => {
+            closeActivationModal();
+          }, 3000);
+        } else {
+          console.error("激活码验证失败:", result.reason);
+          showActivationMessage(`激活码无效: ${result.reason}`);
+        }
+      }
+
+      // 搜索过滤
+      function filterVideos() {
+        const searchTerm = document.getElementById("searchInput").value.toLowerCase();
+        const filtered = allVideos.filter((video) => video.name.toLowerCase().includes(searchTerm));
+        renderVideos(filtered);
+      }
+
+      // 页面加载时初始化
+      init();
+    </script>
+  </body>
+</html>
