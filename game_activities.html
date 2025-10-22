@@ -378,7 +378,9 @@
                 <button id="tab_mai_si_test" onclick="switchTab('mai_si_test')" class="tab-btn w-full text-white py-3 px-4 rounded-lg font-medium text-left transition-all duration-300 hover:bg-white hover:bg-opacity-20 flex items-center">
                     麦思测评
                 </button>
-                
+                <button id="tab_paracraft_tips" onclick="switchTab('paracraft_tips')" class="tab-btn w-full text-white py-3 px-4 rounded-lg font-medium text-left transition-all duration-300 hover:bg-white hover:bg-opacity-20 flex items-center">
+                    创作者学堂
+                </button>
                 <!-- <button id="tab_referral" onclick="switchTab('referral')" class="tab-btn w-full text-white py-3 px-4 rounded-lg font-medium text-left transition-all duration-300 hover:bg-white hover:bg-opacity-20 flex items-center">
                     <span class="mr-2">🎁</span>
                     拉新奖励
@@ -420,6 +422,11 @@
                 id: 'game_activity_mai_si_test',
                 url: 'https://keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_test',
                 title: '麦思测评'
+            },
+            paracraft_tips:{
+                id: 'game_activity_paracraft_tips',
+                url: 'https://keepwork.com/api/raw/maisi/maisi/webgames/data/paracraft_tips',
+                title: '创作学堂'
             },
             referral: {
                 id: 'game_activity_referral',
@@ -579,8 +586,17 @@
                 showLoadError(tabId);
             };
             
-            // 设置iframe源
-            iframe.src = config.url;
+            // Append all URL params to iframe URL
+            let iframeSrc = config.url;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Forward all URL parameters to the iframe
+            if (urlParams.toString()) {
+                const separator = config.url.includes('?') ? '&' : '?';
+                iframeSrc = `${config.url}${separator}${urlParams.toString()}`;
+            }
+            
+            iframe.src = iframeSrc;
             
             // 显示iframe容器
             iframeContainer.classList.remove('hidden');
@@ -627,23 +643,6 @@
             }
         }
         
-        function loadPageInIframe(tabId, url) {
-            const contentDiv = document.getElementById(tabId);
-            
-            // 清空原有内容并创建 iframe
-            contentDiv.innerHTML = `
-                <iframe 
-                    src="${url}" 
-                    style="width: 100%; height: 100vh; border: none; background: white;"
-                    onload="this.style.opacity = '1';"
-                    style="opacity: 0; transition: opacity 0.3s ease;"
-                ></iframe>
-            `;
-            
-            // 显示内容
-            contentDiv.classList.remove('hidden');
-        }
-
         function showSuccessMessage(message) {
             // 创建成功提示
             const toast = document.createElement('div');
@@ -716,6 +715,9 @@
                             switchTab(e.data.tab);
                         }
                         break;
+                    case "miniGameProxyDataResponse":
+                        window.miniGameProxyData = e.data;
+                        break;
                     case "vipPayResult":
                         if (window.parent) {
                             window.parent.postMessage({ type: 'vipPayResult', data: e.data.data }, '*');
@@ -762,6 +764,7 @@
 
         if (isProxyMode) {
             window.parent.postMessage({ type: 'getLocation' }, '*');
+            window.parent.postMessage({ type: "getMiniGameProxyData" }, "*");
         }
         else{
             // If not in proxy mode, load the default tab directly

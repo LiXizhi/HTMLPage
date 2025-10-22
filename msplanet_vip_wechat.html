@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>麦思星球 - 会员充值</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
-    <!-- 引入二维码生成库 -->
     <script src="https://cdn.keepwork.com/npm/qrcode%401.5.1/build/qrcode.min.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -25,7 +25,14 @@
 <body class="min-h-screen bg-gradient-to-br from-cosmic-blue via-cosmic-purple to-cosmic-pink">
     <div class="relative z-10 container mx-auto px-4 py-8 max-w-4xl">
         <!-- 头部标题 -->
-        <div class="text-center mb-8">
+        <div class="text-center mb-8 relative">
+            <!-- 右上角兑换码按钮 -->
+            <div class="flex justify-end mb-3 md:absolute md:top-0 md:right-0 md:mb-0">
+                <button id="redeemCodeBtn" class="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-medium py-2 px-3 md:px-6 rounded-lg transition-all duration-300 border border-white/40 hover:border-white/60 hover:scale-105 text-sm md:text-base">
+                    🎁 使用兑换码
+                </button>
+            </div>
+            
             <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">
                 ✨ 麦思星球 (内测版) 会员
             </h1>
@@ -234,13 +241,112 @@
             </div>
         </div>
 
+        <!-- 兑换码弹窗 -->
+        <div id="redeemModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl p-6 md:p-8 max-w-md w-full mx-auto">
+                <div>
+                    <h3 class="text-xl md:text-2xl font-bold text-gray-800 mb-6 text-center">使用兑换码</h3>
+                    
+                    <!-- 兑换码输入框 -->
+                    <div class="mb-6">
+                        <label class="block text-gray-700 font-medium mb-3">请输入兑换码</label>
+                        <input 
+                            type="text" 
+                            id="redeemCodeInput" 
+                            placeholder="请输入兑换码" 
+                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors text-lg tracking-wider uppercase"
+                        />
+                    </div>
+                    
+                    <!-- 提示信息 -->
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                        <div class="text-gray-700 text-sm space-y-2">
+                            <p class="flex items-start">
+                                <span class="text-blue-500 mr-2">1.</span>
+                                <span>激活成功后，可享受对应的权益和服务</span>
+                            </p>
+                            <p class="flex items-start">
+                                <span class="text-blue-500 mr-2">2.</span>
+                                <span>请在激活码有效期内使用，过期作废</span>
+                            </p>
+                            <p class="flex items-start">
+                                <span class="text-blue-500 mr-2">3.</span>
+                                <span>请妥善保管激活码，遗失泄漏不补</span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- 按钮组 -->
+                    <div class="space-y-3">
+                        <button id="activateCodeBtn" class="w-full bg-gradient-to-r from-purple-500 to-cosmic-purple hover:from-purple-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 hover:scale-105">
+                            ✨ 立即激活
+                        </button>
+                        <button id="closeRedeemModalBtn" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-2 px-4 rounded-lg transition-all duration-300">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 底部说明 -->
         <div class="text-center mt-8 text-white/60 text-sm">
             <p>购买即表示同意《服务条款》和《隐私政策》</p>
         </div>
     </div>
 
+    <!-- Toast 通知容器 -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-[60] space-y-2"></div>
+
     <script>
+        // Initialize Keepwork SDK
+        const sdk = new KeepworkSDK({
+            timeout: 30000
+        });
+        console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+
+        // Toast 通知函数
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            // 根据类型设置样式
+            const styles = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+            
+            const icons = {
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+            
+            toast.className = `${styles[type]} text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 min-w-[300px] max-w-md transform transition-all duration-300 translate-x-[400px] opacity-0`;
+            toast.innerHTML = `
+                <span class="text-xl font-bold">${icons[type]}</span>
+                <span class="flex-1">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            // 动画显示
+            setTimeout(() => {
+                toast.classList.remove('translate-x-[400px]', 'opacity-0');
+            }, 10);
+            
+            // 3秒后自动消失
+            setTimeout(() => {
+                toast.classList.add('translate-x-[400px]', 'opacity-0');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
         // 支付链接配置
         const paymentLinks = {
             '7天': 'https://keepwork.com/p/vb/vipPayOrder?from=maisiAI&productCode=vip_common_7_day',
@@ -310,10 +416,142 @@
             // verifyPaymentStatus();
         }
 
+        // 显示兑换码弹窗
+        function showRedeemModal() {
+            // 检查是否有用户ID
+            const urlParams = new URLSearchParams(window.location.search);
+            let userId = urlParams.get('userid');
+            
+            // 如果URL没有userid，尝试从全局变量获取
+            if (!userId && typeof currentUserId !== 'undefined') {
+                userId = currentUserId;
+            }
+            
+            if (!userId) {
+                showToast('请先输入用户ID后再使用兑换码', 'warning');
+                // 如果没有用户ID视图是隐藏的，显示它
+                const noUserIdView = document.getElementById('noUserIdView');
+                if (noUserIdView && noUserIdView.classList.contains('hidden')) {
+                    document.getElementById('hasUserIdView').classList.add('hidden');
+                    noUserIdView.classList.remove('hidden');
+                    document.getElementById('userIdInput').focus();
+                }
+                // 不打开兑换码弹窗
+                return;
+            }
+            
+            // 有userid才打开兑换码弹窗
+            document.getElementById('redeemModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('redeemCodeInput').focus();
+        }
+
+        // 隐藏兑换码弹窗
+        function hideRedeemModal() {
+            document.getElementById('redeemModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            document.getElementById('redeemCodeInput').value = '';
+        }
+
+        // 激活兑换码
+        async function activateRedeemCode() {
+            const code = document.getElementById('redeemCodeInput').value
+                .replace(/[^a-zA-Z0-9]/g, '')
+                .toUpperCase();
+            
+            if (!code) {
+                showToast('请输入兑换码', 'warning');
+                return;
+            }
+            
+            // 获取用户ID
+            const urlParams = new URLSearchParams(window.location.search);
+            let userId = urlParams.get('userid');
+            
+            // 如果URL没有userid，尝试从全局变量获取
+            if (!userId && typeof currentUserId !== 'undefined') {
+                userId = currentUserId;
+            }
+            
+            // 检查是否有用户ID
+            if (!userId || userId.trim() === '') {
+                showToast('无法获取用户ID，请先输入用户ID后再使用兑换码', 'error');
+                hideRedeemModal();
+                // 显示用户ID输入界面
+                const hasUserIdView = document.getElementById('hasUserIdView');
+                const noUserIdView = document.getElementById('noUserIdView');
+                if (hasUserIdView && noUserIdView) {
+                    hasUserIdView.classList.add('hidden');
+                    noUserIdView.classList.remove('hidden');
+                    document.getElementById('userIdInput').focus();
+                }
+                return;
+            }
+            
+            console.log('激活兑换码:', code, '用户ID:', userId);
+            
+            // 显示加载状态
+            const activateBtn = document.getElementById('activateCodeBtn');
+            const originalText = activateBtn.innerHTML;
+            activateBtn.innerHTML = '激活中...';
+            activateBtn.disabled = true;
+            
+            try {
+                // 调用Keepwork SDK API激活兑换码
+                const res = await sdk.post("/activateCodes/activate", {
+                    key: code,
+                    userId: parseInt(userId)
+                });
+                
+                console.log('激活响应:', res);
+                
+                // 检查响应
+                if (res && (res.period || !res.message)) {
+                    // 激活成功
+                    showToast('兑换码激活成功！会员权益已发放到您的账户。', 'success');
+                    hideRedeemModal();
+                    
+                    // 通知父窗口
+                    window.parent.postMessage({ 
+                        type: 'redeemCodeActivated',
+                        code: code,
+                        userId: userId,
+                        success: true,
+                        data: res.data
+                    }, '*');
+                } else {
+                    // 激活失败，优先显示message字段，其次是msg字段
+                    const errorMsg = res && (res.message) ? (res.message) : '兑换码激活失败，请检查兑换码是否正确或已过期';
+                    showToast(errorMsg, 'error');
+                    console.error('激活失败:', res);
+                }
+                
+            } catch (error) {
+                console.error('兑换码激活失败:', error);
+                let errorMsg = '兑换码激活失败，请稍后重试';
+                
+                // 尝试解析错误信息，优先使用message字段
+                if (error.message) {
+                    errorMsg = error.message;
+                } else if (error.msg) {
+                    errorMsg = error.msg;
+                }
+                
+                showToast(errorMsg, 'error');
+            } finally {
+                // 恢复按钮状态
+                activateBtn.innerHTML = originalText;
+                activateBtn.disabled = false;
+            }
+        }
+
+        // 全局变量存储当前用户ID
+        let currentUserId = null;
+        
         function LoadPage() {
             // 获取URL参数中的userId
             const urlParams = new URLSearchParams(window.location.search);
-            let currentUserId = urlParams.get('userid');
+            currentUserId = urlParams.get('userid');
             
             // 根据是否有userId参数显示对应的视图
             const hasUserIdView = document.getElementById('hasUserIdView');
@@ -344,13 +582,13 @@
             document.getElementById('confirmUserIdBtn').addEventListener('click', function() {
                 const inputUserId = document.getElementById('userIdInput').value.trim();
                 if (!inputUserId) {
-                    alert('请输入用户ID');
+                    showToast('请输入用户ID', 'warning');
                     return;
                 }
                 
                 // 验证用户ID格式（假设为数字）
                 if (!/^\d+$/.test(inputUserId)) {
-                    alert('用户ID格式不正确，请输入数字');
+                    showToast('用户ID格式不正确，请输入数字', 'error');
                     return;
                 }
                 
@@ -380,7 +618,7 @@
                             let userId = currentUserId;
 
                             if (!userId) {
-                                cnosole.log('用户信息获取失败，请重新登录后再试。');
+                                showToast('用户信息获取失败，请重新登录后再试。', 'error');
                                 return;
                             }
                             // 将userId拼接到支付URL
@@ -397,7 +635,7 @@
                                 showQRModal(paymentUrl);
                             }
                         } else {
-                            cnosole.log('支付链接配置错误，请联系客服');
+                            showToast('支付链接配置错误，请联系客服', 'error');
                         }
                     });
                 }
@@ -411,6 +649,25 @@
             document.getElementById('qrModal').addEventListener('click', function(e) {
                 if (e.target === this) {
                     hideQRModal();
+                }
+            });
+            
+            // 兑换码相关事件
+            document.getElementById('redeemCodeBtn').addEventListener('click', showRedeemModal);
+            document.getElementById('activateCodeBtn').addEventListener('click', activateRedeemCode);
+            document.getElementById('closeRedeemModalBtn').addEventListener('click', hideRedeemModal);
+            
+            // 支持回车键激活
+            document.getElementById('redeemCodeInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    activateRedeemCode();
+                }
+            });
+            
+            // 点击兑换码弹窗背景关闭
+            document.getElementById('redeemModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    hideRedeemModal();
                 }
             });
         }
