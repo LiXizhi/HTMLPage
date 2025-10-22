@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>游戏激活码生成与验证系统</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/libs/qrcode.min.js"></script>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-6">
     <div class="max-w-4xl mx-auto">
@@ -19,6 +20,9 @@
                 </button>
                 <button onclick="switchTab('verify')" id="tab-verify" class="px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600">
                     验证激活码
+                </button>
+                <button onclick="switchTab('print')" id="tab-print" class="px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600">
+                    打印激活码
                 </button>
             </div>
 
@@ -61,7 +65,13 @@
                 </div>
 
                 <div id="generatedCodes" class="hidden">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-3">生成的激活码：</h3>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-semibold text-gray-800">生成的激活码：</h3>
+                        <button onclick="copyAllCodes()" 
+                            class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition flex items-center gap-2">
+                            📋 复制全部
+                        </button>
+                    </div>
                     <div class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                         <div id="codesList" class="space-y-2"></div>
                     </div>
@@ -96,6 +106,112 @@
 
                 <div id="verifyResult" class="hidden">
                     <div id="resultContent" class="p-4 rounded-lg"></div>
+                </div>
+            </div>
+
+            <!-- 打印激活码面板 -->
+            <div id="panel-print" class="space-y-6 hidden">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        卡片风格模板
+                    </label>
+                    <select id="styleTemplate" onchange="updateTemplatePreview()" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <option value="modern">🎨 现代简约</option>
+                        <option value="classic">📜 经典雅致</option>
+                        <option value="gaming">🎮 游戏电竞</option>
+                        <option value="gradient">🌈 渐变炫彩</option>
+                        <option value="minimal">⚪ 极简黑白</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        标题文字
+                    </label>
+                    <input type="text" id="printTitle" value="游戏激活码" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        描述文字（可选）
+                    </label>
+                    <textarea id="printDescription" rows="2" placeholder="例如：请妥善保管激活码，遗失不补" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm">扫描二维码下载App</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            背景图片URL（可选）
+                        </label>
+                        <input type="text" id="bgImageUrl" placeholder="https://..." 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            背景颜色（可选）
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="color" id="bgColor" value="#ffffff" 
+                                class="w-20 h-10 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            <button type="button" onclick="clearBgColor()" 
+                                class="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                                清除背景色
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        网址（可选）
+                    </label>
+                    <input type="text" id="printUrl" value="https://xq.maseai.com" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" checked id="useQrCode" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                    <label for="useQrCode" class="ml-2 text-sm font-medium text-gray-700">
+                        使用二维码显示网址
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        激活码列表（每行一个）
+                    </label>
+                    <textarea id="printCodes" rows="10" placeholder="XXXX-XXXX-XXXX-XXXX&#10;YYYY-YYYY-YYYY-YYYY&#10;ZZZZ-ZZZZ-ZZZZ-ZZZZ" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        每行卡片数量
+                    </label>
+                    <select id="columnsPerRow" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <option value="2" selected>2列</option>
+                        <option value="3">3列</option>
+                    </select>
+                </div>
+
+                <button onclick="generatePrintCards()" 
+                    class="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                    🖨️ 生成打印卡片
+                </button>
+
+                <div id="printPreview" class="hidden mt-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">打印预览</h3>
+                        <button onclick="printCards()" 
+                            class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition">
+                            🖨️ 打印
+                        </button>
+                    </div>
+                    <div id="cardsContainer" class="grid grid-cols-1 gap-4"></div>
                 </div>
             </div>
         </div>
@@ -241,24 +357,39 @@
 
         // 设置默认日期为今天
         document.getElementById('generateDate').valueAsDate = new Date();
+        
+        // Clear the cleared flag when user changes background color manually
+        document.getElementById('bgColor').addEventListener('input', function() {
+            delete this.dataset.cleared;
+        });
 
         // 切换标签
         function switchTab(tab) {
             const generateTab = document.getElementById('tab-generate');
             const verifyTab = document.getElementById('tab-verify');
+            const printTab = document.getElementById('tab-print');
             const generatePanel = document.getElementById('panel-generate');
             const verifyPanel = document.getElementById('panel-verify');
+            const printPanel = document.getElementById('panel-print');
 
+            // Reset all tabs
+            generateTab.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600';
+            verifyTab.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600';
+            printTab.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600';
+            generatePanel.classList.add('hidden');
+            verifyPanel.classList.add('hidden');
+            printPanel.classList.add('hidden');
+
+            // Activate selected tab
             if (tab === 'generate') {
                 generateTab.className = 'px-6 py-3 font-semibold text-indigo-600 border-b-2 border-indigo-600';
-                verifyTab.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600';
                 generatePanel.classList.remove('hidden');
-                verifyPanel.classList.add('hidden');
-            } else {
+            } else if (tab === 'verify') {
                 verifyTab.className = 'px-6 py-3 font-semibold text-indigo-600 border-b-2 border-indigo-600';
-                generateTab.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-indigo-600';
                 verifyPanel.classList.remove('hidden');
-                generatePanel.classList.add('hidden');
+            } else if (tab === 'print') {
+                printTab.className = 'px-6 py-3 font-semibold text-indigo-600 border-b-2 border-indigo-600';
+                printPanel.classList.remove('hidden');
             }
         }
 
@@ -304,6 +435,21 @@
         function copyCode(code) {
             navigator.clipboard.writeText(code).then(() => {
                 alert('激活码已复制: ' + code);
+            });
+        }
+
+        // 复制全部激活码（每行一个）
+        function copyAllCodes() {
+            if (generatedCodesData.length === 0) {
+                alert('没有可复制的激活码！');
+                return;
+            }
+
+            const allCodes = generatedCodesData.map(item => item.激活码).join('\n');
+            navigator.clipboard.writeText(allCodes).then(() => {
+                alert(`已复制 ${generatedCodesData.length} 个激活码到剪贴板！`);
+            }).catch(err => {
+                alert('复制失败: ' + err.message);
             });
         }
 
@@ -395,6 +541,322 @@
             }
 
             resultDiv.classList.remove('hidden');
+        }
+
+        // 卡片风格模板配置
+        const styleTemplates = {
+            modern: {
+                name: '现代简约',
+                cardBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                titleColor: '#ffffff',
+                codeBoxBg: 'rgba(255, 255, 255, 0.95)',
+                codeColor: '#667eea',
+                textColor: '#ffffff',
+                borderColor: 'transparent',
+                shadow: '0 10px 30px rgba(0,0,0,0.3)'
+            },
+            classic: {
+                name: '经典雅致',
+                cardBg: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                titleColor: '#2c3e50',
+                codeBoxBg: '#ffffff',
+                codeColor: '#2c3e50',
+                textColor: '#34495e',
+                borderColor: '#bdc3c7',
+                shadow: '0 4px 15px rgba(0,0,0,0.1)'
+            },
+            gaming: {
+                name: '游戏电竞',
+                cardBg: 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
+                titleColor: '#00ff88',
+                codeBoxBg: 'rgba(0, 255, 136, 0.1)',
+                codeColor: '#00ff88',
+                textColor: '#00ff88',
+                borderColor: '#00ff88',
+                shadow: '0 0 20px rgba(0, 255, 136, 0.3)'
+            },
+            gradient: {
+                name: '渐变炫彩',
+                cardBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                titleColor: '#ffffff',
+                codeBoxBg: 'rgba(255, 255, 255, 0.9)',
+                codeColor: '#f5576c',
+                textColor: '#ffffff',
+                borderColor: 'transparent',
+                shadow: '0 8px 25px rgba(245, 87, 108, 0.4)'
+            },
+            minimal: {
+                name: '极简黑白',
+                cardBg: '#ffffff',
+                titleColor: '#000000',
+                codeBoxBg: '#000000',
+                codeColor: '#ffffff',
+                textColor: '#000000',
+                borderColor: '#000000',
+                shadow: '0 2px 10px rgba(0,0,0,0.1)'
+            }
+        };
+
+        // Generate QR code as data URL for efficient rendering
+        function generateQRCodeDataURL(text, size = 120) {
+            const canvas = document.createElement('canvas');
+            const qr = new QRCode(canvas, {
+                text: text,
+                width: size,
+                height: size,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            // Get canvas from QRCode element
+            const qrCanvas = canvas.querySelector('canvas') || canvas;
+            return qrCanvas.toDataURL('image/png');
+        }
+
+        // Update template preview when selection changes
+        function updateTemplatePreview() {
+            // Could add a small preview here if needed
+        }
+
+        // Clear background color
+        function clearBgColor() {
+            const bgColorInput = document.getElementById('bgColor');
+            bgColorInput.value = '#ffffff';
+            bgColorInput.dataset.cleared = 'true';
+        }
+
+        // 生成打印卡片
+        function generatePrintCards() {
+            const title = document.getElementById('printTitle').value.trim();
+            const description = document.getElementById('printDescription').value.trim();
+            const url = document.getElementById('printUrl').value.trim();
+            const useQrCode = document.getElementById('useQrCode').checked;
+            const codesText = document.getElementById('printCodes').value.trim();
+            const styleTemplate = document.getElementById('styleTemplate').value;
+            const bgImageUrl = document.getElementById('bgImageUrl').value.trim();
+            const bgColorInput = document.getElementById('bgColor');
+            const bgColor = bgColorInput.dataset.cleared === 'true' ? '' : bgColorInput.value;
+            const columnsPerRow = document.getElementById('columnsPerRow').value;
+            
+            // Clear the flag after reading
+            delete bgColorInput.dataset.cleared;
+
+            if (!codesText) {
+                alert('请输入至少一个激活码！');
+                return;
+            }
+
+            // Parse activation codes (one per line)
+            const codes = codesText.split('\n')
+                .map(code => code.trim())
+                .filter(code => code.length > 0);
+
+            if (codes.length === 0) {
+                alert('没有有效的激活码！');
+                return;
+            }
+
+            const cardsContainer = document.getElementById('cardsContainer');
+            cardsContainer.innerHTML = '';
+            
+            // Apply column layout based on selection
+            const columnClass = columnsPerRow === '3' ? 'md:grid-cols-3' : 'md:grid-cols-2';
+            cardsContainer.className = `grid grid-cols-1 ${columnClass} gap-4`;
+
+            // Get style template
+            const style = styleTemplates[styleTemplate];
+
+            // Pre-generate QR code data URL once for all cards (efficient for thousands of codes)
+            let qrDataURL = null;
+            if (url && useQrCode) {
+                try {
+                    // Create a temporary container for QR generation
+                    const tempDiv = document.createElement('div');
+                    tempDiv.style.position = 'absolute';
+                    tempDiv.style.left = '-9999px';
+                    document.body.appendChild(tempDiv);
+                    
+                    new QRCode(tempDiv, {
+                        text: url,
+                        width: 120,
+                        height: 120,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    
+                    // Get canvas and convert to data URL
+                    const canvas = tempDiv.querySelector('canvas');
+                    if (canvas) {
+                        qrDataURL = canvas.toDataURL('image/png');
+                    }
+                    
+                    // Clean up
+                    document.body.removeChild(tempDiv);
+                } catch (e) {
+                    console.error('QR code generation error:', e);
+                }
+            }
+
+            // Generate cards using document fragment for better performance
+            const fragment = document.createDocumentFragment();
+            const is3Column = columnsPerRow === '3';
+
+            codes.forEach((code, index) => {
+                const card = document.createElement('div');
+                card.className = `rounded-lg print-card ${is3Column ? 'p-4' : 'p-6'}`;
+                card.style.pageBreakInside = 'avoid';
+                card.style.boxShadow = style.shadow;
+                card.style.border = `2px solid ${style.borderColor}`;
+                
+                // Apply background
+                if (bgImageUrl) {
+                    card.style.backgroundImage = `url('${bgImageUrl}')`;
+                    card.style.backgroundSize = 'cover';
+                    card.style.backgroundPosition = 'center';
+                } else if (bgColor && bgColor !== '' && bgColor !== '#ffffff') {
+                    card.style.backgroundColor = bgColor;
+                } else {
+                    card.style.background = style.cardBg;
+                }
+                
+                let cardHTML = '';
+                
+                // Title - adjust size for 3-column layout
+                if (title) {
+                    const titleSize = is3Column ? 'text-lg' : 'text-xl';
+                    const titleMargin = is3Column ? 'mb-3' : 'mb-4';
+                    cardHTML += `<h3 class="${titleSize} font-bold text-center ${titleMargin}" style="color: ${style.titleColor}">${title}</h3>`;
+                }
+                
+                // Description
+                if (description) {
+                    cardHTML += `<p class="text-xs text-center mb-3" style="color: ${style.textColor}; opacity: 0.9"></p>`;
+                }
+                
+                // Activation code
+                // Calculate font size based on code length and column layout to keep it on single line
+                const codeLength = code.length;
+                let fontSize = '1.5rem'; // 24px default
+                let letterSpacing = '0.1em';
+                let minHeight = '80px';
+                let padding = '0 0.5rem';
+                
+                if (is3Column) {
+                    // More aggressive sizing for 3-column layout
+                    minHeight = '60px';
+                    if (codeLength > 20) {
+                        fontSize = '0.75rem'; // 12px for long codes in 3 columns
+                        letterSpacing = '0.02em';
+                        padding = '0 0.25rem';
+                    } else if (codeLength > 16) {
+                        fontSize = '0.875rem'; // 14px for medium codes in 3 columns
+                        letterSpacing = '0.05em';
+                        padding = '0 0.35rem';
+                    } else {
+                        fontSize = '1rem'; // 16px for shorter codes in 3 columns
+                        letterSpacing = '0.075em';
+                    }
+                } else {
+                    // 2-column layout sizing
+                    if (codeLength > 24) {
+                        fontSize = '0.875rem'; // 14px for very long codes
+                        letterSpacing = '0.025em';
+                    } else if (codeLength > 20) {
+                        fontSize = '1rem'; // 16px for long codes
+                        letterSpacing = '0.05em';
+                    } else if (codeLength > 16) {
+                        fontSize = '1.25rem'; // 20px for medium codes
+                        letterSpacing = '0.075em';
+                    }
+                }
+                
+                cardHTML += `
+                    <div class="rounded-lg px-2 py-3 mb-3" style="background: ${style.codeBoxBg}; min-height: ${minHeight}; display: flex; flex-direction: column; justify-content: center;">
+                        <p class="font-mono font-bold text-center" style="color: ${style.codeColor}; font-size: ${fontSize}; letter-spacing: ${letterSpacing}; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; padding: ${padding}; line-height: 1.4;">${code}</p>
+                    </div>
+                `;
+                
+                // Description between code and QR code
+                if (description) {
+                    const descSize = is3Column ? 'text-xs' : 'text-sm';
+                    const descMargin = is3Column ? 'mb-2' : 'mb-3';
+                    cardHTML += `<p class="${descSize} text-center ${descMargin}" style="color: ${style.textColor}; opacity: 0.9">${description}</p>`;
+                }
+                
+                // URL section
+                if (url) {
+                    const qrSize = is3Column ? 100 : 120;
+                    if (useQrCode && qrDataURL) {
+                        // Use pre-generated QR code data URL (very efficient!)
+                        cardHTML += `
+                            <div class="flex flex-col items-center ${is3Column ? 'mt-2' : 'mt-4'}">
+                                <img src="${qrDataURL}" width="${qrSize}" height="${qrSize}" class="bg-white p-2 rounded" alt="QR Code" />
+                            </div>
+                        `;
+                    } else if (url) {
+                        const urlMargin = is3Column ? 'mt-2' : 'mt-4';
+                        const urlSize = is3Column ? 'text-xs' : 'text-sm';
+                        cardHTML += `
+                            <div class="${urlMargin} text-center">
+                                <p class="${urlSize} mb-1" style="color: ${style.textColor}">访问地址</p>
+                                <p class="${urlSize} break-all" style="color: ${style.textColor}; opacity: 0.9">${url}</p>
+                            </div>
+                        `;
+                    }
+                }
+                
+                card.innerHTML = cardHTML;
+                fragment.appendChild(card);
+            });
+
+            // Append all cards at once (efficient DOM operation)
+            cardsContainer.appendChild(fragment);
+
+            document.getElementById('printPreview').classList.remove('hidden');
+        }
+
+        // 打印卡片
+        function printCards() {
+            const printPreview = document.getElementById('printPreview');
+            const cardsContainer = document.getElementById('cardsContainer');
+            
+            if (!cardsContainer.innerHTML) {
+                alert('没有可打印的卡片！');
+                return;
+            }
+
+            // Create print styles
+            const style = document.createElement('style');
+            style.textContent = `
+                @media print {
+                    body * {
+                        visibility: hidden;
+                    }
+                    #cardsContainer, #cardsContainer * {
+                        visibility: visible;
+                    }
+                    #cardsContainer {
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                    }
+                    .print-card {
+                        page-break-inside: avoid;
+                        margin-bottom: 20px;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Trigger print
+            window.print();
+
+            // Clean up
+            setTimeout(() => {
+                document.head.removeChild(style);
+            }, 1000);
         }
     </script>
 </body>
