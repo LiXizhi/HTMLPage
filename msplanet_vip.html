@@ -165,7 +165,6 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <h1 class="text-lg font-bold">麦思星球（内测版）会员</h1>
-                            <div class="text-base opacity-90">让每个孩子在自己的世界里自由发光</div>
                         </div>
                     </div>
                 </div>
@@ -173,7 +172,7 @@
                 <div class="fade-in mt-4">
                     <!-- 会员状态显示 -->
                     <div id="vipStatusDisplay" class="vip-status-banner" style="display: none;">
-                        <h2>✨ 您已是会员 ✨</h2>
+                        <h2 id="vipStatusTitle">✨ 您已是会员 ✨</h2>
                         <p id="vipExpireDate">有效期到：加载中...</p>
                     </div>
 
@@ -186,10 +185,17 @@
                         <div id="qrcodeContainer" class="flex items-center justify-center"></div>
                     </div>
 
+                    <!-- 兑换码按钮 -->
+                    <div class="mb-4">
+                        <button id="redeemCodeBtn" class="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-medium py-2 px-6 rounded-lg transition-all duration-300 border border-white/40 hover:border-white/60 hover:scale-105">
+                            🎁 使用兑换码
+                        </button>
+                    </div>
+
                     <!-- 用户ID显示 -->
                     <div class="bg-white/20 rounded-lg px-4 py-2 mb-4 inline-block">
                         <span class="text-white/70 text-sm mr-2">当前用户ID:</span>
-                        <span id="userIdDisplay" class="text-white font-mono font-bold">加载中...</span>
+                        <span id="userIdDisplay" class="text-white font-mono font-bold"></span>
                     </div>
 
                     <div class="steps-list">
@@ -244,9 +250,171 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- 底部标语 -->
+            <div class="text-center text-white text-lg opacity-90 py-4">
+                让每个孩子在自己的世界里自由发光
+            </div>
         </div>
     </div>
+
+    <!-- 兑换码弹窗 -->
+    <div id="redeemModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 md:p-8 max-w-md w-full mx-auto">
+            <div>
+                <h3 class="text-xl md:text-2xl font-bold text-gray-800 mb-6 text-center">使用兑换码</h3>
+                
+                <!-- 兑换码输入框 -->
+                <div class="mb-6">
+                    <label class="block text-gray-700 font-medium mb-3">请输入兑换码</label>
+                    <input 
+                        type="text" 
+                        id="redeemCodeInput" 
+                        placeholder="请输入兑换码" 
+                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors text-lg tracking-wider uppercase"
+                    />
+                </div>
+                
+                <!-- 提示信息 -->
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                    <div class="text-gray-700 text-sm space-y-2">
+                        <p class="flex items-start">
+                            <span class="text-blue-500 mr-2">1.</span>
+                            <span>激活成功后，可享受对应的权益和服务</span>
+                        </p>
+                        <p class="flex items-start">
+                            <span class="text-blue-500 mr-2">2.</span>
+                            <span>请在激活码有效期内使用，过期作废</span>
+                        </p>
+                        <p class="flex items-start">
+                            <span class="text-blue-500 mr-2">3.</span>
+                            <span>请妥善保管激活码，遗失泄漏不补</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- 按钮组 -->
+                <div class="space-y-3">
+                    <button id="activateCodeBtn" class="w-full bg-gradient-to-r from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 hover:scale-105">
+                        ✨ 立即激活
+                    </button>
+                    <button id="closeRedeemModalBtn" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-2 px-4 rounded-lg transition-all duration-300">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 通知容器 -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-[60] space-y-2"></div>
+
     <script>
+        /**
+         * ActivationCodeGenerator - 激活码生成与验证类
+         * 编码格式（固定16字符 XXXX-XXXX-XXXX-XXXX）：
+         * - 前4位：日期编码+随机盐（base36）
+         * - 中4位：索引编码+随机盐（base36）
+         * - 后8位：校验和（基于encodedSecret+date+index+randomSalt）
+         */
+        class ActivationCodeGenerator {
+            constructor() {
+                this.BASE_DATE = "2020-01-01";
+                this.SALT_MIN = 1;
+                this.SALT_MAX = 100;
+            }
+
+            /**
+             * 验证激活码
+             * @param {string} code - 激活码
+             * @param {string} expectedEncodedSecret - 期望的编码密钥
+             * @returns {object} 验证结果 { valid: boolean, encodedSecret?, date?, index?, salt?, reason? }
+             */
+            verify(code, expectedEncodedSecret) {
+                try {
+                    const cleanCode = code.replace(/-/g, "").toUpperCase();
+
+                    if (cleanCode.length !== 16) {
+                        return { valid: false, reason: "激活码长度错误" };
+                    }
+
+                    const datePart = cleanCode.substr(0, 4);
+                    const indexPart = cleanCode.substr(4, 4);
+                    const checksumPart = cleanCode.substr(8, 8);
+
+                    const dayNumWithSalt = this._fromBase36(datePart);
+                    const indexWithSalt = this._fromBase36(indexPart);
+                    const receivedChecksum = checksumPart;
+
+                    for (let salt = this.SALT_MIN; salt <= this.SALT_MAX; salt++) {
+                        const dayNum = dayNumWithSalt - salt;
+                        const index = indexWithSalt - salt;
+                        const date = this._numberToDate(dayNum);
+
+                        const checksumSeed = `${expectedEncodedSecret}|${date}|${index}|${salt}`;
+                        const expectedChecksum = this._toBase36(this._hashString(checksumSeed), 8);
+
+                        if (receivedChecksum === expectedChecksum) {
+                            return {
+                                valid: true,
+                                encodedSecret: expectedEncodedSecret,
+                                date: date,
+                                index: index,
+                                salt: salt,
+                            };
+                        }
+                    }
+
+                    return { valid: false, reason: "校验和不匹配（激活码无效）" };
+                } catch (e) {
+                    return { valid: false, reason: "验证异常: " + e.message };
+                }
+            }
+
+            // 私有方法：计算字符串哈希值
+            _hashString(text) {
+                let hash = 0;
+                for (let i = 0; i < text.length; i++) {
+                    hash = (hash << 5) - hash + text.charCodeAt(i);
+                    hash = hash & hash;
+                }
+                return Math.abs(hash);
+            }
+
+            // 私有方法：数字转36进制字符串
+            _toBase36(num, length) {
+                let result = num.toString(36).toUpperCase();
+                while (result.length < length) {
+                    result = "0" + result;
+                }
+                return result.substr(-length);
+            }
+
+            // 私有方法：36进制字符串转数字
+            _fromBase36(str) {
+                return parseInt(str, 36);
+            }
+
+            // 私有方法：日期转换为天数
+            _dateToNumber(dateStr) {
+                const baseDate = new Date(this.BASE_DATE);
+                const targetDate = new Date(dateStr);
+                const days = Math.floor((targetDate - baseDate) / (1000 * 60 * 60 * 24));
+                return days;
+            }
+
+            // 私有方法：天数转换为日期
+            _numberToDate(days) {
+                const baseDate = new Date(this.BASE_DATE);
+                const targetDate = new Date(baseDate.getTime() + days * 1000 * 60 * 60 * 24);
+                return targetDate.toISOString().split("T")[0];
+            }
+        }
+
+        // 创建激活码生成器实例
+        const codeGenerator = new ActivationCodeGenerator();
+        const ENCODED_SECRET = "paracraft";
+
         // Handle VIP result button click
         function clickVipResult() {
             window.parent.postMessage({ type: "vipPayResult" }, "*");
@@ -274,6 +442,202 @@
         });
         console.log(`Keepwork SDK initialized token: ${sdk.token}`);
 
+        // Global cache for userId
+        let cachedUserId = null;
+
+        // Toast 通知函数
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            // 根据类型设置样式
+            const styles = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+            
+            const icons = {
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+            
+            toast.className = `${styles[type]} text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 min-w-[300px] max-w-md transform transition-all duration-300 translate-x-[400px] opacity-0`;
+            toast.innerHTML = `
+                <span class="text-xl font-bold">${icons[type]}</span>
+                <span class="flex-1">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            // 动画显示
+            setTimeout(() => {
+                toast.classList.remove('translate-x-[400px]', 'opacity-0');
+            }, 10);
+            
+            // 3秒后自动消失
+            setTimeout(() => {
+                toast.classList.add('translate-x-[400px]', 'opacity-0');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
+        // 显示兑换码弹窗
+        function showRedeemModal() {
+            document.getElementById('redeemModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('redeemCodeInput').focus();
+        }
+
+        // 隐藏兑换码弹窗
+        function hideRedeemModal() {
+            document.getElementById('redeemModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            document.getElementById('redeemCodeInput').value = '';
+        }
+
+        // 激活兑换码
+        async function activateRedeemCode() {
+            const code = document.getElementById('redeemCodeInput').value
+                .replace(/[^a-zA-Z0-9]/g, '')
+                .toUpperCase();
+            
+            if (!code) {
+                showToast('请输入兑换码', 'warning');
+                return;
+            }
+            
+            if (code.length !== 16) {
+                showToast(`兑换码长度错误，应为16位字符，当前为${code.length}位`, 'warning');
+                return;
+            }
+            
+            // 获取用户ID - 优先使用缓存的userId
+            let userId = cachedUserId;
+            
+            if (!userId) {
+                showToast('无法获取用户信息，请重新登录', 'error');
+                return;
+            }
+            
+            console.log('激活兑换码:', code, '用户ID:', userId);
+            
+            // 显示加载状态
+            const activateBtn = document.getElementById('activateCodeBtn');
+            const originalText = activateBtn.innerHTML;
+            activateBtn.innerHTML = '验证中...';
+            activateBtn.disabled = true;
+            
+            try {
+                // 步骤1：先尝试本地验证（tips360方式）
+                const formattedCode = `${code.substr(0, 4)}-${code.substr(4, 4)}-${code.substr(8, 4)}-${code.substr(12, 4)}`;
+                const localVerifyResult = codeGenerator.verify(formattedCode, ENCODED_SECRET);
+                
+                console.log('本地验证结果:', localVerifyResult);
+                
+                if (localVerifyResult.valid) {
+                    // 本地验证成功，保存到 personal page store
+                    console.log('本地验证成功，保存到 page data');
+                    
+                    try {
+                        const vipData = {
+                            isVIP: true,
+                            code: code,
+                            date: new Date().toISOString(),
+                        };
+                        
+                        await sdk.personalPageStore.savePageData("maisi_userinfo", "user.local_vip", vipData, true);
+                        console.log('VIP状态已保存到 personal page store:', vipData);
+                        
+                        showToast('兑换码激活成功！VIP权益已开通。', 'success');
+                        hideRedeemModal();
+                        
+                        // 刷新用户信息显示
+                        setTimeout(() => {
+                            fetchUserProfileAndUpdate();
+                        }, 1000);
+                        
+                        // 通知父窗口
+                        window.parent.postMessage({ 
+                            type: 'redeemCodeActivated',
+                            code: code,
+                            userId: userId,
+                            success: true,
+                            method: 'local',
+                            data: vipData
+                        }, '*');
+                        
+                        return; // 成功后直接返回
+                        
+                    } catch (saveError) {
+                        console.error('保存VIP状态失败:', saveError);
+                        showToast('保存VIP状态失败，请稍后重试', 'error');
+                        return;
+                    }
+                }
+                
+                // 步骤2：本地验证失败，尝试服务器验证
+                console.log('本地验证失败:', localVerifyResult.reason, '尝试服务器验证');
+                activateBtn.innerHTML = '服务器验证中...';
+                
+                const res = await sdk.post("/activateCodes/activate", {
+                    key: code,
+                    userId: parseInt(userId)
+                });
+                
+                console.log('服务器激活响应:', res);
+                
+                // 检查响应
+                if (res && (res.period || !res.message)) {
+                    // 服务器验证成功
+                    showToast('兑换码激活成功！会员权益已发放到您的账户。', 'success');
+                    hideRedeemModal();
+                    
+                    // 刷新用户信息显示
+                    setTimeout(() => {
+                        fetchUserProfileAndUpdate();
+                    }, 1000);
+                    
+                    // 通知父窗口
+                    window.parent.postMessage({ 
+                        type: 'redeemCodeActivated',
+                        code: code,
+                        userId: userId,
+                        success: true,
+                        method: 'server',
+                        data: res.data
+                    }, '*');
+                } else {
+                    // 服务器验证失败
+                    const errorMsg = res && res.message ? res.message : '兑换码无效，请检查兑换码是否正确或已过期';
+                    showToast(errorMsg, 'error');
+                    console.error('激活失败:', res);
+                }
+                
+            } catch (error) {
+                console.error('兑换码激活失败:', error);
+                let errorMsg = '兑换码激活失败，请稍后重试';
+                
+                // 尝试解析错误信息
+                if (error.message) {
+                    errorMsg = error.message;
+                } else if (error.msg) {
+                    errorMsg = error.msg;
+                }
+                
+                showToast(errorMsg, 'error');
+            } finally {
+                // 恢复按钮状态
+                activateBtn.innerHTML = originalText;
+                activateBtn.disabled = false;
+            }
+        }
+
         // Render initial QR code with placeholder
         function renderInitialQRCode() {
             // Generate QR code with placeholder URL
@@ -285,12 +649,33 @@
         // Fetch user profile and update page
         async function fetchUserProfileAndUpdate() {
             try {
-                // Get user profile from SDK
-                const userInfo = await sdk.getUserProfile();
-                console.log('User info:', userInfo);
+                // Check if userId is provided in URL params
+                const urlParams = new URLSearchParams(window.location.search);
+                const userIdFromUrl = urlParams.get('userid');
                 
-                const userId = userInfo.id;
-                console.log('User ID:', userId);
+                let userId;
+                let userInfo;
+                
+                if (userIdFromUrl) {
+                    // Use userId from URL parameter
+                    userId = userIdFromUrl;
+                    console.log('Using userId from URL:', userId);
+                    // Still try to get user profile for VIP status check
+                    try {
+                        userInfo = await sdk.getUserProfile();
+                    } catch (error) {
+                        console.warn('Could not fetch user profile, will use URL userId only:', error);
+                    }
+                } else {
+                    // Get user profile from SDK
+                    userInfo = await sdk.getUserProfile();
+                    console.log('User info:', userInfo);
+                    userId = userInfo.id;
+                    console.log('User ID from SDK:', userId);
+                }
+                
+                // Cache userId globally
+                cachedUserId = userId;
                 
                 // Update user ID display
                 const userIdDisplay = document.getElementById('userIdDisplay');
@@ -305,29 +690,64 @@
                 const container = document.getElementById('qrcodeContainer');
                 generateQRCode(vipUrl, container);
                 
-                // Check VIP status
-                if (userInfo.vipDeadline) {
+                // Check VIP status from multiple sources
+                let isVIP = false;
+                let isLocalVIP = false;
+                let isServerVIP = false;
+                let vipExpireDate = null;
+                
+                // 1. Check local VIP status from personal page store
+                try {
+                    const localVipData = await sdk.personalPageStore.loadPageData("maisi_userinfo", "user.local_vip");
+                    if (localVipData && localVipData.isVIP) {
+                        console.log('Local VIP status found:', localVipData);
+                        isVIP = true;
+                        isLocalVIP = true;
+                        // For local code activation, we don't have expiry date, show as permanent
+                        vipExpireDate = '创意空间会员';
+                    }
+                } catch (loadError) {
+                    console.log('No local VIP status found:', loadError.message);
+                }
+                
+                // 2. Check server VIP status (only if we have userInfo from SDK)
+                if (userInfo && userInfo.vipDeadline) {
                     const expireDate = new Date(userInfo.vipDeadline);
                     const now = new Date();
                     
                     // Check if VIP is still valid
                     if (expireDate > now) {
+                        isVIP = true;
+                        isServerVIP = true;
                         // Format date as YYYY-MM-DD
                         const formattedDate = expireDate.getFullYear() + '-' + 
                             String(expireDate.getMonth() + 1).padStart(2, '0') + '-' + 
                             String(expireDate.getDate()).padStart(2, '0');
-                        
-                        // Show VIP status
-                        document.getElementById('vipStatusDisplay').style.display = 'block';
-                        document.getElementById('vipExpireDate').textContent = '有效期到：' + formattedDate;
-                        document.getElementById('nonVipPrompt').style.display = 'none';
-                        
-                        console.log('User is VIP until:', formattedDate);
-                    } else {
-                        // VIP expired
-                        document.getElementById('vipStatusDisplay').style.display = 'none';
-                        document.getElementById('nonVipPrompt').style.display = 'block';
+                        vipExpireDate = formattedDate;
+                        console.log('Server VIP status: valid until', formattedDate);
                     }
+                }
+                
+                // Update UI based on VIP status
+                if (isVIP) {
+                    document.getElementById('vipStatusDisplay').style.display = 'block';
+                    
+                    // Update title and message based on VIP type
+                    const titleElement = document.getElementById('vipStatusTitle');
+                    const expireDateElement = document.getElementById('vipExpireDate');
+                    
+                    if (isServerVIP) {
+                        // Server VIP - show "您已是会员"
+                        titleElement.textContent = '✨ 您已是会员 ✨';
+                        expireDateElement.textContent = '有效期到：' + vipExpireDate;
+                    } else if (isLocalVIP) {
+                        // Local VIP only - show "创意空间权限已解锁"
+                        titleElement.textContent = '创意空间已解锁';
+                        expireDateElement.textContent = '可学习全部课程';
+                    }
+                    
+                    document.getElementById('nonVipPrompt').style.display = 'none';
+                    console.log('User is VIP, type:', isServerVIP ? 'server' : 'local', 'expire date:', vipExpireDate);
                 } else {
                     // Not VIP
                     document.getElementById('vipStatusDisplay').style.display = 'none';
@@ -349,6 +769,25 @@
             
             // Then fetch user profile and update
             await fetchUserProfileAndUpdate();
+            
+            // 兑换码相关事件绑定
+            document.getElementById('redeemCodeBtn').addEventListener('click', showRedeemModal);
+            document.getElementById('activateCodeBtn').addEventListener('click', activateRedeemCode);
+            document.getElementById('closeRedeemModalBtn').addEventListener('click', hideRedeemModal);
+            
+            // 支持回车键激活
+            document.getElementById('redeemCodeInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    activateRedeemCode();
+                }
+            });
+            
+            // 点击兑换码弹窗背景关闭
+            document.getElementById('redeemModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    hideRedeemModal();
+                }
+            });
         }
 
         // Start initialization

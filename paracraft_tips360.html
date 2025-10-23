@@ -259,25 +259,29 @@
             console.log("Could not check VIP status:", userError.message);
           }
 
+          // 读取VIP激活信息（从单独的存储位置）
+          let localVIPActivated = false;
+          try {
+            const vipData = await sdk.personalPageStore.loadPageData("maisi_userinfo", "user.local_vip");
+            if (vipData && vipData.isVIP) {
+              localVIPActivated = true;
+              console.log("本地VIP激活信息:", vipData);
+            }
+          } catch (vipError) {
+            console.log("未找到本地VIP激活信息:", vipError.message);
+          }
+
+          // 读取学习进度数据
           const data = await sdk.personalPageStore.loadPageData("paracraft_tips", "user-progress");
           if (data && typeof data === "object") {
-            // If user is Keepwork VIP, automatically activate
-            isVIP = isKeepworkVIP || data.isVIP || false;
             watchedVideos = Array.isArray(data.watchedVideos) ? data.watchedVideos : [];
-            console.log("Loaded user data from personal page store:", data);
-
-            // If Keepwork VIP but not saved, save the VIP status
-            if (isKeepworkVIP && !data.isVIP) {
-              await saveUserData();
-              console.log("Auto-activated via Keepwork VIP membership");
-            }
-          } else {
-            isVIP = isKeepworkVIP;
-            console.log("No existing user data found, checking Keepwork VIP:", isKeepworkVIP);
-            if (isKeepworkVIP) {
-              await saveUserData();
-            }
+            console.log("Loaded user progress from personal page store:", data);
           }
+
+          // VIP状态：Keepwork会员 或 本地激活码激活
+          isVIP = isKeepworkVIP || localVIPActivated;
+          console.log("最终VIP状态:", { isKeepworkVIP, localVIPActivated, isVIP });
+
         } catch (error) {
           console.error("Error loading user data:", error);
         }
@@ -288,12 +292,11 @@
       async function saveUserData() {
         try {
           const data = {
-            isVIP: isVIP,
             watchedVideos: watchedVideos,
             lastUpdated: new Date().toISOString(),
           };
           await sdk.personalPageStore.savePageData("paracraft_tips", "user-progress", data, true);
-          console.log("Saved user data to personal page store:", data);
+          console.log("Saved user progress to personal page store:", data);
         } catch (error) {
           console.error("Error saving user data:", error);
         }
@@ -1264,6 +1267,16 @@ https://keepwork.com/official/tips/s1/1_235
         if (result.valid) {
           isVIP = true;
           await saveUserData();
+          
+          // 单独记录VIP激活信息
+          const vipData = {
+            isVIP: true,
+            code: formattedCode,
+            date: new Date().toISOString(),
+          };
+          await sdk.personalPageStore.savePageData("maisi_userinfo", "user.local_vip", vipData, true);
+          console.log("VIP激活信息已保存:", vipData);
+          
           updateVIPStatus();
           renderVideos(allVideos);
           console.log("激活码验证成功:", result);
