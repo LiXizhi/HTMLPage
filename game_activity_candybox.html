@@ -575,7 +575,6 @@
       let gameData = {
         candyCoins: 500,
         inventory: [],
-        history: [],
         lastClaimDate: null, // 最后领取日期
         lastClaimVipStatus: null, // 上次领取时的VIP状态
       };
@@ -768,7 +767,7 @@
         try {
           const saved = await sdk.personalPageStore.loadPageData(pageName, "gameData");
           if (saved) {
-            gameData = saved;
+            gameData = JSON.parse(JSON.stringify(saved));
 
             // 确保 candyCoins 是有效数字
             if (typeof gameData.candyCoins !== "number" || isNaN(gameData.candyCoins)) {
@@ -791,7 +790,7 @@
       // 保存游戏数据
       async function saveGameData(forceFlush = false) {
         try {
-          await sdk.personalPageStore.savePageData(pageName, "gameData", gameData, forceFlush);
+          await sdk.personalPageStore.savePageData(pageName, "gameData", JSON.parse(JSON.stringify(gameData)), forceFlush);
         } catch (e) {
           console.error("Error saving game data:", e);
         }
@@ -1172,21 +1171,12 @@
                 count: 1
               });
             }
-            rewards.push(selectedReward);
-          }
+          rewards.push(selectedReward);
         }
-
-        // 添加到历史记录
-        gameData.history.unshift({
-          timestamp: Date.now(),
-          count: count,
-          rewards: rewards,
-        });
-
-        return rewards;
       }
 
-      // 根据稀有度随机获取奖励
+      return rewards;
+    }      // 根据稀有度随机获取奖励
       function getRandomReward(pool) {
         const rarity = getRandomRarity();
         const filtered = pool.filter((item) => item.rarity === rarity);

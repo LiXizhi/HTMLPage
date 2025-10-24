@@ -52,18 +52,10 @@
                     
                     <!-- 当没有userid参数时显示 -->
                     <div id="noUserIdView" class="hidden">
-                        <p class="mb-3">请输入您要开通会员的用户ID：</p>
-                        <div class="flex flex-col sm:flex-row gap-3 justify-center items-center max-w-md mx-auto">
-                            <input 
-                                type="text" 
-                                id="userIdInput" 
-                                placeholder="请输入用户ID" 
-                                class="flex-1 w-full sm:w-auto px-4 py-2 rounded-lg bg-white/20 border border-white/40 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50"
-                            />
-                            <button id="confirmUserIdBtn" class="w-full sm:w-auto bg-star-gold hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-lg transition-all duration-300">
-                                确认
-                            </button>
-                        </div>
+                        <p class="mb-3">请先设置用户ID后再进行充值</p>
+                        <button id="setUserIdBtn" class="bg-star-gold hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-lg transition-all duration-300">
+                            设置用户ID
+                        </button>
                     </div>
                 </div>
             </div>
@@ -234,6 +226,44 @@
                             我已完成支付
                         </button>
                         <button id="closeModalBtn" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-2 px-4 rounded-lg transition-all duration-300">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 用户ID输入弹窗 -->
+        <div id="userIdModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl p-6 md:p-8 max-w-md w-full mx-auto">
+                <div>
+                    <h3 class="text-xl md:text-2xl font-bold text-gray-800 mb-6 text-center">设置用户ID</h3>
+                    
+                    <!-- 用户ID输入框 -->
+                    <div class="mb-6">
+                        <label class="block text-gray-700 font-medium mb-3">请输入要充值的用户ID</label>
+                        <input 
+                            type="text" 
+                            id="userIdModalInput" 
+                            placeholder="请输入用户ID" 
+                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors text-lg"
+                        />
+                    </div>
+                    
+                    <!-- 提示信息 -->
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                        <div class="text-gray-700 text-sm">
+                            <p class="mb-2">💡 温馨提示：</p>
+                            <p>用户ID是一串数字（不是手机号），您可以在麦思星球个人中心查看</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 按钮组 -->
+                    <div class="space-y-3">
+                        <button id="confirmUserIdModalBtn" class="w-full bg-gradient-to-r from-purple-500 to-cosmic-purple hover:from-purple-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 hover:scale-105">
+                            ✓ 确认
+                        </button>
+                        <button id="closeUserIdModalBtn" class="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-2 px-4 rounded-lg transition-all duration-300">
                             取消
                         </button>
                     </div>
@@ -416,6 +446,46 @@
             // verifyPaymentStatus();
         }
 
+        // 显示用户ID弹窗
+        function showUserIdModal() {
+            document.getElementById('userIdModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('userIdModalInput').value = '';
+            document.getElementById('userIdModalInput').focus();
+        }
+
+        // 隐藏用户ID弹窗
+        function hideUserIdModal() {
+            document.getElementById('userIdModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        // 确认用户ID（从弹窗）
+        function confirmUserIdFromModal() {
+            const inputUserId = document.getElementById('userIdModalInput').value.trim();
+            if (!inputUserId) {
+                showToast('请输入用户ID', 'warning');
+                return;
+            }
+            
+            // 验证用户ID格式（假设为数字）
+            if (!/^\d+$/.test(inputUserId)) {
+                showToast('用户ID格式不正确，请输入数字', 'error');
+                return;
+            }
+            
+            currentUserId = inputUserId;
+            const currentUserIdSpan = document.getElementById('currentUserId');
+            const hasUserIdView = document.getElementById('hasUserIdView');
+            const noUserIdView = document.getElementById('noUserIdView');
+            
+            currentUserIdSpan.textContent = currentUserId;
+            hasUserIdView.classList.remove('hidden');
+            noUserIdView.classList.add('hidden');
+            hideUserIdModal();
+            showToast('用户ID设置成功', 'success');
+        }
+
         // 显示兑换码弹窗
         function showRedeemModal() {
             // 检查是否有用户ID
@@ -569,39 +639,33 @@
                 noUserIdView.classList.remove('hidden');
             }
             
-            // 为其它用户ID开通按钮事件
+            // 为其它用户ID开通按钮事件 - 打开弹窗
             document.getElementById('changeUserIdBtn').addEventListener('click', function() {
-                hasUserIdView.classList.add('hidden');
-                noUserIdView.classList.remove('hidden');
-                currentUserId = null;
-                document.getElementById('userIdInput').value = '';
-                document.getElementById('userIdInput').focus();
+                showUserIdModal();
             });
             
-            // 确认用户ID按钮事件
-            document.getElementById('confirmUserIdBtn').addEventListener('click', function() {
-                const inputUserId = document.getElementById('userIdInput').value.trim();
-                if (!inputUserId) {
-                    showToast('请输入用户ID', 'warning');
-                    return;
-                }
-                
-                // 验证用户ID格式（假设为数字）
-                if (!/^\d+$/.test(inputUserId)) {
-                    showToast('用户ID格式不正确，请输入数字', 'error');
-                    return;
-                }
-                
-                currentUserId = inputUserId;
-                currentUserIdSpan.textContent = currentUserId;
-                hasUserIdView.classList.remove('hidden');
-                noUserIdView.classList.add('hidden');
+            // 设置用户ID按钮事件 - 打开弹窗
+            document.getElementById('setUserIdBtn').addEventListener('click', function() {
+                showUserIdModal();
             });
             
-            // 支持回车键确认
-            document.getElementById('userIdInput').addEventListener('keypress', function(e) {
+            // 用户ID弹窗确认按钮
+            document.getElementById('confirmUserIdModalBtn').addEventListener('click', confirmUserIdFromModal);
+            
+            // 用户ID弹窗取消按钮
+            document.getElementById('closeUserIdModalBtn').addEventListener('click', hideUserIdModal);
+            
+            // 支持回车键确认用户ID
+            document.getElementById('userIdModalInput').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
-                    document.getElementById('confirmUserIdBtn').click();
+                    confirmUserIdFromModal();
+                }
+            });
+            
+            // 点击用户ID弹窗背景关闭
+            document.getElementById('userIdModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    hideUserIdModal();
                 }
             });
             
