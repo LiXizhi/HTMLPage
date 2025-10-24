@@ -332,6 +332,24 @@
             transform: translateY(0);
         }
         
+        /* Red dot indicator for unvisited updates */
+        .update-indicator {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            width: 10px;
+            height: 10px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+            z-index: 20;
+        }
+        
+        .tab-btn {
+            position: relative;
+        }
+        
         .iframe-container {
             position: relative;
             width: 100%;
@@ -380,6 +398,11 @@
                     糖果盒
                     <span class="absolute -top-2 -left-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded transform -rotate-12 shadow-lg font-bold whitespace-nowrap" style="z-index: 10;">🎃 万圣节</span>
                 </button>
+                <button id="tab_contest" onclick="switchTab('contest')" class="tab-btn w-full text-white py-3 px-4 rounded-lg font-medium text-left transition-all duration-300 hover:bg-white hover:bg-opacity-20 flex items-center">
+                    <span class="mr-2">🏆</span>
+                    创作大赛
+                    <span class="absolute -top-2 -left-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded transform -rotate-12 shadow-lg font-bold whitespace-nowrap animate-pulse" style="z-index: 10;">🔥 火热报名中</span>
+                </button>
                 <button id="tab_mai_si_test" onclick="switchTab('mai_si_test')" class="tab-btn w-full text-white py-3 px-4 rounded-lg font-medium text-left transition-all duration-300 hover:bg-white hover:bg-opacity-20 flex items-center">
                     麦思测评
                 </button>
@@ -410,43 +433,121 @@
         </div>
     </div>
     <script>
+        // Get all visit data from localStorage
+        function getVisitData() {
+            const data = localStorage.getItem('game_activities_visits');
+            return data ? JSON.parse(data) : {};
+        }
+        
+        // Save visit data to localStorage
+        function saveVisitData(data) {
+            localStorage.setItem('game_activities_visits', JSON.stringify(data));
+        }
+        
+        // Check if page needs update indicator
+        function needsUpdateIndicator(tabId) {
+            const config = iframeConfig[tabId];
+            if (!config || !config.updateDate) {
+                return false;
+            }
+            
+            const visitData = getVisitData();
+            const lastVisit = visitData[tabId];
+            
+            if (!lastVisit) {
+                return true; // Never visited
+            }
+            
+            // Compare dates
+            const updateTime = new Date(config.updateDate).getTime();
+            const visitTime = new Date(lastVisit).getTime();
+            
+            return updateTime > visitTime;
+        }
+        
+        // Update last visit date
+        function updateLastVisit(tabId) {
+            const now = new Date().toISOString();
+            const visitData = getVisitData();
+            visitData[tabId] = now;
+            saveVisitData(visitData);
+            console.log(`Updated lastVisit for ${tabId}: ${now}`);
+            
+            // Remove indicator
+            const button = document.getElementById(`tab_${tabId}`);
+            if (button) {
+                const indicator = button.querySelector('.update-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+        }
+        
+        // Add indicator to button
+        function addUpdateIndicator(tabId) {
+            const button = document.getElementById(`tab_${tabId}`);
+            if (!button) return;
+            
+            // Check if indicator already exists
+            if (button.querySelector('.update-indicator')) return;
+            
+            const indicator = document.createElement('span');
+            indicator.className = 'update-indicator';
+            button.appendChild(indicator);
+        }
+        
+        // Initialize all indicators
+        function initializeIndicators() {
+            Object.keys(iframeConfig).forEach(tabId => {
+                if (needsUpdateIndicator(tabId)) {
+                    addUpdateIndicator(tabId);
+                }
+            });
+        }
+        
         // iframe配置
         const iframeConfig = {
             signin: {
                 id: 'game_activity_checkin',
                 url: 'https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_checkin',
-                title: '7日签到'
+                title: '7日签到',
+                updateDate: '2025-10-24'
             },
             vip: {
                 id: 'game_activity_vip', 
                 url: 'https://keepwork.com/api/raw/maisi/maisi/webgames/data/msplanet_vip',
                 // url: 'https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_vip2',
-                title: '会员奖励'
+                title: '会员奖励',
+                updateDate: '2025-10-24'
             },
             mai_si_test:{
                 id: 'game_activity_mai_si_test',
                 url: 'https://keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_test',
-                title: '麦思测评'
+                title: '麦思测评',
+                updateDate: '2025-10-24'
             },
             paracraft_tips:{
                 id: 'game_activity_paracraft_tips',
                 url: 'https://keepwork.com/api/raw/maisi/maisi/webgames/data/paracraft_tips',
-                title: '创作学堂'
+                title: '创作学堂',
+                updateDate: '2025-10-24'
             },
             candybox: {
                 id: 'game_activity_candybox',
                 url: 'https://keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_candybox',
-                title: '糖果盒'
+                title: '糖果盒',
+                updateDate: '2025-10-24'
+            },
+            contest: {
+                id: 'game_activity_contest',
+                url: 'https://keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_contest',
+                title: '创作大赛',
+                updateDate: '2025-10-24'
             },
             referral: {
                 id: 'game_activity_referral',
                 url: 'https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_referral', 
-                title: '拉新奖励'
-            },
-            contest: {
-                id: 'game_activity_contest',
-                url: 'https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/game_activity_contest',
-                title: '家园大赛'
+                title: '拉新奖励',
             },
             feedback: {
                 id: 'game_activity_feedback',
@@ -524,6 +625,9 @@
             if (activeButton && activeButton.classList) {
                 activeButton.classList.add('active-tab');
             }
+            
+            // Record visit and remove indicator
+            updateLastVisit(tabId);
             
             // 检查是否有对应的iframe配置
             if (iframeConfig[tabId]) {
@@ -745,6 +849,7 @@
                     case "miniGameProxyDataResponse":
                         window.miniGameProxyData = e.data;
                         break;
+                    case "closeGameCommon":
                     case "GameLogic.RunCommand":
                     case "vipPayResult":
                         // 直接转发消息给父窗口
@@ -799,6 +904,11 @@
             // If not in proxy mode, load the default tab directly
             switchTab('vip');
         }
+        
+        // Initialize update indicators after page loads
+        setTimeout(() => {
+            initializeIndicators();
+        }, 500);
     </script>
 </body>
 </html>
