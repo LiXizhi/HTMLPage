@@ -244,26 +244,38 @@
         try {
           // Check Keepwork VIP membership status
           let isKeepworkVIP = false;
+          // 如果 URL 参数包含 vip=1，则强制为 VIP
           try {
-            // Try to get user info from SDK
-            if (sdk.user && typeof sdk.user.getUser === "function") {
-              const userInfo = await sdk.user.getUser();
-              isKeepworkVIP = userInfo && userInfo.vip && userInfo.vip > 0;
-              console.log("Keepwork VIP status:", isKeepworkVIP, userInfo);
-            } else if (sdk.userinfo) {
-              // Alternative: check if userinfo is directly available
-              isKeepworkVIP = sdk.userinfo.vip && sdk.userinfo.vip > 0;
-              console.log("Keepwork VIP status from userinfo:", isKeepworkVIP);
+            const params = new URLSearchParams(window.location.search);
+            if (params.get("vip") === "1") {
+              isKeepworkVIP = true;
+              console.log("VIP 状态由 URL 参数覆盖：vip=1");
             }
-          } catch (userError) {
-            console.log("Could not check VIP status:", userError.message);
+          } catch (e) {
+            console.log("解析 URL 参数时出错：", e.message);
+          }
+          if (!isKeepworkVIP) {
+            try {
+              // Try to get user info from SDK
+              if (sdk.user && typeof sdk.user.getUser === "function") {
+                const userInfo = await sdk.user.getUser();
+                isKeepworkVIP = !!userInfo && (Number(userInfo.vip) > 0 || Number(userInfo.commonVip) > 0);
+                console.log("Keepwork VIP status:", isKeepworkVIP, userInfo);
+              } else if (sdk.userinfo) {
+                // Alternative: check if userinfo is directly available
+                isKeepworkVIP = Number(sdk.userinfo.vip || 0) > 0 || Number(sdk.userinfo.commonVip || 0) > 0;
+                console.log("Keepwork VIP status from userinfo:", isKeepworkVIP);
+              }
+            } catch (userError) {
+              console.log("Could not check VIP status:", userError.message);
+            }
           }
 
           // 读取VIP激活信息（从单独的存储位置）
           let localVIPActivated = false;
           try {
             let vipData = await sdk.personalPageStore.loadPageData("maisi_userinfo", "user.local_vip");
-            vipData = JSON.parse(JSON.stringify(vipData)); 
+            vipData = JSON.parse(JSON.stringify(vipData));
             if (vipData && vipData.isVIP) {
               localVIPActivated = true;
               console.log("本地VIP激活信息:", vipData);
@@ -283,7 +295,6 @@
           // VIP状态：Keepwork会员 或 本地激活码激活
           isVIP = isKeepworkVIP || localVIPActivated;
           console.log("最终VIP状态:", { isKeepworkVIP, localVIPActivated, isVIP });
-
         } catch (error) {
           console.error("Error loading user data:", error);
         }
@@ -354,7 +365,6 @@
       // 从postMessage接收配置
       window.addEventListener("message", function (e) {
         if (e.data.type === "setGameConfig") {
-          
         }
       });
 
@@ -1269,7 +1279,7 @@ https://keepwork.com/official/tips/s1/1_235
         if (result.valid) {
           isVIP = true;
           await saveUserData();
-          
+
           // 单独记录VIP激活信息
           const vipData = {
             isVIP: true,
@@ -1278,7 +1288,7 @@ https://keepwork.com/official/tips/s1/1_235
           };
           await sdk.personalPageStore.savePageData("maisi_userinfo", "user.local_vip", vipData, true);
           console.log("VIP激活信息已保存:", vipData);
-          
+
           updateVIPStatus();
           renderVideos(allVideos);
           console.log("激活码验证成功:", result);

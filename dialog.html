@@ -1,0 +1,2390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>神殿守护者 - RPG对话界面</title>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 0;
+             background: linear-gradient(135deg, #87ceeb 0%, #6bb6ff 50%, #4a90e2 100%);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        
+        .container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #87ceeb 0%, #6bb6ff 50%, #4a90e2 100%);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .story-image-container {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 20px auto;
+            margin-bottom: 30px;
+            max-height: 60vh;
+            max-width: 90%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        .story-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 20px;
+            transition: all 0.5s ease;
+        }
+        
+        /* 装饰性星星动画 */
+        .star {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 20px;
+            animation: twinkle 3s ease-in-out infinite;
+            z-index: 1;
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        
+        .star:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
+        .star:nth-child(2) { top: 20%; right: 15%; animation-delay: 1s; }
+        .star:nth-child(3) { top: 60%; left: 5%; animation-delay: 2s; }
+        .star:nth-child(4) { bottom: 30%; right: 10%; animation-delay: 0.5s; }
+        .star:nth-child(5) { top: 40%; left: 20%; animation-delay: 1.5s; }
+        .star:nth-child(6) { bottom: 20%; left: 30%; animation-delay: 2.5s; }
+        
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            z-index: 20;
+        }
+        
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+        
+        
+        
+        .content {
+            flex: 0.5;
+            padding: 1.5vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 0;
+            max-height: 65vh;
+            overflow: visible;
+            padding-bottom: 0px;
+            z-index: 50;
+            position: relative;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+
+        .dialog-container {
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 50%, #2c5aa0 100%);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 25px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(15px);
+            width: 90%;
+            max-width: 1100px;
+            margin: 0 auto;
+            min-height: 120px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+            position: relative;
+        }
+
+        .dialog-text {
+            color: rgba(255, 255, 255, 0.95);
+            font-size: clamp(16px, 2.5vw, 24px);
+            line-height: 1.6;
+            margin-left: 40px;
+            margin-bottom: 25px;
+            margin-right: 200px;
+            text-align: left;
+            min-height: 60px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .dialog-container {
+            position: relative;
+            /* 其他样式保持不变 */
+        }
+
+        .dialog-controls {
+            position: absolute;
+            right: 20px;
+            bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .audio-btn {
+            position: absolute;
+            top: 30px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(45deg,rgb(250, 250, 250),rgb(255, 255, 255));
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            z-index: 1;
+        }
+
+        .audio-btn:hover {
+            background: linear-gradient(45deg,rgb(255, 255, 255),rgb(255, 255, 255));
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgb(255, 255, 255);
+        }
+
+        .audio-btn:active {
+            transform: translateY(-1px) scale(0.95);
+        }
+
+        .audio-btn.playing {
+            background: linear-gradient(45deg,rgb(255, 255, 255),rgb(255, 255, 255));
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .dialog-button {
+            background: linear-gradient(45deg, #2196f3, #42a5f5);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: clamp(18px, 2.2vw, 26px);
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            min-height: 50px;
+            min-width: 120px;
+        }
+
+        .dialog-button:hover {
+            background: linear-gradient(45deg, #1976d2, #2196f3);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        }
+
+        .dialog-button:active {
+            transform: translateY(-1px) scale(0.98);
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+        }
+
+        /* 虚拟按键样式 */
+        .virtual-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 1001;
+        }
+
+        .virtual-btn {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, rgba(33, 150, 243, 0.9), rgba(66, 165, 245, 0.9));
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .virtual-btn:active {
+            background: linear-gradient(45deg, rgba(25, 118, 210, 0.9), rgba(33, 150, 243, 0.9));
+            transform: scale(0.95);
+        }
+
+        .virtual-btn.disabled {
+            background: rgba(128, 128, 128, 0.6);
+            cursor: not-allowed;
+        }
+
+        /* 移动端适配 */
+         @media (max-width: 768px) {
+             .story-image-container {
+                 max-height: 40vh;
+                 padding: 15px;
+             }
+
+             .virtual-controls {
+                 display: flex;
+             }
+
+             .dialog-container {
+                 width: 95%;
+                 padding: 20px;
+             }
+
+
+             .content {
+                 justify-content: center;
+                 align-items: center;
+             }
+         }
+
+
+
+        /* 触控优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .dialog-button:hover {
+                background: linear-gradient(45deg, #2196f3, #42a5f5);
+                transform: none;
+            }
+
+            .virtual-controls {
+                display: flex;
+            }
+        }
+
+        /* 视频播放器控件隐藏样式 */
+        #videoPlayer::-webkit-media-controls,
+        #dialogVideoPlayer::-webkit-media-controls {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-panel,
+        #dialogVideoPlayer::-webkit-media-controls-panel {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-play-button,
+        #dialogVideoPlayer::-webkit-media-controls-play-button {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-timeline,
+        #dialogVideoPlayer::-webkit-media-controls-timeline {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-current-time-display,
+        #dialogVideoPlayer::-webkit-media-controls-current-time-display {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-time-remaining-display,
+        #dialogVideoPlayer::-webkit-media-controls-time-remaining-display {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-mute-button,
+        #dialogVideoPlayer::-webkit-media-controls-mute-button {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-volume-slider,
+        #dialogVideoPlayer::-webkit-media-controls-volume-slider {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-fullscreen-button,
+        #dialogVideoPlayer::-webkit-media-controls-fullscreen-button {
+            display: none !important;
+        }
+
+        #videoPlayer::-webkit-media-controls-overlay-play-button,
+        #dialogVideoPlayer::-webkit-media-controls-overlay-play-button {
+            display: none !important;
+        }
+
+        /* Firefox 控件隐藏 */
+        #videoPlayer::-moz-media-controls,
+        #dialogVideoPlayer::-moz-media-controls {
+            display: none !important;
+        }
+
+        /* 通用控件隐藏 */
+        #videoPlayer::media-controls,
+        #dialogVideoPlayer::media-controls {
+            display: none !important;
+        }
+
+        /* 强制隐藏所有视频控件 */
+        #videoPlayer[controls],
+        #dialogVideoPlayer[controls] {
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        #videoPlayer::-webkit-media-controls-enclosure,
+        #dialogVideoPlayer::-webkit-media-controls-enclosure {
+            display: none !important;
+        }
+    </style>
+
+</head>
+<body>
+    <div class="container">
+        <!-- 装饰性星星 -->
+        <div class="star">✨</div>
+        <div class="star">⭐</div>
+        <div class="star">🌟</div>
+        <div class="star">✨</div>
+        <div class="star">⭐</div>
+        <div class="star">🌟</div>
+        
+        <!-- 返回按钮 -->
+        <div class="back-button" onclick="previousDialog()" title="返回上一个对话">
+            ←
+        </div>
+        
+        <!-- 故事图片区域 -->
+        <div class="story-image-container">
+            <img id="storyImage" class="story-image" src="" alt="故事插图">
+        </div>
+        
+        <div class="dialog-container" id="dialogBox">
+            <button class="audio-btn" id="audioButton" onclick="toggleAudio()" title="播放语音">
+                🔊
+            </button>
+            <div class="game-title" id="gameTitle" style="display: none; color: rgba(255, 255, 255, 0.95); font-size: clamp(16px, 2.5vw, 24px); line-height: 1.6; margin-top: -15px; margin-bottom: 10px; margin-right: 60px; text-align: left; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);">
+                守护者
+            </div>
+            <div class="dialog-text" id="dialogText">
+            </div>
+            <div class="dialog-controls">
+                <button class="dialog-button" id="dialogButton" onclick="nextDialog()">继续 👌</button>
+            </div>
+        </div>
+        
+        <video id="videoPlayer" class="video-player" style="display: none;" 
+               preload="metadata" 
+               playsinline 
+               webkit-playsinline 
+               controls="false" 
+               controlslist="nodownload nofullscreen noremoteplayback"
+               disablePictureInPicture>
+            您的浏览器不支持视频播放。
+        </video>
+        
+        <!-- 虚拟按键控件 -->
+        <div class="virtual-controls" id="virtualControls">
+            <button class="virtual-btn" id="virtualNext" onclick="nextDialog()" title="下一步">
+                ▶️
+            </button>
+            <button class="virtual-btn" id="virtualSkip" onclick="skipDialog()" title="跳过">
+                ⏭️
+            </button>
+        </div>
+
+        <!-- iframe内容区域 -->
+        <div id="iframeContent" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; pointer-events: auto; background: rgba(0,0,0,0.1);">
+            <iframe id="contentFrame" style="width: 100%; height: 100%; border: none; pointer-events: auto;"></iframe>
+        </div>
+    </div>
+
+    <script>
+        let dialogData = [];
+        let gameTitle = "";
+        let game_config = null;
+        let gameLoaded = false;
+        let videoUrl = null; // 视频URL
+
+        let currentDialogIndex = 0;
+        let isDialogEnded = false;
+        let currentSpeech = null;
+        let isPlaying = false;
+        let currentAudio = null; // 当前播放的音频对象
+        let currentIframeUrl = null;
+        let configUrl = null;
+        let isIframePreloaded = false;
+        let voicesLoaded = false;
+        let handleKeyPress = null; // 键盘事件处理函数
+        let currentSteps = null; // 当前执行的steps数组
+        let currentStepIndex = -1; // 当前步骤索引
+        
+        // KeepworkSDK 相关变量
+        let sdk = null;
+        let sdkInitialized = false;
+        let audioCache = new Map(); // 音频缓存
+        
+        // 初始化KeepworkSDK
+        function initKeepworkSDK() {
+            try {
+                sdk = new KeepworkSDK({timeout: 30000});
+                sdkInitialized = true;
+                console.log('KeepworkSDK 初始化成功');
+            } catch (error) {
+                console.error('KeepworkSDK 初始化失败:', error);
+                sdkInitialized = false;
+                console.warn('将使用备用语音方案');
+            }
+        }
+        
+        // 辅助函数：根据skin选择对应的资源
+        function getResourceBySkin(resource, skin) {
+            if (typeof resource === 'object' && resource !== null) {
+                // 如果resource是对象，根据skin选择对应的值
+                return resource[skin] || resource['orange'] || Object.values(resource)[0] || '';
+            } else if (typeof resource === 'string') {
+                // 如果resource是字符串，直接返回
+                return resource;
+            }
+            return '';
+        }
+        let dialogTypes = {
+            'SYESTEM_DIALOG_1': {
+                dialogData: [
+                    {
+                        text: "醒醒！你快醒醒！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46498/raw#第一幕.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46539/raw#1.MP3",
+                        title: "抱抱龙"
+                    },
+                    {
+                        text: "头好疼......我这是在哪......",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46413/raw#醒之前.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46557/raw#my_headache.MP3",
+                        title: "（我）"
+                    },
+                    {
+                        text: "你终于醒了！这里是麦思星球。我是抱抱龙，我们正在精神世界中对话。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46499/raw#第二幕.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46618/raw#awake.MP3"
+                    },
+                    {
+                        text: "很久以前，麦思星球面临着一场巨大的危机。当时的星球居民因为缺乏情感连接而变得孤独冷漠，整个星球陷入了灰色的沉寂。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46392/raw#1.jpeg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46541/raw#3.MP3"
+                    },
+                    {
+                        text: "就在这时，天空中降下了无数闪闪发光的龙蛋，每个蛋都承载着重新点燃星球活力的使命。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46393/raw#2.jpeg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46542/raw#4.MP3"
+                    },
+                    {
+                        text: "如今，每个麦思星球的新生居民都会获得一枚独特的龙蛋。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46391/raw#3.jpeg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46543/raw#5.MP3"
+                    },
+                    {
+                        text: "这些龙蛋会根据主人的个性、能力和情感特征，孵化出完全不同的抱抱龙。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46394/raw#04.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46544/raw#6.MP3"
+                    },
+                    {
+                        text: "我会陪着你一起成长哦~",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46395/raw#5.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46558/raw#yi_qi_cheng_zhang.MP3"
+                    },
+                    {
+                        text: "……那我现在是麦思星球的新居民了吗？",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46415/raw#醒来.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46546/raw#8.MP3",
+                        title: "（我）"
+                    }
+                ],
+                title: "抱抱龙",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46510/raw#say_need_test.mp4" },
+                    { url: "https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/select_egg_guide" }
+                ],
+                id: "dialog_1"
+            },
+            'New_USER_TASK': {
+                dialogData: [
+                    {
+                        text: "你好啊，亲爱的星球居民。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46460/raw#xin1.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46548/raw#10.MP3"
+                    },
+                    {
+                        text: "我已为你开启试炼之路，快去完成今日的所有挑战吧！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46462/raw#xin3.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46549/raw#11.MP3"
+                    },
+                    {
+                        text: "完成今日全部挑战，请回到此处找我。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46463/raw#xin4.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46550/raw#12.MP3"
+                    }
+                ],
+                title: "神殿守护者",
+                id: "dialog_3"
+            },
+            'New_USER_TASK_TOMORROW': {
+                dialogData: [
+                    {
+                        text: "今日的新手任务已完成，明天再来吧！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46460/raw#xin1.jpg"
+                    }
+                ],
+                title: "神殿守护者",
+                id: "dialog_4"
+            },
+            'FEED_PET_DIALOG': {
+                dialogData: [
+                    {
+                        text: "呜~我饿了主人！听说蓝莓+牛奶做的饮品可甜啦！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46478/raw#ren1.jpg"
+                    },
+                    {
+                        text: "我想吃。。所以你能帮我去找点新鲜的蓝莓和香香的牛奶吗？",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46479/raw#ren2.jpg"
+                    }
+                ],
+                title: "神殿守护者",
+                id: "dialog_5"
+            },
+            'GET_EGG_DIALOG': {
+                dialogData: [
+                    {
+                        text: "主人，我来啦！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46525/raw#dan.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46551/raw#13.MP3"
+                    }
+                ],
+                title: "抱抱龙",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46443/raw#dragon_egg_select_complete.mp4" }
+                ],
+                id: "dialog_6"
+            },
+            'WASD_MOVE_DIALOG': {
+                dialogData: [
+                    {
+                        text: "你好，我是神殿守护者。恭喜你获得了一枚龙蛋。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46512/raw#获得龙蛋.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46570/raw#shen_dian_shou_zhe.MP3"
+                    },
+                    {
+                        text: "这枚蛋现在已经属于你了，为了让它可以顺利孵化，我们带着它走动一下吧。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46517/raw#行走.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46571/raw#egg_is_yours.MP3"
+                    },
+                    {
+                        text: "使用电脑操作时按键盘W、A、S、D键人物可以行走，按住鼠标右键同时移动鼠标可改变视觉。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46166/raw#新手引导-7.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46572/raw#use_computer.MP3"
+                    },
+                    {
+                        text: "使用手机或平板时，左下角摇杆控制人物行动，右手滑动可改变视觉。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46167/raw#新手引导-8.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46573/raw#use_phone.MP3"
+                    }
+                ],
+                title: "神殿守护者",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46518/raw#zou.mp4" }
+                ],
+                id: "dialog_7"
+            },
+            "GET_SIGN_REWARD_DIALOG": {
+                dialogData: [
+                    {
+                        text: "你将可以从以下奖励中挑选一样带走噢！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46534/raw#liwu.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46569/raw#take_one_away.MP3"
+                    }
+                ],
+                title: "神殿守护者",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46455/raw#get_reward.mp4" }
+                ],
+                id: "get_sign_in_reward"
+            },
+            "GET_ALL_REWARD_DIALOG": {
+                dialogData: [
+                    {
+                        text: "恭喜你，获得了奖励。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46534/raw#liwu.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46663/raw#get_all_reward.MP3"
+                    }
+                ],
+                title: "神殿守护者",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46455/raw#get_reward.mp4" }
+                ],
+                id: "get_task_reward"
+            },
+            "TIP_CLICK_TASK_BTN": {
+                dialogData: [
+                    {
+                        text: "请试着点击界面左上角的任意任务中的前往按钮，并试着体验今日挑战。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46534/raw#liwu.jpg"
+                    }
+                ],
+                title: "神殿守护者",
+                id: "tip_click_task_btn"
+            },
+            "OPEN_EGG_DIALOG": {
+                dialogData: [
+                    {
+                        text: "主人，我出来了！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46525/raw#dan.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46562/raw#egg_to_dragon.MP3"
+                    }
+                ],
+                title: "抱抱龙",
+                steps: [
+                    { video: {
+                        'orange': "https://api.keepwork.com/ts-storage/siteFiles/46464/raw#橙色蛋.mp4",
+                        'green': "https://api.keepwork.com/ts-storage/siteFiles/46465/raw#绿色蛋.mp4",
+                        'purple': "https://api.keepwork.com/ts-storage/siteFiles/46466/raw#紫色蛋.mp4"
+                    }}
+                ],
+                id: "open_egg"
+            },
+            'DRAGON_FIRST_MEETING_DIALOG': {
+                dialogData: [
+                    {
+                        text: "你好，亲爱的主人！我能感受到你温暖的心灵。",
+                        image:{
+                            'orange':'https://api.keepwork.com/ts-storage/siteFiles/46636/raw#08-2.jpg',
+                            'green':'https://api.keepwork.com/ts-storage/siteFiles/46637/raw#08-1.jpg',
+                            'purple':'https://api.keepwork.com/ts-storage/siteFiles/46635/raw#08-3.png'
+                        },
+                        mp3: {
+                            'orange':'https://api.keepwork.com/ts-storage/siteFiles/46699/raw#抱抱龙：你好亲爱的主人.MP3',
+                            'green':'https://api.keepwork.com/ts-storage/siteFiles/46699/raw#抱抱龙：你好亲爱的主人.MP3',
+                            'purple':'https://api.keepwork.com/ts-storage/siteFiles/46699/raw#抱抱龙：你好亲爱的主人.MP3'
+                        },
+                        title: "抱抱龙"
+                    },
+                    {
+                        text: "哇！你真的会说话！太神奇了！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46691/raw#go1.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46701/raw#自己：哇你真的会说话.MP3",
+                        title: "（我）"
+                    },
+                    {
+                        text: "当然啦！我们抱抱龙天生就拥有与主人心灵相通的能力。从现在开始，我会陪伴你一起成长！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46692/raw#go2.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46700/raw#抱抱龙：当然啦.MP3",
+                        title: "抱抱龙"
+                    }
+                ],
+                title: "抱抱龙",
+                id: "dragon_first_meeting"
+            },
+            'DRAGON_GROWTH_SYSTEM_DIALOG': {
+                dialogData: [
+                    {
+                        text: "让我为你介绍抱抱龙的成长系统。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46693/raw#go3.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46702/raw#导师：让我为你介绍.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "抱抱龙有四个重要属性：爱心值、智慧值、力量值和敏捷值。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46693/raw#go3.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46703/raw#导师：四个属性.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "通过完成各种脑力挑战，抱抱龙的这些属性都会得到提升，它会变得越来越强大！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46772/raw#bbl.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46704/raw#导师：越来越强大.MP3",
+                        title: "神殿守护者"
+                    }
+                ],
+                title: "神殿守护者",
+                id: "dragon_growth_system"
+            },
+            'ACADEMY_INTRO': {
+                dialogData: [
+                    {
+                        text: "欢迎来到麦思学院！这里是星球上最先进的能力测评中心。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46460/raw#academy_intro.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46548/raw#academy_welcome.MP3",
+                        title: "学院导师"
+                    },
+                    {
+                        text: "在学院中，我们提供专业的能力测评，帮助你和抱抱龙发现真正的潜能。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46462/raw#academy_assessment.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46549/raw#professional_assessment.MP3",
+                        title: "学院导师"
+                    },
+                    {
+                        text: "开通398大会员，即可获得完整的测评报告和个性化成长方案！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46463/raw#member_benefits.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46550/raw#member_benefits.MP3",
+                        title: "学院导师"
+                    }
+                ],
+                title: "学院导师",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46518/raw#academy_showcase.mp4" }
+                ],
+                id: "academy_intro"
+            },
+                        // === PAPA 系列（已确保对象间用逗号分隔） ===
+            'PAPA_NAVIGATION_TUTORIAL_VIDEO': {
+                dialogData: [
+                    { text: "你好，我是你的故事向导帕帕。在这个充满惊喜的星球中，快速移动是探索的关键。", image: "https://api.keepwork.com/ts-storage/siteFiles/47105/raw#pa1.jpg", title: "帕帕" },
+                    { text: "接下来，我会让你看一段视频，学会如何通过简单的点击，轻松传送到任何想去的地方。", image: "https://api.keepwork.com/ts-storage/siteFiles/47106/raw#pa2.jpg", title: "帕帕" }
+                ],
+                title: "帕帕",
+                steps: [ { video: "https://api.keepwork.com/ts-storage/siteFiles/47109/raw#微信视频2025-10-24_001630_352.mp4" } ],
+                id: "NAVIGATION_TUTORIAL_VIDEO"
+            },
+
+            'PAPA_ROLEPLAY_TUTORIAL_VIDEO': {
+                dialogData: [
+                    { text: "想要真正融入这个奇妙的星球吗？通过附身到不同角色，你可以体验他们的视角。", image: "https://api.keepwork.com/ts-storage/siteFiles/47107/raw#pa3.jpg", title: "帕帕" },
+                    { text: "控制他们的动作，甚至做出各种有趣的表情。这是探索世界最有趣的方式！", image: "https://api.keepwork.com/ts-storage/siteFiles/47105/raw#pa1.jpg", title: "帕帕" }
+                ],
+                title: "帕帕",
+                steps: [ { video: "https://api.keepwork.com/ts-storage/siteFiles/47111/raw#微信视频2025-10-24_001641_356.mp4" } ],
+                id: "ROLEPLAY_TUTORIAL_VIDEO"
+            },
+
+            'PAPA_EXPRESSION_TUTORIAL_VIDEO': {
+                dialogData: [
+                    { text: "现在让我们深入探索表情系统！每个角色都有着丰富的情感世界。", image: "https://api.keepwork.com/ts-storage/siteFiles/47106/raw#pa2.jpg", title: "帕帕" },
+                    { text: "通过掌握表情控制，你可以让角色展现出喜怒哀乐各种情感！", image: "https://api.keepwork.com/ts-storage/siteFiles/47107/raw#pa3.jpg", title: "帕帕" }
+                ],
+                title: "帕帕",
+                steps: [ { video: "https://api.keepwork.com/ts-storage/siteFiles/47112/raw#微信视频2025-10-24_001650_691.mp4" } ],
+                id: "EXPRESSION_TUTORIAL_VIDEO"
+            },
+
+            'PAPA_ENVIRONMENT_TUTORIAL_VIDEO': {
+                dialogData: [
+                    { text: "想要成为世界的造物主吗？试试使用环境工具吧！", image: "https://api.keepwork.com/ts-storage/siteFiles/47105/raw#pa1.jpg", title: "帕帕" },
+                    { text: "通过掌握天气控制、时间调节、光影效果，你可以随心所欲地改变整个世界的氛围！", image: "https://api.keepwork.com/ts-storage/siteFiles/47106/raw#pa2.jpg", title: "帕帕" }
+                ],
+                title: "帕帕",
+                steps: [ { video: "https://api.keepwork.com/ts-storage/siteFiles/47114/raw#微信视频2025-10-24_001656_770.mp4" } ],
+                id: "ENVIRONMENT_TUTORIAL_VIDEO"
+            },
+
+            'PAPA_BUILDING_TUTORIAL_VIDEO': {
+                dialogData: [
+                    { text: "想要建造属于自己的梦想家园吗？让我来教你如何使用强大的建造系统！", image: "https://api.keepwork.com/ts-storage/siteFiles/47107/raw#pa3.jpg", title: "帕帕" },
+                    { text: "通过掌握颜色选择、方块材质、建造工具，你可以创造出独一无二的建筑作品！", image: "https://api.keepwork.com/ts-storage/siteFiles/47105/raw#pa1.jpg", title: "帕帕" }
+                ],
+                title: "帕帕",
+                steps: [ { video: "https://api.keepwork.com/ts-storage/siteFiles/47110/raw#微信视频2025-10-24_001708_504.mp4" } ],
+                id: "BUILDING_TUTORIAL_VIDEO"
+            },
+
+            'PAPA_ITEM_POCKET_TUTORIAL_VIDEO': {
+                dialogData: [
+                    { text: "想要成为模型管理专家吗？让我教你如何使用强大的物品系统和神奇的口袋功能！", image: "https://api.keepwork.com/ts-storage/siteFiles/47106/raw#pa2.jpg", title: "帕帕" },
+                    { text: "通过掌握物品按钮的使用，你可以访问世界中的全部模型资源！", image: "https://api.keepwork.com/ts-storage/siteFiles/47107/raw#pa3.jpg", title: "帕帕" }
+                ],
+                title: "帕帕",
+                steps: [ { video: "https://api.keepwork.com/ts-storage/siteFiles/47111/raw#微信视频2025-10-24_001641_356.mp4" } ],
+                id: "ITEM_POCKET_TUTORIAL_VIDEO"
+            },
+
+            'PAPA_SAVE_SYSTEM_TUTORIAL_VIDEO': {
+                dialogData: [
+                    { text: "想要让你的创作永远保存吗？让我教你如何使用强大的存档系统！", image: "https://api.keepwork.com/ts-storage/siteFiles/47105/raw#pa1.jpg", title: "帕帕" },
+                    { text: "通过掌握本地存档、云存档上传、存档加载，你可以保护自己的创作成果！", image: "https://api.keepwork.com/ts-storage/siteFiles/47106/raw#pa2.jpg", title: "帕帕" }
+                ],
+                title: "帕帕",
+                steps: [ { video: "https://api.keepwork.com/ts-storage/siteFiles/47108/raw#微信视频2025-10-24_001702_404.mp4" } ],
+                id: "SAVE_SYSTEM_TUTORIAL_VIDEO"
+            },
+            // === PAPA 系列结束 ===
+            'MEMBER_BENEFITS_SHOWCASE': {
+                dialogData: [
+                    {
+                        text: "看！这就是398大会员专享的龙族套装！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46534/raw#premium_suits.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46569/raw#premium_showcase.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "星光套装、雷电特效、还有各种炫酷的专属技能动画！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46535/raw#special_effects.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46570/raw#special_effects.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "更重要的是，会员可以解锁抱抱龙的传说形态！那是真正的龙族王者！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46536/raw#legendary_form.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46571/raw#legendary_dragon.MP3",
+                        title: "神殿守护者"
+                    }
+                ],
+                title: "神殿守护者",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46519/raw#member_showcase.mp4" }
+                ],
+                id: "member_benefits"
+            },
+            'DRAGON_TRANSFORMATION': {
+                dialogData: [
+                    {
+                        text: "感受到了吗？抱抱龙体内的力量正在觉醒！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46525/raw#transformation1.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46562/raw#power_awakening.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "哇！我感觉到一股暖流在体内流淌，力量在不断增强！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46526/raw#transformation2.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46563/raw#power_flow.MP3",
+                        title: "抱抱龙"
+                    },
+                    {
+                        text: "这就是成长的力量！但这只是开始，真正的传说形态还需要在学院中解锁！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46527/raw#transformation3.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46564/raw#beginning_power.MP3",
+                        title: "神殿守护者"
+                    }
+                ],
+                title: "神殿守护者",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46520/raw#dragon_evolution_mid.mp4" }
+                ],
+                id: "dragon_transformation"
+            },
+            'LEGENDARY_DRAGON': {
+                dialogData: [
+                    {
+                        text: "经过无数次的挑战和成长，抱抱龙终于达到了传说级别！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46530/raw#legendary1.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46565/raw#legendary_achieved.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "主人！我现在拥有了前所未有的力量！感谢你一路的陪伴！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46531/raw#legendary2.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46566/raw#grateful_dragon.MP3",
+                        title: "传说抱抱龙"
+                    },
+                    {
+                        text: "这就是398大会员的真正价值！完整的成长之路，专属的传说形态！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46532/raw#legendary3.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46567/raw#member_value.MP3",
+                        title: "神殿守护者"
+                    }
+                ],
+                title: "神殿守护者",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46521/raw#legendary_evolution.mp4" }
+                ],
+                id: "legendary_dragon"
+            },
+            'FINAL_CALL_TO_ACTION': {
+                dialogData: [
+                    {
+                        text: "亲爱的训练师，你和抱抱龙的冒险才刚刚开始！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46533/raw#final_call.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46568/raw#adventure_begins.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "想要解锁更多精彩内容吗？398大会员为你打开通往传说的大门！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46534/raw#membership_door.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46569/raw#legendary_door.MP3",
+                        title: "神殿守护者"
+                    },
+                    {
+                        text: "现在就开通会员，让抱抱龙成为真正的龙族传说！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46535/raw#become_legend.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46570/raw#become_legend.MP3",
+                        title: "神殿守护者"
+                    }
+                ],
+                title: "神殿守护者",
+                steps: [
+                    { url: "https://cross.keepwork.com/api/raw/maisi/maisi/webgames/data/membership_signup" }
+                ],
+                id: "final_call_to_action"
+            },
+            'DRAGON_GROWTH_STORY_1': {
+                dialogData: [
+                    {
+                        text: "亲爱的星球居民，抱抱龙似乎有话对你说……",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46693/raw#go3.jpg",
+                        mp3: "https://api.keepwork.com/ts-storage/siteFiles/46727/raw#qin.MP3"
+                    }
+                ],
+                title: "抱抱龙",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46728/raw#jinhuale.mp4" }
+                ],
+                id: "dragon_growth_story_1"
+            },
+            'ATTENTION_TOKEN': {
+                dialogData: [
+                    {
+                        text: "令人印象深刻！你的专注力非常强大。这枚注意力天赋令牌属于你了。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46750/raw#lanfu.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "记住，24小时内找到小麦老师报名，否则令牌的力量会消散。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46752/raw#xiaomai.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "哇，注意力天赋令牌！这可是最难获得的令牌之一。你准备好进入房间，面对注意力神石的终极考验了吗？",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46753/raw#lanshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "attention_token"
+            },
+            'THINKING_TOKEN': {
+                dialogData: [
+                    {
+                        text: "不可思议！你的思维如星辰般闪耀。这枚思维能力天赋令牌见证了你的智慧。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46755/raw#fenfu.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "快去找小麦老师吧，思维神石正等待着真正的智者。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46752/raw#xiaomai.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "思维神石据说能让通过者获得'洞察万物'的能力，能够瞬间看穿事物的本质和内在联系。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46757/raw#fenshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "thinking_token"
+            },
+            'LEARNING_TOKEN': {
+                dialogData: [
+                    {
+                        text: "amazing！你掌握了学习的真谛。这枚学习策略天赋令牌代表你拥有了学习的钥匙。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46758/raw#huangfu.jpg",
+                        title: "王校长"
+                    },
+                   
+                    {
+                        text: "时间不多了，要去找小麦老师报名吗？",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46752/raw#xiaomai.jpg",
+                        title: "王校长"
+                    },
+                     {
+                        text: "学习策略神碑会给通过者'举一反三'的能力，让你在任何领域都能快速掌握精髓。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46759/raw#huangshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "learning_token"
+            },
+            'STRATEGY_TOKEN': {
+                dialogData: [
+                    {
+                        text: "amazing！你掌握了学习的真谛。这枚学习策略天赋令牌代表你拥有了学习的钥匙。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46758/raw#huangfu.jpg",
+                        title: "王校长"
+                    },
+                   
+                    {
+                        text: "时间不多了，要去找小麦老师报名吗？",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46752/raw#xiaomai.jpg",
+                        title: "王校长"
+                    },
+                     {
+                        text: "学习策略神碑会给通过者'举一反三'的能力，让你在任何领域都能快速掌握精髓。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46759/raw#huangshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "strategy_token"
+            },
+            'MOTIVATION_TOKEN': {
+                dialogData: [
+                  
+                    {
+                        text: "这枚动机天赋令牌见证了你强大的内驱力。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46760/raw#hongfu.jpg",
+                        title: "王校长"
+                    },
+                      {
+                        text: "优秀！你证明了什么是真正的内在动机。不是外在的奖励驱动你前进，而是对目标的热爱和对自我提升的渴望。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46751/raw#wang.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "学习动机令牌散发着温暖的光芒，就像你内心的火焰。动机神石的考验据说最为严苛，但通过者将获得'永不言弃'的精神力量。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46761/raw#hongshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "motivation_token"
+            },
+            'QUALITY_TOKEN': {
+                dialogData: [
+                    {
+                        text: "学习品质令牌！这是最纯洁的令牌，只有品格高尚的人才能获得。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46762/raw#chengfu.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "太棒了！你展现了高尚的品格。这枚学习品质天赋令牌见证了你的人格魅力。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46751/raw#wang.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "品质神碑会赋予通过者'诚信之光'，让你在任何情况下都能坚持正确的选择。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46763/raw#chengshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "quality_token"
+            },
+            'EMOTIONAL_TOKEN': {
+                dialogData: [
+                    {
+                        text: "这枚情绪智力天赋令牌代表你的共情能力。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46764/raw#qingfu.jpg",
+                        title: "王校长"
+                    },
+                     {
+                        text: "你展现了非凡的情绪智力！你不仅理解了他人的情感，还给出了恰当的支持，同时保持了自己的情绪平衡。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46751/raw#wang.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "情绪智力令牌温暖如春风！这类令牌很少见，因为它需要真正的同理心。情绪智力神碑会给通过者'情感治愈'的能力。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46765/raw#qingshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "emotional_token"
+            },
+            'CREATIVITY_TOKEN': {
+                dialogData: [
+                     {
+                        text: "这枚创造力天赋令牌见证了你的创新精神。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46754/raw#lvfu.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "令人惊叹的创意！你的作品不仅新颖独特，还充满了实用价值。真正的创造者不是复制别人的想法，而是开辟全新的道路。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46751/raw#wang.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "创造力散发着绿色的光芒，实际上每个角度都有不同的色彩。创造力神碑是最神秘的，传说通过者会获得'点石成金'的创意能力。",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46766/raw#lvshi.jpg",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                id: "creativity_token"
+            },
+            'TALENT_CONTEST': {
+                dialogData: [
+                    {
+                        text: "欢迎参加麦思星球天赋测评大赛！",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46751/raw#wang.jpg",
+                        title: "王校长"
+                    },
+                    {
+                        text: "这里将测试你在各个领域的天赋潜能，帮助你发现自己的独特才华。准备好开始你的天赋发现之旅了吗？",
+                        image: "https://api.keepwork.com/ts-storage/siteFiles/46756/raw#0C956607-8FD8-4c59-B562-41B19321AAB9_compressed.png",
+                        title: "王校长"
+                    }
+                ],
+                title: "王校长",
+                steps: [
+                    { video: "https://api.keepwork.com/ts-storage/siteFiles/46734/raw#juqing1.mp4" }
+                ],
+                id: "talent_contest"
+            }
+        }
+
+        // 初始化语音系统
+        function initVoices() {
+            if ('speechSynthesis' in window) {
+                // 确保语音列表已加载
+                const loadVoices = () => {
+                    const voices = speechSynthesis.getVoices();
+                    if (voices.length > 0) {
+                        voicesLoaded = true;
+                        //console.log('可用语音:', voices.map(v => v.name));
+
+                        // 移动端额外处理：预加载语音
+                        if (isMobileDevice()) {
+                            // 在移动端预先创建一个语音实例来确保语音引擎准备就绪
+                            const testUtterance = new SpeechSynthesisUtterance('');
+                            testUtterance.volume = 0;
+                            speechSynthesis.speak(testUtterance);
+                        }
+                    }
+                };
+
+                // 监听语音列表变化
+                speechSynthesis.onvoiceschanged = loadVoices;
+                loadVoices(); // 立即尝试加载
+
+                // 移动端强制触发语音列表加载
+                if (isMobileDevice()) {
+                    // 在移动端，有时需要手动触发语音列表加载
+                    setTimeout(() => {
+                        speechSynthesis.getVoices();
+                    }, 100);
+                }
+            }
+        }
+
+         // 按顺序执行steps数组中的步骤
+        function executeSteps(steps, currentIndex) {
+            // 设置全局变量
+            currentSteps = steps;
+            currentStepIndex = currentIndex;
+
+            if (currentIndex >= steps.length) {
+                // 所有步骤执行完毕，检查是否需要关闭窗口
+                if (!configUrl || configUrl === "") {
+                    //console.log('所有步骤执行完毕，关闭窗口');
+                    window.parent.postMessage({ type: 'dialog', data: {
+                        closeWindow: true,
+                        id: game_config.id,
+                    } }, '*');
+                }
+                return;
+            }
+
+            const step = steps[currentIndex];
+            //console.log('执行步骤', currentIndex + 1, ':', step);
+
+            if (step.video && step.video !== "") {
+                // 执行视频播放步骤
+                playVideoStep(step.video, () => {
+                    // 视频播放完成后执行下一步
+                    executeSteps(steps, currentIndex + 1);
+                });
+            } else if (step.url && step.url !== "") {
+                // 执行URL加载步骤
+                loadUrlStep(step.url);
+                // URL步骤不自动执行下一步，需要等待用户交互或特定条件
+                // 下一步将通过其他机制触发（如用户关闭URL页面）
+            } else {
+                // 跳过无效步骤
+                //console.log('跳过无效步骤:', step);
+                executeSteps(steps, currentIndex + 1);
+            }
+        }
+
+         // 播放视频步骤
+        function playVideoStep(videoUrl, onComplete) {
+            const videoPlayer = document.getElementById('videoPlayer');
+            if (videoPlayer) {
+                // 隐藏对话框
+                const dialogBox = document.getElementById('dialogBox');
+                if (dialogBox) {
+                    dialogBox.style.display = 'none';
+                }
+
+                // 根据skin选择视频URL
+                const finalVideoUrl = getResourceBySkin(videoUrl, game_config.skin);
+                console.log('最终视频URL:', finalVideoUrl);
+                
+                // 设置视频源并显示
+                videoPlayer.src = finalVideoUrl;
+                videoPlayer.style.display = 'block';
+                videoPlayer.style.position = 'fixed';
+                videoPlayer.style.top = '0';
+                videoPlayer.style.left = '0';
+                videoPlayer.style.width = '100vw';
+                videoPlayer.style.height = '100vh';
+                videoPlayer.style.zIndex = '9999';
+                videoPlayer.style.backgroundColor = '#000';
+                videoPlayer.style.objectFit = 'contain';
+                videoPlayer.controls = false;
+
+                // 添加播放结束事件监听器
+                const onVideoEnded = function() {
+                    //console.log('视频播放结束');
+                    videoPlayer.style.display = 'none';
+                    videoPlayer.removeEventListener('ended', onVideoEnded);
+                    if (videoPlayer.handleKeyPress) {
+                        document.removeEventListener('keydown', videoPlayer.handleKeyPress);
+                        videoPlayer.handleKeyPress = null;
+                    }
+
+                    // 检查是否为steps数组中的最后一个步骤
+                    let isLastStep = false;
+                    if (currentSteps && currentStepIndex >= 0) {
+                        isLastStep = currentStepIndex === currentSteps.length - 1;
+                    } else {
+                        isLastStep = true;
+                    }
+                    // 如果是最后一个步骤，发送videoEnded消息
+                    if (isLastStep) {
+                        try {
+                            window.parent.postMessage({
+                                type: 'videoEnded',
+                                data: {
+                                    closeWindow: true,
+                                    id: game_config ? game_config.id : 'unknown',
+                                    from:game_config?game_config.from:'unknown',
+                                }
+                            }, '*');
+                        } catch (error) {
+                            console.error('发送videoEnded消息时出错:', error);
+                        }
+                    }
+
+                    onComplete();
+                };
+                videoPlayer.addEventListener('ended', onVideoEnded);
+
+                // 添加ESC键关闭功能
+                const handleKeyPress = function(e) {
+                    if (e.key === 'Escape') {
+                        videoPlayer.style.display = 'none';
+                        videoPlayer.removeEventListener('ended', onVideoEnded);
+                        document.removeEventListener('keydown', handleKeyPress);
+                        videoPlayer.handleKeyPress = null;
+
+                        // 检查是否为steps数组中的最后一个步骤
+                        let isLastStep = false;
+                        if (currentSteps && currentStepIndex >= 0) {
+                            isLastStep = currentStepIndex === currentSteps.length - 1;
+                        } else {
+                            isLastStep = true;
+                        }
+
+                        // 如果是最后一个步骤，发送videoEnded消息
+                        if (isLastStep) {
+                            try {
+                                window.parent.postMessage({
+                                    type: 'videoEnded',
+                                    data: {
+                                        closeWindow: true,
+                                        id: game_config ? game_config.id : 'unknown',
+                                        from:game_config?game_config.from:'unknown',
+                                    }
+                                }, '*');
+                            } catch (error) {
+                                console.error('发送videoEnded消息时出错:', error);
+                            }
+                        }
+
+                        onComplete();
+                    }
+                };
+                document.addEventListener('keydown', handleKeyPress);
+                videoPlayer.handleKeyPress = handleKeyPress;
+
+                // 播放视频
+                videoPlayer.play().catch(error => {
+                    //console.log('视频自动播放失败，需要用户交互:', error);
+                });
+
+                //console.log('视频播放器已启动');
+            } else {
+                console.error('找不到videoPlayer元素');
+                onComplete();
+            }
+        }
+
+        // 加载URL步骤
+        function loadUrlStep(url) {
+            //console.log('加载URL步骤:', url);
+            configUrl = url;
+
+            // 显示iframe
+            const iframeContent = document.getElementById('iframeContent');
+            if (iframeContent) {
+                //console.log('移除iframeContent的hidden类');
+                iframeContent.classList.remove('hidden');
+            } else {
+                console.error('找不到iframeContent元素');
+            }
+
+            const contentFrame = document.getElementById('contentFrame');
+            if (contentFrame) {
+                //console.log('找到contentFrame元素');
+                // 如果已经预加载了相同的URL，直接使用
+                if (isIframePreloaded && currentIframeUrl === url) {
+                    //console.log('使用已预加载的页面:', url);
+                } else {
+                    //console.log('开始加载新页面:', url);
+                    currentIframeUrl = url;
+                    contentFrame.onload = function() {
+                        //console.log('iframe加载完成:', url);
+                        isIframePreloaded = true;
+                    };
+                    contentFrame.onerror = function() {
+                        console.error('iframe加载失败:', url);
+                    };
+                    contentFrame.src = url;
+                }
+            } else {
+                console.error('找不到contentFrame元素');
+            }
+
+            // 隐藏对话框
+            setTimeout(() => {
+                const dialogBox = document.getElementById('dialogBox');
+                if (dialogBox) {
+                    dialogBox.classList.add('hidden');
+                }
+            }, 100);
+        }
+
+        function startAdventure() {
+            //console.log('startAdventure被调用');
+            //console.log('game_config:', game_config);
+
+            // 现在video和url配置都在steps中处理，不需要单独处理
+
+            // 对话结束后隐藏故事图片容器和对话框容器
+            const storyImageContainer = document.querySelector('.story-image-container');
+            const dialogContainer = document.querySelector('.dialog-container');
+
+            if (storyImageContainer) {
+                storyImageContainer.style.display = 'none';
+                //console.log('已隐藏story-image-container');
+            }
+
+            if (dialogContainer) {
+                dialogContainer.style.display = 'none';
+                //console.log('已隐藏dialog-container');
+            }
+
+            // 检查是否有steps配置
+            if (game_config.steps && Array.isArray(game_config.steps)) {
+                executeSteps(game_config.steps, 0);
+                return;
+            }
+
+            // 如果没有steps配置，关闭窗口
+            //console.log('没有steps配置，关闭窗口');
+            window.parent.postMessage({ type: 'dialog', data: {
+                closeWindow: true,
+                id: game_config.id,
+            } }, '*');
+            return;
+            //console.log('开始加载URL:', configUrl);
+            // 显示iframe
+            const iframeContent = document.getElementById('iframeContent');
+            if (iframeContent) {
+                //console.log('移除iframeContent的hidden类');
+                iframeContent.classList.remove('hidden');
+                //console.log('iframeContent当前样式:', window.getComputedStyle(iframeContent).display);
+                //console.log('iframeContent当前z-index:', window.getComputedStyle(iframeContent).zIndex);
+                //console.log('iframeContent当前位置:', iframeContent.getBoundingClientRect());
+                // 添加临时边框以便调试
+                iframeContent.style.border = '5px solid red';
+                setTimeout(() => {
+                    iframeContent.style.border = 'none';
+                }, 3000);
+            } else {
+                console.error('找不到iframeContent元素');
+            }
+
+            const contentFrame = document.getElementById('contentFrame');
+            if (contentFrame) {
+                //console.log('找到contentFrame元素');
+                // 如果已经预加载了相同的URL，直接使用
+                if (isIframePreloaded && currentIframeUrl === configUrl) {
+                    //console.log('使用已预加载的页面:', configUrl);
+                    // 页面已预加载，无需重新设置src
+                } else {
+                    //console.log('开始加载新页面:', configUrl);
+                    // 只有在URL不同或未预加载时才重新加载
+                    currentIframeUrl = configUrl;
+                    contentFrame.onload = function() {
+                        //console.log('iframe加载完成:', configUrl);
+                        isIframePreloaded = true;
+                    };
+                    contentFrame.onerror = function() {
+                        console.error('iframe加载失败:', configUrl);
+                    };
+                    contentFrame.src = configUrl;
+                }
+            } else {
+                console.error('找不到contentFrame元素');
+            }
+
+                const dialogBox = document.getElementById('dialogBox');
+                if (dialogBox) {
+                    dialogBox.classList.add('hidden');
+                }
+                // 通知iframe页面现在可见，可以开始自动播放
+                setTimeout(() => {
+                    const contentFrame = document.getElementById('contentFrame');
+                    if (contentFrame && contentFrame.contentWindow) {
+                        contentFrame.contentWindow.postMessage({
+                            type: 'iframeVisible',
+                            visible: true
+                        }, '*');
+                    }
+                }, 10);
+        }
+
+        function nextDialog() {
+            // 停止当前播放的语音
+            stopAudio();
+
+
+
+            if (isDialogEnded) {
+                // 对话已结束，执行冒险开始逻辑
+
+                startAdventure();
+                return;
+            }
+
+            currentDialogIndex++;
+
+
+            if (currentDialogIndex < dialogData.length) {
+                const currentDialog = dialogData[currentDialogIndex];
+                const dialogTextElement = document.getElementById('dialogText');
+                const storyImageElement = document.getElementById('storyImage');
+                if (dialogTextElement) {
+                    dialogTextElement.textContent = currentDialog.text;
+                }
+                if (storyImageElement) {
+                    storyImageElement.src = getResourceBySkin(currentDialog.image, game_config.skin);
+                }
+
+                // 更新游戏标题 - 优先使用对话数据中的title
+                const dialogTitle = currentDialog.title;
+                let displayTitle = '';
+                if (dialogTitle && dialogTitle.trim() !== '') {
+                    displayTitle = dialogTitle;
+                } else if (game_config.title) {
+                    displayTitle = game_config.title;
+                }
+
+                if (displayTitle) {
+                    const gameTitleElement = document.getElementById('gameTitle');
+                    if (gameTitleElement) {
+                        gameTitleElement.textContent = displayTitle + '：';
+                        gameTitleElement.style.display = 'block';
+                        // 当displayTitle是"我"时，设置字体颜色为黄色
+                        if (displayTitle === '（我）') {
+                            gameTitleElement.style.color = '#FFD700';
+                        } else {
+                            gameTitleElement.style.color = 'rgba(255, 255, 255, 0.95)';
+                        }
+                    }
+                }
+                updateVirtualButtons();
+                // 自动播放新对话内容
+                setTimeout(() => {
+                    playAudio();
+                }, 300);
+
+            } else {
+                // 对话结束，直接开始冒险
+
+                startAdventure();
+                return;
+            }
+        }
+
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    try {
+                        // 如果是字符串，先解析JSON
+                        let rawConfig = JSON.parse(e.data.data);
+                        //console.log('游戏配置已接收，原始数据:', rawConfig);
+                        if (rawConfig.id && dialogTypes[rawConfig.id]) {
+                            game_config = dialogTypes[rawConfig.id];
+                            game_config.skin = rawConfig.skin;
+                            game_config.id = rawConfig.id;
+                            game_config.from = rawConfig.from;
+                        }else{
+                            game_config = {}
+                        }
+
+                    } catch (error) {
+                        console.error('解析游戏配置失败:', error);
+                        // 如果解析失败，尝试直接使用原始数据
+                        game_config = e.data.data || {};
+                    }
+                    // 视频配置将在startAdventure函数中处理，这里不提前设置
+                    //console.log('游戏配置已接收，视频URL将在startAdventure中处理');
+
+                    // 显示故事图片容器和对话容器
+                    const storyImageContainer = document.querySelector('.story-image-container');
+                    const dialogContainer = document.querySelector('.dialog-container');
+                    if (storyImageContainer) {
+                        storyImageContainer.style.display = 'flex';
+                    }
+                    if (dialogContainer) {
+                        dialogContainer.style.display = 'flex';
+                    }
+
+                    if (game_config.dialogData) {
+                        dialogData = game_config.dialogData;
+                        // 重置对话索引和对话结束状态
+                        currentDialogIndex = 0;
+                        isDialogEnded = false;
+                        // 更新当前显示的对话
+                        if (dialogData.length > 0) {
+                            const dialogTextElement = document.getElementById('dialogText');
+                            const storyImageElement = document.getElementById('storyImage');
+                            if (dialogTextElement) {
+                                dialogTextElement.textContent = dialogData[0].text;
+                            }
+                            if (storyImageElement) {
+                                storyImageElement.src = getResourceBySkin(dialogData[0].image, game_config.skin);
+                            }
+
+                            // 更新游戏标题 - 优先使用对话数据中的title
+                            const dialogTitle = dialogData[0].title;
+                            let displayTitle = '';
+                            if (dialogTitle && dialogTitle.trim() !== '') {
+                                displayTitle = dialogTitle;
+                            } else if (game_config.title) {
+                                displayTitle = game_config.title;
+                            }
+
+                            if (displayTitle) {
+                                const gameTitleElement = document.getElementById('gameTitle');
+                                if (gameTitleElement) {
+                                    gameTitleElement.textContent = displayTitle + '：';
+                                    gameTitleElement.style.display = 'block';
+                                    // 当displayTitle是"我"时，设置字体颜色为黄色
+                                    if (displayTitle === '（我）') {
+                                        gameTitleElement.style.color = '#FFD700';
+                                    } else {
+                                        gameTitleElement.style.color = 'rgba(255, 255, 255, 0.95)';
+                                    }
+                                }
+                            }
+                            // 自动播放新对话内容
+                            setTimeout(() => {
+                                playAudio();
+                            }, 500);
+                        }
+                        // 更新虚拟按钮状态
+                        updateVirtualButtons();
+
+                    }
+                    if (game_config.title) {
+                        gameTitle = game_config.title;
+                        // 显示游戏标题并更新内容 - 优先使用对话数据中的title
+                        let displayTitle = '';
+                        if (dialogData.length > 0 && dialogData[currentDialogIndex]) {
+                            const dialogTitle = dialogData[currentDialogIndex].title;
+                            if (dialogTitle && dialogTitle.trim() !== '') {
+                                displayTitle = dialogTitle;
+                            } else {
+                                displayTitle = gameTitle;
+                            }
+                        } else {
+                            displayTitle = gameTitle;
+                        }
+
+                        const gameTitleElement = document.getElementById('gameTitle');
+                        if (gameTitleElement) {
+                            gameTitleElement.textContent = displayTitle + '：';
+                            gameTitleElement.style.display = 'block';
+                            // 当displayTitle是"我"时，设置字体颜色为黄色
+                            if (displayTitle === '（我）') {
+                                gameTitleElement.style.color = '#FFD700';
+                            } else {
+                                gameTitleElement.style.color = 'rgba(255, 255, 255, 0.95)';
+                            }
+                        }
+                    }
+                    // URL配置将在startAdventure函数中处理，这里不提前设置和预加载
+                    //console.log('游戏配置已接收，URL将在startAdventure中处理');
+                    break;
+                case 'selectDragonType':
+                    // 处理来自select_egg_guide页面的龙类型选择消息
+                    if (e.data.data && e.data.data.dragonType) {
+                        // 将消息转发给父窗口
+                        window.parent.postMessage({
+                            type: 'selectDragonType',
+                            data: e.data.data
+                        }, '*');
+
+                        // 如果需要关闭窗口，隐藏iframe
+                        if (e.data.data.closeWindow) {
+                            const iframeContent = document.getElementById('iframeContent');
+                            const dialogBox = document.getElementById('dialogBox');
+                            if (iframeContent) {
+                                iframeContent.classList.add('hidden');
+                            }
+                            if (dialogBox) {
+                                dialogBox.classList.remove('hidden');
+                            }
+
+                            // 如果当前正在执行steps，继续执行下一步
+                            if (currentSteps && currentStepIndex >= 0 && currentStepIndex < currentSteps.length - 1) {
+                                //console.log('URL步骤完成，继续执行下一步');
+                                executeSteps(currentSteps, currentStepIndex + 1);
+                            }
+                        }
+                    }
+                    break;
+                case 'videoEnded':
+                    // 处理视频播放结束消息
+                    if (e.data.data && e.data.data.closeWindow) {
+                        //console.log('收到视频播放结束消息，移除视频播放器');
+                        // 移除视频播放器
+                        removeVideoPlayer();
+
+                        // 将消息转发给父窗口
+                        window.parent.postMessage({
+                            type: 'videoEnded',
+                            data: e.data.data
+                        }, '*');
+                    }
+                    break;
+            }
+        });
+
+        function skipDialog() {
+            if (isDialogEnded) return;
+
+            // 跳转到最后一个对话
+            currentDialogIndex = dialogData.length - 1;
+            const currentDialog = dialogData[currentDialogIndex];
+            const dialogTextElement = document.getElementById('dialogText');
+            const storyImageElement = document.getElementById('storyImage');
+            if (dialogTextElement) {
+                dialogTextElement.textContent = currentDialog.text;
+            }
+            if (storyImageElement) {
+                storyImageElement.src = getResourceBySkin(currentDialog.image, game_config.skin);
+            }
+
+            // 更新游戏标题 - 优先使用对话数据中的title
+            const dialogTitle = currentDialog.title;
+            let displayTitle = '';
+            if (dialogTitle && dialogTitle.trim() !== '') {
+                displayTitle = dialogTitle;
+            } else if (game_config.title) {
+                displayTitle = game_config.title;
+            }
+
+            if (displayTitle) {
+                const gameTitleElement = document.getElementById('gameTitle');
+                if (gameTitleElement) {
+                    gameTitleElement.textContent = displayTitle + '：';
+                    gameTitleElement.style.display = 'block';
+                    // 当displayTitle是"我"时，设置字体颜色为黄色
+                    if (displayTitle === '（我）') {
+                        gameTitleElement.style.color = '#FFD700';
+                    } else {
+                        gameTitleElement.style.color = 'rgba(255, 255, 255, 0.95)';
+                    }
+                }
+            }
+            updateVirtualButtons();
+        }
+
+        function previousDialog() {
+            if (currentDialogIndex > 0) {
+                currentDialogIndex--;
+                const dialogText = document.getElementById('dialogText');
+                const storyImage = document.getElementById('storyImage');
+
+                if (dialogText) {
+                    dialogText.textContent = dialogData[currentDialogIndex].text;
+                }
+                if (storyImage) {
+                    storyImage.src = getResourceBySkin(dialogData[currentDialogIndex].image, game_config.skin);
+                }
+
+                // 更新游戏标题 - 优先使用对话数据中的title
+                const currentDialog = dialogData[currentDialogIndex];
+                const dialogTitle = currentDialog.title;
+                let displayTitle = '';
+                if (dialogTitle && dialogTitle.trim() !== '') {
+                    displayTitle = dialogTitle;
+                } else if (game_config.title) {
+                    displayTitle = game_config.title;
+                }
+
+                if (displayTitle) {
+                    const gameTitleElement = document.getElementById('gameTitle');
+                    if (gameTitleElement) {
+                        gameTitleElement.textContent = displayTitle + '：';
+                        gameTitleElement.style.display = 'block';
+                        // 当displayTitle是"我"时，设置字体颜色为黄色
+                        if (displayTitle === '（我）') {
+                            gameTitleElement.style.color = '#FFD700';
+                        } else {
+                            gameTitleElement.style.color = 'rgba(255, 255, 255, 0.95)';
+                        }
+                    }
+                }
+
+                updateVirtualButtons();
+
+                // 停止当前播放的语音
+                stopAudio();
+            }
+        }
+
+        function updateVirtualButtons() {
+            const skipBtn = document.getElementById('virtualSkip');
+            if (currentDialogIndex >= dialogData.length - 1) {
+                skipBtn.classList.add('disabled');
+            } else {
+                skipBtn.classList.remove('disabled');
+            }
+        }
+
+        function toggleAudio() {
+            if (isPlaying) {
+                stopAudio();
+            } else {
+                playAudio();
+            }
+        }
+
+        // 检测是否为移动设备
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                   (navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
+        }
+
+        function playAudio() {
+            // 停止之前的音频
+            stopAudio();
+
+            // 获取当前对话的mp3字段
+            const currentDialog = dialogData[currentDialogIndex];
+            if (!currentDialog) {
+                console.log('当前对话不存在');
+                return;
+            }
+            
+            // 如果有mp3音频，使用mp3播放
+            if (currentDialog.mp3) {
+                playMp3Audio(currentDialog);
+            } else if (currentDialog.text) {
+                // 如果没有mp3音频但有文本，使用SDK播放语音
+                console.log('当前对话没有mp3音频，使用SDK播放语音');
+                playTextToSpeechSDK(currentDialog.text);
+            } else {
+                console.log('当前对话没有音频和文本');
+                return;
+            }
+        }
+        
+        function playMp3Audio(currentDialog) {
+
+            // 创建音频对象
+            currentAudio = new Audio(getResourceBySkin(currentDialog.mp3, game_config.skin));
+
+            // 设置最大音量
+            currentAudio.volume = 1.0;
+
+            // 设置音频事件监听
+            currentAudio.onloadstart = function() {
+                isPlaying = true;
+                const audioButton = document.getElementById('audioButton');
+                if (audioButton) {
+                    audioButton.classList.add('playing');
+                    audioButton.innerHTML = '⏸️';
+                }
+            };
+
+            currentAudio.onended = function() {
+                isPlaying = false;
+                const audioButton = document.getElementById('audioButton');
+                if (audioButton) {
+                    audioButton.classList.remove('playing');
+                    audioButton.innerHTML = '🔊';
+                }
+                currentAudio = null;
+            };
+
+            currentAudio.onerror = function(event) {
+                console.error('音频播放错误:', event);
+                isPlaying = false;
+                const audioButton = document.getElementById('audioButton');
+                if (audioButton) {
+                    audioButton.classList.remove('playing');
+                    audioButton.innerHTML = '🔊';
+                }
+                currentAudio = null;
+            };
+
+            // 播放音频
+            currentAudio.play().catch(error => {
+                console.error('音频播放失败:', error);
+                isPlaying = false;
+                const audioButton = document.getElementById('audioButton');
+                if (audioButton) {
+                    audioButton.classList.remove('playing');
+                    audioButton.innerHTML = '🔊';
+                }
+                currentAudio = null;
+             });
+
+        }
+
+        function stopAudio() {
+            // 停止mp3音频播放
+            if (currentAudio && isPlaying) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                isPlaying = false;
+                const audioButton = document.getElementById('audioButton');
+                if (audioButton) {
+                    audioButton.classList.remove('playing');
+                    audioButton.innerHTML = '🔊';
+                }
+                currentAudio = null;
+            }
+
+            // 兼容性：同时停止语音合成（如果有的话）
+            if (currentSpeech && speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+                currentSpeech = null;
+            }
+        }
+        
+        // 使用SDK播放文本语音
+        async function playTextToSpeechSDK(text) {
+            // 清理文本中的表情符号
+            text = text.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
+            
+            // 检查SDK是否初始化
+            if (!sdkInitialized || !sdk) {
+                console.warn('KeepworkSDK 未初始化，尝试重新初始化...');
+                initKeepworkSDK();
+                if (!sdkInitialized) {
+                    console.warn('KeepworkSDK 不可用，使用Web Speech API降级方案');
+                    playTextToSpeechFallback(text);
+                    return;
+                }
+            }
+            
+            try {
+                // 设置播放状态
+                isPlaying = true;
+                const audioButton = document.getElementById('audioButton');
+                if (audioButton) {
+                    audioButton.classList.add('playing');
+                    audioButton.innerHTML = '⏸️';
+                }
+                
+                let audio_url;
+                
+                // 检查缓存中是否已有该文本的音频URL
+                if (audioCache.has(text)) {
+                    audio_url = audioCache.get(text);
+                    console.log('使用缓存的音频URL');
+                } else {
+                    // 从SDK获取新的音频URL
+                    const result = await sdk.speech.textToAudio(text, {
+                        gender: game_config?.character?.gender,
+                        age: game_config?.character?.age,
+                    });
+                    
+                    if (result && result.data) {
+                        audio_url = result.data;
+                        // 缓存音频URL
+                        audioCache.set(text, audio_url);
+                        console.log('缓存新的音频URL');
+                    } else {
+                        throw new Error('无法获取音频URL');
+                    }
+                }
+                
+                if (audio_url) {
+                    // 创建音频元素
+                    currentAudio = new Audio(audio_url);
+                    
+                    // 确保音频不循环播放
+                    currentAudio.loop = false;
+                    
+                    // 音频播放完成事件
+                    currentAudio.addEventListener('ended', () => {
+                        console.log('SDK音频播放完成');
+                        isPlaying = false;
+                        const audioButton = document.getElementById('audioButton');
+                        if (audioButton) {
+                            audioButton.classList.remove('playing');
+                            audioButton.innerHTML = '🔊';
+                        }
+                        currentAudio = null;
+                    });
+                    
+                    // 音频出错事件
+                    currentAudio.addEventListener('error', (e) => {
+                        console.error('SDK音频播放出错:', e);
+                        isPlaying = false;
+                        const audioButton = document.getElementById('audioButton');
+                        if (audioButton) {
+                            audioButton.classList.remove('playing');
+                            audioButton.innerHTML = '🔊';
+                        }
+                        currentAudio = null;
+                    });
+                    
+                    // 音频加载完成后开始播放
+                    currentAudio.addEventListener('canplay', () => {
+                        if (currentAudio && isPlaying) {
+                            currentAudio.play().catch((error) => {
+                                console.error('SDK音频播放失败:', error);
+                                isPlaying = false;
+                                const audioButton = document.getElementById('audioButton');
+                                if (audioButton) {
+                                    audioButton.classList.remove('playing');
+                                    audioButton.innerHTML = '🔊';
+                                }
+                                currentAudio = null;
+                            });
+                        }
+                    });
+                    
+                    // 加载音频
+                    currentAudio.load();
+                }
+            } catch (error) {
+                console.error('SDK语音播放失败:', error);
+                isPlaying = false;
+                const audioButton = document.getElementById('audioButton');
+                if (audioButton) {
+                    audioButton.classList.remove('playing');
+                    audioButton.innerHTML = '🔊';
+                }
+                currentAudio = null;
+                // 降级到Web Speech API
+                playTextToSpeechFallback(text);
+            }
+        }
+        
+        // Web Speech API 降级方案
+        function playTextToSpeechFallback(text) {
+            try {
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 0.8;
+                    
+                    // 设置播放状态
+                    isPlaying = true;
+                    const audioButton = document.getElementById('audioButton');
+                    if (audioButton) {
+                        audioButton.classList.add('playing');
+                        audioButton.innerHTML = '⏸️';
+                    }
+                    
+                    utterance.onend = function() {
+                        isPlaying = false;
+                        const audioButton = document.getElementById('audioButton');
+                        if (audioButton) {
+                            audioButton.classList.remove('playing');
+                            audioButton.innerHTML = '🔊';
+                        }
+                        currentSpeech = null;
+                    };
+                    
+                    utterance.onerror = function(event) {
+                        console.error('语音合成错误:', event);
+                        isPlaying = false;
+                        const audioButton = document.getElementById('audioButton');
+                        if (audioButton) {
+                            audioButton.classList.remove('playing');
+                            audioButton.innerHTML = '🔊';
+                        }
+                        currentSpeech = null;
+                    };
+                    
+                    currentSpeech = utterance;
+                    speechSynthesis.speak(utterance);
+                } else {
+                    console.error('浏览器不支持语音合成');
+                }
+            } catch (error) {
+                console.error('降级语音播放失败:', error);
+            }
+        }
+
+        // 触控事件处理
+        function addTouchSupport() {
+            const dialogButton = document.getElementById('dialogButton');
+            const audioButton = document.getElementById('audioButton');
+            const virtualButtons = document.querySelectorAll('.virtual-btn');
+
+            // 为主按钮添加触控支持
+            dialogButton.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                this.style.transform = 'translateY(-1px) scale(0.98)';
+            });
+
+            dialogButton.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                this.style.transform = '';
+                nextDialog();
+            });
+
+            // 为语音按钮添加触控支持
+            audioButton.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                this.style.transform = 'translateY(-1px) scale(0.95)';
+            });
+
+            audioButton.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                this.style.transform = '';
+                toggleAudio();
+            });
+
+            // 为虚拟按钮添加触控支持
+            virtualButtons.forEach(btn => {
+                btn.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    if (!this.classList.contains('disabled')) {
+                        this.style.transform = 'scale(0.95)';
+                    }
+                });
+
+                btn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    this.style.transform = '';
+                    if (!this.classList.contains('disabled')) {
+                        this.click();
+                    }
+                });
+            });
+        }
+
+        // 键盘事件处理
+        function addKeyboardSupport() {
+            document.addEventListener('keydown', function(e) {
+                switch(e.key) {
+                    case 'Enter':
+                    case ' ':
+                        e.preventDefault();
+                        nextDialog();
+                        break;
+                    case 'Escape':
+                        e.preventDefault();
+                        skipDialog();
+                        break;
+                }
+            });
+        }
+
+        // 预加载视频播放器
+        // 显示视频播放器
+        function showVideoPlayer() {
+            const video = document.getElementById('videoPlayer');
+
+            if (!video) {
+                console.error('视频元素不存在');
+                return false;
+            }
+
+            // 检查是否有视频URL
+            const videoUrl = game_config && game_config.videoUrl ? game_config.videoUrl : '';
+
+            if (!videoUrl || videoUrl.trim() === '') {
+                //console.log('没有视频URL，无法播放');
+                return false;
+            }
+
+            //console.log('显示视频播放器，URL:', videoUrl);
+
+            // 设置视频源
+            video.src = videoUrl;
+
+            // 隐藏对话框
+            const dialogBox = document.getElementById('dialogBox');
+            if (dialogBox) {
+                dialogBox.style.display = 'none';
+            }
+
+            // 显示视频
+            video.style.display = 'block';
+            video.style.position = 'fixed';
+            video.style.top = '0';
+            video.style.left = '0';
+            video.style.width = '100vw';
+            video.style.height = '100vh';
+            video.style.objectFit = 'contain';
+            video.style.background = '#000';
+            video.style.zIndex = '10000';
+            video.controls = true;
+
+            // 添加键盘事件监听
+            const handleKeyPress = function(e) {
+                if (e.key === 'Escape') {
+                    hideVideoPlayer();
+                }
+            };
+
+            document.addEventListener('keydown', handleKeyPress);
+            video.handleKeyPress = handleKeyPress;
+
+            // 视频事件监听
+            video.addEventListener('ended', function() {
+                //console.log('视频播放结束');
+                hideVideoPlayer();
+            });
+
+            // 播放视频
+            video.currentTime = 0;
+            video.play().catch(function(error) {
+                console.error('视频播放失败:', error);
+            });
+
+            return true;
+        }
+
+        // 隐藏视频播放器
+        function hideVideoPlayer() {
+            // console.log('hideVideoPlayer函数被调用');
+            const video = document.getElementById('videoPlayer');
+
+            if (video) {
+                //console.log('隐藏视频播放器');
+
+                // 移除键盘事件监听
+                if (video.handleKeyPress) {
+                    document.removeEventListener('keydown', video.handleKeyPress);
+                }
+
+                // 暂停视频
+                video.pause();
+
+                // 隐藏视频
+                video.style.display = 'none';
+                video.style.position = '';
+                video.style.top = '';
+                video.style.left = '';
+                video.style.width = '';
+                video.style.height = '';
+                video.style.objectFit = '';
+                video.style.background = '';
+                video.style.zIndex = '';
+                video.controls = false;
+
+                // 不再显示对话框，因为story-image-container和dialog-container应该保持隐藏状态
+            }
+
+            // 检查是否为steps中的最后一个视频步骤
+            let isLastVideoStep = false;
+            if (currentSteps && currentStepIndex >= 0) {
+                // 查找当前步骤之后是否还有视频步骤
+                let hasMoreVideoSteps = false;
+                for (let i = currentStepIndex + 1; i < currentSteps.length; i++) {
+                    if (currentSteps[i].video && currentSteps[i].video !== "") {
+                        hasMoreVideoSteps = true;
+                        break;
+                    }
+                }
+                isLastVideoStep = !hasMoreVideoSteps;
+                //console.log('当前步骤索引:', currentStepIndex, '总步骤数:', currentSteps.length, '是否为最后一个视频步骤:', isLastVideoStep);
+            } else {
+                // 如果不在steps执行流程中，则认为是最后一个视频步骤
+                isLastVideoStep = true;
+                //console.log('不在steps执行流程中，默认为最后一个视频步骤');
+            }
+
+            // 只有在最后一个视频步骤时才发送postMessage
+            if (isLastVideoStep) {
+                //console.log('准备发送postMessage, game_config:', game_config);
+                try {
+                    window.parent.postMessage({
+                        type: 'videoEnded',
+                        data: {
+                            closeWindow: true,
+                            id : game_config ? game_config.id : 'unknown',
+                            from:game_config?game_config.from:'unknown',
+                        }
+                    }, '*');
+                    //console.log('postMessage已发送');
+                } catch (error) {
+                    console.error('发送postMessage时出错:', error);
+                }
+            } else {
+                //console.log('不是最后一个视频步骤，跳过发送postMessage');
+            }
+        }
+
+        // 立即执行初始化
+        function initializePage() {
+            // 添加触控和键盘支持
+            addTouchSupport();
+            addKeyboardSupport();
+
+            // 初始化语音系统
+            initVoices();
+
+            // 初始化虚拟按钮状态
+            updateVirtualButtons();
+
+            // 检查并显示游戏标题 - 优先使用对话数据中的title
+            let displayTitle = '';
+            if (dialogData.length > 0 && dialogData[currentDialogIndex]) {
+                const dialogTitle = dialogData[currentDialogIndex].title;
+                if (dialogTitle && dialogTitle.trim() !== '') {
+                    displayTitle = dialogTitle;
+                } else if (gameTitle) {
+                    displayTitle = gameTitle;
+                }
+            } else if (gameTitle) {
+                displayTitle = gameTitle;
+            }
+
+            if (displayTitle) {
+                const gameTitleElement = document.getElementById('gameTitle');
+                if (gameTitleElement) {
+                    gameTitleElement.textContent = displayTitle + '：';
+                    gameTitleElement.style.display = 'block';
+                    // 当displayTitle是"我"时，设置字体颜色为黄色
+                    if (displayTitle === '（我）') {
+                        gameTitleElement.style.color = '#FFD700';
+                    } else {
+                        gameTitleElement.style.color = 'rgba(255, 255, 255, 0.95)';
+                    }
+                }
+            }
+
+            // 检测设备类型并优化显示
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobile) {
+                const virtualControls = document.getElementById('virtualControls');
+                if (virtualControls) {
+                    virtualControls.style.display = 'flex';
+                }
+
+                // 移动端特殊处理：添加用户交互提示
+                 if (isMobileDevice()) {
+                     let firstInteraction = true;
+                     document.addEventListener('touchstart', function() {
+                         if (firstInteraction) {
+                             firstInteraction = false;
+                             // 激活语音合成
+                             if ('speechSynthesis' in window) {
+                                 const testUtterance = new SpeechSynthesisUtterance('');
+                                 speechSynthesis.speak(testUtterance);
+                                 window.speechSynthesisActivated = true;
+                             }
+                         }
+                     }, { once: false });
+                 }
+            }
+
+            // 防止页面缩放
+            document.addEventListener('gesturestart', function(e) {
+                e.preventDefault();
+            });
+
+            document.addEventListener('gesturechange', function(e) {
+                e.preventDefault();
+            });
+
+            document.addEventListener('gestureend', function(e) {
+                e.preventDefault();
+            });
+        }
+
+        // 页面可见时也尝试初始化语音（处理某些浏览器的延迟加载）
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && !voicesLoaded) {
+                setTimeout(initVoices, 100);
+            }
+        });
+
+        // 立即执行页面初始化
+        initializePage();
+        
+        // 初始化KeepworkSDK
+        initKeepworkSDK();
+
+        setTimeout(() => {
+            gameLoaded = true;
+            window.parent.postMessage({ type: 'gameLoaded',data: {
+                gameName: 'dialog'
+            } }, '*');
+        }, 10);
+    </script>
+
+</body>
+</html>
