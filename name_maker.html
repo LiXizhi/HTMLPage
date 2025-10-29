@@ -1,0 +1,240 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D作品命名器</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+        .word-btn {
+            transition: all 0.3s ease;
+            height: fit-content;
+        }
+        .word-btn:hover {
+            transform: translateY(-2px);
+        }
+        .word-btn.selected {
+            animation: pulse 0.3s ease;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 120px));
+            grid-auto-rows: min-content;
+            gap: 0.5rem 0.5rem;
+            row-gap: 0.25rem;
+            height: calc(100vh - 180px);
+            overflow-y: auto;
+            padding: 1rem;
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            justify-content: start;
+            align-items: start;
+        }
+        @media (max-width: 1024px) {
+            .categories-grid {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 120px));
+            }
+        }
+        @media (max-width: 640px) {
+            .categories-grid {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 100px));
+            }
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-full mx-auto px-4">
+        <!-- 标题和结果显示区 -->
+        <div class="bg-white rounded-lg shadow-2xl p-6 mb-6">
+            <div class="flex items-center justify-between gap-3">
+                <div id="result" class="flex-1 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4 flex items-center justify-center">
+                    <span class="text-2xl font-bold text-gray-400">请开始选择词语...</span>
+                </div>
+                <span class="text-sm text-gray-500 whitespace-nowrap">已选 <span id="count" class="font-bold text-purple-600">0</span>/5</span>
+                <button onclick="clearSelection()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap">
+                    清除
+                </button>
+                <button onclick="copyName()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap">
+                    复制名称
+                </button>
+            </div>
+        </div>
+
+        <!-- 词语分类选择区 -->
+        <div id="categoriesContainer" class="categories-grid">
+            <!-- 动态生成的词语按钮将在这里显示 -->
+        </div>
+    </div>
+
+    <script>
+        // 词语配置
+        const wordsConfig = [
+            {
+                title: '人物',
+                icon: '👤',
+                color: 'indigo',
+                words: ['我', '爸爸', '妈妈', '爷爷', '奶奶', '哥哥', '姐姐', '弟弟', '妹妹', '老师', '同学', '朋友', '小伙伴', '队友', '兄弟', '姐妹', '家人', '宝宝', '孩子', '玩家']
+            },
+            {
+                title: '形容词',
+                icon: '✨',
+                color: 'purple',
+                words: ['神秘', '巨大', '未来', '赛博', '梦幻', '黑暗', '光明', '迷你', '史诗', '奇幻', '魔法', '极限', '无尽', '失落', '古老', '神圣', '邪恶', '传奇', '隐藏', '禁忌', '永恒', '遗忘', '炫酷', '疯狂', '超级', '终极', '完美', '危险']
+            },
+            {
+                title: '连接词',
+                icon: '🔗',
+                color: 'blue',
+                words: ['的', '之', '与', '和', '在', '中']
+            },
+            {
+                title: '动作类',
+                icon: '⚡',
+                color: 'green',
+                words: ['跑酷', '冒险', '探索', '战斗', '建造', '解谜', '竞速', '飞行', '生存', '狩猎', '收集', '逃脱', '挑战', '闯关', '射击', '跳跃', '攀爬', '驾驶', '寻宝', '打怪', '升级', '对战', '竞技', '守卫']
+            },
+            {
+                title: '名词',
+                icon: '🏰',
+                color: 'orange',
+                words: ['家园', '世界', '城市', '迷宫', '森林', '海洋', '太空', '王国', '遗迹', '塔', '地牢', '天堂', '战场', '秘境', '传说', '维度', '岛屿', '宇宙', '旅程', '山脉', '城堡', '基地', '神殿', '废墟', '乐园', '星球', '大陆', '帝国', '领地', '据点', '营地', '村庄', '洞穴', '峡谷', '沙漠', '雪域', '火山', '深渊', '天空', '地下']
+            },
+            {
+                title: '特色词',
+                icon: '💎',
+                color: 'pink',
+                words: ['守护者', '英雄', '勇士', '建筑', '机器', '机甲', '龙', '怪兽', '精灵', '骑士', '参赛作品', '战士', '法师', '刺客', '猎人', '坦克', '射手', '萌宠', 'boss', '恶魔', '天使', '巨人', '幽灵']
+            }
+        ];
+
+        let selectedWords = [];
+        const maxWords = 5;
+
+        // 动态生成分类UI
+        function generateCategories() {
+            const container = document.getElementById('categoriesContainer');
+            
+            wordsConfig.forEach(category => {
+                const color = category.color;
+                const title = category.title;
+                const icon = category.icon;
+                
+                // 添加分类标题
+                const titleDiv = document.createElement('div');
+                titleDiv.className = `flex items-center justify-center text-${color}-600 font-bold py-2`;
+                titleDiv.innerHTML = `<span class="mr-2">${icon}</span>${title}`;
+                container.appendChild(titleDiv);
+                
+                // 添加该分类的所有词语按钮
+                category.words.forEach(word => {
+                    const button = document.createElement('button');
+                    button.className = `word-btn bg-${color}-100 hover:bg-${color}-200 text-${color}-800 font-semibold py-2 px-4 rounded-full`;
+                    button.textContent = word;
+                    button.onclick = () => selectWord(button, word);
+                    container.appendChild(button);
+                });
+            });
+        }
+
+        function selectWord(button, word) {
+            const index = selectedWords.indexOf(word);
+            
+            if (index > -1) {
+                // 取消选择
+                selectedWords.splice(index, 1);
+                button.classList.remove('selected');
+                button.style.opacity = '1';
+                button.style.transform = 'scale(1)';
+            } else {
+                // 添加选择
+                if (selectedWords.length >= maxWords) {
+                    showToast('最多只能选择5个词语！');
+                    return;
+                }
+                selectedWords.push(word);
+                button.classList.add('selected');
+                button.style.opacity = '0.6';
+                button.style.transform = 'scale(0.95)';
+            }
+            
+            updateResult();
+        }
+
+        function updateResult() {
+            const resultDiv = document.getElementById('result');
+            const countSpan = document.getElementById('count');
+            
+            countSpan.textContent = selectedWords.length;
+            
+            if (selectedWords.length === 0) {
+                resultDiv.innerHTML = '<span class="text-2xl font-bold text-gray-400">请开始选择词语...</span>';
+            } else {
+                const name = selectedWords.join('');
+                resultDiv.innerHTML = `<span class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">${name}</span>`;
+            }
+        }
+
+        function clearSelection() {
+            if (selectedWords.length === 0) {
+                showToast('没有可清除的词语');
+                return;
+            }
+            
+            // 获取最后选择的词语
+            const lastWord = selectedWords.pop();
+            
+            // 找到对应的按钮并取消选中状态
+            document.querySelectorAll('.word-btn').forEach(btn => {
+                if (btn.textContent === lastWord && btn.classList.contains('selected')) {
+                    btn.classList.remove('selected');
+                    btn.style.opacity = '1';
+                    btn.style.transform = 'scale(1)';
+                }
+            });
+            
+            updateResult();
+            showToast('已清除：' + lastWord);
+        }
+
+        function copyName() {
+            if (selectedWords.length === 0) {
+                showToast('请先选择词语！');
+                return;
+            }
+            
+            const name = selectedWords.join('');
+            navigator.clipboard.writeText(name).then(() => {
+                showToast('✓ 已复制：' + name);
+            }).catch(() => {
+                showToast('复制失败，请手动复制');
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
+        }
+
+        // 初始化：生成所有分类
+        generateCategories();
+    </script>
+</body>
+</html>
