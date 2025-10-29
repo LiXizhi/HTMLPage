@@ -50,7 +50,13 @@
       <div id="playerSection" class="hidden mb-6">
         <div class="bg-white rounded-lg shadow-lg p-4">
           <div class="flex justify-between items-center mb-4">
-            <h2 id="currentVideoTitle" class="text-xl font-bold text-gray-800"></h2>
+            <div>
+              <h2 id="currentVideoTitle" class="text-xl font-bold text-gray-800"></h2>
+              <div id="watchProgress" class="text-sm text-gray-600 mt-1">
+                <span id="watchTimeText">观看进度: 0秒 / 60秒</span>
+                <span id="watchCompleteIcon" class="hidden ml-2 text-green-600">✅ 已完成</span>
+              </div>
+            </div>
             <button onclick="closePlayer()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">关闭播放器</button>
           </div>
           <div class="flex justify-center">
@@ -238,6 +244,13 @@
       let allVideos = [];
       let markdownConfig = "";
       let dataLoaded = false;
+      
+      // 视频观看时间跟踪
+      let currentVideoIndex = -1;
+      let videoStartTime = null;
+      let videoTimeAccumulated = 0;
+      const REQUIRED_WATCH_TIME = 60; // 必须观看60秒才算完成
+      let progressUpdateInterval = null;
 
       // Load user data from personal page store
       async function loadUserData() {
@@ -1180,6 +1193,26 @@ https://keepwork.com/official/tips/s1/1_235
         });
       }
 
+      // 更新观看进度显示
+      function updateWatchProgress() {
+        if (currentVideoIndex === -1 || videoStartTime === null) return;
+        
+        const currentTime = Date.now();
+        const sessionTime = Math.floor((currentTime - videoStartTime) / 1000);
+        const totalTime = videoTimeAccumulated + sessionTime;
+        
+        const watchTimeText = document.getElementById('watchTimeText');
+        const watchCompleteIcon = document.getElementById('watchCompleteIcon');
+        
+        if (totalTime >= REQUIRED_WATCH_TIME) {
+          watchTimeText.textContent = `观看进度: ${REQUIRED_WATCH_TIME}秒 / ${REQUIRED_WATCH_TIME}秒`;
+          watchCompleteIcon.classList.remove('hidden');
+        } else {
+          watchTimeText.textContent = `观看进度: ${totalTime}秒 / ${REQUIRED_WATCH_TIME}秒`;
+          watchCompleteIcon.classList.add('hidden');
+        }
+      }
+      
       // 播放视频
       async function playVideo(index) {
         const video = allVideos[index];
@@ -1189,8 +1222,10 @@ https://keepwork.com/official/tips/s1/1_235
           return;
         }
 
-        // 标记为已观看
-        await markAsWatched(index);
+        // 如果切换到新视频，保存之前视频的观看时间
+        if (currentVideoIndex !== -1 && currentVideoIndex !== index) {
+          await checkAndMarkWatched(currentVideoIndex);
+        }
 
         // 处理视频URL，添加?layout=none参数
         let videoUrl = video.url;
@@ -1204,7 +1239,19 @@ https://keepwork.com/official/tips/s1/1_235
         document.getElementById("currentVideoTitle").textContent = video.name;
         document.getElementById("videoPlayer").src = videoUrl;
 
-        // 重新渲染列表以更新已观看状态
+        // 初始化新视频的观看时间跟踪
+        currentVideoIndex = index;
+        videoStartTime = Date.now();
+        videoTimeAccumulated = 0;
+
+        // 开始更新进度显示
+        if (progressUpdateInterval) {
+          clearInterval(progressUpdateInterval);
+        }
+        progressUpdateInterval = setInterval(updateWatchProgress, 1000);
+        updateWatchProgress();
+
+        // 重新渲染列表
         renderVideos(allVideos);
 
         // 滚动到播放器
@@ -1212,10 +1259,70 @@ https://keepwork.com/official/tips/s1/1_235
       }
 
       // 关闭播放器
-      function closePlayer() {
+      async function closePlayer() {
+        // 停止进度更新
+        if (progressUpdateInterval) {
+          clearInterval(progressUpdateInterval);
+          progressUpdateInterval = null;
+        }
+        
+        // 保存当前视频的观看时间
+        if (currentVideoIndex !== -1) {
+          await checkAndMarkWatched(currentVideoIndex);
+        }
+        
         document.getElementById("playerSection").classList.add("hidden");
         document.getElementById("videoPlayer").src = "";
+        
+        // 重置观看状态
+        currentVideoIndex = -1;
+        videoStartTime = null;
+        videoTimeAccumulated = 0;
       }
+      
+      // 检查并标记视频为已观看（如果观看时间足够）
+      async function checkAndMarkWatched(index) {
+        if (videoStartTime !== null) {
+          const currentTime = Date.now();
+          const sessionTime = Math.floor((currentTime - videoStartTime) / 1000);
+          videoTimeAccumulated += sessionTime;
+          
+          console.log(`视频 ${index} 本次观看: ${sessionTime}秒, 累计: ${videoTimeAccumulated}秒`);
+          
+          if (videoTimeAccumulated >= REQUIRED_WATCH_TIME) {
+            if (!watchedVideos.includes(index)) {
+              await markAsWatched(index);
+              console.log(`视频 ${index} 已标记为完成（观看时长: ${videoTimeAccumulated}秒）`);
+              
+              // 重新渲染列表以更新已观看状态
+              renderVideos(allVideos);
+            }
+          }
+          
+          // 重置计时器
+          videoStartTime = null;
+        }
+      }
+      
+      // 页面可见性变化处理（用户切换标签页时暂停计时）
+      document.addEventListener('visibilitychange', function() {
+        if (currentVideoIndex !== -1) {
+          if (document.hidden) {
+            // 页面隐藏时，累计当前观看时间
+            if (videoStartTime !== null) {
+              const currentTime = Date.now();
+              const sessionTime = Math.floor((currentTime - videoStartTime) / 1000);
+              videoTimeAccumulated += sessionTime;
+              videoStartTime = null;
+              console.log(`页面隐藏，累计观看时间: ${videoTimeAccumulated}秒`);
+            }
+          } else {
+            // 页面重新可见时，重新开始计时
+            videoStartTime = Date.now();
+            console.log(`页面可见，重新开始计时`);
+          }
+        }
+      });
 
       // 显示激活弹窗
       function showActivationModal() {
