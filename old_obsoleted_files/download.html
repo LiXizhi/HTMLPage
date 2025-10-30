@@ -8,8 +8,9 @@
     <script>
       // Global Configuration - 全局配置
       const GLOBAL_CONFIG = {
-        apkDownloadUrl: "https://cdn.keepwork.com/dist/maseai/maseai-v1.3-7-20250917-1923-release.apk",
+        apkDownloadUrl: "https://cdn.keepwork.com/dist/maseai/maseai-v1.6-10-20251026-1129-master-release.apk",
         webUrl: "https://play.maseai.com",
+        webGameUrl: "https://keepwork.com/public/resource/miniGameProxy.html?projectPath=maisi/maisi/webgames/data&gameName=ms_games_login&ver=11",
         iosAppStoreUrl: "https://apps.apple.com/app/6749035691",
         androidPlayStoreUrl: "https://play.google.com/store/apps/details?id=com.maixi.planet",
       };
@@ -80,7 +81,7 @@
               </div>
             </div>
             <a
-              href="https://cdn.keepwork.com/dist/maseai/maseai-v1.4-8-20250928-1652-release.apk"
+              href=""
               class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center"
               id="apkDownloadButton"
               download
@@ -177,7 +178,7 @@
         const userAgent = navigator.userAgent.toLowerCase();
         const isWeChat = /micromessenger/i.test(userAgent);
         const isIOS = /iphone|ipad|ipod/.test(userAgent);
-        const isAndroid = /android/.test(userAgent);
+        const isAndroid = /android|harmonyos/.test(userAgent);
         const isMobile = /mobile|tablet|phone|pad/.test(userAgent) || isIOS || isAndroid;
         const isPC = !isMobile;
 
@@ -341,7 +342,7 @@
           document.execCommand("copy");
           showCopySuccess();
         } catch (err) {
-          alert("复制失败，请手动复制：" + text);
+          showNotification('复制失败', `请手动复制网址：\n\n${text}`, 'error');
         }
 
         document.body.removeChild(textArea);
@@ -378,23 +379,24 @@
         if (e.target === this) {
           hideQRCode();
         }
-      }); // APK下载函数 - 专门处理移动端下载
-      function downloadAPK() {
+      }); 
+      // APK下载函数 - 专门处理移动端下载
+      function onClickDownloadAPK() {
         const device = detectDevice();
         const apkUrl = GLOBAL_CONFIG.apkDownloadUrl;
 
         // 检测微信浏览器
         if (device.isWeChat) {
-          alert('检测到您正在使用微信浏览器\n\n为了正常下载APK安装包，请：\n1. 点击右上角"..."菜单\n2. 选择"在浏览器中打开"\n3. 然后重新点击下载按钮\n\n或者复制链接到系统浏览器中打开：\n' + apkUrl);
+          showNotification(
+            '检测到微信浏览器', 
+            `为了正常下载APK安装包，请：\n\n1. 点击右上角"..."菜单\n2. 选择"在浏览器中打开"\n3. 然后重新点击下载按钮\n\n或者复制链接到系统浏览器中打开：\n${apkUrl}`, 
+            'warning'
+          );
           return;
         }
 
         // 显示下载开始提示
         showDownloadTip();
-
-        // 对于所有设备，直接使用window.location.href触发下载
-        // 这种方法比创建隐藏链接更可靠
-        window.location.href = apkUrl;
       }
 
       // 显示下载提示
@@ -468,6 +470,54 @@
         }
       }
 
+      // 显示自定义通知替代alert
+      function showNotification(title, message, type = 'info') {
+        const notificationId = 'notification_' + Date.now();
+        const notification = document.createElement('div');
+        notification.id = notificationId;
+        notification.className = `fixed top-4 left-4 right-4 md:left-1/2 md:right-auto md:transform md:-translate-x-1/2 md:max-w-md bg-white border-l-4 rounded-lg shadow-xl z-50 transition-all duration-300 ${
+          type === 'error' ? 'border-red-500' : 
+          type === 'warning' ? 'border-yellow-500' : 
+          'border-blue-500'
+        }`;
+        
+        notification.innerHTML = `
+            <div class="p-4 cursor-pointer" onclick="closeNotification('${notificationId}')">
+            <div class="flex items-start justify-between">
+              <div class="flex items-start space-x-3 flex-1">
+              <div class="text-2xl">
+                ${type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}
+              </div>
+              <div class="flex-1">
+                <div class="font-semibold text-gray-800 mb-2">${title}</div>
+                <div class="text-sm text-gray-600 whitespace-pre-line">${message}</div>
+              </div>
+              </div>
+              <button onclick="event.stopPropagation(); closeNotification('${notificationId}')" 
+              class="text-gray-400 hover:text-gray-600 text-xl leading-none flex-shrink-0 ml-2">
+              ×
+              </button>
+            </div>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+      }
+
+      // 关闭通知
+      function closeNotification(notificationId) {
+        const notification = document.getElementById(notificationId);
+        if (notification) {
+          notification.style.opacity = '0';
+          notification.style.transform = 'translateY(-20px)';
+          setTimeout(() => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification);
+            }
+          }, 300);
+        }
+      }
+
       // 下载处理函数
       function downloadApp(type) {
         const device = detectDevice();
@@ -492,8 +542,7 @@
 
       // 启动网页版函数
       function launchWebVersion() {
-        const webGameUrl = "https://keepwork.com/public/resource/miniGameProxy.html?projectPath=maisi/maisi/webgames/data&gameName=ms_games_login&ver=11";
-        window.open(webGameUrl, "_blank");
+        window.open(GLOBAL_CONFIG.webGameUrl, "_blank");
       }
 
       // 初始化配置
@@ -502,6 +551,18 @@
         const webUrlDisplay = document.getElementById("webUrlDisplay");
         if (webUrlDisplay) {
           webUrlDisplay.textContent = GLOBAL_CONFIG.webUrl;
+        }
+
+        // 设置APK下载链接
+        const apkDownloadButton = document.getElementById("apkDownloadButton");
+        if (apkDownloadButton) {
+          const device = detectDevice();
+          if (!device.isWeChat) {
+            apkDownloadButton.href = GLOBAL_CONFIG.apkDownloadUrl;
+          } else {
+            apkDownloadButton.onclick = onClickDownloadAPK;
+            apkDownloadButton.removeAttribute('href');
+          }
         }
 
         // 为PC平台添加"启动网页版"按钮
