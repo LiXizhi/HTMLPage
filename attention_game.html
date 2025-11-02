@@ -1,0 +1,3085 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三心二意 - 注意力训练游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+
+        .game-container {
+            width: 1280px;
+            height: 720px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+
+        .header {
+            height: 80px;
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .game-area {
+            height: 640px;
+            display: flex;
+        }
+
+        .side {
+            width: 50%;
+            height: 100%;
+            position: relative;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .left-side {
+            background: #f8f9fa;
+            border-right: 3px solid #dee2e6;
+        }
+
+        .right-side {
+            background: #f1f3f4;
+        }
+
+        .instruction-container {
+            margin-bottom: 20px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b6b, #ffa500, #ffff00, #90ee90, #87ceeb);
+            border-radius: 4px;
+            transition: width 0.1s linear;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 20px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+            animation: shimmer 1s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-20px); }
+            100% { transform: translateX(20px); }
+        }
+
+        .instruction {
+            height: 60px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .mini-timer {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            background: rgba(220, 53, 69, 0.8);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .game-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .feedback {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 360px;
+            z-index: 1000;
+            animation: fadeInOut 1s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .success { color: #28a745; }
+        .failure { color: #dc3545; }
+
+        .highlight {
+            color: #007bff;
+            background: rgba(0,123,255,0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        /* 游戏组件样式 */
+        .options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            justify-items: center;
+            align-items: center;
+            margin-top: 30px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .option, .clickable {
+            padding: 25px 35px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 48px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            min-width: 180px;
+            min-height: 120px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            box-shadow: 0 4px 8px rgba(0,123,255,0.2);
+        }
+
+        .option:active, .clickable:active {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,123,255,0.4);
+        }
+
+        .question {
+            font-size: 56px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        /* 迷宫样式 */
+        .maze {
+            display: grid;
+            gap: 2px;
+            margin: 20px auto;
+        }
+
+        .maze-cell {
+            width: 30px;
+            height: 30px;
+            background: #333;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .maze-path {
+            background: #fff !important;
+        }
+
+        .maze-start {
+            background: #28a745 !important;
+        }
+
+        .maze-end {
+            background: #dc3545 !important;
+        }
+
+        .maze-current {
+            background: #ffc107 !important;
+        }
+
+        /* 纸杯游戏样式 */
+        .cups {
+            display: flex;
+            gap: 50px;
+            justify-content: center;
+            align-items: flex-end;
+            margin-top: 40px;
+            height: 180px;
+        }
+
+        .cup-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 150px;
+            height: 180px;
+        }
+
+        .cup {
+            width: 120px;
+            height: 150px;
+            background: linear-gradient(to bottom, #D2B48C 0%, #CD853F 50%, #8B4513 100%);
+            /* 倒扣纸杯形状：上窄下宽 */
+            clip-path: polygon(25% 0%, 75% 0%, 90% 100%, 10% 100%);
+            cursor: pointer;
+            position: relative;
+            transform: translateY(-30px);
+            transition: all 0.3s ease;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .cup:hover {
+            transform: translateY(-35px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+
+        .cup.swapping {
+            z-index: 10;
+        }
+
+        .ball {
+            width: 36px;
+            height: 36px;
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #dc3545);
+            border-radius: 50%;
+            position: absolute;
+            bottom: 0px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* 气泡游戏样式 */
+        .bubble-area {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            overflow: hidden;
+        }
+
+        .bubble {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            cursor: pointer;
+            /* 动画时间将通过JavaScript动态设置 */
+        }
+
+        @keyframes bubbleUp {
+            from { bottom: -60px; }
+            to { bottom: 100%; }
+        }
+
+        /* 多边形样式 */
+        .shapes {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 25px;
+            justify-items: center;
+            align-items: center;
+            margin-top: 30px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .shape {
+            width: 160px;
+            height: 160px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 56px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .shape:active {
+            transform: scale(1.1);
+        }
+
+        .selected {
+            border: 3px solid #ffc107 !important;
+            box-shadow: 0 0 15px rgba(255, 193, 7, 0.6);
+        }
+
+        /* 迷宫样式 */
+        .maze-container {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .maze-cell {
+            background: rgba(248, 249, 250, 0.8);
+            /* 移除边框 */
+        }
+
+        .maze-wall {
+            background: #333 !important;
+        }
+
+        .maze-path-line {
+            pointer-events: none;
+        }
+
+        /* 汉字颜色游戏样式 */
+        .chinese-char {
+            font-size: 36px;
+            font-weight: bold;
+            padding: 20px;
+            margin: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .chinese-char:active {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .start-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 12px 36px;
+            border-radius: 16px;
+            font-weight: bold;
+            font-size: 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .start-btn:hover {
+            background: #0056b3;
+            transform: translate(-50%, -50%) translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+        }
+
+        .start-btn:active {
+            transform: translate(-50%, -50%) translateY(0);
+        }
+
+        /* 规则按钮样式 */
+        .rules-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .rules-button:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+            transform: scale(1.05);
+        }
+
+        .rules-button:active {
+            transform: scale(0.95);
+        }
+
+        /* 积分按钮样式 */
+        .points-button {
+            position: fixed;
+            bottom: 88px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #ffc107;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .points-button:hover {
+            box-shadow: 0 6px 16px rgba(255, 193, 7, 0.4);
+            transform: scale(1.05);
+        }
+
+        .points-button:active {
+            transform: scale(0.95);
+        }
+
+        /* 弹窗遮罩 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 弹窗主体 */
+        .rules-modal {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            max-width: 768px;
+            width: 90%;
+            background: white;
+            border-radius: 16px;
+            padding: 36px;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.show .rules-modal {
+            transform: translateY(0);
+        }
+
+        /* 积分弹窗样式 */
+        .points-modal {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-overlay.show .points-modal {
+            transform: translateY(0);
+        }
+
+        /* 积分弹窗头部 */
+        .points-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 36px;
+            background: rgba(0, 123, 255, 0.1);
+            color: #333;
+        }
+
+        .points-header h2 {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .points-close {
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            color: rgba(51, 51, 51, 0.7);
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            line-height: 1;
+        }
+
+        .points-close:hover {
+            background: rgba(51, 51, 51, 0.1);
+            color: #333;
+        }
+
+        /* 积分弹窗内容 */
+        .points-body {
+            padding: 36px;
+            color: #333;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .points-body::-webkit-scrollbar {
+            display: none;
+        }
+
+        .points-stats {
+            margin-bottom: 32px;
+        }
+
+        .points-stats h3 {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            text-align: center;
+            background: rgba(0, 123, 255, 0.05);
+            border: 1px solid rgba(0, 123, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-card.total {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+        }
+
+        .stat-card.daily {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+        }
+
+        .stat-label {
+            color: white;
+            font-size: 14px;
+            margin-bottom: 8px;
+            opacity: 0.9;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .last-update {
+            text-align: center;
+            font-size: 14px;
+            color: rgba(51, 51, 51, 0.6);
+            margin-bottom: 32px;
+        }
+
+        .points-rules h3 {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .rules-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .rules-list li {
+            margin-bottom: 16px;
+            padding: 16px 20px;
+            color: #333;
+        }
+
+        .points-highlight {
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        /* 弹窗头部 */
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 36px;
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 36px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        /* 弹窗规则说明 */
+        .rules-content {
+            list-style-type: decimal;
+            margin-left: 36px;
+            font-weight: 500;
+            font-size: 27px;
+        }
+
+        .rules-content li {
+            margin-bottom: 18px;
+            line-height: 1.5;
+        }
+
+        /* 弹窗底部按钮 */
+        .modal-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+            padding: 12px 36px;
+            border-radius: 16px;
+            font-weight: bold;
+            font-size: 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .modal-button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+        }
+
+        .modal-button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <div>🎯 三心二意</div>
+            <div>⏰ 时间: <span id="timer">60</span>s</div>
+            <div>🎯 正确率: <span id="score">0%</span></div>
+            <div>⭐ 总积分: <span id="totalPoints">0</span></div>
+        </div>
+        <div class="game-area">
+            <div class="side left-side">
+                <div class="instruction-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="left-progress"></div>
+                    </div>
+                    <div class="instruction" id="left-instruction">
+                        点击开始按钮开始训练
+                        <div class="mini-timer" id="left-timer">-</div>
+                    </div>
+                </div>
+                <div class="game-content" id="left-content">
+                    <button class="start-btn" onclick="startGame()">开始训练</button>
+                </div>
+            </div>
+            <div class="side right-side">
+                <div class="instruction-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="right-progress"></div>
+                    </div>
+                    <div class="instruction" id="right-instruction">
+                        准备就绪
+                        <div class="mini-timer" id="right-timer">-</div>
+                    </div>
+                </div>
+                <div class="game-content" id="right-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 积分按钮 -->
+    <div class="points-button" onclick="showPointsModal()">★</div>
+
+    <!-- 规则按钮 -->
+    <div class="rules-button" onclick="showRulesModal()">❓</div>
+
+    <!-- 积分弹窗 -->
+    <div class="modal-overlay" id="pointsModal" onclick="hidePointsModal(event)">
+        <div class="points-modal" onclick="event.stopPropagation()">
+            <div class="points-header">
+                <h2>★ 积分系统</h2>
+                <button class="points-close" onclick="hidePointsModal()">×</button>
+            </div>
+            <div class="points-body">
+                <div class="points-stats">
+                    <h3>积分统计</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card total">
+                            <div class="stat-label">总积分</div>
+                            <div id="modalTotalPoints" class="stat-value">0</div>
+                        </div>
+                        <div class="stat-card daily">
+                            <div class="stat-label">今日积分</div>
+                            <div id="modalDailyPoints" class="stat-value">0</div>
+                        </div>
+                    </div>
+                    <div class="last-update">
+                        最后更新: <span id="lastUpdateDate">--</span>
+                    </div>
+                </div>
+                <div class="points-rules">
+                    <h3>积分获得规则</h3>
+                    <ul class="rules-list">
+                        <li>每正确完成一个注意力分配任务获得 <span class="points-highlight">5积分</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规则弹窗 -->
+    <div class="modal-overlay" id="rulesModal" onclick="hideRulesModal(event)">
+        <div class="rules-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>🎯 三心二意</div>
+                <button class="modal-close" onclick="hideRulesModal()">×</button>
+            </div>
+            <ol class="rules-content">
+                <li>这是一个双任务注意力分配训练，左右两侧会同时显示不同的任务</li>
+                <li>你需要同时关注并完成两侧的任务，训练分配注意力</li>
+                <li>每完成一个任务可获得5分积分，正确率显示为完成正确的任务数/总完成任务数</li>
+                <li>任务类型包括：简单算术、记忆纸杯、气泡点击、找不同等</li>
+            </ol>
+            <button class="modal-button" onclick="startGame(); hideRulesModal()">开始训练</button>
+        </div>
+    </div>
+
+    <script>
+        // ========== 游戏配置区域 ==========
+        const GAME_CONFIG = {
+            GAME_TIME_LIMIT: 15,        // 每个小游戏的时间限制（秒）
+            TOTAL_GAME_TIME: 90,       // 总游戏时间（秒）
+            BUBBLE_RISE_TIME: 5,       // 气泡上升时间（秒）
+            SCORE_PER_SUCCESS: 5,      // 每次成功得分（积分）
+            
+            // ========== 游戏过滤配置 ==========
+            // 设置需要从随机玩法中排除的游戏类型
+            // 可选值: 'maze', 'math', 'cups', 'bubbles', 'oddOneOut', 
+            //        'wordCategory', 'colorChar', 'polygonAsc', 'polygonDesc',
+            //        'letterOrder', 'letterReverse', 'numberAsc', 'numberDesc'
+            EXCLUDED_GAMES: ['maze'],         // 例如: ['maze', 'bubbles'] 排除迷宫和气泡游戏
+            
+            // ========== 测试模式配置 ==========
+            // 设置为null表示正常随机模式
+            // 设置具体游戏类型可以只测试该游戏
+            // 可选值: 'maze', 'math', 'cups', 'bubbles', 'oddOneOut', 
+            //        'wordCategory', 'colorChar', 'polygonAsc', 'polygonDesc',
+            //        'letterOrder', 'letterReverse', 'numberAsc', 'numberDesc'
+            TEST_GAME_TYPE: null,       // 测试特定游戏类型，null为正常模式
+            
+            // 或者设置多个游戏类型进行测试
+            TEST_GAME_TYPES: null       // 例如: ['math', 'colorChar'] 或 null
+        };
+        // ===================================
+
+        class AttentionGame {
+            constructor() {
+                this.gameTime = GAME_CONFIG.TOTAL_GAME_TIME;
+                this.completedTasks = 0;  // 已完成任务数
+                this.correctTasks = 0;    // 正确完成任务数
+                this.accuracy = 0;        // 正确率
+                this.totalPoints = 0;  // 总积分
+                this.dailyPoints = 0;  // 今日积分
+                this.gameEarnedPoints = 0; // 本次游戏获得的积分
+                this.isGameRunning = false;
+                this.leftGame = null;
+                this.rightGame = null;
+                this.timer = null;
+                this.delayedTasks = []; // 存储延迟任务的定时器ID
+                this.messageHandlerSetup = false; // 标记消息处理器是否已设置
+                
+                // 根据测试配置设置游戏类型
+                this.allGameTypes = [
+                    'maze', 'math', 'cups', 'bubbles', 'oddOneOut', 
+                    'wordCategory', 'colorChar', 'polygonAsc', 'polygonDesc',
+                    'letterOrder', 'letterReverse', 'numberAsc', 'numberDesc'
+                ];
+                
+                // 测试模式配置
+                if (GAME_CONFIG.TEST_GAME_TYPE) {
+                    // 单个游戏类型测试
+                    this.gameTypes = [GAME_CONFIG.TEST_GAME_TYPE];
+                } else if (GAME_CONFIG.TEST_GAME_TYPES && Array.isArray(GAME_CONFIG.TEST_GAME_TYPES)) {
+                    // 多个游戏类型测试
+                    this.gameTypes = GAME_CONFIG.TEST_GAME_TYPES;
+                } else {
+                    // 正常模式，使用所有游戏类型并应用过滤配置
+                    this.gameTypes = [...this.allGameTypes];
+                    
+                    // 应用游戏过滤配置
+                    if (GAME_CONFIG.EXCLUDED_GAMES && Array.isArray(GAME_CONFIG.EXCLUDED_GAMES)) {
+                        this.gameTypes = this.gameTypes.filter(gameType => 
+                            !GAME_CONFIG.EXCLUDED_GAMES.includes(gameType)
+                        );
+                    }
+                    
+                    // 确保至少有一个游戏类型可用
+                    if (this.gameTypes.length === 0) {
+                        console.warn('所有游戏类型都被排除了，回退到使用所有游戏类型');
+                        this.gameTypes = [...this.allGameTypes];
+                    }
+                }
+                
+                // 记录每一侧上一个游戏类型，避免连续重复
+                this.lastGameType = {
+                    left: null,
+                    right: null
+                };
+                
+                this.init();
+            }
+
+            init() {
+                this.updateDisplay();
+                this.setupMessageHandlers();
+            }
+
+            setupMessageHandlers() {
+                // 防止重复注册消息监听器
+                if (this.messageHandlerSetup) {
+                    return;
+                }
+                
+                this.messageHandlerSetup = true;
+                
+                // 监听来自父窗口的消息
+                this.messageHandler = (event) => {
+                    const { type, totalPoints, total, dailyTotal, lastUpdateDate, action } = event.data;
+                    
+                    switch (type) { 
+                        case 'trainingPointsResponse':
+                            // 收到积分更新回复
+                            this.totalPoints = totalPoints;
+                            this.updatePointsDisplay();
+                            break;
+                            
+                        case 'totalTrainingPointsResponse':
+                            // 收到积分查询回复
+                            this.totalPoints = total;
+                            this.dailyPoints = dailyTotal;
+                            this.updatePointsDisplay();
+                            this.updatePointsModal(total, dailyTotal, lastUpdateDate);
+                            break;
+                            
+                        case 'setGameConfig':
+                            if (event.data.quotaName === '注意分配') {
+                                GAME_CONFIG.TEST_GAME_TYPES = ['cups', 'bubbles', 'numberAsc', 'numberDesc'];
+                                this.gameTypes = GAME_CONFIG.TEST_GAME_TYPES;
+                            }
+                            // 在配置处理结束后查询总积分
+                            this.getTotalTrainingPoints();
+                            break;
+                        case 'gameContinue':
+                            if (action === 'restart') {
+                                this.startGame();
+                            }
+                            break;
+                    }
+                };
+                
+                window.addEventListener('message', this.messageHandler);
+            }
+
+            getTotalTrainingPoints() {
+                // 查询总积分
+                window.parent.postMessage({ type: 'getTotalTrainingPoints' }, '*');
+            }
+
+            startGame() {
+                if (this.isGameRunning) return;
+                
+                // 发送游戏开始事件
+                window.parent.postMessage({
+                    type: 'gameStarted'
+                }, '*');
+                
+                this.isGameRunning = true;
+                this.gameTime = GAME_CONFIG.TOTAL_GAME_TIME;
+                this.completedTasks = 0;   // 重置已完成任务数
+                this.correctTasks = 0;     // 重置正确完成任务数
+                this.accuracy = 0;         // 重置正确率
+                this.gameEarnedPoints = 0; // 重置本次游戏获得的积分
+                
+                // 重置游戏对象引用
+                this.leftGame = null;
+                this.rightGame = null;
+                
+                // 清理所有延迟任务
+                this.delayedTasks.forEach(taskId => {
+                    clearTimeout(taskId);
+                });
+                this.delayedTasks = [];
+                
+                // 重置游戏类型记录
+                this.lastGameType = {
+                    left: null,
+                    right: null
+                };
+                
+                // 重置界面状态
+                document.getElementById('left-content').innerHTML = '';
+                document.getElementById('right-content').innerHTML = '';
+                
+                const leftInstruction = document.getElementById('left-instruction');
+                const rightInstruction = document.getElementById('right-instruction');
+                leftInstruction.innerHTML = '准备开始';
+                rightInstruction.innerHTML = '';
+                
+                // 重置进度条
+                document.getElementById('left-progress').style.width = '0%';
+                document.getElementById('right-progress').style.width = '0%';
+                
+                // 重置计时器显示
+                const leftTimer = document.getElementById('left-timer');
+                const rightTimer = document.getElementById('right-timer');
+                if (leftTimer) {
+                    leftTimer.textContent = '';
+                    leftTimer.style.background = '';
+                }
+                if (rightTimer) {
+                    rightTimer.textContent = '';
+                    rightTimer.style.background = '';
+                }
+                
+                this.updateDisplay();
+                
+                // 开始计时器
+                this.timer = setInterval(() => {
+                    this.gameTime--;
+                    this.updateDisplay();
+                    
+                    if (this.gameTime <= 0) {
+                        this.endGame();
+                    }
+                }, 1000);
+                
+                // 开始左右两侧游戏
+                this.startSideGame('left');
+                this.startSideGame('right');
+            }
+
+            endGame() {
+                this.isGameRunning = false;
+                
+                // 清理主定时器
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                }
+                
+                // 清理所有延迟任务
+                this.delayedTasks.forEach(taskId => {
+                    clearTimeout(taskId);
+                });
+                this.delayedTasks = [];
+                
+                // 清理两侧游戏的定时器和进度条
+                if (this.leftGame) {
+                    // 调用游戏特定的清理方法
+                    if (this.leftGame.cleanup) {
+                        this.leftGame.cleanup();
+                    }
+                    if (this.leftGame.timeout) {
+                        clearTimeout(this.leftGame.timeout);
+                        this.leftGame.timeout = null;
+                    }
+                    if (this.leftGame.progressTimer) {
+                        clearInterval(this.leftGame.progressTimer);
+                        this.leftGame.progressTimer = null;
+                    }
+                }
+                
+                if (this.rightGame) {
+                    // 调用游戏特定的清理方法
+                    if (this.rightGame.cleanup) {
+                        this.rightGame.cleanup();
+                    }
+                    if (this.rightGame.timeout) {
+                        clearTimeout(this.rightGame.timeout);
+                        this.rightGame.timeout = null;
+                    }
+                    if (this.rightGame.progressTimer) {
+                        clearInterval(this.rightGame.progressTimer);
+                        this.rightGame.progressTimer = null;
+                    }
+                }
+                
+                // 清理游戏内容
+                document.getElementById('left-content').innerHTML = '';
+                document.getElementById('right-content').innerHTML = '';
+                
+                const leftInstruction = document.getElementById('left-instruction');
+                const rightInstruction = document.getElementById('right-instruction');
+                leftInstruction.innerHTML = '训练结束';
+                rightInstruction.innerHTML = '';
+                
+                // 清理进度条
+                document.getElementById('left-progress').style.width = '0%';
+                document.getElementById('right-progress').style.width = '0%';
+                
+                // 清理计时器显示
+                const leftTimer = document.getElementById('left-timer');
+                const rightTimer = document.getElementById('right-timer');
+                if (leftTimer) {
+                    leftTimer.textContent = '';
+                    leftTimer.style.background = '';
+                }
+                if (rightTimer) {
+                    rightTimer.textContent = '';
+                    rightTimer.style.background = '';
+                }
+                
+                // 发送游戏结束消息，包含正确率和积分
+                window.parent.postMessage({
+                    type: 'gameFinished',
+                        data: {
+                        score: this.accuracy,
+                        showAccuracy: true,
+                        accuracy: this.accuracy,
+                        accuracyText: '你的任务完成正确率为',
+                        earnedPoints: this.gameEarnedPoints,
+                        isMaxDifficulty: true,
+                    },
+                }, '*');
+                
+                // gameFinished事件发出后，清理游戏状态
+                this.leftGame = null;
+                this.rightGame = null;
+                this.completedTasks = 0;
+                this.correctTasks = 0;
+                this.accuracy = 0;
+                this.gameEarnedPoints = 0;
+                this.gameTime = GAME_CONFIG.TOTAL_GAME_TIME;
+            }
+
+            // 清理消息监听器（可选，通常不需要调用，除非要完全销毁游戏实例）
+            cleanupMessageHandlers() {
+                if (this.messageHandler && this.messageHandlerSetup) {
+                    window.removeEventListener('message', this.messageHandler);
+                    this.messageHandler = null;
+                    this.messageHandlerSetup = false;
+                }
+            }
+
+            updateDisplay() {
+                document.getElementById('timer').textContent = this.gameTime;
+                document.getElementById('score').textContent = this.accuracy + '%';
+                this.updatePointsDisplay();
+            }
+
+            updatePointsDisplay() {
+                const totalPointsElement = document.getElementById('totalPoints');
+                if (totalPointsElement) {
+                    totalPointsElement.textContent = this.totalPoints;
+                }
+            }
+
+            updatePointsModal(totalPoints, dailyPoints, lastUpdateDate) {
+                const modalTotalPoints = document.getElementById('modalTotalPoints');
+                const modalDailyPoints = document.getElementById('modalDailyPoints');
+                const lastUpdate = document.getElementById('lastUpdateDate');
+                
+                if (modalTotalPoints) modalTotalPoints.textContent = totalPoints;
+                if (modalDailyPoints) modalDailyPoints.textContent = dailyPoints;
+                if (lastUpdate) lastUpdate.textContent = lastUpdateDate || '--';
+            }
+
+            startSideGame(side) {
+                if (!this.isGameRunning) return;
+                
+                // 获取可选择的游戏类型（排除上一个游戏类型和另一侧当前游戏类型）
+                let availableGames = [...this.gameTypes];
+                const lastGame = this.lastGameType[side];
+                const otherSide = side === 'left' ? 'right' : 'left';
+                const otherSideCurrentGame = this.lastGameType[otherSide];
+                
+                // 如果游戏类型超过1种，则排除需要排除的游戏类型
+                // 测试模式下如果只有一种游戏类型，则不进行过滤
+                if (availableGames.length > 1) {
+                    // 排除同侧的上一个游戏类型
+                    if (lastGame) {
+                        availableGames = availableGames.filter(game => game !== lastGame);
+                    }
+                    
+                    // 排除另一侧的当前游戏类型
+                    if (otherSideCurrentGame) {
+                        availableGames = availableGames.filter(game => game !== otherSideCurrentGame);
+                    }
+                }
+                
+                // 随机选择一个游戏类型
+                const randomGame = availableGames[Math.floor(Math.random() * availableGames.length)];
+                
+                // 记录当前游戏类型
+                this.lastGameType[side] = randomGame;
+                
+                const gameInstance = new GameFactory().createGame(randomGame, side, this);
+                
+                if (side === 'left') {
+                    this.leftGame = gameInstance;
+                } else {
+                    this.rightGame = gameInstance;
+                }
+                
+                gameInstance.start();
+            }
+
+            onGameComplete(side, success) {
+                if (!this.isGameRunning) return;
+                
+                // 统计任务完成情况
+                this.completedTasks++;
+                if (success) {
+                    this.correctTasks++;
+                }
+                
+                // 计算正确率
+                this.accuracy = this.completedTasks > 0 ? Math.round(this.correctTasks / this.completedTasks * 100) : 0;
+
+                // 显示反馈
+                const content = document.getElementById(`${side}-content`);
+                const feedback = document.createElement('div');
+                feedback.className = `feedback ${success ? 'success' : 'failure'}`;
+                feedback.textContent = success ? '✓' : '✗';
+                content.appendChild(feedback);
+                
+                if (success) {
+                    this.gameEarnedPoints += GAME_CONFIG.SCORE_PER_SUCCESS;
+                    
+                    // 发送积分获得消息
+                    window.parent.postMessage({
+                        type: 'showTrainingPoints',
+                        points: GAME_CONFIG.SCORE_PER_SUCCESS
+                    }, '*');
+                }
+                
+                this.updateDisplay();
+                
+                // 重置进度条
+                const progressBar = document.getElementById(`${side}-progress`);
+                if (progressBar) {
+                    progressBar.style.width = '0%';
+                }
+                
+                // 1秒后开始新游戏
+                const delayedTaskId = setTimeout(() => {
+                    if (feedback.parentNode) {
+                        feedback.remove();
+                    }
+                    // 移除已完成的任务ID
+                    const index = this.delayedTasks.indexOf(delayedTaskId);
+                    if (index > -1) {
+                        this.delayedTasks.splice(index, 1);
+                    }
+                    this.startSideGame(side);
+                }, 1000);
+                
+                // 追踪延迟任务
+                this.delayedTasks.push(delayedTaskId);
+            }
+        }
+
+        class GameFactory {
+            createGame(type, side, gameManager) {
+                switch(type) {
+                    case 'maze': return new MazeGame(side, gameManager);
+                    case 'math': return new MathGame(side, gameManager);
+                    case 'cups': return new CupsGame(side, gameManager);
+                    case 'bubbles': return new BubblesGame(side, gameManager);
+                    case 'oddOneOut': return new OddOneOutGame(side, gameManager);
+                    case 'wordCategory': return new WordCategoryGame(side, gameManager);
+                    case 'colorChar': return new ColorCharGame(side, gameManager);
+                    case 'polygonAsc': return new PolygonGame(side, gameManager, 'asc');
+                    case 'polygonDesc': return new PolygonGame(side, gameManager, 'desc');
+                    case 'letterOrder': return new LetterGame(side, gameManager, 'asc');
+                    case 'letterReverse': return new LetterGame(side, gameManager, 'desc');
+                    case 'numberAsc': return new NumberGame(side, gameManager, 'asc');
+                    case 'numberDesc': return new NumberGame(side, gameManager, 'desc');
+                    default: return new MathGame(side, gameManager);
+                }
+            }
+        }
+
+        class BaseGame {
+            constructor(side, gameManager) {
+                this.side = side;
+                this.gameManager = gameManager;
+                this.timeout = null;
+                this.gameTimeLimit = GAME_CONFIG.GAME_TIME_LIMIT; // 统一的游戏时间限制（秒）
+                this.timeLimit = this.gameTimeLimit * 1000; // 转换为毫秒
+                this.progressTimer = null;
+                this.startTime = null; // 添加开始时间戳
+            }
+
+            start() {
+                this.setupGame();
+                this.startProgressBar();
+                this.timeout = setTimeout(() => {
+                    this.gameManager.onGameComplete(this.side, false);
+                }, this.timeLimit);
+            }
+
+            startProgressBar() {
+                // 先清理已存在的进度条定时器
+                if (this.progressTimer) {
+                    clearInterval(this.progressTimer);
+                    this.progressTimer = null;
+                }
+                
+                // 记录开始时间
+                this.startTime = Date.now();
+                this.updateProgress();
+                
+                this.progressTimer = setInterval(() => {
+                    this.updateProgress();
+                }, 100);
+            }
+
+            updateProgress() {
+                // 基于时间戳计算实际剩余时间
+                const elapsed = (Date.now() - this.startTime) / 1000;
+                const remainingTime = Math.max(0, this.gameTimeLimit - elapsed);
+                
+                const percentage = (remainingTime / this.gameTimeLimit) * 100;
+                const progressBar = document.getElementById(`${this.side}-progress`);
+                const timer = document.getElementById(`${this.side}-timer`);
+                
+                if (progressBar) {
+                    progressBar.style.width = Math.max(0, percentage) + '%';
+                }
+                
+                if (timer) {
+                    timer.textContent = Math.max(0, Math.ceil(remainingTime));
+                    
+                    // 根据剩余时间改变颜色
+                    if (remainingTime <= this.gameTimeLimit * 0.375) { // 3/8的时间
+                        timer.style.background = 'rgba(220, 53, 69, 0.9)';
+                    } else if (remainingTime <= this.gameTimeLimit * 0.625) { // 5/8的时间
+                        timer.style.background = 'rgba(255, 193, 7, 0.9)';
+                    } else {
+                        timer.style.background = 'rgba(40, 167, 69, 0.8)';
+                    }
+                }
+                
+                // 如果时间到了，清理定时器
+                if (remainingTime <= 0) {
+                    clearInterval(this.progressTimer);
+                    this.progressTimer = null;
+                }
+            }
+
+            complete(success) {
+                // 先清理游戏特定状态
+                this.cleanup();
+                
+                // 清理基础定时器
+                if (this.timeout) {
+                    clearTimeout(this.timeout);
+                    this.timeout = null;
+                }
+                if (this.progressTimer) {
+                    clearInterval(this.progressTimer);
+                    this.progressTimer = null;
+                }
+                this.gameManager.onGameComplete(this.side, success);
+            }
+
+            cleanup() {
+                // 基础清理 - 移除所有动画和事件监听器
+                const content = this.getContent();
+                if (content) {
+                    // 停止所有CSS动画
+                    const animatedElements = content.querySelectorAll('*');
+                    animatedElements.forEach(element => {
+                        element.style.animation = 'none';
+                        element.style.transition = 'none';
+                        // 移除事件监听器
+                        element.onclick = null;
+                        element.onmousedown = null;
+                        element.onmouseup = null;
+                        element.onmousemove = null;
+                        element.ontouchstart = null;
+                        element.ontouchend = null;
+                        element.ontouchmove = null;
+                    });
+                    
+                    // 清理所有Web Animations API创建的动画
+                    animatedElements.forEach(element => {
+                        if (element.getAnimations) {
+                            element.getAnimations().forEach(animation => {
+                                animation.cancel();
+                            });
+                        }
+                    });
+                }
+                
+                // 确保清理进度条定时器
+                if (this.progressTimer) {
+                    clearInterval(this.progressTimer);
+                    this.progressTimer = null;
+                }
+                
+                // 重置时间戳
+                this.startTime = null;
+                
+                // 子类可以重写此方法来添加特定清理逻辑
+            }
+
+            getContent() {
+                return document.getElementById(`${this.side}-content`);
+            }
+
+            getInstruction() {
+                return document.getElementById(`${this.side}-instruction`);
+            }
+
+            setInstruction(text) {
+                const instruction = this.getInstruction();
+                const timer = instruction.querySelector('.mini-timer');
+                instruction.innerHTML = text;
+                if (timer) {
+                    instruction.appendChild(timer);
+                }
+            }
+
+            setupGame() {
+                // 子类实现
+            }
+        }
+
+        // 复杂拼图迷宫游戏
+        class MazeGame extends BaseGame {
+            constructor(side, gameManager) {
+                super(side, gameManager);
+                this.gridSize = 6; // 6x6网格，适中难度
+                
+                // 这些会在setupGame中动态计算
+                this.cellSize = 40; // 默认值
+                this.actualMazeSize = 240; // 默认值
+                
+                this.maze = [];
+                this.walls = new Set(); // 存储墙壁边
+                this.paths = new Set(); // 存储路径边
+                this.entrance = null;
+                this.exit = null;
+                this.isDragging = false;
+                this.currentPath = [];
+                this.isPathComplete = false;
+                
+                this.generateMaze();
+            }
+
+            // 生成俄罗斯方块形状的拼图块
+            getTetrisShapes() {
+                return [
+                    // I形状
+                    [[0,0], [0,1], [0,2], [0,3]],
+                    // O形状  
+                    [[0,0], [0,1], [1,0], [1,1]],
+                    // T形状
+                    [[0,0], [0,1], [0,2], [1,1]],
+                    // L形状
+                    [[0,0], [0,1], [0,2], [1,2]],
+                    // J形状
+                    [[0,0], [0,1], [0,2], [1,0]],
+                    // S形状
+                    [[0,1], [0,2], [1,0], [1,1]],
+                    // Z形状
+                    [[0,0], [0,1], [1,1], [1,2]]
+                ];
+            }
+
+            // 旋转形状
+            rotateShape(shape) {
+                const rotated = shape.map(([x, y]) => [-y, x]);
+                const minX = Math.min(...rotated.map(([x, y]) => x));
+                const minY = Math.min(...rotated.map(([x, y]) => y));
+                return rotated.map(([x, y]) => [x - minX, y - minY]);
+            }
+
+            // 获取形状的所有旋转版本
+            getAllRotations(shape) {
+                const rotations = [shape];
+                let current = shape;
+                for (let i = 0; i < 3; i++) {
+                    current = this.rotateShape(current);
+                    rotations.push(current);
+                }
+                return rotations;
+            }
+
+            // 检查形状是否可以放置在指定位置
+            canPlaceShape(shape, startX, startY, occupiedCells) {
+                for (const [dx, dy] of shape) {
+                    const x = startX + dx;
+                    const y = startY + dy;
+                    if (x < 0 || x >= this.gridSize || y < 0 || y >= this.gridSize) {
+                        return false;
+                    }
+                    if (occupiedCells.has(`${x},${y}`)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            // 生成迷宫
+            generateMaze() {
+                const shapes = this.getTetrisShapes();
+                const occupiedCells = new Set();
+                const placedShapes = [];
+                
+                // 尝试填满整个网格
+                let attempts = 0;
+                while (occupiedCells.size < this.gridSize * this.gridSize && attempts < 1000) {
+                    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+                    const rotations = this.getAllRotations(shape);
+                    const rotation = rotations[Math.floor(Math.random() * rotations.length)];
+                    
+                    const startX = Math.floor(Math.random() * this.gridSize);
+                    const startY = Math.floor(Math.random() * this.gridSize);
+                    
+                    if (this.canPlaceShape(rotation, startX, startY, occupiedCells)) {
+                        const shapeData = {
+                            shape: rotation,
+                            x: startX,
+                            y: startY,
+                            cells: []
+                        };
+                        
+                        for (const [dx, dy] of rotation) {
+                            const x = startX + dx;
+                            const y = startY + dy;
+                            occupiedCells.add(`${x},${y}`);
+                            shapeData.cells.push([x, y]);
+                        }
+                        
+                        placedShapes.push(shapeData);
+                    }
+                    attempts++;
+                }
+
+                // 生成所有可能的边
+                this.generateWalls(placedShapes);
+                
+                // 选择入口和出口
+                this.selectEntranceAndExit(placedShapes);
+                
+                // 随机移除一些内部墙壁创建路径
+                this.createPaths();
+            }
+
+            // 生成墙壁
+            generateWalls(placedShapes) {
+                this.walls.clear();
+                
+                for (const shape of placedShapes) {
+                    for (const [x, y] of shape.cells) {
+                        // 检查每个方向的边
+                        const directions = [
+                            [0, -1, 'top'],    // 上边
+                            [1, 0, 'right'],   // 右边
+                            [0, 1, 'bottom'],  // 下边
+                            [-1, 0, 'left']    // 左边
+                        ];
+                        
+                        for (const [dx, dy, side] of directions) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            
+                            // 如果相邻位置在网格外或不属于当前形状，则添加墙壁
+                            const isOutsideGrid = nx < 0 || nx >= this.gridSize || ny < 0 || ny >= this.gridSize;
+                            const isInSameShape = shape.cells.some(([sx, sy]) => sx === nx && sy === ny);
+                            
+                            if (isOutsideGrid || !isInSameShape) {
+                                this.walls.add(`${x},${y},${side}`);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 选择入口和出口
+            selectEntranceAndExit(placedShapes) {
+                const edgeWalls = Array.from(this.walls).filter(wall => {
+                    const [x, y, side] = wall.split(',');
+                    const xi = parseInt(x);
+                    const yi = parseInt(y);
+                    
+                    return (
+                        (side === 'top' && yi === 0) ||
+                        (side === 'bottom' && yi === this.gridSize - 1) ||
+                        (side === 'left' && xi === 0) ||
+                        (side === 'right' && xi === this.gridSize - 1)
+                    );
+                });
+                
+                if (edgeWalls.length >= 2) {
+                    const shuffled = edgeWalls.sort(() => Math.random() - 0.5);
+                    const entranceWall = shuffled[0];
+                    const exitWall = shuffled[1];
+                    
+                    this.entrance = this.parseWall(entranceWall);
+                    this.exit = this.parseWall(exitWall);
+                    
+                    // 移除入口和出口的墙壁
+                    this.walls.delete(entranceWall);
+                    this.walls.delete(exitWall);
+                }
+                
+                // 确保所有边缘都被墙壁封闭（除了入口和出口）
+                this.ensureEdgeWalls();
+            }
+
+            // 确保边缘墙壁完整
+            ensureEdgeWalls() {
+                // 添加顶部边缘墙壁
+                for (let x = 0; x < this.gridSize; x++) {
+                    const wallKey = `${x},0,top`;
+                    if (!this.walls.has(wallKey) && 
+                        (!this.entrance || this.entrance.wallStr !== wallKey) && 
+                        (!this.exit || this.exit.wallStr !== wallKey)) {
+                        this.walls.add(wallKey);
+                    }
+                }
+                
+                // 添加底部边缘墙壁
+                for (let x = 0; x < this.gridSize; x++) {
+                    const wallKey = `${x},${this.gridSize - 1},bottom`;
+                    if (!this.walls.has(wallKey) && 
+                        (!this.entrance || this.entrance.wallStr !== wallKey) && 
+                        (!this.exit || this.exit.wallStr !== wallKey)) {
+                        this.walls.add(wallKey);
+                    }
+                }
+                
+                // 添加左侧边缘墙壁
+                for (let y = 0; y < this.gridSize; y++) {
+                    const wallKey = `0,${y},left`;
+                    if (!this.walls.has(wallKey) && 
+                        (!this.entrance || this.entrance.wallStr !== wallKey) && 
+                        (!this.exit || this.exit.wallStr !== wallKey)) {
+                        this.walls.add(wallKey);
+                    }
+                }
+                
+                // 添加右侧边缘墙壁
+                for (let y = 0; y < this.gridSize; y++) {
+                    const wallKey = `${this.gridSize - 1},${y},right`;
+                    if (!this.walls.has(wallKey) && 
+                        (!this.entrance || this.entrance.wallStr !== wallKey) && 
+                        (!this.exit || this.exit.wallStr !== wallKey)) {
+                        this.walls.add(wallKey);
+                    }
+                }
+            }
+
+            // 解析墙壁字符串
+            parseWall(wallStr) {
+                const [x, y, side] = wallStr.split(',');
+                return {
+                    x: parseInt(x),
+                    y: parseInt(y),
+                    side: side,
+                    wallStr: wallStr
+                };
+            }
+
+            // 创建路径
+            createPaths() {
+                if (!this.entrance || !this.exit) return;
+                
+                // 首先创建一条从入口到出口的确定路径
+                this.createGuaranteedPath();
+                
+                // 然后随机移除一些额外的内部墙壁增加路径选择
+                const internalWalls = Array.from(this.walls).filter(wall => {
+                    const [x, y, side] = wall.split(',');
+                    const xi = parseInt(x);
+                    const yi = parseInt(y);
+                    
+                    // 不是边缘墙壁
+                    return !(
+                        (side === 'top' && yi === 0) ||
+                        (side === 'bottom' && yi === this.gridSize - 1) ||
+                        (side === 'left' && xi === 0) ||
+                        (side === 'right' && xi === this.gridSize - 1)
+                    );
+                });
+                
+                const toRemove = Math.floor(internalWalls.length * 0.3);
+                const shuffled = internalWalls.sort(() => Math.random() - 0.5);
+                
+                for (let i = 0; i < toRemove; i++) {
+                    this.walls.delete(shuffled[i]);
+                    this.paths.add(shuffled[i]);
+                }
+            }
+
+            // 创建确保的连通路径
+            createGuaranteedPath() {
+                const startX = this.entrance.x;
+                const startY = this.entrance.y;
+                const endX = this.exit.x;
+                const endY = this.exit.y;
+                
+                let currentX = startX;
+                let currentY = startY;
+                
+                // 先水平移动到目标X坐标
+                while (currentX !== endX) {
+                    const nextX = currentX < endX ? currentX + 1 : currentX - 1;
+                    this.removeWallBetweenCells(currentX, currentY, nextX, currentY);
+                    currentX = nextX;
+                }
+                
+                // 再垂直移动到目标Y坐标
+                while (currentY !== endY) {
+                    const nextY = currentY < endY ? currentY + 1 : currentY - 1;
+                    this.removeWallBetweenCells(currentX, currentY, currentX, nextY);
+                    currentY = nextY;
+                }
+                
+                // 添加一些随机分支路径
+                this.addRandomBranches(startX, startY, endX, endY);
+            }
+
+            // 移除两个格子之间的墙壁
+            removeWallBetweenCells(x1, y1, x2, y2) {
+                // 确保两个格子相邻
+                const dx = Math.abs(x1 - x2);
+                const dy = Math.abs(y1 - y2);
+                if (dx + dy !== 1) return;
+                
+                let side1, side2;
+                if (x2 > x1) { // 向右
+                    side1 = 'right';
+                    side2 = 'left';
+                } else if (x2 < x1) { // 向左
+                    side1 = 'left';
+                    side2 = 'right';
+                } else if (y2 > y1) { // 向下
+                    side1 = 'bottom';
+                    side2 = 'top';
+                } else { // 向上
+                    side1 = 'top';
+                    side2 = 'bottom';
+                }
+                
+                // 移除两个方向的墙壁
+                const wall1 = `${x1},${y1},${side1}`;
+                const wall2 = `${x2},${y2},${side2}`;
+                
+                this.walls.delete(wall1);
+                this.walls.delete(wall2);
+                this.paths.add(wall1);
+                this.paths.add(wall2);
+            }
+
+            // 添加随机分支路径
+            addRandomBranches(startX, startY, endX, endY) {
+                const numBranches = 4;
+                
+                for (let i = 0; i < numBranches; i++) {
+                    // 在主路径上选择一个随机点作为分支起点
+                    const branchStartX = Math.min(startX, endX) + Math.floor(Math.random() * (Math.abs(endX - startX) + 1));
+                    const branchStartY = Math.min(startY, endY) + Math.floor(Math.random() * (Math.abs(endY - startY) + 1));
+                    
+                    // 创建一个短的随机分支
+                    let currentX = branchStartX;
+                    let currentY = branchStartY;
+                    
+                    const branchLength = 2 + Math.floor(Math.random() * 3); // 2-4步长度
+                    
+                    for (let step = 0; step < branchLength; step++) {
+                        const directions = [
+                            [0, 1], [0, -1], [1, 0], [-1, 0]
+                        ];
+                        
+                        const [dx, dy] = directions[Math.floor(Math.random() * directions.length)];
+                        const nextX = currentX + dx;
+                        const nextY = currentY + dy;
+                        
+                        // 确保在边界内
+                        if (nextX >= 0 && nextX < this.gridSize && nextY >= 0 && nextY < this.gridSize) {
+                            this.removeWallBetweenCells(currentX, currentY, nextX, nextY);
+                            currentX = nextX;
+                            currentY = nextY;
+                        }
+                    }
+                }
+            }
+
+
+
+            setupGame() {
+                this.setInstruction('拼图迷宫：从<span class="highlight">绿色入口</span>拖拽到<span class="highlight">红色出口</span>');
+                
+                const content = this.getContent();
+                content.innerHTML = '';
+                
+                // 动态获取容器大小
+                const contentRect = content.getBoundingClientRect();
+                const availableWidth = Math.min(contentRect.width - 40, 400); // 减去padding，最大400px
+                const availableHeight = Math.min(contentRect.height - 40, 400); // 减去padding，最大400px
+                const containerSize = Math.min(availableWidth, availableHeight);
+                
+                // 重新计算迷宫尺寸
+                this.cellSize = Math.floor(containerSize / this.gridSize);
+                this.actualMazeSize = this.cellSize * this.gridSize;
+                
+                const mazeContainer = document.createElement('div');
+                mazeContainer.className = 'maze-container';
+                mazeContainer.style.cssText = `
+                    position: relative;
+                    width: ${this.actualMazeSize}px;
+                    height: ${this.actualMazeSize}px;
+                    margin: 0 auto;
+                    background: #f8f9fa;
+                    flex-shrink: 0;
+                `;
+                
+                // 绘制格子（去除灰边）
+                for (let y = 0; y < this.gridSize; y++) {
+                    for (let x = 0; x < this.gridSize; x++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'maze-cell';
+                        cell.style.cssText = `
+                            position: absolute;
+                            left: ${x * this.cellSize}px;
+                            top: ${y * this.cellSize}px;
+                            width: ${this.cellSize}px;
+                            height: ${this.cellSize}px;
+                            box-sizing: border-box;
+                        `;
+                        mazeContainer.appendChild(cell);
+                    }
+                }
+                
+                // 绘制墙壁
+                this.drawWalls(mazeContainer);
+                
+                // 绘制入口和出口标记
+                this.drawEntranceAndExit(mazeContainer);
+                
+                // 添加事件监听
+                this.addEventListeners(mazeContainer);
+                
+                content.appendChild(mazeContainer);
+            }
+
+            // 绘制墙壁
+            drawWalls(container) {
+                for (const wallStr of this.walls) {
+                    const [x, y, side] = wallStr.split(',');
+                    const xi = parseInt(x);
+                    const yi = parseInt(y);
+                    
+                    const wall = document.createElement('div');
+                    wall.className = 'maze-wall';
+                    wall.style.cssText = `
+                        position: absolute;
+                        background: #333;
+                        z-index: 2;
+                    `;
+                    
+                    if (side === 'top') {
+                        wall.style.cssText += `
+                            left: ${xi * this.cellSize}px;
+                            top: ${yi * this.cellSize - 1}px;
+                            width: ${this.cellSize}px;
+                            height: 2px;
+                        `;
+                    } else if (side === 'bottom') {
+                        wall.style.cssText += `
+                            left: ${xi * this.cellSize}px;
+                            top: ${(yi + 1) * this.cellSize - 1}px;
+                            width: ${this.cellSize}px;
+                            height: 2px;
+                        `;
+                    } else if (side === 'left') {
+                        wall.style.cssText += `
+                            left: ${xi * this.cellSize - 1}px;
+                            top: ${yi * this.cellSize}px;
+                            width: 2px;
+                            height: ${this.cellSize}px;
+                        `;
+                    } else if (side === 'right') {
+                        wall.style.cssText += `
+                            left: ${(xi + 1) * this.cellSize - 1}px;
+                            top: ${yi * this.cellSize}px;
+                            width: 2px;
+                            height: ${this.cellSize}px;
+                        `;
+                    }
+                    
+                    container.appendChild(wall);
+                }
+            }
+
+            // 绘制入口和出口
+            drawEntranceAndExit(container) {
+                if (this.entrance) {
+                    const marker = this.createMarker(this.entrance, '#28a745', '入口');
+                    container.appendChild(marker);
+                }
+                
+                if (this.exit) {
+                    const marker = this.createMarker(this.exit, '#dc3545', '出口');
+                    container.appendChild(marker);
+                }
+            }
+
+            // 创建标记
+            createMarker(position, color, text) {
+                const marker = document.createElement('div');
+                marker.style.cssText = `
+                    position: absolute;
+                    background: ${color};
+                    color: white;
+                    font-size: 12px;
+                    font-weight: bold;
+                    text-align: center;
+                    line-height: 20px;
+                    z-index: 3;
+                    border-radius: 3px;
+                `;
+                
+                const { x, y, side } = position;
+                
+                if (side === 'top') {
+                    marker.style.cssText += `
+                        left: ${x * this.cellSize + 5}px;
+                        top: ${y * this.cellSize - 25}px;
+                        width: ${this.cellSize - 10}px;
+                        height: 20px;
+                    `;
+                } else if (side === 'bottom') {
+                    marker.style.cssText += `
+                        left: ${x * this.cellSize + 5}px;
+                        top: ${(y + 1) * this.cellSize + 5}px;
+                        width: ${this.cellSize - 10}px;
+                        height: 20px;
+                    `;
+                } else if (side === 'left') {
+                    marker.style.cssText += `
+                        left: ${x * this.cellSize - 45}px;
+                        top: ${y * this.cellSize + 10}px;
+                        width: 40px;
+                        height: 20px;
+                    `;
+                } else if (side === 'right') {
+                    marker.style.cssText += `
+                        left: ${(x + 1) * this.cellSize + 5}px;
+                        top: ${y * this.cellSize + 10}px;
+                        width: 40px;
+                        height: 20px;
+                    `;
+                }
+                
+                marker.textContent = text;
+                return marker;
+            }
+
+            // 添加事件监听（支持移动端和即时检测）
+            addEventListeners(container) {
+                let lastX, lastY;
+                
+                // 统一处理开始事件
+                const handleStart = (e) => {
+                    if (this.isPathComplete) return;
+                    
+                    // 只有触摸事件且被设置为passive时才不调用preventDefault
+                    if (e.type.startsWith('touch')) {
+                        // touchstart设置为passive，不需要preventDefault
+                    } else {
+                        e.preventDefault();
+                    }
+                    
+                    const rect = container.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    lastX = clientX - rect.left;
+                    lastY = clientY - rect.top;
+                    
+                    // 检查是否从入口开始
+                    if (this.isNearEntrance(lastX, lastY)) {
+                        this.isDragging = true;
+                        this.currentPath = [{ x: lastX, y: lastY }];
+                        this.drawPath(container);
+                    }
+                };
+                
+                // 统一处理移动事件
+                const handleMove = (e) => {
+                    if (!this.isDragging || this.isPathComplete) return;
+                    
+                    // touchmove设置为passive: false，可以安全调用preventDefault
+                    e.preventDefault();
+                    const rect = container.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    const currentX = clientX - rect.left;
+                    const currentY = clientY - rect.top;
+                    
+                    // 检查是否撞墙 - 立即失败
+                    if (!this.isValidPath(lastX, lastY, currentX, currentY)) {
+                        this.isDragging = false;
+                        this.clearPath(container);
+                        this.complete(false); // 立即触发失败
+                        return;
+                    }
+                    
+                    this.currentPath.push({ x: currentX, y: currentY });
+                    this.drawPath(container);
+                    
+                    // 检查是否到达出口 - 立即成功
+                    if (this.isNearExit(currentX, currentY)) {
+                        this.isDragging = false;
+                        this.isPathComplete = true;
+                        this.complete(true); // 立即触发成功
+                        return;
+                    }
+                    
+                    lastX = currentX;
+                    lastY = currentY;
+                };
+                
+                // 统一处理结束事件
+                const handleEnd = (e) => {
+                    if (!this.isDragging) return;
+                    
+                    // touchend/touchcancel设置为passive，不需要preventDefault
+                    if (e.type.startsWith('mouse')) {
+                        e.preventDefault();
+                    }
+                    
+                    this.isDragging = false;
+                    
+                    // 如果拖拽结束时没有到达出口，清除路径但不立即判定失败
+                    if (!this.isPathComplete) {
+                        this.clearPath(container);
+                    }
+                };
+                
+                // 鼠标事件
+                container.addEventListener('mousedown', handleStart);
+                container.addEventListener('mousemove', handleMove);
+                container.addEventListener('mouseup', handleEnd);
+                container.addEventListener('mouseleave', handleEnd);
+                
+                // 触摸事件 - 添加适当的passive属性提升性能
+                container.addEventListener('touchstart', handleStart, { passive: true });
+                container.addEventListener('touchmove', handleMove, { passive: false }); // 需要preventDefault阻止滚动
+                container.addEventListener('touchend', handleEnd, { passive: true });
+                container.addEventListener('touchcancel', handleEnd, { passive: true });
+                
+                // 防止移动端滚动
+                container.style.touchAction = 'none';
+            }
+
+            // 检查是否接近入口
+            isNearEntrance(x, y) {
+                if (!this.entrance) return false;
+                const { x: ex, y: ey, side } = this.entrance;
+                const centerX = ex * this.cellSize + this.cellSize / 2;
+                const centerY = ey * this.cellSize + this.cellSize / 2;
+                const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                return distance < this.cellSize / 2;
+            }
+
+            // 检查是否接近出口
+            isNearExit(x, y) {
+                if (!this.exit) return false;
+                const { x: ex, y: ey, side } = this.exit;
+                const centerX = ex * this.cellSize + this.cellSize / 2;
+                const centerY = ey * this.cellSize + this.cellSize / 2;
+                const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                return distance < this.cellSize / 2;
+            }
+
+            // 检查路径是否有效（没有撞墙）
+            isValidPath(fromX, fromY, toX, toY) {
+                // 检查起点和终点是否在有效区域内
+                if (this.isPositionBlocked(fromX, fromY) || this.isPositionBlocked(toX, toY)) {
+                    return false;
+                }
+                
+                // 使用更精确的线段与墙壁相交检测
+                return !this.checkLineWallCollision(fromX, fromY, toX, toY);
+            }
+
+            // 检查线段是否与墙壁相交
+            checkLineWallCollision(x1, y1, x2, y2) {
+                // 遍历所有墙壁，检查是否与路径线段相交
+                for (const wallStr of this.walls) {
+                    const [x, y, side] = wallStr.split(',');
+                    const xi = parseInt(x);
+                    const yi = parseInt(y);
+                    
+                    // 获取墙壁的两个端点
+                    let wallX1, wallY1, wallX2, wallY2;
+                    
+                    if (side === 'top') {
+                        wallX1 = xi * this.cellSize;
+                        wallY1 = yi * this.cellSize;
+                        wallX2 = (xi + 1) * this.cellSize;
+                        wallY2 = yi * this.cellSize;
+                    } else if (side === 'bottom') {
+                        wallX1 = xi * this.cellSize;
+                        wallY1 = (yi + 1) * this.cellSize;
+                        wallX2 = (xi + 1) * this.cellSize;
+                        wallY2 = (yi + 1) * this.cellSize;
+                    } else if (side === 'left') {
+                        wallX1 = xi * this.cellSize;
+                        wallY1 = yi * this.cellSize;
+                        wallX2 = xi * this.cellSize;
+                        wallY2 = (yi + 1) * this.cellSize;
+                    } else if (side === 'right') {
+                        wallX1 = (xi + 1) * this.cellSize;
+                        wallY1 = yi * this.cellSize;
+                        wallX2 = (xi + 1) * this.cellSize;
+                        wallY2 = (yi + 1) * this.cellSize;
+                    }
+                    
+                    // 检查两个线段是否相交
+                    if (this.lineSegmentIntersect(x1, y1, x2, y2, wallX1, wallY1, wallX2, wallY2)) {
+                        return true; // 发生碰撞
+                    }
+                }
+                
+                return false; // 没有碰撞
+            }
+
+            // 检查两个线段是否相交
+            lineSegmentIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+                const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+                if (Math.abs(denom) < 1e-10) return false; // 平行线
+                
+                const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+                const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+                
+                return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+            }
+
+            // 检查位置是否被边界阻挡
+            isPositionBlocked(x, y) {
+                // 检查是否超出迷宫边界
+                return x < 0 || x >= this.actualMazeSize || y < 0 || y >= this.actualMazeSize;
+            }
+
+            // 绘制路径
+            drawPath(container) {
+                // 清除之前的路径
+                const oldPath = container.querySelector('.maze-path-line');
+                if (oldPath) oldPath.remove();
+                
+                if (this.currentPath.length < 2) return;
+                
+                const pathLine = document.createElement('canvas');
+                pathLine.className = 'maze-path-line';
+                pathLine.width = this.actualMazeSize;
+                pathLine.height = this.actualMazeSize;
+                pathLine.style.cssText = `
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    z-index: 4;
+                    pointer-events: none;
+                `;
+                
+                const ctx = pathLine.getContext('2d');
+                ctx.strokeStyle = '#007bff';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                
+                ctx.beginPath();
+                ctx.moveTo(this.currentPath[0].x, this.currentPath[0].y);
+                
+                for (let i = 1; i < this.currentPath.length; i++) {
+                    ctx.lineTo(this.currentPath[i].x, this.currentPath[i].y);
+                }
+                
+                ctx.stroke();
+                container.appendChild(pathLine);
+            }
+
+            // 清除路径
+            clearPath(container) {
+                const pathLine = container.querySelector('.maze-path-line');
+                if (pathLine) pathLine.remove();
+                this.currentPath = [];
+            }
+
+            cleanup() {
+                // 调用父类清理
+                super.cleanup();
+                
+                // 清理迷宫游戏特定状态
+                this.isDragging = false;
+                this.currentPath = [];
+                this.isPathComplete = false;
+                
+                // 清理事件监听器
+                const content = this.getContent();
+                if (content) {
+                    const mazeContainer = content.querySelector('.maze-container');
+                    if (mazeContainer) {
+                        // 移除所有可能的事件监听器
+                        // 由于我们没有保存监听器的引用，我们重新创建一个新的容器来清理所有监听器
+                        const newContainer = mazeContainer.cloneNode(true);
+                        mazeContainer.parentNode.replaceChild(newContainer, mazeContainer);
+                        
+                        // 清理路径画布
+                        this.clearPath(newContainer);
+                        
+                        // 重置触摸动作
+                        newContainer.style.touchAction = 'auto';
+                    }
+                }
+            }
+        }
+
+        // 算术题游戏
+        class MathGame extends BaseGame {
+            setupGame() {
+                this.setInstruction('简单算术：选择正确答案');
+                
+                let num1 = Math.floor(Math.random() * 20) + 1;
+                let num2 = Math.floor(Math.random() * 20) + 1;
+                const operators = ['+', '-', '*'];
+                const operator = operators[Math.floor(Math.random() * operators.length)];
+                
+                let answer;
+                switch(operator) {
+                    case '+': 
+                        answer = num1 + num2; 
+                        break;
+                    case '-': 
+                        // 确保被减数大于等于减数，结果为正数或0
+                        if (num1 < num2) {
+                            [num1, num2] = [num2, num1]; // 交换使num1 >= num2
+                        }
+                        answer = num1 - num2; 
+                        break;
+                    case '*': 
+                        answer = num1 * num2; 
+                        break;
+                }
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="question">${num1} ${operator} ${num2} = ?</div>
+                    <div class="options">
+                        ${this.generateOptions(answer).map(opt => 
+                            `<button class="option" onclick="game.handleAnswer('${this.side}', ${opt}, ${answer})">${opt}</button>`
+                        ).join('')}
+                    </div>
+                `;
+            }
+
+            generateOptions(correct) {
+                const options = [correct];
+                while(options.length < 4) {
+                    const wrong = correct + Math.floor(Math.random() * 20) - 10;
+                    if (wrong > 0 && !options.includes(wrong)) {
+                        options.push(wrong);
+                    }
+                }
+                return options.sort(() => Math.random() - 0.5);
+            }
+        }
+
+        // 纸杯游戏
+        class CupsGame extends BaseGame {
+            constructor(side, gameManager) {
+                super(side, gameManager);
+                this.ballPosition = Math.floor(Math.random() * 3);
+                this.showingBall = true;
+                this.gamePhase = 'showing'; // 'showing', 'hiding', 'shuffling', 'guessing'
+                this.shuffleCount = 0;
+                this.maxShuffles = 3;
+                this.canSelect = false;
+                this.cupsCurrentState = []; // 记录每个杯子的当前transform状态
+                this.gameTimers = []; // 追踪所有游戏相关的定时器
+            }
+
+            setupGame() {
+                this.setInstruction('记住小球位置：观察红球位置，等待杯子交换完成后选择');
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="cups">
+                        ${[0, 1, 2].map(i => `
+                            <div class="cup-container">
+                                <div class="cup" id="${this.side}-cup-${i}" data-position="${i}">
+                                </div>
+                                ${i === this.ballPosition ? '<div class="ball" id="' + this.side + '-ball"></div>' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                // 初始化杯子状态记录
+                this.cupsCurrentState = [
+                    { translateX: 0, translateY: -30 }, // 初始悬浮状态
+                    { translateX: 0, translateY: -30 },
+                    { translateX: 0, translateY: -30 }
+                ];
+                
+                // 设置杯子初始悬浮状态
+                const cups = this.getContent().querySelectorAll('.cup');
+                cups.forEach((cup, index) => {
+                    cup.style.transform = `translateY(-30px)`;
+                    cup.style.boxShadow = '0 6px 12px rgba(0,0,0,0.3)';
+                });
+                
+                // 2秒后开始隐藏球并下降杯子
+                const startHidingTimer = setTimeout(() => {
+                    this.startHiding();
+                }, 2000);
+                this.gameTimers.push(startHidingTimer);
+            }
+
+            startHiding() {
+                this.gamePhase = 'hiding';
+                this.setInstruction('杯子盖住小球，准备交换...');
+                
+                const ball = document.getElementById(`${this.side}-ball`);
+                const cups = this.getContent().querySelectorAll('.cup');
+                
+                // 球消失动画 - 使用animate API
+                if (ball) {
+                    ball.animate([
+                        { opacity: 1 },
+                        { opacity: 0 }
+                    ], {
+                        duration: 400,
+                        easing: 'ease-out',
+                        fill: 'forwards'
+                    });
+                }
+                
+                // 杯子下降动画 - 使用animate API
+                cups.forEach((cup, index) => {
+                    cup.animate([
+                        { transform: 'translateY(-30px)', boxShadow: '0 6px 12px rgba(0,0,0,0.3)' },
+                        { transform: 'translateY(0px)', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }
+                    ], {
+                        duration: 800,
+                        easing: 'ease-out',
+                        fill: 'forwards'
+                    });
+                    
+                    // 更新状态记录
+                    this.cupsCurrentState[index].translateY = 0;
+                });
+                
+                const startShufflingTimer = setTimeout(() => {
+                    this.startShuffling();
+                }, 800);
+                this.gameTimers.push(startShufflingTimer);
+            }
+
+            startShuffling() {
+                this.gamePhase = 'shuffling';
+                this.setInstruction(`杯子交换中... (${this.shuffleCount + 1}/${this.maxShuffles})`);
+                
+                this.performShuffle();
+            }
+
+            performShuffle() {
+                if (this.shuffleCount >= this.maxShuffles) {
+                    this.endShuffling();
+                    return;
+                }
+
+                // 随机选择两个不同的杯子进行交换
+                let pos1, pos2;
+                do {
+                    pos1 = Math.floor(Math.random() * 3);
+                    pos2 = Math.floor(Math.random() * 3);
+                } while (pos1 === pos2);
+
+                this.swapCups(pos1, pos2);
+                
+                // 更新球的位置记录
+                if (this.ballPosition === pos1) {
+                    this.ballPosition = pos2;
+                } else if (this.ballPosition === pos2) {
+                    this.ballPosition = pos1;
+                }
+
+                this.shuffleCount++;
+                
+                const shuffleTimer = setTimeout(() => {
+                    if (this.shuffleCount < this.maxShuffles) {
+                        this.setInstruction(`杯子交换中... (${this.shuffleCount + 1}/${this.maxShuffles})`);
+                        const nextShuffleTimer = setTimeout(() => {
+                            this.performShuffle();
+                        }, 500);
+                        this.gameTimers.push(nextShuffleTimer);
+                    } else {
+                        this.performShuffle();
+                    }
+                }, 1000);
+                this.gameTimers.push(shuffleTimer);
+            }
+
+            swapCups(pos1, pos2) {
+                const cup1 = document.getElementById(`${this.side}-cup-${pos1}`);
+                const cup2 = document.getElementById(`${this.side}-cup-${pos2}`);
+                
+                if (!cup1 || !cup2) return;
+
+                // 计算交换距离 - 基于元素实际位置
+                const cup1Rect = cup1.getBoundingClientRect();
+                const cup2Rect = cup2.getBoundingClientRect();
+                const distance = cup2Rect.left - cup1Rect.left; // 实际像素距离
+                const duration = 1000; // 动画持续时间（毫秒）
+                
+                // 获取当前状态
+                const currentState1 = this.cupsCurrentState[pos1];
+                const currentState2 = this.cupsCurrentState[pos2];
+                
+                // 计算新的位置
+                const newState1 = {
+                    translateX: currentState1.translateX + distance,
+                    translateY: currentState1.translateY
+                };
+                const newState2 = {
+                    translateX: currentState2.translateX - distance,
+                    translateY: currentState2.translateY
+                };
+
+                // 使用animate API创建杯子交换动画，保持在下降状态
+                cup1.animate([
+                    { transform: `translateX(${currentState1.translateX}px) translateY(${currentState1.translateY}px)` },
+                    { transform: `translateX(${newState1.translateX / 2}px) translateY(${currentState1.translateY - 30}px)` },
+                    { transform: `translateX(${newState1.translateX}px) translateY(${newState1.translateY}px)` }
+                ], { 
+                    duration: duration, 
+                    easing: 'ease-in-out', 
+                });
+
+                cup2.animate([
+                    { transform: `translateX(${currentState2.translateX}px) translateY(${currentState2.translateY}px)` },
+                    { transform: `translateX(${newState2.translateX / 2}px) translateY(${currentState2.translateY - 30}px)` },
+                    { transform: `translateX(${newState2.translateX}px) translateY(${newState2.translateY}px)` }
+                ], { 
+                    duration: duration, 
+                    easing: 'ease-in-out', 
+                });
+                
+                // 更新状态记录
+                this.cupsCurrentState[pos1] = newState2; // 注意交换
+                this.cupsCurrentState[pos2] = newState1;
+
+                // 交换DOM位置（在动画结束后执行）
+                const swapDOMTimer = setTimeout(() => {
+                    const parent = cup1.parentNode.parentNode;
+                    const container1 = cup1.parentNode;
+                    const container2 = cup2.parentNode;
+                    
+                    // 创建临时标记
+                    const temp = document.createElement('div');
+                    parent.insertBefore(temp, container1);
+                    parent.insertBefore(container1, container2);
+                    parent.insertBefore(container2, temp);
+                    parent.removeChild(temp);
+                    
+                    // 更新ID和数据属性
+                    cup1.id = `${this.side}-cup-${pos2}`;
+                    cup2.id = `${this.side}-cup-${pos1}`;
+                    cup1.dataset.position = pos2;
+                    cup2.dataset.position = pos1;
+                    
+                    // 重置transform，因为DOM位置已经改变
+                    cup1.style.transform = `translateY(${currentState1.translateY}px)`;
+                    cup2.style.transform = `translateY(${currentState2.translateY}px)`;
+                    
+                    // 重置状态记录为DOM交换后的状态
+                    this.cupsCurrentState[pos1] = { translateX: 0, translateY: currentState2.translateY };
+                    this.cupsCurrentState[pos2] = { translateX: 0, translateY: currentState1.translateY };
+                }, duration);
+                this.gameTimers.push(swapDOMTimer);
+            }
+
+            endShuffling() {
+                this.gamePhase = 'guessing';
+                this.canSelect = true;
+                this.setInstruction('杯子交换完成！<span class="highlight">点击</span>你认为藏有红球的杯子');
+                
+                // 添加点击事件
+                const cups = this.getContent().querySelectorAll('.cup');
+                cups.forEach((cup, index) => {
+                    cup.style.cursor = 'pointer';
+                    cup.onclick = () => {
+                        if (this.canSelect) {
+                            this.selectCup(parseInt(cup.dataset.position));
+                        }
+                    };
+                });
+            }
+
+            selectCup(cupIndex) {
+                if (!this.canSelect) return;
+                
+                this.canSelect = false;
+                const isCorrect = cupIndex === this.ballPosition;
+                
+                // 显示结果
+                const cups = this.getContent().querySelectorAll('.cup');
+                cups.forEach(cup => {
+                    cup.style.cursor = 'default';
+                    cup.onclick = null;
+                });
+                
+                // 揭示答案 - 杯子上升显示球
+                const correctCupContainer = document.querySelector(`#${this.side}-cup-${this.ballPosition}`).parentNode;
+                const correctCup = document.querySelector(`#${this.side}-cup-${this.ballPosition}`);
+                
+                if (correctCup && correctCupContainer) {
+                    // 杯子上升动画
+                    correctCup.animate([
+                        { transform: 'translateY(0px)' },
+                        { transform: 'translateY(-30px)' }
+                    ], {
+                        duration: 600,
+                        easing: 'ease-out',
+                        fill: 'forwards'
+                    });
+                    
+                    // 创建并显示球
+                    const ball = document.createElement('div');
+                    ball.className = 'ball';
+                    ball.style.opacity = '0';
+                    ball.style.transform = 'translateX(-50%)';
+                    correctCupContainer.appendChild(ball);
+                    
+                    const ballShowTimer = setTimeout(() => {
+                        ball.animate([
+                            { opacity: 0 },
+                            { opacity: 1 }
+                        ], {
+                            duration: 400,
+                            easing: 'ease-out',
+                            fill: 'forwards'
+                        });
+                    }, 200);
+                    this.gameTimers.push(ballShowTimer);
+                }
+                
+                const completeTimer = setTimeout(() => {
+                    this.complete(isCorrect);
+                }, 1000);
+                this.gameTimers.push(completeTimer);
+            }
+
+            cleanup() {
+                // 调用父类清理
+                super.cleanup();
+                
+                // 清理杯子游戏特定状态
+                this.canSelect = false;
+                this.gamePhase = 'ended';
+                
+                // 清理所有游戏相关的定时器
+                this.gameTimers.forEach(timerId => {
+                    clearTimeout(timerId);
+                });
+                this.gameTimers = [];
+                
+                // 重置杯子状态
+                this.cupsCurrentState = [];
+                
+                // 确保所有杯子都移除事件监听器和重置样式
+                const content = this.getContent();
+                if (content) {
+                    const cups = content.querySelectorAll('.cup');
+                    cups.forEach(cup => {
+                        cup.style.cursor = 'default';
+                        cup.onclick = null;
+                        cup.style.animation = 'none';
+                        cup.style.transform = '';
+                        cup.style.transition = 'none';
+                        
+                        // 取消所有Web Animations API动画
+                        if (cup.getAnimations) {
+                            cup.getAnimations().forEach(animation => {
+                                animation.cancel();
+                            });
+                        }
+                    });
+                    
+                    // 清理球元素的动画
+                    const balls = content.querySelectorAll('.ball');
+                    balls.forEach(ball => {
+                        if (ball.getAnimations) {
+                            ball.getAnimations().forEach(animation => {
+                                animation.cancel();
+                            });
+                        }
+                    });
+                }
+            }
+        }
+
+        // 气泡游戏
+        class BubblesGame extends BaseGame {
+            constructor(side, gameManager) {
+                super(side, gameManager);
+                this.bubbles = [];
+                this.colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7'];
+                this.bubbleCount = 3;
+                this.bubblesPopped = 0;
+            }
+
+            setupGame() {
+                this.setInstruction('轻点气泡：<span class="highlight">点击</span>所有上升的气泡');
+                
+                const content = this.getContent();
+                content.innerHTML = '<div class="bubble-area"></div>';
+                
+                const bubbleArea = content.querySelector('.bubble-area');
+                
+                // 创建气泡
+                for (let i = 0; i < this.bubbleCount; i++) {
+                    setTimeout(() => {
+                        this.createBubble(bubbleArea);
+                    }, i * 1000);
+                }
+            }
+
+            createBubble(container) {
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                bubble.style.backgroundColor = this.colors[Math.floor(Math.random() * this.colors.length)];
+                bubble.style.left = Math.random() * (container.offsetWidth - 80) + 'px';
+                bubble.style.animation = `bubbleUp ${GAME_CONFIG.BUBBLE_RISE_TIME}s linear`;
+                
+                bubble.addEventListener('click', () => {
+                    bubble.remove();
+                    this.bubblesPopped++;
+                    if (this.bubblesPopped === this.bubbleCount) {
+                        this.complete(true);
+                    }
+                });
+
+                bubble.addEventListener('animationend', () => {
+                    if (bubble.parentNode) {
+                        bubble.remove();
+                        this.complete(false);
+                    }
+                });
+
+                container.appendChild(bubble);
+            }
+
+            cleanup() {
+                // 调用父类清理
+                super.cleanup();
+                
+                // 清理泡泡游戏特定状态
+                this.bubblesPopped = 0;
+                this.bubbles = [];
+                
+                // 停止所有泡泡的动画和移除事件监听器
+                const content = this.getContent();
+                if (content) {
+                    const bubbles = content.querySelectorAll('.bubble');
+                    bubbles.forEach(bubble => {
+                        bubble.style.animation = 'none';
+                        bubble.onclick = null;
+                        bubble.onanimationend = null;
+                        
+                        // 取消Web Animations API动画
+                        if (bubble.getAnimations) {
+                            bubble.getAnimations().forEach(animation => {
+                                animation.cancel();
+                            });
+                        }
+                        
+                        // 立即移除元素
+                        if (bubble.parentNode) {
+                            bubble.remove();
+                        }
+                    });
+                }
+            }
+        }
+
+        // 找不同类物体游戏
+        class OddOneOutGame extends BaseGame {
+            setupGame() {
+                this.setInstruction('找不同类：<span class="highlight">点击</span>不属于同类的物体');
+                
+                const categories = [
+                    { same: ['🐶', '🐱', '🐰'], different: '🍎' },
+                    { same: ['🚗', '🚌', '🚲'], different: '🍌' },
+                    { same: ['📱', '💻', '⌚'], different: '🌸' },
+                    { same: ['⚽', '🏀', '🎾'], different: '📚' },
+                    { same: ['🌸', '🌺', '🌻'], different: '🚗' },
+                    { same: ['🍎', '🍊', '🍌'], different: '📱' }
+                ];
+                
+                const category = categories[Math.floor(Math.random() * categories.length)];
+                const items = [...category.same, category.different];
+                
+                // 确保有4个选项，如果只有4个就直接使用，否则随机排列
+                const shuffledItems = items.sort(() => Math.random() - 0.5);
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="options">
+                        ${shuffledItems.map(item => `
+                            <button class="option" onclick="game.selectOddOne('${this.side}', '${item}', '${category.different}')" 
+                                    style="font-size: 48px;">${item}</button>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        // 词汇分类游戏
+        class WordCategoryGame extends BaseGame {
+            setupGame() {
+                this.setInstruction('词汇分类：<span class="highlight">点击</span>不属于同类的词汇');
+                
+                const categories = [
+                    { same: ['苹果', '香蕉', '橙子'], different: '汽车' },
+                    { same: ['猫', '狗', '兔子'], different: '桌子' },
+                    { same: ['红色', '蓝色', '绿色'], different: '音乐' },
+                    { same: ['春天', '夏天', '秋天'], different: '电脑' },
+                    { same: ['书本', '笔记', '作业'], different: '西瓜' },
+                    { same: ['足球', '篮球', '排球'], different: '钢琴' }
+                ];
+                
+                const category = categories[Math.floor(Math.random() * categories.length)];
+                const words = [...category.same, category.different];
+                
+                // 确保有4个选项
+                const shuffledWords = words.sort(() => Math.random() - 0.5);
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="options">
+                        ${shuffledWords.map(word => `
+                            <button class="option" onclick="game.selectOddWord('${this.side}', '${word}', '${category.different}')">${word}</button>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        // 颜色汉字游戏
+        class ColorCharGame extends BaseGame {
+            setupGame() {
+                this.setInstruction('颜色判断：选择<span class="highlight">汉字颜色</span>（不是字义）');
+                
+                const colors = [
+                    { name: '红', color: '#dc3545' },
+                    { name: '蓝', color: '#007bff' },
+                    { name: '绿', color: '#28a745' },
+                    { name: '黄', color: '#ffc107' }
+                ];
+                
+                const charColor = colors[Math.floor(Math.random() * colors.length)];
+                const charName = colors[Math.floor(Math.random() * colors.length)];
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="chinese-char" style="color: ${charColor.color}; font-size: 64px; margin: 0 0 30px; font-weight: bold;">${charName.name}</div>
+                    <div class="options">
+                        ${colors.map(color => `
+                            <button class="option" onclick="game.selectColor('${this.side}', '${color.name}', '${charColor.name}')">${color.name}</button>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        // 多边形游戏
+        class PolygonGame extends BaseGame {
+            constructor(side, gameManager, order) {
+                super(side, gameManager);
+                this.order = order; // 'asc' or 'desc'
+                this.selectedShapes = [];
+                this.shapes = [];
+            }
+
+            setupGame() {
+                const orderText = this.order === 'asc' ? '由少至多' : '由多至少';
+                this.setInstruction(`多边形排序：按边数<span class="highlight">${orderText}</span>依次点击`);
+                
+                // 生成3-8边形
+                const sides = [3, 4, 5, 6].sort(() => Math.random() - 0.5);
+                this.shapes = sides;
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="shapes">
+                        ${sides.map((side, index) => `
+                            <div class="shape" onclick="game.selectShape('${this.side}', ${index}, ${side})" 
+                                 style="background: ${this.getShapeColor(side)}; clip-path: ${this.getShapeClipPath(side)};">
+                                ${side}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            getShapeColor(sides) {
+                const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
+                return colors[sides - 3];
+            }
+
+            getShapeClipPath(sides) {
+                const clipPaths = {
+                    3: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+                    4: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)',
+                    5: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+                    6: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)'
+                };
+                return clipPaths[sides] || clipPaths[4];
+            }
+        }
+
+        // 字母游戏
+        class LetterGame extends BaseGame {
+            constructor(side, gameManager, order) {
+                super(side, gameManager);
+                this.order = order; // 'asc' or 'desc'
+                this.selectedLetters = [];
+                this.letters = [];
+            }
+
+            setupGame() {
+                const orderText = this.order === 'asc' ? '顺序' : '逆序';
+                this.setInstruction(`字母排序：按<span class="highlight">${orderText}</span>依次点击字母`);
+                
+                // 生成4个连续字母
+                const startChar = Math.floor(Math.random() * 23); // A-W
+                this.letters = [];
+                for (let i = 0; i < 4; i++) {
+                    this.letters.push(String.fromCharCode(65 + startChar + i));
+                }
+                
+                const shuffled = [...this.letters].sort(() => Math.random() - 0.5);
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="options">
+                        ${shuffled.map(letter => `
+                            <button class="option" onclick="game.selectLetter('${this.side}', '${letter}')">${letter}</button>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        // 数字游戏
+        class NumberGame extends BaseGame {
+            constructor(side, gameManager, order) {
+                super(side, gameManager);
+                this.order = order; // 'asc' or 'desc'
+                this.selectedNumbers = [];
+                this.numbers = [];
+            }
+
+            setupGame() {
+                const orderText = this.order === 'asc' ? '由小到大' : '由大到小';
+                this.setInstruction(`数字排序：<span class="highlight">${orderText}</span>依次点击数字`);
+                
+                // 生成4个不重复数字
+                this.numbers = [];
+                while (this.numbers.length < 4) {
+                    const num = Math.floor(Math.random() * 99) + 1;
+                    if (!this.numbers.includes(num)) {
+                        this.numbers.push(num);
+                    }
+                }
+                
+                const shuffled = [...this.numbers].sort(() => Math.random() - 0.5);
+                
+                const content = this.getContent();
+                content.innerHTML = `
+                    <div class="options">
+                        ${shuffled.map(num => `
+                            <button class="option" onclick="game.selectNumber('${this.side}', ${num})">${num}</button>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        // 游戏实例
+        let gameInstance;
+
+        function startGame() {
+            // 如果游戏实例已存在，直接重启游戏而不创建新实例
+            if (gameInstance) {
+                gameInstance.startGame();
+            } else {
+                // 只在第一次时创建新实例
+                gameInstance = new AttentionGame();
+                gameInstance.startGame();
+            }
+        }
+
+        // 游戏交互函数
+        window.game = {
+            handleAnswer(side, selected, correct) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                game.complete(selected === correct);
+            },
+
+            selectCup(side, cupIndex) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                if (game && typeof game.selectCup === 'function') {
+                    game.selectCup(cupIndex);
+                } else {
+                    // 兼容旧版本
+                    game.complete(cupIndex === game.ballPosition);
+                }
+            },
+
+            selectOddOne(side, selected, correct) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                game.complete(selected === correct);
+            },
+
+            selectOddWord(side, selected, correct) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                game.complete(selected === correct);
+            },
+
+            selectColor(side, selected, correct) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                game.complete(selected === correct);
+            },
+
+            selectShape(side, index, sides) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                const button = event.target;
+                
+                if (button.classList.contains('selected')) return;
+                
+                button.classList.add('selected');
+                game.selectedShapes.push(sides);
+                
+                const expectedOrder = game.order === 'asc' ? 
+                    [...game.shapes].sort((a, b) => a - b) : 
+                    [...game.shapes].sort((a, b) => b - a);
+                
+                const isCorrectSoFar = game.selectedShapes.every((shape, i) => 
+                    shape === expectedOrder[i]
+                );
+                
+                if (!isCorrectSoFar) {
+                    game.complete(false);
+                } else if (game.selectedShapes.length === game.shapes.length) {
+                    game.complete(true);
+                }
+            },
+
+            selectLetter(side, letter) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                const button = event.target;
+                
+                if (button.classList.contains('selected')) return;
+                
+                button.classList.add('selected');
+                game.selectedLetters.push(letter);
+                
+                const expectedOrder = game.order === 'asc' ? 
+                    [...game.letters].sort() : 
+                    [...game.letters].sort().reverse();
+                
+                const isCorrectSoFar = game.selectedLetters.every((letter, i) => 
+                    letter === expectedOrder[i]
+                );
+                
+                if (!isCorrectSoFar) {
+                    game.complete(false);
+                } else if (game.selectedLetters.length === game.letters.length) {
+                    game.complete(true);
+                }
+            },
+
+            selectNumber(side, number) {
+                const game = side === 'left' ? gameInstance.leftGame : gameInstance.rightGame;
+                const button = event.target;
+                
+                if (button.classList.contains('selected')) return;
+                
+                button.classList.add('selected');
+                game.selectedNumbers.push(number);
+                
+                const expectedOrder = game.order === 'asc' ? 
+                    [...game.numbers].sort((a, b) => a - b) : 
+                    [...game.numbers].sort((a, b) => b - a);
+                
+                const isCorrectSoFar = game.selectedNumbers.every((num, i) => 
+                    num === expectedOrder[i]
+                );
+                
+                if (!isCorrectSoFar) {
+                    game.complete(false);
+                } else if (game.selectedNumbers.length === game.numbers.length) {
+                    game.complete(true);
+                }
+            }
+        };
+
+        // 积分弹窗功能
+        function showPointsModal() {
+            // 每次打开积分弹窗时查询最新积分
+            gameInstance.getTotalTrainingPoints();
+            
+            const modal = document.getElementById('pointsModal');
+            modal.classList.add('show');
+        }
+
+        function hidePointsModal(event) {
+            // 如果事件存在且点击的是弹窗内容区域，则不关闭弹窗
+            if (event && event.target !== event.currentTarget) {
+                return;
+            }
+            
+            const modal = document.getElementById('pointsModal');
+            modal.classList.remove('show');
+        }
+
+        // 规则弹窗功能
+        function showRulesModal() {
+            const modal = document.getElementById('rulesModal');
+            modal.classList.add('show');
+        }
+
+        function hideRulesModal(event) {
+            // 如果事件存在且点击的是弹窗内容区域，则不关闭弹窗
+            if (event && event.target !== event.currentTarget) {
+                return;
+            }
+            
+            const modal = document.getElementById('rulesModal');
+            modal.classList.remove('show');
+        }
+
+        // 初始化游戏
+        gameInstance = new AttentionGame();
+        
+        // 页面卸载时清理资源
+        window.addEventListener('beforeunload', () => {
+            if (gameInstance) {
+                gameInstance.cleanupMessageHandlers();
+            }
+        });
+        
+        // 页面加载完成后查询积分并显示规则弹窗
+        // 查询总积分
+        gameInstance.getTotalTrainingPoints();
+        
+        setTimeout(() => {
+            showRulesModal();
+        }, 500);
+        
+        // 游戏初始化完毕，发送gameLoaded事件
+        window.parent.postMessage({
+            type: 'gameLoaded'
+        }, '*');
+    </script>
+</body>
+</html>
