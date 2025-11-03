@@ -1016,7 +1016,7 @@
       // 基于 userAgent 检测当前平台
       function detectCurrentPlatform() {
         const userAgent = navigator.userAgent.toLowerCase();
-        debugger;
+        
         // 检测微信小程序环境
         if (typeof wx !== 'undefined' && wx.miniProgram) {
           return 'web'; // 微信小程序按 web 处理
@@ -1137,10 +1137,10 @@
         }
       }
 
-      function showTaskButton() {
+      function showTaskButton(bShow) {
         const taskButton = document.querySelector(".task-btn");
         if (taskButton) {
-          taskButton.classList.remove("hidden");
+          taskButton.classList.toggle("hidden", bShow == false);
         }
       }
       function showEnterButton() {
@@ -1206,6 +1206,7 @@
       });
 
       function UpdateButtonsByUrlParams(urlParams) {
+        let gameOnly = false;
         if (!urlParams) {
           const currentUrl = new URL(window.location.href);
           const currentUrlParams = new URLSearchParams(currentUrl.search);
@@ -1213,11 +1214,13 @@
           paracraftPlatform = currentUrlParams.get("paracraftPlatform");
           isMaisiTestCompleted = currentUrlParams.get("isMaisiTestCompleted") === "true";
           isLoading = currentUrlParams.get("isLoading") === "true";
+          gameOnly = currentUrlParams.get("gameonly") === "true";
         } else {
           devMode = urlParams.dev;
           paracraftPlatform = urlParams.paracraftPlatform || paracraftPlatform;
           isMaisiTestCompleted = urlParams.isMaisiTestCompleted === "true";
           isLoading = urlParams.isLoading === "true";
+          gameOnly = urlParams.gameonly === "true";
           updateTaskButtonDisplay(urlParams.taskTime);
         }
         
@@ -1238,24 +1241,30 @@
           uiContainer.style.display = "block";
         }
         
-        if (devMode === "true") {
+        if (gameOnly) {
+          // gameonly=true: 隐藏任务按钮，只显示进入按钮
+          showEnterButton();
+          showDownloadAppButton();
+          showAccountButton();
+          showTaskButton(false);
+        } else if (devMode === "true") {
           showTaskButton();
           showEnterButton();
           showDownloadAppButton();
           showAccountButton();
-        }
-        
-        // 使用 userAgent 检测当前平台
-        const currentPlatform = detectCurrentPlatform();
-        
-        if (currentPlatform === "android" || currentPlatform === "ios" || currentPlatform === "harmony") {
-          showEnterButton();
-          showAccountButton();
-          // showDownloadAppButton();
-          // android/ios/harmony 不显示任务按钮
         } else {
-          // web 平台显示任务按钮
-          showTaskButton();
+          // 使用 userAgent 检测当前平台
+          const currentPlatform = detectCurrentPlatform();
+          
+          if (currentPlatform === "android" || currentPlatform === "ios" || currentPlatform === "harmony") {
+            showEnterButton();
+            showAccountButton();
+            // showDownloadAppButton();
+            // android/ios/harmony 不显示任务按钮
+          } else {
+            // web 平台显示任务按钮
+            showTaskButton();
+          }
         }
       }
 
@@ -1624,6 +1633,12 @@
         if (urlParams && Object.keys(urlParams).length > 0) {
           if (urlParams.orientation) {
             newUrlParams.set("orientation", urlParams.orientation);
+          }
+          if (urlParams.gameonly) {
+            newUrlParams.set("gameonly", urlParams.gameonly);
+          }
+          if (urlParams.dev) {
+            newUrlParams.set("dev", urlParams.dev);
           }
         }
         url += "&" + newUrlParams.toString();
