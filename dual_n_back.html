@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>脑力双轨战</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        /* 清除浏览器默认样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* 通用字体样式 */
+        html {
+            /* 设置根元素字体大小，便于 rem 单位换算：1rem = 10px */
+            font-size: 10px;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #B4E35A;
+            
+            /* 字体族设置 - 按优先级排列 */
+            font-family: 
+                /* iOS 中文 */
+                "PingFang SC", "PingFang TC",
+                /* iOS 英文 */
+                "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "SF Pro Display",
+                /* Android 中文 */
+                "Noto Sans SC", "Noto Sans CJK SC",
+                /* Android 英文 */
+                "Roboto",
+                /* 通用后备字体 */
+                "Helvetica Neue", "Arial", "Microsoft YaHei", "微软雅黑",
+                sans-serif;
+            
+            /* 基础字号和行高 */
+            font-size: 1.4rem;
+            line-height: 2.2rem; /* 字号 + 8px */
+            
+            /* 优化字体渲染 */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        
+        /* 数字使用 DIN 字体 */
+        .number,
+        input[type="number"],
+        .price,
+        .count {
+            font-family: 
+                "DIN Alternate", "DIN", "DIN-Medium", "DIN-Bold",
+                "SF Pro Display", "Roboto",
+                monospace;
+            font-variant-numeric: tabular-nums; /* 等宽数字 */
+        }
+        
+        /* ==================== 字号规范 ==================== */
+        /* 针对不同字号保持行高规则（字号 + 8px） */
+        .text-10 { font-size: 1rem; line-height: 1.8rem; }
+        .text-12 { font-size: 1.2rem; line-height: 2rem; }
+        .text-14 { font-size: 1.4rem; line-height: 2.2rem; }
+        .text-16 { font-size: 1.6rem; line-height: 2.4rem; }
+        .text-18 { font-size: 1.8rem; line-height: 2.6rem; }
+        .text-20 { font-size: 2rem; line-height: 2.8rem; }
+        .text-22 { font-size: 2.2rem; line-height: 3rem; }
+        .text-24 { font-size: 2.4rem; line-height: 3.2rem; }
+        
+        /* ==================== 颜色规范 ==================== */
+        /* 标题 正文 - 黑色 */
+        .text-title,
+        .text-primary {
+            color: #000000;
+        }
+        
+        /* 正文 列表 - 深灰色 */
+        .text-secondary,
+        .text-list {
+            color: #333333;
+        }
+        
+        /* 说明 备注 - 中灰色 */
+        .text-note,
+        .text-remark,
+        .text-description {
+            color: #999999;
+        }
+        
+        /* 分割线 - 浅灰色 */
+        .text-divider,
+        .text-disabled {
+            color: #D6DEE4;
+        }
+        
+        /* 背景色版本 */
+        .bg-primary { background-color: #000000; }
+        .bg-secondary { background-color: #333333; }
+        .bg-note { background-color: #999999; }
+        .bg-divider { background-color: #D6DEE4; }
+        
+        /* 边框色版本 */
+        .border-primary { border-color: #000000; }
+        .border-secondary { border-color: #333333; }
+        .border-note { border-color: #999999; }
+        .border-divider { border-color: #D6DEE4; }
+        
+        /* 可选：针对特定平台的字体优化 */
+        @supports (-webkit-touch-callout: none) {
+            /* iOS 特定样式 */
+            body {
+                font-family: 
+                    "PingFang SC", "PingFang TC",
+                    "-apple-system", "BlinkMacSystemFont",
+                    sans-serif;
+            }
+        }
+        
+        .game-container {
+            display: flex;
+            position: relative;
+            width: 65.2rem;
+            height: 37.5rem;
+            padding: 1.2rem;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        .game-main {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            width: 34.8rem;
+            height: 34.8rem;
+            padding: 1.6rem;
+            margin-left: 0.9rem;
+            margin-right: 1.2rem;
+            background-color: #8EC625;
+            border-radius: 1.2rem;
+        }
+        
+        /* 仅限制主游戏区域的触摸手势，避免误触；不影响面板和下拉的滚动 */
+        .game-main, .game-grid {
+            touch-action: none;
+        }
+        
+        .game-grid {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            gap: 0.8rem; /* 默认间距，会被JavaScript动态调整 */
+        }
+        
+        .grid-cell {
+            aspect-ratio: 1;
+            background-color: #fff;
+            border-radius: 0.4rem;
+            transition: all 0.2s ease;
+        }
+        
+        .light-tip {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 0.8rem 2.4rem;
+            background-color: #000000B2;
+            border-radius: 0.8rem;
+            font-weight: 600;
+            color: #FFF;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .light-tip.show {
+            opacity: 1;
+        }
+        
+        .game-controls {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            width: 9.5rem;
+            padding-top: 5.3rem;
+        }
+        
+        .control-btn {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 6rem;
+            margin-bottom: 1.4rem;
+            border-radius: 0.8rem;
+            font-weight: 500;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        .control-btn.clicked-disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+            filter: brightness(0.8);
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .btn-visual {
+            background-color: #AFAAFF;
+            box-shadow: 0 0.4rem 0 0 #6A60FF;
+        }
+
+        .btn-color {
+            background-color: #4E9DFC;
+            box-shadow: 0 0.4rem 0 0 #1E77E6;
+        }
+
+        .btn-none {
+            background-color: #E18845;
+            box-shadow: 0 0.4rem 0 0 #C86825;
+        }
+
+        /* 规则弹窗样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-content {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            width: 39rem;
+            padding: 2.2rem 2.2rem 1.8rem;
+            background-color: #FFFFFF;
+            border-radius: 0.8rem;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.6rem;
+        }
+        
+        .rules-sign {
+            width: 0.6rem;
+            height: 1.8rem;
+            margin-right: 0.6rem;
+            background-color: #009DFF;
+            border-radius: 0.6rem;
+        }
+        
+        .modal-title {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+        }
+        
+        .modal-close-btn {
+            cursor: pointer;
+            font-weight: normal;
+            width: 1rem;
+            height: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: none;
+        }
+        
+        .modal-rules {
+            list-style-type: decimal;
+            margin-left: 1.4rem;
+        }
+        
+        .modal-rules li {
+            margin-bottom: 1rem;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 1rem;
+        }
+        
+        #startGameFromRules {
+            width: 12rem;
+            height: 3rem;
+            background-color: #009DFF;
+            border-radius: 0.8rem;
+            font-weight: 600;
+            color: #FFF;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* 积分弹窗样式 */
+        .points-modal {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            width: 39rem;
+            padding: 2.2rem 2.2rem 1.8rem;
+            background-color: #FFFFFF;
+            border-radius: 0.8rem;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .points-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .points-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+        }
+        
+        .points-sign {
+            width: 0.6rem;
+            height: 1.8rem;
+            margin-right: 0.6rem;
+            background-color: #FF9A00;
+            border-radius: 0.6rem;
+        }
+        
+        .points-title {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+        }
+        
+        .points-close {
+            cursor: pointer;
+            font-weight: normal;
+            width: 1rem;
+            height: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: none;
+        }
+        
+        .points-modal-content {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .points-stats-section {
+            background-color: #FDECE2;
+            border-radius: 0.8rem;
+            padding: 0.8rem 1.3rem 1rem 2.5rem;
+            margin-bottom: 0.2rem;
+        }
+        
+        .points-stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.6rem;
+        }
+        
+        .points-subtitle {
+            position: relative;
+            margin-bottom: 0.6rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .points-subtitle::before {
+            content: '';
+            display: inline-block;
+            position: absolute;
+            left: -1.2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0.4rem;
+            height: 0.4rem;
+            background-color: #FF9A00;
+            border-radius: 50%;
+        }
+        
+        .points-stats-grid {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        
+        .points-stat-item {
+            display: flex;
+            align-items: center;
+            width: 14.6rem;
+            height: 3.6rem;
+            padding: 0 1.2rem;
+            background-color: #ffffff;
+            border-radius: 0.8rem;
+        }
+        
+        .points-stat-label {
+            color: #999999;
+            font-size: 1.2rem;
+        }
+        
+        .points-stat-value {
+            margin-left: 1.2rem;
+            font-weight: 600;
+            font-size: 1.8rem;
+        }
+        
+        .points-stat-value.total {
+            color: #FF5800;
+        }
+        
+        .points-stat-value.daily {
+            color: #22C55E;
+        }
+        
+        .points-rules-section {
+            padding: 0.8rem 1.3rem 0 2.5rem;
+        }
+        
+        .points-rules-list-warpper {
+            width: 100%;
+            max-height: 7.2rem;
+            overflow-y: auto;
+        }
+        
+        .points-rules-list {
+            list-style-type: none;
+            display: inline-block;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .points-rules-list-warpper::-webkit-scrollbar {
+            width: 0.2rem;
+        }
+        
+        .points-rules-list-warpper::-webkit-scrollbar-thumb {
+            background: #999;
+            border-radius: 0.2rem;
+        }
+        
+        .points-rules-list li {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.4rem;
+            color: #333333;
+        }
+        
+        .points-rules-list li:last-child {
+            margin-bottom: 0;
+        }
+        
+        .points-rule-name {
+            display: inline-block;
+        }
+        
+        .points-rule-value {
+            margin-left: 2rem;
+            color: #FF9500;
+            font-weight: 600;
+        }
+        
+        .points-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .points-modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .rules-icon {
+            position: absolute;
+            width: 3.8rem;
+            height: 3.8rem;
+            right: 0.4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            border: none;
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        
+        #rulesIcon {
+            bottom: 0.4rem;
+            background-image: url("https://qiniu-public.keepwork.com/paracraft-cdn-resource/Web/ms_games/icon/game_rule.png");
+        }
+        
+        #pointsIcon {
+            bottom: 4.2rem;
+            background-image: url("https://qiniu-public.keepwork.com/paracraft-cdn-resource/Web/ms_games/icon/game_points.png");
+        }
+
+        .left-panel {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 16.4rem;
+        }
+        
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 23.1rem;
+            padding: 1.6rem 2.2rem;
+            padding-right: 2rem; /* 有的设备上字体较宽，这里是防止文本换行多给2像素距离 */
+            margin-bottom: 2.2rem;
+            background-color: #fff;
+            border-radius: 1.2rem;
+        }
+
+        .control-panel .info-item {
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+        }
+
+        .control-panel .info-item .vertical-bar {
+            width: 0.4rem;
+            height: 1.4rem;
+            margin-right: 0.8rem;
+            border-radius: 0.4rem;
+        }
+        
+        /* 新难度选择器样式 */
+        .difficulty-selector {
+            position: relative;
+            width: 100%;
+            height: 2.6rem;
+            color: #333;
+            margin-bottom: 1.6rem;
+        }
+
+        .difficulty-selector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.2rem 0.6rem;
+            background-color: #FFF1DF;
+            border-radius: 0.4rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .difficulty-selector-header.active {
+            border-color: #4196FF;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .difficulty-selector-header.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #F5F5F5;
+        }
+
+        .difficulty-selector-arrow {
+            width: 0;
+            height: 0;
+            border-left: 0.3rem solid transparent;
+            border-right: 0.3rem solid transparent;
+            border-top: 0.4rem solid #333;
+            transition: transform 0.2s ease;
+        }
+
+        .difficulty-selector-header.active .difficulty-selector-arrow {
+            transform: rotate(180deg);
+        }
+
+        .difficulty-selector-dropdown {
+            position: absolute;
+            top: 2.6rem;
+            left: 0;
+            right: 0;
+            background-color: #FFF1DF;
+            border-top: none;
+            border-bottom-left-radius: 0.4rem;
+            border-bottom-right-radius: 0.4rem;
+            z-index: 100;
+            max-height: 0;
+            overflow-y: auto;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .difficulty-selector-dropdown.show {
+            max-height: 20.8rem;
+            opacity: 1;
+        }
+
+        .difficulty-selector-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 2.6rem;
+            padding: 0.2rem 0.6rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .difficulty-selector-option:last-child {
+            border-bottom: none;
+        }
+
+        .difficulty-selector-option.selected {
+            background-color: #DBEAFE;
+            color: #4196FF;
+            font-weight: 600;
+        }
+
+        .difficulty-selector-option:hover:not(.selected) {
+            background-color: #FFE4B5;
+        }
+
+        .difficulty-selector.highlighted .difficulty-selector-header {
+            animation: difficultyHighlight 2s ease-in-out;
+        }
+
+        @keyframes difficultyHighlight {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.2);
+                background: #FFF1DF;
+            }
+            50% {
+                box-shadow: 0 0 0 0.4rem rgba(59, 130, 246, 0.3);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(0,0,0,0.1);
+                background: #FFF1DF;
+            }
+        }
+        
+        .reset-button,
+        .restart-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 12rem;
+            height: 3rem;
+            border-radius: 0.8rem;
+            font-weight: 500;
+            font-size: 1.6rem;
+            color: #fff;
+        }
+
+        .reset-button {
+            margin-bottom: 2.2rem;
+            background-color: #626774;
+            box-shadow: 0 0.4rem 0 0 #3E4454;
+        }
+
+        .restart-button {
+            background-color: #FF6C45;
+            box-shadow: 0 0.4rem 0 0 #DD3D1F;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- 左侧面板 -->
+        <div class="left-panel">
+            <div class="control-panel">
+                <div class="info-item" style="margin-bottom: 1.6rem; color: #17A34A;">
+                    <div class="vertical-bar" style="background-color: #17A34A;"></div>
+                    <div class="text-14">积分：</div>
+                    <div class="text-24" id="totalPoints">-</div>
+                </div>
+                <div class="info-item" style="margin-bottom: 1.8rem; color: #6A60FF;">
+                    <div class="vertical-bar" style="background-color: #6A60FF;"></div>
+                    <div class="text-14">轮次：</div>
+                    <div class="text-24" id="round">-/-</div>
+                </div>
+
+                <!-- 难度选择器 -->
+                <div class="difficulty-selector text-14" id="difficultySelectorContainer">
+                    <div class="difficulty-selector-header" id="difficultySelectorHeader">
+                        <span>难度</span>
+                        <span style="font-weight: 500;" id="selectedDifficultyText">3x3, 1步</span>
+                        <div class="difficulty-selector-arrow"></div>
+                    </div>
+                    <div class="difficulty-selector-dropdown" id="difficultySelectorDropdown">
+                        <!-- 选项将由JavaScript生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="reset-button" id="resetBtn">重置</div>
+            <div class="restart-button" id="startBtn">开始训练</div>
+        </div>
+        
+        <div class="game-main">
+            <div class="game-grid" id="gameGrid">
+                <!-- 网格由JavaScript生成 -->
+            </div>
+        </div>
+            
+        <!-- 控制按钮 -->
+        <div class="game-controls">
+            <button class="control-btn btn-visual" id="visualMatch" disabled>
+                <div class="text-16">位置匹配</div>
+                <div class="text-10" id="visualMatchCount">正确: 0</div>
+            </button>
+            <button class="control-btn btn-color" id="colorMatch" disabled>
+                <div class="text-16">颜色匹配</div>
+                <div class="text-10" id="colorMatchCount">正确: 0</div>
+            </button>
+            <button class="control-btn btn-none" id="noneMatch" disabled>
+                <div class="text-16">都不匹配</div>
+                <div class="text-10" id="noneMatchCount">正确: 0</div>
+            </button>
+        </div>
+        
+        <!-- 积分按钮 -->
+        <div class="rules-icon" id="pointsIcon" title="查看积分系统"></div>
+        <!-- 规则说明图标 -->
+        <div class="rules-icon" id="rulesIcon" title="查看游戏规则"></div>
+    </div>
+    
+    <!-- 规则说明弹窗 -->
+    <div class="modal-overlay" id="rulesModal">
+        <div class="modal-content">
+            <div class="modal-header text-18">
+                <div class="modal-title text-secondary">
+                    <div class="rules-sign"></div>
+                    <span>脑力双轨战</span>
+                </div>
+                <button class="modal-close-btn text-primary" id="modalCloseBtn" title="关闭">×</button>
+            </div>
+            <ol class="modal-rules text-14 text-list">
+                <li>判断当前闪烁方块的颜色与位置，与上一步或多步的方块的颜色与位置是否相同。</li>
+                <li>根据你的模型，当前为你推荐的难度为<span id="recommendedDifficulty" style="color: #4189FF;">【3x3, 1步】</span>，你可以随时根据作答情况，调整难度。</li>
+            </ol>
+            <div class="modal-footer">
+                <button class="text-12" id="startGameFromRules">开始训练</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 积分弹窗遮罩层 -->
+    <div class="points-modal-overlay" id="pointsModalOverlay"></div>
+    
+    <!-- 积分弹窗 -->
+    <div class="points-modal" id="pointsModal">
+        <div class="points-header">
+            <div class="points-title text-18 text-secondary">
+                <div class="points-sign"></div>
+                <span>积分系统</span>
+            </div>
+            <button id="pointsCloseBtn" class="points-close text-primary">×</button>
+        </div>
+        <div class="points-modal-content text-14 text-list">
+            <div class="points-stats-section">
+                <div class="points-stats-header">
+                    <div class="points-subtitle" style="margin: 0;">积分统计</div>
+                    <div class="text-10 text-note">
+                        最后更新: <span id="lastUpdateDateDisplay">--</span>
+                    </div>
+                </div>
+                <div class="points-stats-grid">
+                    <div class="points-stat-item">
+                        <div class="points-stat-label">总积分</div>
+                        <div id="totalPointsDisplay" class="points-stat-value total">0</div>
+                    </div>
+                    <div class="points-stat-item">
+                        <div class="points-stat-label">今日积分</div>
+                        <div id="dailyPointsDisplay" class="points-stat-value daily">+0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="points-rules-section">
+                <div class="points-subtitle">积分获得规则</div>
+                <div class="points-rules-list-warpper">
+                    <ul class="points-rules-list">
+                        <li class="text-12">
+                            <span class="points-rule-name">2×2, 1步：每轮</span>
+                            <span class="points-rule-value">10积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">3×3, 1步：每轮</span>
+                            <span class="points-rule-value">10积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">4×4, 1步：每轮</span>
+                            <span class="points-rule-value">15积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">5×5, 1步：每轮</span>
+                            <span class="points-rule-value">15积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">2×2, 2步：每轮</span>
+                            <span class="points-rule-value">20积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">3×3, 2步：每轮</span>
+                            <span class="points-rule-value">20积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">4×4, 2步：每轮</span>
+                            <span class="points-rule-value">25积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">5×5, 2步：每轮</span>
+                            <span class="points-rule-value">25积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">3×3, 3步：每轮</span>
+                            <span class="points-rule-value">30积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">4×4, 3步：每轮</span>
+                            <span class="points-rule-value">30积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">5×5, 3步：每轮</span>
+                            <span class="points-rule-value">30积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">4×4, 4步：每轮</span>
+                            <span class="points-rule-value">40积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">5×5, 4步：每轮</span>
+                            <span class="points-rule-value">40积分</span>
+                        </li>
+                        <li class="text-12">
+                            <span class="points-rule-name">5×5, 5步：每轮</span>
+                            <span class="points-rule-value">50积分</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量和配置
+        let game_config = '';
+        let globalHighestScore = 0;
+        let gameStarted = false;
+        let lightTipElement = null;
+        let lightTipTimer = null;
+
+        // 轻提示方法
+        function showLightTip(message, duration = 3000) {
+            // 如果元素不存在，创建它
+            if (!lightTipElement) {
+                lightTipElement = document.createElement('div');
+                lightTipElement.className = 'light-tip';
+                document.body.appendChild(lightTipElement);
+            }
+            
+            // 清除之前的定时器
+            if (lightTipTimer) {
+                clearTimeout(lightTipTimer);
+            }
+            
+            // 更新文本内容
+            lightTipElement.textContent = message;
+            
+            // 显示提示
+            lightTipElement.classList.add('show');
+            
+            // 设置自动隐藏
+            lightTipTimer = setTimeout(() => {
+                lightTipElement.classList.remove('show');
+            }, duration);
+        }
+
+        // 添加消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data;
+                    updateGameConfig(game_config, e.data.levelName);
+                    // 查询总积分
+                    window.parent.postMessage({ type: 'getTotalTrainingPoints' }, '*');
+                    break;
+                case 'getGameStats':
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: globalHighestScore,
+                            difficulty: window.game ? window.game.difficulty : 1,
+                        }
+                    }, '*');
+                    break;
+                case 'gameContinue':
+                    if (e.data.action === 'restart') {
+                        if (window.game) {
+                            window.game.restartCurrentDifficulty();
+                        }
+                    } else if (e.data.action === 'challenge') {
+                        if (window.game) {
+                            window.game.challengeNextDifficulty();
+                        }
+                    }
+                    break;
+                case 'trainingPointsResponse':
+                    // 更新积分显示
+                    if (window.game) {
+                        window.game.updatePointsDisplay(e.data.totalPoints);
+                    }
+                    break;
+                case 'totalTrainingPointsResponse':
+                    // 更新积分弹窗显示
+                    if (window.game) {
+                        window.game.updatePointsDisplay(e.data.total);
+                        window.game.updatePointsModal(e.data.total, e.data.dailyTotal, e.data.lastUpdateDate);
+                    }
+                    break;
+            }
+        });
+
+        function updateGameConfig(config, levelName) {
+            try {
+                let recommendedDifficulty = null;
+                
+                // 根据levelName确定推荐难度
+                if (levelName) {
+                    switch (levelName) {
+                        case '待提升':
+                            recommendedDifficulty = 2; // 3x3, 1步
+                            break;
+                        case '良好':
+                            recommendedDifficulty = 3; // 4x4, 1步
+                            break;
+                        case '优异':
+                            recommendedDifficulty = 4; // 5x5, 1步
+                            break;
+                    }
+                }
+                
+                if (typeof config === 'string' && config.trim()) {
+                    const newConfig = parseGameConfig(config);
+                    if (newConfig && window.game) {
+                        let finalDifficulty = recommendedDifficulty;
+                        let ageGroupDifficulty = 2;
+                        
+                        // 根据年龄组设置默认难度
+                        if (newConfig.ageGroup === 'younger') {
+                            ageGroupDifficulty = 1;
+                            // 如果有推荐难度，取更高的难度值
+                            if (finalDifficulty !== null) {
+                                finalDifficulty = Math.max(finalDifficulty, ageGroupDifficulty);
+                            } else {
+                                finalDifficulty = ageGroupDifficulty;
+                            }
+                        }
+                        
+                        // 应用最终难度
+                        if (finalDifficulty !== null) {
+                            window.game.setDefaultDifficulty(finalDifficulty);
+                            // 更新推荐难度显示
+                            window.game.updateRecommendedDifficulty(levelName);
+                        }
+                        
+                        if (newConfig.n !== undefined) {
+                            window.game.n = Math.max(1, Math.min(5, newConfig.n));
+                        }
+                        if (newConfig.gridSize !== undefined) {
+                            window.game.gridSize = Math.max(3, Math.min(5, newConfig.gridSize));
+                            window.game.createGrid();
+                        }
+                        if (newConfig.colors && newConfig.colors.length > 0) {
+                            window.game.colors = newConfig.colors;
+                        }
+                        console.log('配置已更新');
+                        window.game.updateDisplay();
+                    }
+                } else if (recommendedDifficulty !== null && window.game) {
+                    // 如果没有其他配置但有推荐难度，直接应用推荐难度
+                    window.game.setDefaultDifficulty(recommendedDifficulty);
+                    window.game.updateRecommendedDifficulty(levelName);
+                }
+            } catch (error) {
+                console.warn('解析游戏配置失败，保持原配置:', error);
+            }
+        }
+
+        function parseGameConfig(config) {
+            const result = {};
+            
+            try {
+                const jsonData = JSON.parse(config);
+                return jsonData;
+            } catch (e) {
+                const lines = config.trim().split('\n');
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    if (line.includes('=')) {
+                        const [key, value] = line.split('=').map(s => s.trim());
+                        if (key === 'n') {
+                            result.n = parseInt(value);
+                        } else if (key === 'gridSize') {
+                            result.gridSize = parseInt(value);
+                        } else if (key === 'ageGroup') {
+                            result.ageGroup = value;
+                        }
+                    }
+                }
+            }
+            
+            return result;
+        }
+        
+        // 调整根元素字体大小的方法
+        function adjustRootFontSize() {
+            // 游戏主容器的设计尺寸
+            const DESIGN_WIDTH = 652;
+            const DESIGN_HEIGHT = 375;
+            
+            // 获取视口尺寸
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // 计算基于宽度和高度的缩放比例
+            const scaleByWidth = viewportWidth / DESIGN_WIDTH;
+            const scaleByHeight = viewportHeight / DESIGN_HEIGHT;
+            
+            // 取较小的缩放比例，确保内容完全可见（等比例缩放）
+            const scale = Math.min(scaleByWidth, scaleByHeight);
+            
+            // 设置根元素的 font-size
+            // 假设设计稿基准是 1rem = 10px，则调整后的 font-size = 10 * scale
+            const baseFontSize = 10; // 设计稿基准
+            const finalFontSize = baseFontSize * scale;
+            
+            document.documentElement.style.fontSize = `${finalFontSize}px`;
+            window.rootFontSize = finalFontSize; // 保存到全局变量
+        }
+
+        class DualNBackGame {
+            constructor() {
+                this.difficulty = 1;
+                this.n = 3;
+                this.gridSize = 3;
+                this.round = 0;
+                this.maxAttempts = 40;
+                this.minAccuracy = 50;
+                this.maxConsecutiveWrong = 7;
+                this.consecutiveWrong = 0;
+                this.isPlaying = false;
+                this.gameMode = 'position-color';
+                this.currentSequence = [];
+                this.userResponses = [];
+                this.buttonCorrectCounts = {
+                    visual: 0,
+                    color: 0,
+                    none: 0,
+                };
+                this.matchCounter = 0;
+                this.streak = 0;
+                this.maxStreak = 0;
+                this.streakBroken = false;
+                this.stats = {
+                    totalScore: 0,
+                    visualCorrect: 0,
+                    colorCorrect: 0,
+                    totalAttempts: 0
+                };
+                
+                // 按钮点击控制
+                this.hasClickedThisRound = false;
+                
+                // 积分相关
+                this.totalPoints = 0;
+                this.gamePoints = 0; // 本局游戏获得的积分
+                this.pointsPerRound = this.getPointsPerRound();
+                
+                // 推荐难度相关
+                this.hasClosedRulesOnce = false;
+                
+                // 难度配置数据
+                this.difficultyOptions = [
+                    { value: 1, grid: 2, n: 1, max: 15, minAcc: 70, maxWrong: 4, label: '2x2 1步' },
+                    { value: 2, grid: 3, n: 1, max: 20, minAcc: 60, maxWrong: 5, label: '3x3 1步' },
+                    { value: 3, grid: 4, n: 1, max: 25, minAcc: 55, maxWrong: 6, label: '4x4 1步' },
+                    { value: 4, grid: 5, n: 1, max: 30, minAcc: 50, maxWrong: 7, label: '5x5 1步' },
+                    { value: 5, grid: 2, n: 2, max: 18, minAcc: 65, maxWrong: 5, label: '2x2 2步' },
+                    { value: 6, grid: 3, n: 2, max: 22, minAcc: 55, maxWrong: 6, label: '3x3 2步' },
+                    { value: 7, grid: 4, n: 2, max: 28, minAcc: 50, maxWrong: 7, label: '4x4 2步' },
+                    { value: 8, grid: 5, n: 2, max: 32, minAcc: 45, maxWrong: 8, label: '5x5 2步' },
+                    { value: 9, grid: 3, n: 3, max: 25, minAcc: 50, maxWrong: 7, label: '3x3 3步' },
+                    { value: 10, grid: 4, n: 3, max: 30, minAcc: 45, maxWrong: 8, label: '4x4 3步' },
+                    { value: 11, grid: 5, n: 3, max: 35, minAcc: 40, maxWrong: 9, label: '5x5 3步' },
+                    { value: 12, grid: 4, n: 4, max: 32, minAcc: 40, maxWrong: 9, label: '4x4 4步' },
+                    { value: 13, grid: 5, n: 4, max: 38, minAcc: 35, maxWrong: 10, label: '5x5 4步' },
+                    { value: 14, grid: 5, n: 5, max: 40, minAcc: 30, maxWrong: 11, label: '5x5 5步' }
+                ];
+                
+                // 初始化难度选择器
+                this.initDifficultySelector();
+                
+                // 设置默认难度为第2个（3x3, 1步）
+                this.setDefaultDifficulty(2);
+                
+                this.colors = [
+                    { name: 'red', class: 'bg-red-500' },
+                    { name: 'blue', class: 'bg-blue-500' },
+                    { name: 'green', class: 'bg-green-500' },
+                    { name: 'yellow', class: 'bg-yellow-400' },
+                    { name: 'purple', class: 'bg-purple-500' },
+                    { name: 'pink', class: 'bg-pink-400' },
+                    { name: 'orange', class: 'bg-orange-400' }
+                ];
+                
+                this.setupEventListeners();
+                this.createGrid();
+                this.updateDisplay();
+                this.showRulesModal();
+                
+                window.game = this;
+            }
+            
+            // 初始化难度选择器
+            initDifficultySelector() {
+                const dropdown = document.getElementById('difficultySelectorDropdown');
+                dropdown.innerHTML = '';
+                
+                this.difficultyOptions.forEach(option => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'difficulty-selector-option';
+                    optionDiv.dataset.value = option.value;
+                    optionDiv.innerHTML = `
+                        <span style="opacity: 0;">难度</span>
+                        <span style="font-weight: 500;">${option.label}</span>
+                        <div class="difficulty-selector-arrow" style="opacity: 0;"></div>
+                    `;
+                    
+                    optionDiv.addEventListener('click', () => {
+                        if (!this.isPlaying) {
+                            this.selectDifficulty(option.value);
+                        }
+                    });
+                    
+                    dropdown.appendChild(optionDiv);
+                });
+            }
+            
+            // 选择难度
+            selectDifficulty(value) {
+                this.setDifficulty(value);
+                this.toggleDifficultyDropdown(false);
+            }
+            
+            // 切换下拉菜单
+            toggleDifficultyDropdown(show) {
+                const header = document.getElementById('difficultySelectorHeader');
+                const dropdown = document.getElementById('difficultySelectorDropdown');
+                
+                if (show === undefined) {
+                    show = !dropdown.classList.contains('show');
+                }
+                
+                if (show && !this.isPlaying) {
+                    header.classList.add('active');
+                    dropdown.classList.add('show');
+                } else {
+                    header.classList.remove('active');
+                    dropdown.classList.remove('show');
+                }
+            }
+            
+            // 更新选中的难度显示
+            updateSelectedDifficulty(value) {
+                const selectedText = document.getElementById('selectedDifficultyText');
+                const option = this.difficultyOptions.find(opt => opt.value === value);
+                
+                if (option) {
+                    selectedText.textContent = option.label;
+                }
+                
+                // 更新选项的选中状态
+                const options = document.querySelectorAll('.difficulty-selector-option');
+                options.forEach(opt => {
+                    if (parseInt(opt.dataset.value) === value) {
+                        opt.classList.add('selected');
+                    } else {
+                        opt.classList.remove('selected');
+                    }
+                });
+            }
+            
+            // 设置难度选择器启用/禁用状态
+            setDifficultySelectorDisabled(disabled) {
+                const header = document.getElementById('difficultySelectorHeader');
+                if (disabled) {
+                    header.classList.add('disabled');
+                    this.toggleDifficultyDropdown(false);
+                } else {
+                    header.classList.remove('disabled');
+                }
+            }
+            
+            showRulesModal() {
+                const modal = document.getElementById('rulesModal');
+                modal.classList.add('active');
+            }
+            
+            hideRulesModal() {
+                const modal = document.getElementById('rulesModal');
+                modal.classList.remove('active');
+                
+                // 如果是第一次关闭规则窗口，高亮难度选择器
+                if (!this.hasClosedRulesOnce) {
+                    this.hasClosedRulesOnce = true;
+                    this.highlightDifficultySelector();
+                }
+            }
+
+            showPointsModal() {
+                // 查询最新积分数据
+                window.parent.postMessage({ type: 'getTotalTrainingPoints' }, '*');
+                const modal = document.getElementById('pointsModal');
+                const overlay = document.getElementById('pointsModalOverlay');
+                modal.classList.add('active');
+                overlay.classList.add('active');
+            }
+            
+            hidePointsModal() {
+                const modal = document.getElementById('pointsModal');
+                const overlay = document.getElementById('pointsModalOverlay');
+                modal.classList.remove('active');
+                overlay.classList.remove('active');
+            }
+
+            // 更新推荐难度显示
+            updateRecommendedDifficulty(levelName) {
+                const recommendedElement = document.getElementById('recommendedDifficulty');
+                if (recommendedElement && levelName) {
+                    let difficultyText = '';
+                    switch (levelName) {
+                        case '待提升':
+                            difficultyText = '【3x3, 1步】';
+                            break;
+                        case '良好':
+                            difficultyText = '【4x4, 1步】';
+                            break;
+                        case '优异':
+                            difficultyText = '【5x5, 1步】';
+                            break;
+                        default:
+                            difficultyText = '【3x3, 1步】';
+                    }
+                    recommendedElement.textContent = difficultyText;
+                }
+            }
+
+            // 高亮难度选择器
+            highlightDifficultySelector() {
+                const container = document.getElementById('difficultySelectorContainer');
+                if (container) {
+                    // 添加高亮CSS类
+                    container.classList.add('highlighted');
+                    
+                    // 2秒后移除高亮类
+                    setTimeout(() => {
+                        container.classList.remove('highlighted');
+                    }, 2000);
+                }
+            }
+
+            // 根据当前难度获取每轮积分
+            getPointsPerRound() {
+                const pointsMap = {
+                    '2-1': 10,  // 2x2, 1步
+                    '3-1': 10,  // 3x3, 1步
+                    '4-1': 15,  // 4x4, 1步
+                    '5-1': 15,  // 5x5, 1步
+                    '2-2': 20,  // 2x2, 2步
+                    '3-2': 20,  // 3x3, 2步
+                    '4-2': 25,  // 4x4, 2步
+                    '5-2': 25,  // 5x5, 2步
+                    '3-3': 30,  // 3x3, 3步
+                    '4-3': 30,  // 4x4, 3步
+                    '5-3': 30,  // 5x5, 3步
+                    '4-4': 40,  // 4x4, 4步
+                    '5-4': 40,  // 5x5, 4步
+                    '5-5': 50   // 5x5, 5步
+                };
+                
+                const key = `${this.gridSize}-${this.n}`;
+                return pointsMap[key] || 10;
+            }
+
+            // 更新积分显示
+            updatePointsDisplay(totalPoints) {
+                this.totalPoints = totalPoints;
+                document.getElementById('totalPoints').textContent = totalPoints;
+            }
+
+            // 更新积分弹窗显示
+            updatePointsModal(total, daily, lastUpdate) {
+                document.getElementById('totalPointsDisplay').textContent = total;
+                document.getElementById('dailyPointsDisplay').textContent = `+${daily}`;
+                document.getElementById('lastUpdateDateDisplay').textContent = lastUpdate || '--';
+            }
+
+            // 获得积分时调用
+            awardPoints(points) {
+                this.gamePoints += points;
+                window.parent.postMessage({
+                    type: 'showTrainingPoints',
+                    points: points
+                }, '*');
+            }
+
+            shouldForceMatch() {
+                this.matchCounter++;
+                if (this.matchCounter >= 3 && Math.random() < 0.7) {
+                    this.matchCounter = 0;
+                    return true;
+                }
+                return false;
+            }
+
+            generateStimuli() {
+                const totalCells = this.gridSize * this.gridSize;
+                
+                if (this.round <= this.n) {
+                    return {
+                        visualPos: Math.floor(Math.random() * totalCells),
+                        colorIndex: Math.floor(Math.random() * this.colors.length)
+                    };
+                }
+
+                const compareIndex = this.currentSequence.length - this.n;
+                const compareStimuli = this.currentSequence[compareIndex];
+                
+                let visualPos = Math.floor(Math.random() * totalCells);
+                let colorIndex = Math.floor(Math.random() * this.colors.length);
+
+                if (this.shouldForceMatch()) {
+                    // 随机选择只匹配位置或只匹配颜色，不会同时匹配两者
+                    const matchTypes = ['visual', 'color'];
+                    const selectedMatch = matchTypes[Math.floor(Math.random() * matchTypes.length)];
+                    
+                    if (selectedMatch === 'visual') {
+                        visualPos = compareStimuli.visual;
+                        // 确保颜色不同
+                        do {
+                            colorIndex = Math.floor(Math.random() * this.colors.length);
+                        } while (colorIndex === compareStimuli.color);
+                    } else if (selectedMatch === 'color') {
+                        colorIndex = compareStimuli.color;
+                        // 确保位置不同
+                        do {
+                            visualPos = Math.floor(Math.random() * totalCells);
+                        } while (visualPos === compareStimuli.visual);
+                    }
+                } else {
+                    // 确保位置和颜色都不匹配
+                    while (visualPos === compareStimuli.visual && colorIndex === compareStimuli.color) {
+                        visualPos = Math.floor(Math.random() * totalCells);
+                        colorIndex = Math.floor(Math.random() * this.colors.length);
+                    }
+                }
+
+                return { visualPos, colorIndex };
+            }
+            
+            setupEventListeners() {
+                document.getElementById('rulesIcon').addEventListener('click', () => this.showRulesModal());
+                document.getElementById('startGameFromRules').addEventListener('click', () => {
+                    this.hideRulesModal();
+                    this.startGame();
+                });
+                document.getElementById('modalCloseBtn').addEventListener('click', () => this.hideRulesModal());
+                
+                // 积分按钮事件
+                document.getElementById('pointsIcon').addEventListener('click', () => this.showPointsModal());
+                document.getElementById('pointsCloseBtn').addEventListener('click', () => this.hidePointsModal());
+                
+                // 新难度选择器事件
+                const header = document.getElementById('difficultySelectorHeader');
+                header.addEventListener('click', () => {
+                    if (!this.isPlaying) {
+                        this.toggleDifficultyDropdown();
+                    }
+                });
+                
+                // 点击外部关闭下拉菜单
+                document.addEventListener('click', (e) => {
+                    const container = document.getElementById('difficultySelectorContainer');
+                    if (container && !container.contains(e.target)) {
+                        this.toggleDifficultyDropdown(false);
+                    }
+                });
+
+                document.getElementById('startBtn').onclick = () => this.startGame();
+                document.getElementById('resetBtn').onclick = () => this.resetGame();
+                
+                document.getElementById('visualMatch').addEventListener('click', () => this.handleUserInput('visual'));
+                document.getElementById('colorMatch').addEventListener('click', () => this.handleUserInput('color'));
+                document.getElementById('noneMatch').addEventListener('click', () => this.handleUserInput('none'));
+
+                document.addEventListener('keydown', (e) => {
+                    if (!this.isPlaying) return;
+                    if (e.key === '1') this.handleUserInput('visual');
+                    if (e.key === '2') this.handleUserInput('color');
+                    if (e.key === '3') this.handleUserInput('none');
+                });
+                
+                document.getElementById('rulesModal').addEventListener('click', (e) => {
+                    if (e.target.classList.contains('modal-overlay')) {
+                        this.hideRulesModal();
+                    }
+                });
+
+                document.getElementById('pointsModalOverlay').addEventListener('click', () => {
+                    this.hidePointsModal();
+                });
+            }
+            
+            setDifficulty(difficultyValue) {
+                this.difficulty = parseInt(difficultyValue);
+                const option = this.difficultyOptions.find(opt => opt.value === this.difficulty);
+                
+                if (option) {
+                    this.gridSize = option.grid;
+                    this.n = option.n;
+                    this.maxAttempts = option.max;
+                    this.minAccuracy = option.minAcc;
+                    this.maxConsecutiveWrong = option.maxWrong;
+                    this.pointsPerRound = this.getPointsPerRound();
+                    this.createGrid();
+                    this.updateDisplay();
+                    this.updateSelectedDifficulty(this.difficulty);
+                }
+            }
+
+            setDefaultDifficulty(difficultyValue) {
+                // 应用对应的难度设置
+                this.setDifficulty(difficultyValue);
+                
+                // 更新积分规则
+                this.pointsPerRound = this.getPointsPerRound();
+            }
+            
+            createGrid() {
+                const grid = document.getElementById('gameGrid');
+                grid.innerHTML = '';
+                grid.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
+                
+                // 根据网格大小调整gap
+                let gap;
+                if (this.gridSize === 2) {
+                    gap = '0.8rem';
+                } else if (this.gridSize === 3) {
+                    gap = '0.6rem';
+                } else if (this.gridSize === 4) {
+                    gap = '0.4rem';
+                } else if (this.gridSize === 5) {
+                    gap = '0.4rem';
+                } else {
+                    gap = '0.8rem'; // 默认值
+                }
+                grid.style.gap = gap;
+                
+                const totalCells = this.gridSize * this.gridSize;
+                for (let i = 0; i < totalCells; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.id = `cell-${i}`;
+                    grid.appendChild(cell);
+                }
+            }
+
+            updateButtonCounts() {
+                document.getElementById('visualMatchCount').textContent = `正确: ${this.buttonCorrectCounts.visual}`;
+                document.getElementById('colorMatchCount').textContent = `正确: ${this.buttonCorrectCounts.color}`;
+                document.getElementById('noneMatchCount').textContent = `正确: ${this.buttonCorrectCounts.none}`;
+            }
+
+            animateButton(buttonId, isCorrect) {
+                const button = document.getElementById(buttonId);
+                const originalClass = button.className;
+                
+                button.classList.add(isCorrect ? 'correct' : 'incorrect');
+                setTimeout(() => {
+                    button.className = originalClass;
+                }, 300);
+            }
+
+
+
+            startGame() {
+                if (!gameStarted) {
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
+                    gameStarted = true;
+                }
+                
+                // 设置当前难度参数
+                const option = this.difficultyOptions.find(opt => opt.value === this.difficulty);
+                if (option) {
+                    this.maxAttempts = option.max;
+                    this.minAccuracy = option.minAcc;
+                    this.maxConsecutiveWrong = option.maxWrong;
+                }
+                this.pointsPerRound = this.getPointsPerRound();
+                
+                this.isPlaying = true;
+                this.round = 0;
+                this.matchCounter = 0;
+                this.streak = 0;
+                this.maxStreak = 0;
+                this.streakBroken = false;
+                this.consecutiveWrong = 0;
+                this.currentSequence = [];
+                this.userResponses = [];
+                this.buttonCorrectCounts = { visual: 0, color: 0, none: 0 };
+                this.gamePoints = 0; // 重置本局积分
+                this.stats = {
+                    totalScore: 0,
+                    visualCorrect: 0,
+                    colorCorrect: 0,
+                    totalAttempts: 0
+                };
+                this.hasClickedThisRound = false; // 重置点击状态
+                
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('visualMatch').disabled = false;
+                document.getElementById('colorMatch').disabled = false;
+                document.getElementById('noneMatch').disabled = false;
+                
+                // 初始禁用按钮，因为前n轮不能点击
+                this.disableButtons();
+                
+                this.setDifficultySelectorDisabled(true);
+                
+                this.updateButtonCounts();
+                this.nextRound();
+            }
+
+            resetGame() {
+                this.isPlaying = false;
+                
+                this.round = 0;
+                this.matchCounter = 0;
+                this.streak = 0;
+                this.maxStreak = 0;
+                this.streakBroken = false;
+                this.consecutiveWrong = 0;
+                this.currentSequence = [];
+                this.userResponses = [];
+                this.buttonCorrectCounts = { visual: 0, color: 0, none: 0 };
+                this.gamePoints = 0; // 重置本局积分
+                this.stats = {
+                    totalScore: 0,
+                    visualCorrect: 0,
+                    colorCorrect: 0,
+                    totalAttempts: 0
+                };
+                this.hasClickedThisRound = false; // 重置点击状态
+                
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('visualMatch').disabled = true;
+                document.getElementById('colorMatch').disabled = true;
+                document.getElementById('noneMatch').disabled = true;
+                this.setDifficultySelectorDisabled(false);
+                
+                // 移除临时禁用样式
+                document.getElementById('visualMatch').classList.remove('clicked-disabled');
+                document.getElementById('colorMatch').classList.remove('clicked-disabled');
+                document.getElementById('noneMatch').classList.remove('clicked-disabled');
+                
+                this.clearGrid();
+                this.updateDisplay();
+                this.updateButtonCounts();
+            }
+
+            nextRound() {
+                if (!this.isPlaying) return;
+                
+                this.round++;
+                
+                // 重置本轮的点击状态
+                this.hasClickedThisRound = false;
+                
+                const { visualPos, colorIndex } = this.generateStimuli();
+                
+                this.currentSequence.push({
+                    visual: visualPos,
+                    color: colorIndex,
+                    visualMatch: false,
+                    colorMatch: false
+                });
+
+                if (this.round > this.n) {
+                    const compareIndex = this.currentSequence.length - 1 - this.n;
+                    if (compareIndex >= 0) {
+                        const current = this.currentSequence[this.currentSequence.length - 1];
+                        const compare = this.currentSequence[compareIndex];
+                        
+                        current.visualMatch = compare.visual === visualPos;
+                        current.colorMatch = compare.color === colorIndex;
+                    }
+                }
+
+                this.userResponses.push({
+                    visualResponse: false,
+                    colorResponse: false,
+                    noneResponse: false,
+                    responded: false
+                });
+
+                this.displayStimuli(visualPos, colorIndex);
+                this.updateDisplay();
+            }
+
+            displayStimuli(visualPos, colorIndex) {
+                this.clearGrid();
+                
+                // 根据当前轮次决定按钮是否可用
+                if (this.round <= this.n) {
+                    // 前n轮，禁用按钮
+                    this.disableButtons();
+                } else {
+                    // 从第n+1轮开始，如果还没点击过，启用按钮
+                    if (!this.hasClickedThisRound) {
+                        this.enableButtons();
+                    }
+                }
+                
+                const cell = document.getElementById(`cell-${visualPos}`);
+                const color = this.colors[colorIndex];
+                cell.className = `grid-cell ${color.class}`;
+                
+                setTimeout(() => {
+                    this.clearGrid();
+                    setTimeout(() => {
+                        if (this.isPlaying) {
+                            this.evaluateRound();
+                            this.nextRound();
+                        }
+                    }, 1000);
+                }, 2000);
+            }
+
+            clearGrid() {
+                const totalCells = this.gridSize * this.gridSize;
+                for (let i = 0; i < totalCells; i++) {
+                    document.getElementById(`cell-${i}`).className = 'grid-cell';
+                }
+            }
+
+            handleUserInput(type) {
+                // 前n轮不允许点击
+                if (!this.isPlaying || this.round <= this.n) return;
+                
+                const currentResponse = this.userResponses[this.userResponses.length - 1];
+                
+                // 如果本轮已经点击过，不允许再次点击
+                if (currentResponse.responded || this.hasClickedThisRound) return;
+                
+                // 标记本轮已点击
+                this.hasClickedThisRound = true;
+                
+                // 禁用所有按钮
+                this.disableButtons();
+                
+                // 记录用户响应
+                if (type === 'visual') {
+                    currentResponse.visualResponse = true;
+                } else if (type === 'color') {
+                    currentResponse.colorResponse = true;
+                } else if (type === 'none') {
+                    currentResponse.noneResponse = true;
+                }
+                
+                currentResponse.responded = true;
+                
+                // 立即验证响应并给出视觉反馈
+                const currentStimuli = this.currentSequence[this.currentSequence.length - 1];
+                let isCorrect = false;
+                let buttonId = '';
+                
+                if (type === 'visual') {
+                    isCorrect = currentStimuli.visualMatch;
+                    buttonId = 'visualMatch';
+                } else if (type === 'color') {
+                    isCorrect = currentStimuli.colorMatch;
+                    buttonId = 'colorMatch';
+                } else if (type === 'none') {
+                    isCorrect = !currentStimuli.visualMatch && !currentStimuli.colorMatch;
+                    buttonId = 'noneMatch';
+                }
+                
+                this.animateButton(buttonId, isCorrect);
+                
+                if (isCorrect) {
+                    this.buttonCorrectCounts[type]++;
+                    this.updateButtonCounts();
+                    // 显示正确提示（积分将在evaluateRound中计算）
+                    showLightTip(`正确，+${this.pointsPerRound}分`, 1000);
+                } else {
+                    // 显示错误提示
+                    showLightTip('错误，+0分', 1000);
+                }
+            }
+
+            // 禁用所有按钮
+            disableButtons() {
+                document.getElementById('visualMatch').classList.add('clicked-disabled');
+                document.getElementById('colorMatch').classList.add('clicked-disabled');
+                document.getElementById('noneMatch').classList.add('clicked-disabled');
+            }
+
+            // 启用所有按钮（仅在游戏进行中且不是前n轮时）
+            enableButtons() {
+                if (this.isPlaying && this.round > this.n) {
+                    document.getElementById('visualMatch').classList.remove('clicked-disabled');
+                    document.getElementById('colorMatch').classList.remove('clicked-disabled');
+                    document.getElementById('noneMatch').classList.remove('clicked-disabled');
+                }
+            }
+
+            evaluateRound() {
+                if (this.round <= this.n) return;
+                
+                const currentStimuli = this.currentSequence[this.currentSequence.length - 1];
+                const currentResponse = this.userResponses[this.userResponses.length - 1];
+                
+                // 计算每轮的分数（总分100分平均分配到有效轮次）
+                const effectiveRounds = this.maxAttempts - this.n;
+                const pointsPerRound = Math.floor(100 / effectiveRounds);
+                const extraPoints = 100 - (pointsPerRound * effectiveRounds);
+                
+                // 如果用户没有做出任何响应，则自动评估为错误
+                if (!currentResponse.responded) {
+                    this.consecutiveWrong++;
+                    if (this.streak > 0) {
+                        this.streakBroken = true;
+                    }
+                    this.streak = 0;
+                    this.stats.totalAttempts++;
+                    // 实时更新显示
+                    this.updateDisplay();
+                    this.checkGameEndConditions();
+                    return;
+                }
+
+                let isCorrect = false;
+
+                // 检查用户的响应是否正确
+                if (currentResponse.visualResponse && !currentResponse.colorResponse) {
+                    isCorrect = currentStimuli.visualMatch && !currentStimuli.colorMatch;
+                } else if (currentResponse.colorResponse && !currentResponse.visualResponse) {
+                    isCorrect = currentStimuli.colorMatch && !currentStimuli.visualMatch;
+                } else if (currentResponse.visualResponse && currentResponse.colorResponse) {
+                    isCorrect = currentStimuli.visualMatch && currentStimuli.colorMatch;
+                } else if (currentResponse.noneResponse) {
+                    isCorrect = !currentStimuli.visualMatch && !currentStimuli.colorMatch;
+                } else {
+                    isCorrect = false;
+                }
+
+                if (isCorrect) {
+                    // 根据轮次分配分数，前几轮可能得到额外分数
+                    let roundScore = pointsPerRound;
+                    if (this.stats.totalAttempts < extraPoints) {
+                        roundScore += 1;
+                    }
+                    this.stats.totalScore += roundScore;
+                    
+                    // 给予积分
+                    this.awardPoints(this.pointsPerRound);
+                    
+                    this.streak++;
+                    this.maxStreak = Math.max(this.maxStreak, this.streak);
+                    this.consecutiveWrong = 0;
+                } else {
+                    if (this.streak > 0) {
+                        this.streakBroken = true;
+                    }
+                    this.streak = 0;
+                    this.consecutiveWrong++;
+                }
+
+                this.stats.totalAttempts++;
+                // 实时更新显示
+                this.updateDisplay();
+                this.checkGameEndConditions();
+            }
+
+            checkGameEndConditions() {
+                // 检查是否达到最大轮次
+                if (this.round >= this.maxAttempts) {
+                    this.endGame('完成训练', '恭喜完成所有轮次的训练！', true);
+                    return;
+                }
+                
+                // 检查连续答错次数
+                if (this.consecutiveWrong >= this.maxConsecutiveWrong) {
+                    this.endGame('连续答错过多', `连续答错${this.consecutiveWrong}次，需要重新开始训练。`);
+                    return;
+                }
+                
+                // 检查准确率（至少需要10轮数据）
+                if (this.stats.totalAttempts >= 10) {
+                    const accuracy = this.calculateAccuracy();
+                    if (accuracy < this.minAccuracy) {
+                        this.endGame('准确率过低', `准确率${accuracy}%低于要求的${this.minAccuracy}%，需要重新开始训练。`);
+                        return;
+                    }
+                }
+            }
+
+            calculateFinalScore() {
+                // 直接返回实际得分，因为已经按100分制计算
+                return Math.min(100, Math.max(0, this.stats.totalScore));
+            }
+
+            showGameEndMessage(title, message) {
+                showLightTip(`${title}\n${message}`, 2000);
+            }
+
+            endGame(reason, message, complete) {
+                this.isPlaying = false;
+                
+                // 显示游戏结束提示
+                this.showGameEndMessage(reason, message);
+                
+                if (complete) {
+                    // 延迟发送gameFinished消息
+                    setTimeout(() => {
+                        const finalScore = this.calculateFinalScore();
+                        
+                        if (finalScore > globalHighestScore) {
+                            globalHighestScore = finalScore;
+                        }
+                        
+                        window.parent.postMessage({ 
+                            type: 'gameFinished', 
+                            data: {
+                                score: finalScore,
+                                highestScore: Math.max(globalHighestScore, finalScore),
+                                round: this.round,
+                                maxRounds: this.maxAttempts,
+                                n: this.n,
+                                gridSize: this.gridSize,
+                                gameMode: this.gameMode,
+                                difficulty: this.difficulty,
+                                accuracy: this.calculateAccuracy(),
+                                endReason: reason,
+                                rawScore: this.stats.totalScore,
+                                streakBroken: this.streakBroken,
+                                maxStreak: this.maxStreak,
+                                earnedPoints: this.gamePoints, // 添加本次游戏获得的总积分
+                                showAccuracy: true,
+                                accuracy: finalScore, // 直接用百分制成绩作为正确率
+                                accuracyTitle: '轮次',
+                                isMaxDifficulty: this.difficulty >= 14,
+                                levelCount: this.round, // 记录本次游戏完成的关卡/轮次数量
+                            }
+                        }, '*');
+                    }, 2000);
+                }
+                
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('visualMatch').disabled = true;
+                document.getElementById('colorMatch').disabled = true;
+                document.getElementById('noneMatch').disabled = true;
+                this.setDifficultySelectorDisabled(false);
+                
+                // 移除临时禁用样式
+                document.getElementById('visualMatch').classList.remove('clicked-disabled');
+                document.getElementById('colorMatch').classList.remove('clicked-disabled');
+                document.getElementById('noneMatch').classList.remove('clicked-disabled');
+                
+                this.clearGrid();
+                this.updateDisplay();
+                this.updateButtonCounts();
+            }
+
+            calculateAccuracy() {
+                return this.stats.totalAttempts > 0 ? Math.round((this.stats.totalScore / this.stats.totalAttempts) * 100) : 0;
+            }
+
+            // 以当前难度重新开始游戏
+            restartCurrentDifficulty() {
+                // 停止当前游戏
+                this.isPlaying = false;
+                
+                // 重置游戏状态但保持当前难度设置
+                this.round = 0;
+                this.matchCounter = 0;
+                this.streak = 0;
+                this.maxStreak = 0;
+                this.streakBroken = false;
+                this.consecutiveWrong = 0;
+                this.currentSequence = [];
+                this.userResponses = [];
+                this.buttonCorrectCounts = { visual: 0, color: 0, none: 0 };
+                this.gamePoints = 0;
+                this.stats = {
+                    totalScore: 0,
+                    visualCorrect: 0,
+                    colorCorrect: 0,
+                    totalAttempts: 0
+                };
+                this.hasClickedThisRound = false; // 重置点击状态
+                
+                // 清理界面
+                this.clearGrid();
+                this.updateDisplay();
+                this.updateButtonCounts();
+                
+                // 重新开始游戏
+                this.startGame();
+            }
+
+            // 挑战下一难度
+            challengeNextDifficulty() {
+                const currentValue = this.difficulty;
+                const maxDifficulty = 14; // 最大难度值
+                
+                // 检查是否还有更高难度
+                if (currentValue < maxDifficulty) {
+                    // 设置下一个难度
+                    const nextDifficulty = currentValue + 1;
+                    
+                    // 应用新难度设置
+                    this.setDifficulty(nextDifficulty);
+                    
+                    // 停止当前游戏
+                    this.isPlaying = false;
+                    
+                    // 重置游戏状态
+                    this.round = 0;
+                    this.matchCounter = 0;
+                    this.streak = 0;
+                    this.maxStreak = 0;
+                    this.streakBroken = false;
+                    this.consecutiveWrong = 0;
+                    this.currentSequence = [];
+                    this.userResponses = [];
+                    this.buttonCorrectCounts = { visual: 0, color: 0, none: 0 };
+                    this.gamePoints = 0;
+                    this.stats = {
+                        totalScore: 0,
+                        visualCorrect: 0,
+                        colorCorrect: 0,
+                        totalAttempts: 0
+                    };
+                    this.hasClickedThisRound = false; // 重置点击状态
+                    
+                    // 清理界面
+                    this.clearGrid();
+                    this.updateDisplay();
+                    this.updateButtonCounts();
+                    
+                    // 获取当前难度选项的文本
+                    const currentOption = this.difficultyOptions.find(opt => opt.value === nextDifficulty);
+                    const difficultyText = currentOption ? currentOption.label : '';
+                    
+                    // 显示难度提升提示
+                    showLightTip(`难度已提升！当前：${difficultyText}`, 2000);
+                    
+                    // 延迟开始新游戏，让用户看到难度变化
+                    setTimeout(() => {
+                        this.startGame();
+                    }, 2000);
+                } else {
+                    // 已经是最高难度，只能重新开始
+                    showLightTip('已经是最高难度！', 1500);
+                    setTimeout(() => {
+                        this.restartCurrentDifficulty();
+                    }, 1500);
+                }
+            }
+
+            updateDisplay() {
+                document.getElementById('round').textContent = `${this.round}/${this.maxAttempts}`;
+                document.getElementById('totalPoints').textContent = this.totalPoints;
+                
+                const accuracy = this.calculateAccuracy();
+                // document.getElementById('accuracy').textContent = this.stats.totalAttempts > 0 ? accuracy + '%' : '--';
+                
+                if (this.stats.totalScore > globalHighestScore) {
+                    globalHighestScore = this.stats.totalScore;
+                }
+            }
+        }
+        
+        // 初始调整字体大小
+        adjustRootFontSize();
+        
+        // 监听窗口大小变化
+        window.addEventListener('resize', adjustRootFontSize);
+
+        const game = new DualNBackGame();
+
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+    </script>
+</body>
+</html>

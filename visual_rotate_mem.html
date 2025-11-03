@@ -1,0 +1,2690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>旋转宫殿</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        /* 清除浏览器默认样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* 通用字体样式 */
+        html {
+            /* 设置根元素字体大小，便于 rem 单位换算：1rem = 10px */
+            font-size: 10px;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #8A83FF;
+            
+            /* 字体族设置 - 按优先级排列 */
+            font-family: 
+                /* iOS 中文 */
+                "PingFang SC", "PingFang TC",
+                /* iOS 英文 */
+                "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "SF Pro Display",
+                /* Android 中文 */
+                "Noto Sans SC", "Noto Sans CJK SC",
+                /* Android 英文 */
+                "Roboto",
+                /* 通用后备字体 */
+                "Helvetica Neue", "Arial", "Microsoft YaHei", "微软雅黑",
+                sans-serif;
+            
+            /* 基础字号和行高 */
+            font-size: 1.4rem;
+            line-height: 2.2rem; /* 字号 + 8px */
+            
+            /* 优化字体渲染 */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        /* 数字使用 DIN 字体 */
+        .number,
+        input[type="number"],
+        .price,
+        .count {
+            font-family: 
+                "DIN Alternate", "DIN", "DIN-Medium", "DIN-Bold",
+                "SF Pro Display", "Roboto",
+                monospace;
+            font-variant-numeric: tabular-nums; /* 等宽数字 */
+        }
+
+        /* ==================== 字号规范 ==================== */
+        /* 针对不同字号保持行高规则（字号 + 8px） */
+        .text-10 { font-size: 1rem; line-height: 1.8rem; }
+        .text-12 { font-size: 1.2rem; line-height: 2rem; }
+        .text-14 { font-size: 1.4rem; line-height: 2.2rem; }
+        .text-16 { font-size: 1.6rem; line-height: 2.4rem; }
+        .text-18 { font-size: 1.8rem; line-height: 2.6rem; }
+        .text-20 { font-size: 2rem; line-height: 2.8rem; }
+        .text-22 { font-size: 2.2rem; line-height: 3rem; }
+        .text-24 { font-size: 2.4rem; line-height: 3.2rem; }
+
+        /* 隐藏类 */
+        .hidden {
+            display: none !important;
+        }
+
+        /* ==================== 颜色规范 ==================== */
+        /* 标题 正文 - 黑色 */
+        .text-title,
+        .text-primary {
+            color: #000000;
+        }
+
+        /* 正文 列表 - 深灰色 */
+        .text-secondary,
+        .text-list {
+            color: #333333;
+        }
+
+        /* 说明 备注 - 中灰色 */
+        .text-note,
+        .text-remark,
+        .text-description {
+            color: #999999;
+        }
+
+        /* 分割线 - 浅灰色 */
+        .text-divider,
+        .text-disabled {
+            color: #D6DEE4;
+        }
+
+        /* 背景色版本 */
+        .bg-primary { background-color: #000000; }
+        .bg-secondary { background-color: #333333; }
+        .bg-note { background-color: #999999; }
+        .bg-divider { background-color: #D6DEE4; }
+
+        /* 边框色版本 */
+        .border-primary { border-color: #000000; }
+        .border-secondary { border-color: #333333; }
+        .border-note { border-color: #999999; }
+        .border-divider { border-color: #D6DEE4; }
+
+        /* 可选：针对特定平台的字体优化 */
+        @supports (-webkit-touch-callout: none) {
+            /* iOS 特定样式 */
+            body {
+                font-family: 
+                    "PingFang SC", "PingFang TC",
+                    "-apple-system", "BlinkMacSystemFont",
+                    sans-serif;
+            }
+        }
+
+        /* 全屏适配 */
+        html, body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .game-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            width: 65.2rem;
+            height: 37.5rem;
+            padding: 1.2rem;
+        }
+
+        .left {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-left: 2rem;
+        }
+
+        .left .info-panel {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            width: 19rem;
+            height: 25.4rem;
+            padding: 0 2.2rem;
+            margin-bottom: 1.2rem;
+            background-color: #fff;
+            border-radius: 1.2rem;
+        }
+
+        .info-panel .info-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.4rem;
+            font-weight: 500;
+        }
+
+        .info-panel .info-item .vertical-bar {
+            width: 0.4rem;
+            height: 1.4rem;
+            margin-right: 0.8rem;
+            border-radius: 0.4rem;
+        }
+
+        .left .start-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 12rem;
+            max-width: 19rem;
+            height: 3rem;
+            padding: 0 1.6rem;
+            background-color: #4E9DFC;
+            border-radius: 0.8rem;
+            box-shadow: 0 0.4rem 0 0 #1E77E6;
+            font-weight: 500;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .left .start-button:hover {
+            background-color: #3A8EEB;
+        }
+
+        .left .start-button:active {
+            transform: translateY(0.2rem);
+            box-shadow: 0 0.2rem 0 0 #1E77E6;
+        }
+
+        .left .start-button.playing {
+            background-color: #6B7280;
+            box-shadow: 0 0.4rem 0 0 #4B5563;
+            cursor: default;
+        }
+
+        .left .start-button.playing:hover {
+            background-color: #6B7280;
+        }
+
+        .left .start-button.playing:active {
+            transform: none;
+            box-shadow: 0 0.4rem 0 0 #4B5563;
+        }
+
+        /* 增大游戏网格适配 */
+        .grid-cell {
+            /* transition: all 0.3s ease; */
+            background-color: #8A83FF !important;
+            cursor: pointer;
+            border-radius: 0.4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            font-weight: 500;
+            color: white;
+            position: relative;
+            transition: box-shadow 0.3s ease, z-index 0s;
+        }
+
+        /* 移动设备禁用 hover 效果 */
+        @media (hover: hover) and (pointer: fine) {
+            .grid-cell:hover {
+                box-shadow: 0 0 0 0.3rem rgba(138, 131, 255, 0.5);
+                z-index: 1;
+            }
+        }
+        
+        /* 添加触摸反馈样式 */
+        .grid-cell.touch-active {
+            box-shadow: inset 0 0 0.8rem rgba(0, 0, 0, 0.2);
+        }
+
+        .grid-container {
+            transition: transform 2s ease-in-out;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 0.4rem;
+            width: 31.6rem;
+            height: 31.6rem;
+            padding: 0.4rem;
+            background-color: #fff;
+            border-radius: 0.8rem;
+        }
+
+        .grid-container.no-transition {
+            transition: none !important;
+        }
+
+        /* 状态样式 */
+        .highlighted {
+            background-color: #96C944 !important;
+        }
+        .correct {
+            background-color: #22C55E !important; /* 更明亮的绿色，与左侧积分绿色呼应 */
+        }
+        .incorrect {
+            background-color: #FF6B9D !important; /* 粉紫色调的错误色，更柔和且符合紫色主题 */
+        }
+        .pulse-green {
+            animation: pulseGreen 0.5s ease-in-out;
+        }
+        .pulse-red {
+            animation: pulseRed 0.5s ease-in-out;
+        }
+
+        @keyframes pulseGreen {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); box-shadow: 0 0 2rem rgba(16, 185, 129, 0.8); }
+        }
+        @keyframes pulseRed {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); box-shadow: 0 0 2rem rgba(239, 68, 68, 0.8); }
+        }
+
+        /* 规则弹窗 */
+        .rules-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        .rules-content {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            width: 39rem;
+            padding: 2.2rem 2.2rem 1.8rem;
+            background-color: #FFFFFF;
+            border-radius: 0.8rem;
+        }
+
+        .rules-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.6rem;
+        }
+
+        .rules-title {
+            display: flex;
+            align-items: center;
+        }
+
+        .rules-sign {
+            width: 0.6rem;
+            height: 1.8rem;
+            margin-right: 0.6rem;
+            background-color: #009DFF;
+            border-radius: 0.6rem;
+        }
+
+        .rules-close {
+            cursor: pointer;
+            font-weight: normal;
+            width: 1rem;
+            height: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rules-body {
+            overflow-y: scroll;
+        }
+
+        .rules-body::-webkit-scrollbar {
+            display: none;
+        }
+
+        .rules-list {
+            list-style-type: decimal;
+            margin-left: 1.4rem;
+        }
+
+        .rules-list li {
+            margin-bottom: 1rem;
+        }
+
+        .rules-footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+            margin-top: 1rem;
+            width: 12rem;
+            height: 3rem;
+            background-color: #009DFF;
+            border-radius: 0.8rem;
+            font-weight: 600;
+            color: #FFF;
+            cursor: pointer;
+        }
+
+        /* 积分弹窗样式 */
+        .points-modal {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            width: 39rem;
+            padding: 2.2rem 2.2rem 1.8rem;
+            background-color: #FFFFFF;
+            border-radius: 0.8rem;
+        }
+
+        .points-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+        }
+
+        .points-sign {
+            width: 0.6rem;
+            height: 1.8rem;
+            margin-right: 0.6rem;
+            background-color: #FF9A00;
+            border-radius: 0.6rem;
+        }
+
+        .points-title {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+        }
+
+        .points-close {
+            cursor: pointer;
+            font-weight: normal;
+            width: 1rem;
+            height: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .points-modal-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .points-stats-section {
+            background-color: #FDECE2;
+            border-radius: 0.8rem;
+            padding: 0.8rem 1.3rem 1rem 2.5rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .points-stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.6rem;
+        }
+
+        .points-subtitle {
+            position: relative;
+            margin-bottom: 0.6rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .points-subtitle::before {
+            content: '';
+            display: inline-block;
+            position: absolute;
+            left: -1.2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0.4rem;
+            height: 0.4rem;
+            background-color: #FF9A00;
+            border-radius: 50%;
+        }
+
+        .points-stats-grid {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .points-stat-item {
+            display: flex;
+            align-items: center;
+            width: 14.6rem;
+            height: 3.6rem;
+            padding: 0 1.2rem;
+            background-color: #ffffff;
+            border-radius: 0.8rem;
+        }
+
+        .points-stat-label {
+            color: #999999;
+            font-size: 1.2rem;
+        }
+
+        .points-stat-value {
+            margin-left: 1.2rem;
+            font-weight: 600;
+            font-size: 1.8rem;
+        }
+
+        .points-stat-value.total {
+            color: #FF5800;
+        }
+
+        .points-stat-value.daily {
+            color: #22C55E;
+        }
+
+        .points-rules-section {
+            padding: 0.8rem 1.3rem 0 2.5rem;
+        }
+
+        .points-rules-list-warpper {
+            width: 100%;
+            max-height: 7.2rem;
+            overflow-y: auto;
+        }
+
+        .points-rules-list {
+            list-style-type: none;
+            display: inline-block;
+        }
+
+        .points-rules-list-warpper::-webkit-scrollbar {
+            width: 0.2rem;
+        }
+
+        .points-rules-list-warpper::-webkit-scrollbar-thumb {
+            background: #999;
+            border-radius: 0.2rem;
+        }
+
+        .points-rules-list li {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.4rem;
+            color: #333333;
+        }
+
+        .points-rules-list li:last-child {
+            margin-bottom: 0;
+        }
+
+        .points-rule-name {
+            display: inline-block;
+        }
+
+        .points-rule-value {
+            margin-left: 2rem;
+            color: #FF9500;
+            font-weight: 600;
+        }
+
+        /* 新的难度选择器样式 */
+        .difficulty-selector {
+            position: relative;
+            width: 19rem;
+            height: 2.6rem;
+            color: #333;
+            margin-bottom: 1.2rem;
+        }
+
+        .difficulty-selector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.2rem 0.6rem;
+            background-color: #FFF1DF;
+            border-radius: 0.4rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .difficulty-selector-header.active {
+            border-color: #4196FF;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .difficulty-selector-arrow {
+            width: 0;
+            height: 0;
+            border-left: 0.3rem solid transparent;
+            border-right: 0.3rem solid transparent;
+            border-top: 0.4rem solid #333;
+            transition: transform 0.2s ease;
+        }
+
+        .difficulty-selector-header.active .difficulty-selector-arrow {
+            transform: rotate(180deg);
+        }
+
+        .difficulty-selector-dropdown {
+            position: absolute;
+            top: 2.6rem;
+            left: 0;
+            right: 0;
+            background-color: #FFF1DF;
+            border-top: none;
+            border-bottom-left-radius: 0.4rem;
+            border-bottom-right-radius: 0.4rem;
+            z-index: 100;
+            max-height: 0;
+            overflow-y: auto;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .difficulty-selector-dropdown.show {
+            max-height: 35.1rem;
+            opacity: 1;
+        }
+
+        .difficulty-selector-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 2.6rem;
+            padding: 0.2rem 0.6rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .difficulty-selector-option:last-child {
+            border-bottom: none;
+        }
+
+        .difficulty-selector-option.selected {
+            background-color: #DBEAFE;
+            color: #4196FF;
+            font-weight: 600;
+        }
+
+        .difficulty-selector-option:hover:not(.selected) {
+            background-color: rgba(219, 234, 254, 0.5);
+        }
+
+        /* 倒计时显示 */
+        .countdown-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 6rem;
+            font-weight: bold;
+            color: #FF6600;
+            z-index: 200;
+            text-shadow: 0 0 0.2rem rgba(255, 102, 0, 0.5);
+            pointer-events: none;
+        }
+
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 防止双击缩放 */
+        * {
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 游戏主体区域 */
+        .game-board-area {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 39.6rem;
+            height: 35.1rem;
+            padding: 2.6rem 4rem 0.9rem;
+            background-color: #6A60FF;
+            border-radius: 1.2rem;
+            overflow: hidden;
+        }
+
+        .grid-2 { 
+            padding: 0.8rem;
+            gap: 0.8rem;
+        }
+        .grid-2 .grid-cell {
+            width: 14.6rem;
+            height: 14.6rem;
+            font-size: 2.8rem !important;
+        }
+
+        .grid-3 .grid-cell {
+            width: 10rem;
+            height: 10rem;
+            font-size: 2.4rem !important;
+        }
+
+        .grid-4 .grid-cell {
+            width: 7.4rem;
+            height: 7.4rem;
+            font-size: 2.0rem !important;
+        }
+
+        .grid-5 .grid-cell {
+            width: 5.84rem;
+            height: 5.84rem;
+            font-size: 1.8rem !important;
+        }
+
+        .grid-6 .grid-cell {
+            width: 4.8rem;
+            height: 4.8rem;
+            font-size: 1.6rem !important;
+        }
+
+        /* 积分图标 - 定位到规则图标上方 */
+        .points-icon {
+            position: absolute;
+            width: 3.8rem;
+            height: 3.8rem;
+            right: 0.4rem;
+            bottom: 4.2rem;
+            background-image: url("https://qiniu-public.keepwork.com/paracraft-cdn-resource/Web/ms_games/icon/game_points.png");
+            background-size: cover;
+            background-position: center;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        /* 规则图标 - 定位到右下角 */
+        .rules-icon {
+            position: absolute;
+            width: 3.8rem;
+            height: 3.8rem;
+            right: 0.4rem;
+            bottom: 0.4rem;
+            background-image: url("https://qiniu-public.keepwork.com/paracraft-cdn-resource/Web/ms_games/icon/game_rule.png");
+            background-size: cover;
+            background-position: center;
+            cursor: pointer;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="left">
+            <!-- 新的难度选择器 -->
+            <div class="difficulty-selector text-14">
+                <div class="difficulty-selector-header">
+                    <span>难度</span>
+                    <span id="currentDifficultyLabel" style="font-weight: 500;">1级 - 2x2纯色</span>
+                    <div class="difficulty-selector-arrow"></div>
+                </div>
+                <div class="difficulty-selector-dropdown">
+                    <!-- 动态生成选项 -->
+                </div>
+            </div>
+            <div class="info-panel">
+                <div class="info-item" style="color: #17A34A;">
+                    <div class="vertical-bar" style="background-color: #17A34A;"></div>
+                    <div class="text-14">积分：</div>
+                    <div class="text-24">0</div>
+                </div>
+                <div class="info-item" style="color: #6A60FF;">
+                    <div class="vertical-bar" style="background-color: #6A60FF;"></div>
+                    <div class="text-14">关卡：</div>
+                    <div class="text-24">1/1</div>
+                </div>
+                <div class="info-item" style="color: #1E77E5;">
+                    <div class="vertical-bar" style="background-color: #1E77E5;"></div>
+                    <div class="text-14">目标：</div>
+                    <div class="text-24">2</div>
+                </div>
+                <div class="info-item" style="color: #FF6600;">
+                    <div class="vertical-bar" style="background-color: #FF6600;"></div>
+                    <div class="text-14">错误：</div>
+                    <div class="text-24">0/2</div>
+                </div>
+                <div class="info-item" style="color: #FF9A00;">
+                    <div class="vertical-bar" style="background-color: #FF9A00;"></div>
+                    <div class="text-14">时间：</div>
+                    <div class="text-24">10:00</div>
+                </div>
+            </div>
+            <div class="start-button text-16">开始训练</div>
+        </div>
+
+        <!-- 游戏主体区域 -->
+        <div class="game-board-area">
+            <div id="gameBoard" class="grid-container">
+                <!-- 动态生成网格 -->
+            </div>
+            <!-- 倒计时显示 -->
+            <div id="countdownDisplay" class="countdown-display hidden"></div>
+        </div>
+
+        <!-- 积分查看图标 -->
+        <div id="pointsIcon" class="points-icon hidden" title="查看积分"></div>
+        <!-- 规则查看图标 -->
+        <div id="rulesIcon" class="rules-icon hidden" title="查看规则"></div>
+    </div>
+
+    <!-- 积分弹窗 -->
+    <div id="pointsModal" class="rules-modal hidden">
+        <div class="points-modal">
+            <div class="points-header">
+                <div class="points-title text-18 text-secondary">
+                    <div class="points-sign"></div>
+                    <span>积分系统</span>
+                </div>
+                <button id="closePoints" class="points-close text-primary">×</button>
+            </div>
+            <div class="points-modal-content text-14 text-list">
+                <div class="points-stats-section">
+                    <div class="points-stats-header">
+                        <div class="points-subtitle" style="margin: 0;">积分统计</div>
+                        <div class="text-10 text-note">
+                            最后更新: <span id="lastUpdateDateDisplay">--</span>
+                        </div>
+                    </div>
+                    <div class="points-stats-grid">
+                        <div class="points-stat-item">
+                            <div class="points-stat-label">总积分</div>
+                            <div id="totalPointsDisplay" class="points-stat-value total">0</div>
+                        </div>
+                        <div class="points-stat-item">
+                            <div class="points-stat-label">今日积分</div>
+                            <div id="dailyPointsDisplay" class="points-stat-value daily">+0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="points-rules-section">
+                    <div class="points-subtitle">积分获得规则</div>
+                    <div class="points-rules-list-warpper">
+                        <ul class="points-rules-list">
+                            <li class="text-12">
+                                <span class="points-rule-name">3×3 网格关卡：每关正确完成获得</span>
+                                <span class="points-rule-value">5积分</span>
+                            </li>
+                            <li class="text-12">
+                                <span class="points-rule-name">4×4 网格关卡：每关正确完成获得</span>
+                                <span class="points-rule-value">7积分</span>
+                            </li>
+                            <li class="text-12">
+                                <span class="points-rule-name">5×5 网格关卡：每关正确完成获得</span>
+                                <span class="points-rule-value">10积分</span>
+                            </li>
+                            <li class="text-12">
+                                <span class="points-rule-name">6×6 网格关卡：每关正确完成获得</span>
+                                <span class="points-rule-value">15积分</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规则弹窗 -->
+    <div id="rulesModal" class="rules-modal">
+        <div class="rules-content">
+            <div class="rules-header text-18">
+                <div class="rules-title text-secondary" style="font-weight: 600;">
+                    <div class="rules-sign"></div>
+                    <span>旋转宫殿</span>
+                </div>
+                <button id="closeRules" class="rules-close text-primary">×</button>
+            </div>
+            <ol class="rules-list text-14 text-list">
+                <li>在限定时间内，记忆格子矩阵中亮起的方块、成语、单词的位置</li>
+                <li>在矩阵旋转后，找到它们的对应位置</li>
+                <li>根据你的模型，当前为你推荐的难度为<span id="recommendedDifficulty" style="color: #4189FF;">【1级】</span>，你可以随时根据作答情况，调整难度。</li>
+            </ol>
+            <button id="startGameFromRules" class="rules-footer text-12">
+                开始训练
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量和配置
+        let game_config = '';
+        let globalHighestScore = 0;
+        let gameStarted = false;
+        let hasClosedRulesOnce = false; // 标记是否第一次关闭过规则窗口
+
+        // 添加消息监听器
+        window.addEventListener('message', function (e) {
+            switch (e.data.type) {
+                case 'setGameConfig':
+                    game_config = e.data.data;
+                    updateGameConfig(game_config);
+                    
+                    // 根据levelName设置初始难度
+                    if (e.data.levelName && window.visualGame) {
+                        let levelBasedDifficulty = null;
+                        
+                        switch (e.data.levelName) {
+                            case '待提升':
+                                levelBasedDifficulty = 10; // 3x3纯色 (对应10级难度)
+                                break;
+                            case '良好':
+                                levelBasedDifficulty = 13; // 4x4纯色 (对应13级难度)
+                                break;
+                            case '优异':
+                                levelBasedDifficulty = 16; // 5x5纯色 (对应16级难度)
+                                break;
+                        }
+                        
+                        if (levelBasedDifficulty !== null) {
+                            // 如果现有配置更新逻辑中已有难度设置，取更高的难度值
+                            const currentDifficulty = window.visualGame.difficultyLevel;
+                            const finalDifficulty = Math.max(currentDifficulty, levelBasedDifficulty);
+                            
+                            // 如果目标难度高于当前难度，应用新难度
+                            if (finalDifficulty !== currentDifficulty) {
+                                window.visualGame.setDifficultyLevel(finalDifficulty);
+                                console.log(`根据levelName "${e.data.levelName}" 设置难度为: ${finalDifficulty}级`);
+                            }
+                            
+                            updateRecommendedDifficultyDisplay(finalDifficulty);
+                        }
+                    }
+                    
+                    window.parent.postMessage({
+                        type: 'getTotalTrainingPoints',
+                    }, '*');
+                    break;
+                case 'getGameStats':
+                    const difficulty = calculateDifficulty();
+                    window.parent.postMessage({ 
+                        type: 'gameStats', 
+                        data: {
+                            score: globalHighestScore,
+                            difficulty: Math.min(difficulty, 3)
+                        }
+                    }, '*');
+                    break;
+                case 'gameContinue':
+                    if (e.data.action === 'restart') {
+                        if (window.visualGame) {
+                            window.visualGame.resetGame();
+                            window.visualGame.startGame();
+                        }
+                    } else if (e.data.action === 'challenge') {
+                        // 如果有下一个难度，从下一个难度开始游戏
+                        if (window.visualGame) {
+                            window.visualGame.setDifficultyLevel(window.visualGame.difficultyLevel + 1);
+                            window.visualGame.startGame();
+                        }
+                    }
+                    break;
+                case 'trainingPointsResponse':
+                    // 接收父窗口传递的积分更新值
+                    if (window.visualGame && e.data.totalPoints !== undefined) {
+                        window.visualGame.totalPoints = e.data.totalPoints;
+                        window.visualGame.updateTotalPointsDisplay();
+                        console.log(`总积分已更新为: ${e.data.totalPoints}`);
+                    }
+                    break;
+                case 'totalTrainingPointsResponse':
+                    // 接收父窗口传递的详细积分信息
+                    if (window.visualGame && e.data.total !== undefined) {
+                        window.visualGame.updateDetailedPointsInfo(e.data);
+                        console.log('详细积分信息已更新:', e.data);
+                    }
+                    break;
+            }
+        });
+
+        // 更新推荐难度显示
+        function updateRecommendedDifficultyDisplay(difficultyLevel) {
+            const showLevel = difficultyLevel >= 10 ? difficultyLevel - 9 : difficultyLevel;
+            const recommendedDifficultyElement = document.getElementById('recommendedDifficulty');
+            if (recommendedDifficultyElement) {
+                recommendedDifficultyElement.textContent = `【${showLevel}级】`;
+            }
+        }
+
+            // 高亮难度选择器
+            function highlightDifficultySelector() {
+                const difficultySelector = document.querySelector('.difficulty-selector-header');
+                if (difficultySelector) {
+                    const game = window.visualGame;
+                    const shadowSize = game ? (1.5 * game.rootFontSize / 10) : 1.5;
+                    // 添加高亮样式
+                    difficultySelector.style.boxShadow = `0 0 ${shadowSize}rem #fbbf24`;
+                    difficultySelector.style.transition = 'all 0.3s ease';
+                    
+                    // 2秒后移除高亮
+                    setTimeout(() => {
+                        difficultySelector.style.boxShadow = '';
+                    }, 2000);
+                }
+            }        // 更新游戏配置
+        function updateGameConfig(config) {
+            try {
+                if (typeof config === 'string' && config.trim()) {
+                    const newConfig = parseGameConfig(config);
+                    if (newConfig && window.visualGame) {
+                        // 年龄组配置优先级最高
+                        if (newConfig.ageGroup !== undefined) {
+                            window.visualGame.setAgeGroupConfig(newConfig.ageGroup);
+                            
+                            // 在设置年龄组后，也尝试读取对应的词汇字段并覆盖
+                            if (newConfig.customWords !== undefined) {
+                                window.visualGame.customWords = shuffleArray([...newConfig.customWords]);
+                            }
+                            if (newConfig.customChinese !== undefined) {
+                                window.visualGame.customChinese = shuffleArray([...newConfig.customChinese]);
+                            }
+                            
+                            console.log(`已设置为${newConfig.ageGroup === 'young' ? '5-7岁' : '8岁以上'}儿童模式，并更新了自定义词库`);
+                            return; // 年龄组配置会覆盖其他设置，直接返回
+                        }
+                        
+                        if (newConfig.difficultyLevel !== undefined) {
+                            window.visualGame.setDifficultyLevel(newConfig.difficultyLevel);
+                        } else {
+                            // 兼容旧配置格式
+                            if (newConfig.gridSize !== undefined) {
+                                window.visualGame.gridSize = Math.max(3, Math.min(8, newConfig.gridSize));
+                                // 根据网格大小推断难度等级
+                                const gridToDifficulty = { 3: 1, 4: 5, 5: 7, 6: 10 };
+                                const inferredLevel = gridToDifficulty[window.visualGame.gridSize] || 5;
+                                window.visualGame.setDifficultyLevel(inferredLevel);
+                            }
+                            if (newConfig.gameMode !== undefined) {
+                                window.visualGame.gameMode = newConfig.gameMode;
+                                window.visualGame.updateGameModeUI();
+                            }
+                            if (newConfig.maxErrors !== undefined) {
+                                window.visualGame.maxErrors = Math.max(1, Math.min(5, newConfig.maxErrors));
+                            }
+                            if (newConfig.difficulty !== undefined) {
+                                window.visualGame.setDifficulty(newConfig.difficulty);
+                            }
+                            if (newConfig.memoryTime !== undefined) {
+                                window.visualGame.memoryTime = Math.max(2, Math.min(10, newConfig.memoryTime));
+                            }
+                            if (newConfig.maxLevels !== undefined) {
+                                window.visualGame.maxLevels = Math.max(3, Math.min(20, newConfig.maxLevels));
+                            }
+                        }
+                        
+                        // 设置自定义词库并随机打乱
+                        if (newConfig.customWords !== undefined) {
+                            window.visualGame.customWords = shuffleArray([...newConfig.customWords]);
+                        }
+                        if (newConfig.customChinese !== undefined) {
+                            window.visualGame.customChinese = shuffleArray([...newConfig.customChinese]);
+                        }
+                        
+                        console.log('配置已更新');
+                        window.visualGame.resetGame();
+                    }
+                }
+            } catch (error) {
+                console.warn('解析游戏配置失败，保持原配置:', error);
+            }
+        }
+
+        // 数组随机打乱函数
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // 解析游戏配置（支持多种格式）
+        function parseGameConfig(config) {
+            const result = {};
+            
+            try {
+                const jsonData = JSON.parse(config);
+                return jsonData;
+            } catch (e) {
+                const lines = config.trim().split('\n');
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    if (line.includes('=')) {
+                        const [key, value] = line.split('=').map(s => s.trim());
+                        if (key === 'gridSize') {
+                            result.gridSize = parseInt(value);
+                        } else if (key === 'maxErrors') {
+                            result.maxErrors = parseInt(value);
+                        } else if (key === 'gameMode') {
+                            result.gameMode = value;
+                        } else if (key === 'difficulty') {
+                            result.difficulty = parseInt(value);
+                        } else if (key === 'difficultyLevel') {
+                            result.difficultyLevel = parseInt(value);
+                        } else if (key === 'ageGroup') {
+                            result.ageGroup = value;
+                        } else if (key === 'memoryTime') {
+                            result.memoryTime = parseInt(value);
+                        } else if (key === 'maxLevels') {
+                            result.maxLevels = parseInt(value);
+                        }
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        /* 
+         * 游戏配置示例:
+         * 
+         * 配置项1 - 5-7岁儿童模式 (JSON格式):
+         * {
+         *   "ageGroup": "young",
+         *   "customChinese": ["大小", "上下", "左右", "前后", "早晚"],
+         *   "customWords": ["CAT", "DOG", "SUN", "MOON", "STAR"]
+         * }
+         * 
+         * 配置项2 - 8岁以上儿童模式 (JSON格式):
+         * {
+         *   "ageGroup": "older",
+         *   "customChinese": ["一心一意", "二龙戏珠", "三心二意"],
+         *   "customWords": ["APPLE", "BRAVE", "CLOUD", "DREAM"]
+         * }
+         * 
+         * 配置项3 - 使用综合难度等级 (JSON格式):
+         * {
+         *   "difficultyLevel": 8
+         * }
+         * 
+         * 配置项4 - 自定义5-7岁模式，包含词库 (JSON格式):
+         * {
+         *   "difficultyLevel": 2,
+         *   "customChinese": ["大小", "上下", "左右", "前后", "早晚", "开关", "冷热", "高低", "快慢", "多少", "黑白", "新旧", "好坏", "里外", "远近", "轻重", "粗细", "长短", "宽窄", "厚薄"],
+         *   "customWords": ["CAT", "DOG", "SUN", "MOON", "STAR", "TREE", "FISH", "BIRD", "BALL", "BOOK", "MILK", "CAKE", "PLAY", "JUMP", "RUN", "SING", "LOVE", "GOOD", "NICE", "BLUE"]
+         * }
+         * 
+         * 配置项5 - 自定义8岁以上模式，包含词库 (JSON格式):
+         * {
+         *   "difficultyLevel": 20,
+         *   "customChinese": ["一心一意", "二龙戏珠", "三心二意", "四面楚歌", "五湖四海", "六神无主", "七上八下", "八仙过海", "九牛一毛", "十全十美", "百发百中", "千军万马", "万事如意", "东山再起", "南辕北辙", "西风残照", "北斗七星", "春暖花开", "夏日炎炎", "秋高气爽"],
+         *   "customWords": ["APPLE", "BRAVE", "CLOUD", "DREAM", "EAGLE", "FLAME", "GRACE", "HEART", "IVORY", "JEWEL", "KNIFE", "LIGHT", "MAGIC", "NOBLE", "OCEAN", "PEACE", "QUEEN", "RIVER", "STORM", "TIGER"]
+         * }
+         * 
+         * 注意：
+         * - 5-7岁模式（difficultyLevel 1-9）：中文模式显示为"词语"，网格从2x2到4x4
+         * - 8岁以上模式（difficultyLevel 10-21）：中文模式显示为"成语"，网格从3x3到6x6
+         * - 年龄组配置会自动读取自定义词库并覆盖默认设置
+         */
+
+        // 计算当前难度
+        function calculateDifficulty() {
+            if (!window.visualGame) return 1;
+            
+            const game = window.visualGame;
+            let difficultyScore = 0;
+            
+            // 基于关卡
+            if (game.level >= 15) difficultyScore += 2;
+            else if (game.level >= 8) difficultyScore += 1;
+            
+            // 基于网格大小
+            if (game.gridSize >= 6) difficultyScore += 2;
+            else if (game.gridSize >= 5) difficultyScore += 1;
+            
+            // 基于错误容忍度（错误次数越少越难）
+            if (game.maxErrors <= 1) difficultyScore += 1;
+            
+            // 基于累计失败次数（失败次数越多说明难度越高）
+            if (game.totalFailures >= 3) difficultyScore += 1;
+            
+            return Math.min(Math.max(difficultyScore, 1), 3);
+        }
+
+        class VisualMemoryGame {
+            constructor() {
+                this.gridSize = 4; // 默认4x4
+                this.originalPattern = []; // 原始位置的目标格子
+                this.correctClicks = [];
+                this.gameState = 'waiting'; // waiting, showing, rotating, rotated, finished
+                this.score = 0;
+                this.level = 1;
+                this.errorCount = 0;
+                this.totalErrors = 0; // 累计错误次数
+                this.maxErrors = 2;
+                this.currentRotation = 0; // 当前旋转角度
+                this.gameMode = 'color'; // 游戏模式：color, chinese, english
+                this.sequenceChars = []; // 存储当前序列的字符内容
+                this.currentWord = ''; // 当前完整的词汇
+                this.levelScores = []; // 记录每关的得分
+                this.levelScoreCache = new Map(); // 缓存关卡分数分配
+
+                // 添加游戏结束条件相关属性
+                this.maxLevels = 10; // 最大关卡数
+                this.totalFailures = 0; // 累计失败次数
+                this.maxFailures = 3; // 最大失败次数限制
+                this.startTime = 0; // 游戏开始时间
+                this.maxPlayTime = 600000; // 最大游戏时长（10分钟）
+                this.gameTimeRemaining = 600; // 剩余游戏时间（秒）
+                this.gameTimer = null; // 游戏计时器
+                this.difficulty = 2; // 难度等级：1-简单，2-中等，3-困难
+                this.difficultyLevel = 1; // 综合难度等级 1-12，默认1级（5-7岁模式）
+                this.memoryTime = 4; // 记忆时间（秒）
+                this.rotationOptions = [-90, 90, 180]; // 可用的旋转角度
+                
+                // 积分系统相关属性
+                this.totalPoints = 0; // 总积分
+                this.currentLevelPoints = 0; // 当前关卡获得的积分
+                this.earnedPoints = 0; // 累计获得的积分
+                this.dailyPoints = 0; // 今日积分
+                this.lastUpdateDate = ''; // 最后更新日期
+                this.rootFontSize = 10; // 根字体大小
+                
+                // 预定义词库
+                this.chineseWords = [
+                    // 5-7岁儿童成语
+                    '大小', '上下', '左右', '前后', '早晚', '开关', '冷热', '高低', '快慢', '多少',
+                    '黑白', '新旧', '好坏', '里外', '远近', '轻重', '粗细', '长短', '宽窄', '厚薄',
+                    '一二', '三四', '五六', '七八', '九十', '红花', '绿草', '蓝天', '白云', '黄叶',
+                    '太阳', '月亮', '星星', '大树', '小草', '河水', '山峰', '石头', '泥土', '沙子',
+                    
+                    // 8岁以上儿童成语
+                    '一心一意', '二龙戏珠', '三心二意', '四面楚歌', '五湖四海', '六神无主', '七上八下', '八仙过海', '九牛一毛', '十全十美',
+                    '百发百中', '千军万马', '万事如意', '东山再起', '南辕北辙', '西风残照', '北斗七星', '春暖花开', '夏日炎炎', '秋高气爽',
+                    '冬雪皑皑', '朝气蓬勃', '夕阳西下', '月明星稀', '风和日丽', '雨过天晴', '云开雾散', '花好月圆', '鸟语花香', '山清水秀',
+                    '龙飞凤舞', '虎头虎脑', '兔死狐悲', '马到成功', '羊入虎口', '猴年马月', '鸡犬不宁', '狗急跳墙', '猪突豨勇', '鼠目寸光',
+                    '牛刀小试', '如虎添翼', '守株待兔', '亡羊补牢', '画蛇添足', '杯弓蛇影', '鸡鸣狗盗', '狐假虎威', '井底之蛙', '坐井观天',
+                    '刻舟求剑', '掩耳盗铃', '班门弄斧', '滥竽充数', '买椟还珠', '画饼充饥', '望梅止渴', '纸上谈兵', '闻鸡起舞', '悬梁刺股',
+                    '凿壁偷光', '囊萤映雪', '韦编三绝', '学而时习', '温故知新', '举一反三', '触类旁通', '融会贯通', '熟能生巧', '青出于蓝',
+                    '后来居上', '百尺竿头', '更进一步', '精益求精', '止于至善', '追求卓越', '勇往直前', '锲而不舍', '坚持不懈', '百折不挠'
+                ];
+                
+                this.englishWords = [
+                    // 5-7岁儿童单词
+                    'CAT', 'DOG', 'SUN', 'MOON', 'STAR', 'TREE', 'FISH', 'BIRD', 'BALL', 'BOOK',
+                    'MILK', 'CAKE', 'PLAY', 'JUMP', 'RUN', 'SING', 'LOVE', 'GOOD', 'NICE', 'BLUE',
+                    'RED', 'BIG', 'SMALL', 'HOT', 'COLD', 'FAST', 'SLOW', 'HAPPY', 'SAD', 'BABY',
+                    'MOM', 'DAD', 'BOY', 'GIRL', 'HOME', 'PARK', 'FOOD', 'WATER', 'SNOW', 'RAIN',
+                    
+                    // 8岁以上儿童单词
+                    'APPLE', 'BRAVE', 'CLOUD', 'DREAM', 'EAGLE', 'FLAME', 'GRACE', 'HEART', 'IVORY', 'JEWEL',
+                    'KNIFE', 'LIGHT', 'MAGIC', 'NOBLE', 'OCEAN', 'PEACE', 'QUEEN', 'RIVER', 'STORM', 'TIGER',
+                    'UMBRELLA', 'VICTORY', 'WISDOM', 'YELLOW', 'ZEBRA', 'ADVENTURE', 'BEAUTIFUL', 'CREATIVE', 'ELEPHANT', 'FANTASTIC',
+                    'GENEROUS', 'HARMONY', 'IMAGINE', 'JOURNEY', 'KNOWLEDGE', 'LAUGHTER', 'MOUNTAIN', 'NECKLACE', 'ORDINARY', 'PLATFORM',
+                    'QUESTION', 'RAINBOW', 'SUNSHINE', 'TRIANGLE', 'UNIVERSE', 'VEGETABLE', 'WONDERFUL', 'XYLOPHONE', 'YESTERDAY', 'ZEPPELIN',
+                    'AIRPLANE', 'BICYCLE', 'COMPUTER', 'DINOSAUR', 'ELEPHANT', 'FIREFLY', 'GIRAFFE', 'HOSPITAL', 'INTERNET', 'JELLYFISH',
+                    'KANGAROO', 'LIGHTNING', 'MAGAZINE', 'NOTEBOOK', 'OCTOPUS', 'PENGUIN', 'QUADRANT', 'RECTANGLE', 'SANDWICH', 'TELESCOPE',
+                    'VACATION', 'WATERFALL', 'XENOPHILE', 'YOUTHFUL', 'ZUCCHINI', 'BUTTERFLY', 'CHARACTER', 'DISCOVERY', 'ECOSYSTEM', 'FESTIVAL'
+                ];
+                
+                this.customWords = []; // 自定义英文词库
+                this.customChinese = []; // 自定义中文成语词库
+                
+                // 初始化时调整根字体大小
+                this.adjustRootFontSize();
+                
+                this.initializeElements();
+                this.initializeRulesModal();
+                this.initializePointsModal();
+                this.createGrid();
+                this.bindEvents();
+                this.updateGameModeUI();
+                this.addTouchSupport();
+                this.setDifficultyLevel(this.difficultyLevel); // 设置默认难度
+                
+                updateRecommendedDifficultyDisplay(this.difficultyLevel);
+                
+                window.visualGame = this;
+                
+                // 监听窗口大小变化
+                window.addEventListener('resize', () => this.adjustRootFontSize());
+                
+                // 初始化难度选择器选项
+                this.generateDifficultyOptions();
+                
+                // 游戏开始时显示规则
+                this.showRulesModal();
+            }
+
+            // 调整根字体大小以适配不同屏幕
+            adjustRootFontSize() {
+                // 游戏主容器的设计尺寸
+                const DESIGN_WIDTH = 652;
+                const DESIGN_HEIGHT = 375;
+                
+                // 获取视口尺寸
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                
+                // 计算基于宽度和高度的缩放比例
+                const scaleByWidth = viewportWidth / DESIGN_WIDTH;
+                const scaleByHeight = viewportHeight / DESIGN_HEIGHT;
+                
+                // 取较小的缩放比例，确保内容完全可见（等比例缩放）
+                const scale = Math.min(scaleByWidth, scaleByHeight);
+                
+                // 设置根元素的 font-size
+                // 假设设计稿基准是 1rem = 10px，则调整后的 font-size = 10 * scale
+                const baseFontSize = 10; // 设计稿基准
+                const finalFontSize = baseFontSize * scale;
+                
+                document.documentElement.style.fontSize = `${finalFontSize}px`;
+                this.rootFontSize = finalFontSize;
+            }
+
+            // 设置综合难度等级（1-21）
+            setDifficultyLevel(level, shouldResetGame = true) {
+                level = Math.max(1, Math.min(21, level));
+                this.difficultyLevel = level;
+                
+                // 根据综合难度等级设置参数
+                // 5-7岁配置（1-9级）：2x2到4x4的纯色、词语、单词
+                // 注意：maxErrors 会根据每关的目标数动态调整
+                const youngConfigs = [
+                    { gridSize: 2, gameMode: 'color', maxErrors: 2, maxFailures: 6, maxLevels: 6, memoryTime: 5 },   // 1级 - 2x2纯色
+                    { gridSize: 2, gameMode: 'chinese', maxErrors: 2, maxFailures: 6, maxLevels: 8, memoryTime: 5 }, // 2级 - 2x2词语
+                    { gridSize: 2, gameMode: 'english', maxErrors: 2, maxFailures: 5, maxLevels: 8, memoryTime: 4 }, // 3级 - 2x2单词
+                    { gridSize: 3, gameMode: 'color', maxErrors: 3, maxFailures: 4, maxLevels: 8, memoryTime: 4 },  // 4级 - 3x3纯色
+                    { gridSize: 3, gameMode: 'chinese', maxErrors: 3, maxFailures: 4, maxLevels: 10, memoryTime: 4 }, // 5级 - 3x3词语
+                    { gridSize: 3, gameMode: 'english', maxErrors: 3, maxFailures: 4, maxLevels: 10, memoryTime: 4 }, // 6级 - 3x3单词
+                    { gridSize: 4, gameMode: 'color', maxErrors: 3, maxFailures: 3, maxLevels: 10, memoryTime: 3 },  // 7级 - 4x4纯色
+                    { gridSize: 4, gameMode: 'chinese', maxErrors: 3, maxFailures: 3, maxLevels: 12, memoryTime: 3 }, // 8级 - 4x4词语
+                    { gridSize: 4, gameMode: 'english', maxErrors: 3, maxFailures: 3, maxLevels: 12, memoryTime: 3 }, // 9级 - 4x4单词
+                ];
+                
+                // 8岁以上配置（10-21级）：3x3到6x6的纯色、成语、单词
+                const olderConfigs = [
+                    { gridSize: 3, gameMode: 'color', maxErrors: 3, maxFailures: 4, maxLevels: 10, memoryTime: 4 },  // 10级 - 3x3纯色
+                    { gridSize: 3, gameMode: 'chinese', maxErrors: 3, maxFailures: 4, maxLevels: 10, memoryTime: 4 }, // 11级 - 3x3成语
+                    { gridSize: 3, gameMode: 'english', maxErrors: 3, maxFailures: 4, maxLevels: 12, memoryTime: 4 }, // 12级 - 3x3单词
+                    { gridSize: 4, gameMode: 'color', maxErrors: 3, maxFailures: 3, maxLevels: 12, memoryTime: 3 },  // 13级 - 4x4纯色
+                    { gridSize: 4, gameMode: 'chinese', maxErrors: 3, maxFailures: 3, maxLevels: 12, memoryTime: 3 }, // 14级 - 4x4成语
+                    { gridSize: 4, gameMode: 'english', maxErrors: 3, maxFailures: 3, maxLevels: 14, memoryTime: 3 }, // 15级 - 4x4单词
+                    { gridSize: 5, gameMode: 'color', maxErrors: 3, maxFailures: 2, maxLevels: 14, memoryTime: 3 },  // 16级 - 5x5纯色
+                    { gridSize: 5, gameMode: 'chinese', maxErrors: 3, maxFailures: 2, maxLevels: 16, memoryTime: 2 }, // 17级 - 5x5成语
+                    { gridSize: 5, gameMode: 'english', maxErrors: 3, maxFailures: 2, maxLevels: 16, memoryTime: 2 }, // 18级 - 5x5单词
+                    { gridSize: 6, gameMode: 'color', maxErrors: 3, maxFailures: 2, maxLevels: 16, memoryTime: 2 },  // 19级 - 6x6纯色
+                    { gridSize: 6, gameMode: 'chinese', maxErrors: 2, maxFailures: 2, maxLevels: 18, memoryTime: 2 }, // 20级 - 6x6成语
+                    { gridSize: 6, gameMode: 'english', maxErrors: 2, maxFailures: 1, maxLevels: 20, memoryTime: 2 }, // 21级 - 6x6单词
+                ];
+                
+                let config;
+                if (level <= 9) {
+                    config = youngConfigs[level - 1];
+                } else {
+                    config = olderConfigs[level - 10];
+                }
+                
+                this.gridSize = config.gridSize;
+                this.gameMode = config.gameMode;
+                this.maxErrors = config.maxErrors; // 初始值，会在每关动态调整
+                this.maxFailures = config.maxFailures;
+                this.maxLevels = config.maxLevels;
+                this.memoryTime = config.memoryTime;
+                
+                // 根据难度等级设置基础难度（用于现有逻辑）
+                if (level <= 6) {
+                    this.difficulty = 1; // 简单
+                } else if (level <= 15) {
+                    this.difficulty = 2; // 中等
+                } else {
+                    this.difficulty = 3; // 困难
+                }
+                
+                // 更新难度选择器选项
+                this.updateDifficultyOptions();
+                
+                this.createGrid();
+                this.updateGameModeUI();
+                
+                // 只有在明确要求时才重置游戏
+                if (shouldResetGame) {
+                    this.resetGame();
+                }
+                
+                console.log(`综合难度已设置为: ${level}级`);
+            }
+
+            // 更新难度选择器选项
+            updateDifficultyOptions() {
+                // 更新新选择器的下拉选项
+                if (this.difficultySelectorDropdown) {
+                    this.generateDifficultyOptions();
+                }
+                
+                // 更新难度选择器的显示文本
+                this.updateDifficultyLabel();
+            }
+            
+            // 根据难度等级获取标签文本
+            getDifficultyLabelByLevel(level) {
+                const isYoungMode = level <= 9;
+                
+                if (isYoungMode) {
+                    const labels = [
+                        '1级 - 2x2纯色',
+                        '2级 - 2x2词语',
+                        '3级 - 2x2单词',
+                        '4级 - 3x3纯色',
+                        '5级 - 3x3词语',
+                        '6级 - 3x3单词',
+                        '7级 - 4x4纯色',
+                        '8级 - 4x4词语',
+                        '9级 - 4x4单词'
+                    ];
+                    return labels[level - 1];
+                } else {
+                    const labels = [
+                        '1级 - 3x3纯色',
+                        '2级 - 3x3成语',
+                        '3级 - 3x3单词',
+                        '4级 - 4x4纯色',
+                        '5级 - 4x4成语',
+                        '6级 - 4x4单词',
+                        '7级 - 5x5纯色',
+                        '8级 - 5x5成语',
+                        '9级 - 5x5单词',
+                        '10级 - 6x6纯色',
+                        '11级 - 6x6成语',
+                        '12级 - 6x6单词'
+                    ];
+                    return labels[level - 10];
+                }
+            }
+            
+            // 更新难度选择器的显示文本
+            updateDifficultyLabel() {
+                if (this.currentDifficultyLabel) {
+                    const label = this.getDifficultyLabelByLevel(this.difficultyLevel);
+                    if (label) {
+                        this.currentDifficultyLabel.textContent = label;
+                    }
+                }
+            }
+
+            // 开始游戏计时器
+            startGameTimer() {
+                if (this.gameTimer) {
+                    clearInterval(this.gameTimer);
+                }
+                
+                this.gameTimeRemaining = Math.floor(this.maxPlayTime / 1000);
+                this.updateTimeDisplay();
+                
+                this.gameTimer = setInterval(() => {
+                    this.gameTimeRemaining--;
+                    this.updateTimeDisplay();
+                    
+                    if (this.gameTimeRemaining <= 0) {
+                        clearInterval(this.gameTimer);
+                        this.endGame();
+                    }
+                }, 1000);
+            }
+
+            // 停止游戏计时器
+            stopGameTimer() {
+                if (this.gameTimer) {
+                    clearInterval(this.gameTimer);
+                    this.gameTimer = null;
+                }
+            }
+
+            // 更新时间显示
+            updateTimeDisplay() {
+                if (this.timeRemainingElement) {
+                    const minutes = Math.floor(this.gameTimeRemaining / 60);
+                    const seconds = this.gameTimeRemaining % 60;
+                    this.timeRemainingElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }
+
+            // 添加设置难度的方法（保留兼容性）
+            setDifficulty(level) {
+                level = Math.max(1, Math.min(3, level)); // 限制在1-3之间
+                this.difficulty = level;
+                
+                // 根据难度调整游戏参数
+                switch(level) {
+                    case 1: // 简单
+                        this.setDifficultyLevel(2); // 对应综合难度2级
+                        break;
+                    case 2: // 中等
+                        this.setDifficultyLevel(8); // 对应综合难度8级
+                        break;
+                    case 3: // 困难
+                        this.setDifficultyLevel(18); // 对应综合难度18级
+                        break;
+                }
+                
+                console.log(`难度已设置为: ${level} (${level === 1 ? '简单' : level === 2 ? '中等' : '困难'})`);
+            }
+
+            // 为不同年龄段设置游戏配置
+            setAgeGroupConfig(ageGroup) {
+                switch(ageGroup) {
+                    case 'young': // 5-7岁
+                        this.setYoungKidsConfig();
+                        break;
+                    case 'older': // 8岁以上
+                        this.setOlderKidsConfig();
+                        break;
+                    default:
+                        console.warn('未知年龄组:', ageGroup);
+                        break;
+                }
+            }
+
+            // 5-7岁儿童配置
+            setYoungKidsConfig() {
+                this.setDifficultyLevel(1); // 设置为1级难度，会触发更新选项
+                updateRecommendedDifficultyDisplay(1);
+                console.log('已设置为5-7岁儿童模式');
+            }
+
+            // 8岁以上儿童配置
+            setOlderKidsConfig() {
+                this.setDifficultyLevel(10); // 设置为10级难度，会触发更新选项
+                updateRecommendedDifficultyDisplay(10);
+                console.log('已设置为8岁以上儿童模式');
+            }
+
+            // 初始化DOM元素
+            initializeElements() {
+                this.gameBoard = document.getElementById('gameBoard');
+                
+                // 使用 .info-panel 中的元素
+                const infoItems = document.querySelectorAll('.info-panel .info-item .text-24');
+                this.scoreElement = infoItems[0]; // 积分
+                this.levelElement = infoItems[1]; // 关卡
+                this.totalLevelElement = infoItems[1]; // 复用关卡元素
+                this.targetCountElement = infoItems[2]; // 目标
+                this.errorCountElement = infoItems[3]; // 错误
+                this.maxErrorCountElement = infoItems[3]; // 复用错误元素
+                this.timeRemainingElement = infoItems[4]; // 时间
+                
+                // 使用 .start-button 作为开始按钮和状态显示
+                this.startBtn = document.querySelector('.start-button');
+                this.statusElement = this.startBtn; // 状态显示也使用开始按钮
+                
+                this.gameModeElement = document.getElementById('gameMode');
+                this.countdownDisplay = document.getElementById('countdownDisplay');
+                this.rulesIcon = document.getElementById('rulesIcon');
+                this.pointsIcon = document.getElementById('pointsIcon');
+                this.totalPointsElement = document.getElementById('totalPointsDisplay');
+                this.dailyPointsElement = document.getElementById('dailyPointsDisplay');
+                this.lastUpdateDateElement = document.getElementById('lastUpdateDateDisplay');
+                this.recommendedDifficultyElement = document.getElementById('recommendedDifficulty');
+                
+                // 新的难度选择器元素
+                this.difficultySelectorHeader = document.querySelector('.difficulty-selector-header');
+                this.difficultySelectorDropdown = document.querySelector('.difficulty-selector-dropdown');
+                this.currentDifficultyLabel = document.getElementById('currentDifficultyLabel');
+                
+                // 更新总关卡数显示
+                if (this.totalLevelElement) {
+                    this.totalLevelElement.textContent = this.maxLevels;
+                }
+            }
+
+            // 初始化规则弹窗
+            initializeRulesModal() {
+                this.rulesModal = document.getElementById('rulesModal');
+                this.closeRulesBtn = document.getElementById('closeRules');
+                this.startGameFromRulesBtn = document.getElementById('startGameFromRules');
+                
+                // 显示规则图标和积分图标
+                if (this.rulesIcon) {
+                    this.rulesIcon.classList.remove('hidden');
+                }
+                if (this.pointsIcon) {
+                    this.pointsIcon.classList.remove('hidden');
+                }
+            }
+
+            // 初始化积分弹窗
+            initializePointsModal() {
+                this.pointsModal = document.getElementById('pointsModal');
+                this.closePointsBtn = document.getElementById('closePoints');
+            }
+
+            // 创建网格
+            createGrid() {
+                this.gameBoard.innerHTML = '';
+                this.gameBoard.className = `grid-container grid-${this.gridSize}`;
+                
+                const totalCells = this.gridSize * this.gridSize;
+                for (let i = 0; i < totalCells; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.addEventListener('click', () => this.cellClicked(i));
+                    this.gameBoard.appendChild(cell);
+                }
+                
+                this.updateDisplay();
+            }
+
+            // 绑定事件
+            bindEvents() {
+                this.startBtn.addEventListener('click', () => {
+                    // 只有在 waiting 状态时才能点击开始
+                    if (this.gameState === 'waiting') {
+                        this.startGame();
+                    }
+                });
+                
+                // 新的难度选择器事件
+                if (this.difficultySelectorHeader) {
+                    this.difficultySelectorHeader.addEventListener('click', () => {
+                        this.toggleDifficultyDropdown();
+                    });
+                }
+
+                // 点击页面其他地方关闭下拉菜单
+                document.addEventListener('click', (e) => {
+                    if (this.difficultySelectorHeader && this.difficultySelectorDropdown) {
+                        if (!e.target.closest('.difficulty-selector')) {
+                            this.closeDifficultyDropdown();
+                        }
+                    }
+                });
+                
+                // 规则弹窗事件
+                this.closeRulesBtn.addEventListener('click', () => this.hideRulesModal());
+                this.startGameFromRulesBtn.addEventListener('click', () => {
+                    this.hideRulesModal();
+                    this.startGame();
+                });
+                this.rulesIcon.addEventListener('click', () => this.showRulesModal());
+                
+                // 积分弹窗事件
+                this.closePointsBtn.addEventListener('click', () => this.hidePointsModal());
+                this.pointsIcon.addEventListener('click', () => this.showPointsModal());
+                
+                // 点击弹窗外部关闭
+                this.rulesModal.addEventListener('click', (e) => {
+                    if (e.target === this.rulesModal) {
+                        this.hideRulesModal();
+                    }
+                });
+                
+                this.pointsModal.addEventListener('click', (e) => {
+                    if (e.target === this.pointsModal) {
+                        this.hidePointsModal();
+                    }
+                });
+            }
+
+            // 检查是否可以切换模式
+            canSwitchMode() {
+                // 允许在等待、游戏结束、以及"点击绿色格子位置"阶段切换难度
+                return this.gameState === 'waiting' || this.gameState === 'finished' || this.gameState === 'rotated';
+            }
+
+            // 显示模式切换警告
+            showModeSwitchWarning() {
+                const originalText = this.startBtn.textContent;
+                this.startBtn.textContent = '进行中，无法切换！';
+                setTimeout(() => {
+                    this.startBtn.textContent = originalText;
+                }, 2000);
+            }
+
+            // 生成难度选项
+            generateDifficultyOptions() {
+                if (!this.difficultySelectorDropdown) return;
+                
+                // 检查当前是否为5-7岁模式（难度等级1-9）
+                const isYoungMode = this.difficultyLevel <= 9;
+                
+                let options = [];
+                if (isYoungMode) {
+                    // 5-7岁选项：2x2到4x4的纯色、词语、单词
+                    options = [
+                        { value: 1, label: '1级 - 2x2纯色' },
+                        { value: 2, label: '2级 - 2x2词语' },
+                        { value: 3, label: '3级 - 2x2单词' },
+                        { value: 4, label: '4级 - 3x3纯色' },
+                        { value: 5, label: '5级 - 3x3词语' },
+                        { value: 6, label: '6级 - 3x3单词' },
+                        { value: 7, label: '7级 - 4x4纯色' },
+                        { value: 8, label: '8级 - 4x4词语' },
+                        { value: 9, label: '9级 - 4x4单词' }
+                    ];
+                } else {
+                    // 8岁以上选项：3x3到6x6的纯色、成语、单词
+                    options = [
+                        { value: 10, label: '1级 - 3x3纯色' },
+                        { value: 11, label: '2级 - 3x3成语' },
+                        { value: 12, label: '3级 - 3x3单词' },
+                        { value: 13, label: '4级 - 4x4纯色' },
+                        { value: 14, label: '5级 - 4x4成语' },
+                        { value: 15, label: '6级 - 4x4单词' },
+                        { value: 16, label: '7级 - 5x5纯色' },
+                        { value: 17, label: '8级 - 5x5成语' },
+                        { value: 18, label: '9级 - 5x5单词' },
+                        { value: 19, label: '10级 - 6x6纯色' },
+                        { value: 20, label: '11级 - 6x6成语' },
+                        { value: 21, label: '12级 - 6x6单词' }
+                    ];
+                }
+                
+                // 清空并重新生成选项
+                this.difficultySelectorDropdown.innerHTML = '';
+                options.forEach(option => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'difficulty-selector-option text-14';
+                    if (option.value === this.difficultyLevel) {
+                        optionDiv.classList.add('selected');
+                    }
+                    
+                    optionDiv.innerHTML = `
+                        <span style="opacity: 0;">难度</span>
+                        <span style="font-weight: 500;">${option.label}</span>
+                        <div class="difficulty-selector-arrow" style="opacity: 0;"></div>
+                    `;
+                    
+                    optionDiv.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.selectDifficulty(option.value, option.label);
+                    });
+                    
+                    this.difficultySelectorDropdown.appendChild(optionDiv);
+                });
+            }
+
+            // 切换下拉菜单显示/隐藏
+            toggleDifficultyDropdown() {
+                if (!this.difficultySelectorHeader || !this.difficultySelectorDropdown) return;
+                
+                const isOpen = this.difficultySelectorDropdown.classList.contains('show');
+                if (isOpen) {
+                    this.closeDifficultyDropdown();
+                } else {
+                    this.openDifficultyDropdown();
+                }
+            }
+
+            // 打开下拉菜单
+            openDifficultyDropdown() {
+                if (!this.difficultySelectorHeader || !this.difficultySelectorDropdown) return;
+                
+                this.difficultySelectorHeader.classList.add('active');
+                this.difficultySelectorDropdown.classList.add('show');
+            }
+
+            // 关闭下拉菜单
+            closeDifficultyDropdown() {
+                if (!this.difficultySelectorHeader || !this.difficultySelectorDropdown) return;
+                
+                this.difficultySelectorHeader.classList.remove('active');
+                this.difficultySelectorDropdown.classList.remove('show');
+            }
+
+            // 选择难度
+            selectDifficulty(value, label) {
+                // 检查是否可以切换模式
+                if (!this.canSwitchMode()) {
+                    this.showModeSwitchWarning();
+                    this.closeDifficultyDropdown();
+                    return;
+                }
+                
+                // 更新当前难度显示
+                if (this.currentDifficultyLabel) {
+                    this.currentDifficultyLabel.textContent = label;
+                }
+                
+                // 更新选中状态
+                const allOptions = this.difficultySelectorDropdown.querySelectorAll('.difficulty-selector-option');
+                allOptions.forEach(opt => opt.classList.remove('selected'));
+                event.target.closest('.difficulty-selector-option').classList.add('selected');
+                
+                // 关闭下拉菜单
+                this.closeDifficultyDropdown();
+                
+                // 如果在游戏进行中（rotated状态）切换难度，需要重新开始游戏
+                if (this.gameState === 'rotated') {
+                    // 显示提示信息
+                    const originalText = this.startBtn.textContent;
+                    this.startBtn.textContent = '切换难度，重新开始...';
+                    
+                    // 延迟执行切换，让用户看到提示
+                    setTimeout(() => {
+                        this.setDifficultyLevel(value, false);
+                        this.resetGameState();
+                    }, 1000);
+                } else {
+                    // 在等待或结束状态下直接切换
+                    this.setDifficultyLevel(value);
+                }
+            }
+
+            // 显示规则弹窗
+            showRulesModal() {
+                this.rulesModal.classList.remove('hidden');
+            }
+
+            // 隐藏规则弹窗
+            hideRulesModal() {
+                this.rulesModal.classList.add('hidden');
+                
+                // 如果是第一次关闭规则窗口，高亮难度选择器
+                if (!hasClosedRulesOnce) {
+                    hasClosedRulesOnce = true;
+                    setTimeout(() => {
+                        highlightDifficultySelector();
+                    }, 500); // 延迟500ms后高亮，让用户看到弹窗关闭动画
+                }
+            }
+
+            // 显示积分弹窗
+            showPointsModal() {
+                // 查询最新的积分信息
+                window.parent.postMessage({ type: 'getTotalTrainingPoints' }, '*');
+                
+                this.pointsModal.classList.remove('hidden');
+            }
+
+            // 隐藏积分弹窗
+            hidePointsModal() {
+                this.pointsModal.classList.add('hidden');
+            }
+
+            // 更新总积分显示
+            updateTotalPointsDisplay() {
+                if (this.scoreElement) {
+                    this.scoreElement.textContent = this.totalPoints;
+                }
+                if (this.totalPointsElement) {
+                    this.totalPointsElement.textContent = this.totalPoints;
+                }
+            }
+
+            // 更新详细积分信息
+            updateDetailedPointsInfo(data) {
+                this.totalPoints = data.total || 0;
+                this.dailyPoints = data.dailyTotal || 0;
+                this.lastUpdateDate = data.lastUpdateDate || '';
+                
+                // 更新所有显示元素
+                this.updateTotalPointsDisplay();
+                this.updateDailyPointsDisplay();
+                this.updateLastUpdateDateDisplay();
+            }
+
+            // 更新今日积分显示
+            updateDailyPointsDisplay() {
+                if (this.dailyPointsElement) {
+                    this.dailyPointsElement.textContent = this.dailyPoints;
+                }
+            }
+
+            // 更新最后更新日期显示
+            updateLastUpdateDateDisplay() {
+                if (this.lastUpdateDateElement) {
+                    this.lastUpdateDateElement.textContent = this.lastUpdateDate || '--';
+                }
+            }
+
+            // 根据网格大小计算关卡积分
+            calculateLevelPoints() {
+                switch(this.gridSize) {
+                    case 3:
+                        return 5;
+                    case 4:
+                        return 7;
+                    case 5:
+                        return 10;
+                    case 6:
+                        return 15;
+                    default:
+                        return 5; // 默认最小积分
+                }
+            }
+
+            // 获得积分并发送消息
+            awardPoints() {
+                const points = this.calculateLevelPoints();
+                this.currentLevelPoints = points;
+                this.earnedPoints += points;
+                
+                // 临时更新总积分显示（实际总积分由父窗口管理）
+                this.totalPoints += points;
+                this.updateDisplay();
+                this.updateTotalPointsDisplay();
+                
+                // 发送积分获得消息给父窗口
+                window.parent.postMessage({
+                    type: 'showTrainingPoints',
+                    points: points
+                }, '*');
+                
+                console.log(`获得积分: ${points}，网格大小: ${this.gridSize}x${this.gridSize}`);
+            }
+
+            // 更新游戏模式UI
+            updateGameModeUI() {
+                if (this.gameModeElement) {
+                    let modeText;
+                    if (this.gameMode === 'color') {
+                        modeText = '纯色';
+                    } else if (this.gameMode === 'chinese') {                    // 根据难度等级决定显示"词语"还是"成语"
+                    modeText = this.difficultyLevel <= 9 ? '词语' : '成语';
+                    } else {
+                        modeText = '单词';
+                    }
+                    this.gameModeElement.textContent = `${this.difficultyLevel}级-${modeText}`;
+                }
+                
+                // 更新总关卡数显示
+                if (this.totalLevelElement) {
+                    this.totalLevelElement.textContent = this.maxLevels;
+                }
+                
+                if (this.maxErrorCountElement) {
+                    this.maxErrorCountElement.textContent = this.maxErrors;
+                }
+                
+                this.updateTargetCount();
+            }
+
+            // 获取词库
+            getWordBank() {
+                let bank = [];
+                if (this.gameMode === 'chinese') {                // 根据难度等级选择合适的词库
+                if (this.difficultyLevel <= 6) {
+                    // 5-7岁词库
+                    bank = this.chineseWords.slice(0, 40); // 前40个是简单词汇
+                } else {
+                    // 8岁以上词库
+                    bank = this.chineseWords.slice(40); // 后面的是复杂词汇
+                }
+                    if (this.customChinese.length > 0) {
+                        bank = this.customChinese;
+                    }
+                } else if (this.gameMode === 'english') {                // 根据难度等级选择合适的词库
+                if (this.difficultyLevel <= 6) {
+                    // 5-7岁词库
+                    bank = this.englishWords.slice(0, 40); // 前40个是简单词汇
+                } else {
+                    // 8岁以上词库
+                    bank = this.englishWords.slice(40); // 后面的是复杂词汇
+                }
+                    if (this.customWords.length > 0) {
+                        bank = this.customWords;
+                    }
+                    
+                    // 过滤掉长度大于网格数+1的英文单词，避免难度过高
+                    const maxLength = this.gridSize + 1;
+                    bank = bank.filter(word => word.length <= maxLength);
+                }
+                
+                // 随机打乱词库顺序
+                return this.shuffleArray([...bank]);
+            }
+
+            // 数组随机打乱方法
+            shuffleArray(array) {
+                const shuffled = [...array];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                return shuffled;
+            }
+
+            // 添加触摸支持
+            addTouchSupport() {
+                // 防止双击缩放
+                document.addEventListener('touchstart', function(e) {
+                    if (e.touches.length > 1) {
+                        e.preventDefault();
+                    }
+                });
+                
+                let lastTouchEnd = 0;
+                document.addEventListener('touchend', function(e) {
+                    const now = (new Date()).getTime();
+                    if (now - lastTouchEnd <= 300) {
+                        e.preventDefault();
+                    }
+                    lastTouchEnd = now;
+                }, false);
+            }
+
+            updateTargetCount() {
+                if (!this.targetCountElement) return;
+                
+                if (this.gameMode === 'color') {
+                    let numCells;
+                    
+                    // 根据难度调整目标格子数量
+                    const difficultyMultiplier = this.difficulty === 1 ? 0.8 : this.difficulty === 3 ? 1.2 : 1;
+                    let extraCells = Math.max(0, this.gridSize - 4); // 额外格子数
+                    
+                    if (this.level <= 3) {
+                        numCells = Math.ceil(2 * difficultyMultiplier);
+                    } else if (this.level <= 6) {
+                        numCells = Math.ceil(3 * difficultyMultiplier);
+                    } else if (this.level <= 10) {
+                        numCells = Math.ceil(4 * difficultyMultiplier);
+                    } else if (this.level <= 15) {
+                        numCells = Math.ceil(5 * difficultyMultiplier);
+                    } else {
+                        numCells = Math.min(Math.ceil(6 * difficultyMultiplier), Math.floor(this.gridSize * this.gridSize * 0.4));
+                    }
+                    numCells += extraCells; // 添加额外格子数
+                    
+                    // 确保至少有1个格子，最多不超过总格子数的一半
+                    numCells = Math.max(1, Math.min(numCells, Math.floor(this.gridSize * this.gridSize / 2)));
+                    
+                    this.targetCountElement.textContent = numCells;
+                } else {
+                    const wordBank = this.getWordBank();
+                    if (wordBank.length > 0) {
+                        const avgLength = Math.round(wordBank.reduce((sum, word) => sum + word.length, 0) / wordBank.length);
+                        this.targetCountElement.textContent = `${avgLength}字`;
+                    } else {
+                        this.targetCountElement.textContent = '4字';
+                    }
+                }
+            }
+            
+            startGame() {
+                if (!gameStarted) {
+                    this.startTime = Date.now();
+                    this.startGameTimer(); // 开始计时器
+                    window.parent.postMessage({ type: 'gameStarted' }, '*');
+                    gameStarted = true;
+                }
+
+                if (this.shouldEndGame()) {
+                    this.endGame();
+                    return;
+                }
+
+                this.gameState = 'showing';
+                this.correctClicks = [];
+                this.errorCount = 0;
+                this.generatePattern();
+                this.showPattern();
+                
+                // 添加 playing 类，使按钮看起来像禁用状态
+                this.startBtn.classList.add('playing');
+                this.updateTargetCount();
+                this.updateErrorCount(); // 更新错误数显示
+            }
+
+            startCountdown(seconds, callback) {
+                if (this.countdownDisplay) {
+                    this.countdownDisplay.classList.remove('hidden');
+                    
+                    let remaining = seconds;
+                    this.countdownDisplay.textContent = remaining;
+                    
+                    const timer = setInterval(() => {
+                        remaining--;
+                        if (remaining > 0) {
+                            this.countdownDisplay.textContent = remaining;
+                        } else {
+                            clearInterval(timer);
+                            this.countdownDisplay.classList.add('hidden');
+                            callback();
+                        }
+                    }, 1000);
+                } else {
+                    // 如果倒计时元素不存在，直接执行回调
+                    setTimeout(callback, seconds * 1000);
+                }
+            }
+
+            shouldEndGame() {
+                // 检查是否完成了当前难度的所有关卡
+                if (this.level > this.maxLevels) {
+                    return true;
+                }
+                
+                // 检查是否超过了最大游戏时长
+                if (this.startTime > 0 && (Date.now() - this.startTime) > this.maxPlayTime) {
+                    return true;
+                }
+                
+                // 移除失败次数限制，只有时间结束或完成所有关卡才结束游戏
+                return false;
+            }
+
+            endGame() {
+                // 记录当前游戏状态，用于判断是否需要计算未完成关卡的部分得分
+                const currentGameState = this.gameState;
+                
+                // 如果游戏在进行中的关卡因时间结束，计算当前关卡的部分得分
+                if (currentGameState === 'rotated' || currentGameState === 'showing' || currentGameState === 'rotating') {
+                    const currentLevelScore = this.calculateCurrentLevelScore(false);
+                    this.levelScores.push(currentLevelScore);
+                    this.score = this.calculateCumulativeScore();
+                }
+                
+                this.gameState = 'finished';
+                
+                // 发送游戏结束消息
+                this.sendGameFinishedMessage();
+                
+                // 停止计时器
+                this.stopGameTimer();
+            }
+
+            sendGameFinishedMessage() {
+                const finalScore = this.calculateFinalScore();
+                const difficulty = calculateDifficulty();
+                
+                // 计算实际完成的关卡数，不能超过最大关卡数
+                const completedLevels = Math.min(this.level - 1, this.maxLevels);
+
+                // 检查是否为最大难度
+                const isYoungMode = this.difficultyLevel <= 9;
+                const maxDifficultyLevel = isYoungMode ? 9 : 21;
+                const isMaxDifficulty = this.difficultyLevel === maxDifficultyLevel;
+                
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: {
+                        score: finalScore,
+                        highestScore: Math.max(globalHighestScore, finalScore),
+                        level: completedLevels,
+                        maxLevels: this.maxLevels,
+                        completedLevels: this.levelScores.length,
+                        gridSize: this.gridSize,
+                        difficulty: Math.min(difficulty, 3),
+                        totalFailures: this.totalFailures,
+                        playTime: this.startTime > 0 ? Date.now() - this.startTime : 0,
+                        levelScores: this.levelScores, // 每关的得分详情
+                        totalPoints: this.totalPoints, // 明确的总积分字段
+                        earnedPoints: this.earnedPoints, // 累计获得的积分字段
+                        showAccuracy: true,
+                        accuracy: this.calculateAccuracy(),
+                        accuracyTitle: '关卡',
+                        isMaxDifficulty: isMaxDifficulty,
+                        levelCount: this.maxLevels,
+                    }
+                }, '*');
+            }
+
+            calculateAccuracy() {
+                return (1 - (this.totalErrors / (this.maxErrors * this.maxLevels))) * 100;
+            }
+
+            /**
+             * 计算关卡应得分数
+             * @param {number} currentLevel - 当前关卡数（1开始）
+             * @param {number} totalLevels - 总关卡数
+             * @param {number} errorCount - 错误次数（可选，默认0）
+             * @returns {number} 该关卡的应得分数
+             */
+            calculateLevelScore(currentLevel, totalLevels, errorCount = 0) {
+                if (currentLevel < 1 || currentLevel > totalLevels || totalLevels < 1) return 0;
+
+                // 检查缓存
+                const cacheKey = `levels_${totalLevels}`;
+                let levelScores = this.levelScoreCache.get(cacheKey);
+
+                if (!levelScores) {
+                    // 计算各关卡分数分配
+                    levelScores = this.calculateLevelScoreDistribution(totalLevels);
+                    this.levelScoreCache.set(cacheKey, levelScores);
+                }
+
+                // 获取当前关卡的基础分数
+                const baseScore = levelScores[currentLevel - 1];
+
+                // 根据错误次数扣分，每次错误扣1分
+                const finalScore = Math.max(0, baseScore - errorCount);
+
+                return Math.round(finalScore);
+            }
+
+            /**
+             * 计算关卡分数分配
+             * @param {number} totalLevels - 总关卡数
+             * @returns {Array} 各关卡分数数组
+             */
+            calculateLevelScoreDistribution(totalLevels) {
+                if (totalLevels < 1) return [];
+                if (totalLevels === 1) return [100];
+
+                const totalScore = 100;
+                const scores = [];
+                const decreaseRatio = 0.9; // 每关递减90%
+
+                // 计算各关卡权重
+                const weights = [];
+                let totalWeight = 0;
+
+                for (let i = 0; i < totalLevels; i++) {
+                    const weight = Math.pow(decreaseRatio, i);
+                    weights.push(weight);
+                    totalWeight += weight;
+                }
+
+                // 标准化权重并计算分数
+                let currentSum = 0;
+                for (let i = 0; i < totalLevels; i++) {
+                    if (i === totalLevels - 1) {
+                        // 最后一关确保总和为100
+                        scores.push(totalScore - currentSum);
+                    } else {
+                        const score = Math.round((weights[i] / totalWeight) * totalScore);
+                        scores.push(score);
+                        currentSum += score;
+                    }
+                }
+
+                return scores;
+            }
+
+            // 废弃的旧方法，保留兼容性
+            getBaseLevelScore() {
+                // 使用新的计算方法
+                return this.calculateLevelScore(this.level, this.maxLevels, 0);
+            }
+
+            // 计算当前关卡的得分（重构后的方法）
+            calculateCurrentLevelScore(success) {
+                if (success) {
+                    // 完全成功：使用新的计算方法
+                    return this.calculateLevelScore(this.level, this.maxLevels, this.errorCount);
+                } else {
+                    // 未完成关卡：根据完成度给分
+                    let completionRate = 0;
+                    if (this.gameMode === 'color') {
+                        completionRate = this.correctClicks.length / this.originalPattern.length;
+                    } else {
+                        completionRate = this.correctClicks.length / this.sequenceChars.length;
+                    }
+                    
+                    // 获取基础分数
+                    const baseScore = this.calculateLevelScore(this.level, this.maxLevels, 0);
+                    
+                    // 部分完成得分 = 基础分 * 完成率 * 0.5（最多只能得到一半分数）
+                    let levelScore = Math.floor(baseScore * completionRate * 0.5);
+                    
+                    // 根据错误次数进一步减分
+                    const errorPenalty = Math.floor((this.errorCount / this.maxErrors) * 0.2 * levelScore);
+                    levelScore = Math.max(0, levelScore - errorPenalty);
+                    
+                    return Math.max(0, levelScore);
+                }
+            }
+
+            // 计算当前累计得分（已完成关卡的得分总和）
+            calculateCumulativeScore() {
+                if (this.levelScores.length === 0) return 0;
+                
+                const totalScore = this.levelScores.reduce((sum, score) => sum + score, 0);
+                return totalScore; // 返回整数
+            }
+
+            // 计算最终得分（当前难度下的总得分）
+            calculateFinalScore() {
+                let finalScore = this.calculateCumulativeScore();
+                
+                // 如果游戏因时间结束而未完成所有关卡，当前正在进行的关卡也要计分
+                if (this.gameState === 'rotated' || this.gameState === 'showing' || this.gameState === 'rotating') {
+                    // 当前关卡未完成，按部分完成计分
+                    const currentLevelScore = this.calculateCurrentLevelScore(false);
+                    finalScore += currentLevelScore;
+                }
+                
+                // 确保最终得分不超过100分
+                return Math.min(100, finalScore);
+            }
+
+            generatePattern() {
+                if (this.gameMode === 'color') {
+                    let numCells;
+                    
+                    // 根据难度调整目标格子数量
+                    const difficultyMultiplier = this.difficulty === 1 ? 0.8 : this.difficulty === 3 ? 1.2 : 1;
+                    let extraCells = Math.max(0, this.gridSize - 4); // 额外格子数
+                    
+                    if (this.level <= 3) {
+                        numCells = Math.ceil(2 * difficultyMultiplier);
+                    } else if (this.level <= 6) {
+                        numCells = Math.ceil(3 * difficultyMultiplier);
+                    } else if (this.level <= 10) {
+                        numCells = Math.ceil(4 * difficultyMultiplier);
+                    } else if (this.level <= 15) {
+                        numCells = Math.ceil(5 * difficultyMultiplier);
+                    } else {
+                        numCells = Math.min(Math.ceil(6 * difficultyMultiplier), Math.floor(this.gridSize * this.gridSize * 0.4));
+                    }
+                    numCells += extraCells; // 添加额外格子数
+                    
+                    // 确保至少有1个格子，最多不超过总格子数的一半
+                    numCells = Math.max(1, Math.min(numCells, Math.floor(this.gridSize * this.gridSize / 2)));
+                    
+                    const totalCells = this.gridSize * this.gridSize;
+                    this.originalPattern = [];
+                    
+                    while (this.originalPattern.length < numCells) {
+                        const randomIndex = Math.floor(Math.random() * totalCells);
+                        if (!this.originalPattern.includes(randomIndex)) {
+                            this.originalPattern.push(randomIndex);
+                        }
+                    }
+                } else {
+                    const wordBank = this.getWordBank();
+                    this.currentWord = wordBank[Math.floor(Math.random() * wordBank.length)];
+                    this.sequenceChars = this.currentWord.split('');
+                    
+                    const totalCells = this.gridSize * this.gridSize;
+                    this.originalPattern = [];
+                    
+                    while (this.originalPattern.length < this.sequenceChars.length) {
+                        const randomIndex = Math.floor(Math.random() * totalCells);
+                        if (!this.originalPattern.includes(randomIndex)) {
+                            this.originalPattern.push(randomIndex);
+                        }
+                    }
+                }
+                
+                // 动态调整当前关卡的最大错误数
+                this.updateDynamicMaxErrors();
+            }
+            
+            // 动态更新最大错误数
+            updateDynamicMaxErrors() {
+                // 获取当前难度配置的原始最大错误数
+                const configMaxErrors = this.getConfigMaxErrors();
+                
+                // 计算目标数量
+                let targetCount;
+                if (this.gameMode === 'color') {
+                    targetCount = this.originalPattern.length;
+                } else {
+                    targetCount = this.sequenceChars.length;
+                }
+                
+                // 动态最大错误数 = min(原配置的最大错误数, 目标数量)
+                this.maxErrors = Math.min(configMaxErrors, targetCount);
+                
+                // 确保至少有1次错误机会
+                this.maxErrors = Math.max(1, this.maxErrors);
+                
+                console.log(`目标数: ${targetCount}, 配置错误数: ${configMaxErrors}, 实际错误数: ${this.maxErrors}`);
+            }
+            
+            // 获取当前难度配置的原始最大错误数
+            getConfigMaxErrors() {
+                const youngConfigs = [
+                    { maxErrors: 2 },   // 1级 - 2x2纯色
+                    { maxErrors: 2 },   // 2级 - 2x2词语
+                    { maxErrors: 2 },   // 3级 - 2x2单词
+                    { maxErrors: 3 },   // 4级 - 3x3纯色
+                    { maxErrors: 3 },   // 5级 - 3x3词语
+                    { maxErrors: 3 },   // 6级 - 3x3单词
+                    { maxErrors: 3 },   // 7级 - 4x4纯色
+                    { maxErrors: 3 },   // 8级 - 4x4词语
+                    { maxErrors: 3 },   // 9级 - 4x4单词
+                ];
+                
+                const olderConfigs = [
+                    { maxErrors: 3 },   // 10级 - 3x3纯色
+                    { maxErrors: 3 },   // 11级 - 3x3成语
+                    { maxErrors: 3 },   // 12级 - 3x3单词
+                    { maxErrors: 3 },   // 13级 - 4x4纯色
+                    { maxErrors: 3 },   // 14级 - 4x4成语
+                    { maxErrors: 3 },   // 15级 - 4x4单词
+                    { maxErrors: 3 },   // 16级 - 5x5纯色
+                    { maxErrors: 3 },   // 17级 - 5x5成语
+                    { maxErrors: 3 },   // 18级 - 5x5单词
+                    { maxErrors: 3 },   // 19级 - 6x6纯色
+                    { maxErrors: 2 },   // 20级 - 6x6成语
+                    { maxErrors: 2 },   // 21级 - 6x6单词
+                ];
+                
+                let config;
+                if (this.difficultyLevel <= 9) {
+                    config = youngConfigs[this.difficultyLevel - 1];
+                } else {
+                    config = olderConfigs[this.difficultyLevel - 10];
+                }
+                
+                return config.maxErrors;
+            }
+
+            showPattern() {
+                this.clearAllHighlights();
+                
+                if (this.gameMode === 'color') {
+                    this.originalPattern.forEach(index => {
+                        const cell = this.gameBoard.children[index];
+                        cell.classList.add('highlighted');
+                    });
+                    
+                    this.startBtn.textContent = '记住绿色格子位置...';
+                    
+                    this.startCountdown(this.memoryTime, () => {
+                        this.rotateBoard();
+                    });
+                } else {
+                    this.showSequentialPattern();
+                }
+            }
+
+            showSequentialPattern() {
+                this.startBtn.textContent = `记住顺序:${this.currentWord}`;
+                
+                let currentIndex = 0;
+                const showNextChar = () => {
+                    if (currentIndex < this.originalPattern.length) {
+                        const cellIndex = this.originalPattern[currentIndex];
+                        const char = this.sequenceChars[currentIndex];
+                        const cell = this.gameBoard.children[cellIndex];
+                        
+                        this.clearAllHighlights();
+                        
+                        cell.classList.add('highlighted');
+                        cell.textContent = char;
+                        
+                        currentIndex++;
+                        
+                        setTimeout(showNextChar, 1200);
+                    } else {
+                        this.startBtn.textContent = `完整:${this.currentWord}`;
+                        setTimeout(() => {
+                            this.clearAllHighlights();
+                            this.clearAllText();
+                            this.rotateBoard();
+                        }, 1500);
+                    }
+                };
+                
+                showNextChar();
+            }
+
+            rotateBoard() {
+                this.gameState = 'rotating';
+                
+                this.clearAllHighlights();
+                
+                this.startBtn.textContent = '棋盘正在旋转...';
+                
+                const appliedRotation = this.rotationOptions[Math.floor(Math.random() * this.rotationOptions.length)];
+                
+                this.currentRotation += appliedRotation;
+                
+                this.gameBoard.style.transform = `rotate(${this.currentRotation}deg)`;
+                
+                setTimeout(() => {
+                    this.gameState = 'rotated';
+                    if (this.gameMode === 'color') {
+                        this.startBtn.textContent = '点击绿色格子！';
+                    } else {
+                        this.startBtn.textContent = `拼成:${this.currentWord}`;
+                    }
+                }, 2000);
+            }
+
+            cellClicked(originalIndex) {
+                if (this.gameState !== 'rotated') return;
+
+                const cell = this.gameBoard.children[originalIndex];
+                
+                if (cell.classList.contains('correct')) {
+                    return; // 已经正确点击的格子不能再点击
+                }
+                
+                let isCorrect = false;
+                
+                if (this.gameMode === 'color') {
+                    isCorrect = this.originalPattern.includes(originalIndex);
+                } else {
+                    const expectedIndex = this.originalPattern[this.correctClicks.length];
+                    isCorrect = (originalIndex === expectedIndex);
+                }
+                
+                if (isCorrect) {
+                    cell.classList.add('correct', 'pulse-green');
+                    // 移除可能的错误标记
+                    cell.classList.remove('incorrect', 'pulse-red');
+                    this.correctClicks.push(originalIndex);
+                    
+                    if (this.gameMode !== 'color') {
+                        const charIndex = this.correctClicks.length - 1;
+                        cell.textContent = this.sequenceChars[charIndex];
+                        
+                        const currentProgress = this.sequenceChars.slice(0, this.correctClicks.length).join('');
+                        this.startBtn.textContent = `${currentProgress}/${this.currentWord}`;
+                    }
+                    
+                    if (this.correctClicks.length === this.originalPattern.length) {
+                        this.gameCompleted(true);
+                    }
+                } else {
+                    // 在词语/成语或单词模式下，错误点击只标记为错误，但不禁用格子
+                    if (this.gameMode === 'color') {
+                        cell.classList.add('incorrect', 'pulse-red');
+                    } else {
+                        // 词语/成语模式下，给出视觉反馈但不永久标记
+                        cell.classList.add('pulse-red');
+                        const feedbackTimeout = 500 * (this.rootFontSize / 10);
+                        setTimeout(() => {
+                            cell.classList.remove('pulse-red');
+                        }, feedbackTimeout);
+                    }
+                    
+                    this.errorCount++;
+                    this.totalErrors++;
+                    this.updateErrorCount();
+                    
+                    if (this.errorCount >= this.maxErrors) {
+                        this.gameCompleted(false);
+                    }
+                }
+            }
+
+            gameCompleted(success) {
+                this.gameState = 'finished';
+                
+                this.originalPattern.forEach((originalIndex, i) => {
+                    const cell = this.gameBoard.children[originalIndex];
+                    if (!cell.classList.contains('correct')) {
+                        cell.classList.add('correct');
+                    }
+                    
+                    if (this.gameMode !== 'color' && this.sequenceChars[i]) {
+                        cell.textContent = this.sequenceChars[i];
+                    }
+                });
+                
+                // 计算本关得分
+                const levelScore = this.calculateCurrentLevelScore(success);
+                this.levelScores.push(levelScore);
+                
+                // 更新累计得分
+                this.score = this.calculateCumulativeScore();
+                
+                if (success) {
+                    this.level++;
+                    
+                    // 成功完成关卡时获得积分
+                    this.awardPoints();
+            
+                    if (this.gameMode !== 'color') {
+                        if (this.errorCount === 0) {
+                            this.startBtn.textContent = `完美！+${this.currentLevelPoints}分`;
+                        } else {
+                            this.startBtn.textContent = `成功！+${this.currentLevelPoints}分`;
+                        }
+                    } else {
+                        if (this.errorCount === 0) {
+                            this.startBtn.textContent = `完美！+${this.currentLevelPoints}分`;
+                        } else {
+                            this.startBtn.textContent = `成功！+${this.currentLevelPoints}分`;
+                        }
+                    }
+                    
+                    if (this.totalPoints > globalHighestScore) {
+                        globalHighestScore = this.totalPoints;
+                    }
+                } else {
+                    // 失败时不增加totalFailures，因为新规则下没有失败次数限制
+                    
+                    if (this.gameMode !== 'color') {
+                        this.startBtn.textContent = `失败！答案:${this.currentWord}`;
+                    } else {
+                        this.startBtn.textContent = '失败！答案已显示';
+                    }
+                    
+                    // 即使失败也要进入下一关，直到时间结束或完成所有关卡
+                    this.level++;
+                }
+
+                this.updateDisplay();
+        
+                if (this.shouldEndGame()) {
+                    setTimeout(() => {
+                        this.endGame();
+                    }, 2000);
+                } else {
+                    setTimeout(() => {
+                        this.autoStartNextRound();
+                    }, 2000);
+                }
+            }
+
+            autoStartNextRound() {
+                this.gameState = 'waiting';
+                this.clearAllStates();
+                this.gameBoard.classList.add('no-transition');
+                this.currentRotation = 0;
+                this.gameBoard.style.transform = 'rotate(0deg)';
+                this.gameBoard.offsetHeight;
+                this.gameBoard.classList.remove('no-transition');
+                this.startGame();
+            }
+
+            clearAllStates() {
+                const cells = this.gameBoard.children;
+                for (let cell of cells) {
+                    // 重置所有相关属性
+                    cell.className = 'grid-cell'; // 直接重置为基础类名
+                    cell.textContent = '';
+                }
+            }
+
+            clearAllHighlights() {
+                const cells = this.gameBoard.children;
+                for (let cell of cells) {
+                    cell.classList.remove('highlighted', 'correct', 'incorrect', 'pulse-green', 'pulse-red');
+                }
+            }
+
+            clearAllText() {
+                const cells = this.gameBoard.children;
+                for (let cell of cells) {
+                    cell.textContent = '';
+                }
+            }
+
+            resetGameState() {
+                this.score = 0;
+                this.level = 1;
+                this.totalFailures = 0; // 保留此字段以免影响其他逻辑
+                this.startTime = 0;
+                this.levelScores = []; // 重置关卡得分记录
+                this.stopGameTimer(); // 停止计时器
+                this.gameTimeRemaining = Math.floor(this.maxPlayTime / 1000);
+                this.updateTimeDisplay();
+                
+                // 注意：不重置totalPoints，因为总积分由父窗口管理
+                this.earnedPoints = 0; // 重置累计获得的积分
+                
+                this.currentRotation = 0;
+                this.gameBoard.classList.add('no-transition');
+                this.gameBoard.style.transform = 'rotate(0deg)';
+                this.gameBoard.offsetHeight;
+                this.gameBoard.classList.remove('no-transition');
+                
+                this.clearAllHighlights();
+                this.clearAllText();
+                this.gameState = 'waiting';
+                this.startBtn.textContent = '开始训练';
+                this.startBtn.classList.remove('playing'); // 移除 playing 类
+                this.updateDisplay();
+                this.updateTargetCount();
+                this.errorCount = 0;
+                this.totalErrors = 0;
+                this.updateErrorCount();
+                
+                gameStarted = false;
+            }
+
+            resetGame() {
+                // 直接重置游戏状态，不调用endGame
+                this.resetGameState();
+            }
+
+            updateDisplay() {
+                // 更新积分显示
+                if (this.scoreElement) {
+                    this.scoreElement.textContent = this.totalPoints;
+                }
+                
+                // 更新关卡显示（格式：当前/总数）
+                if (this.levelElement) {
+                    const displayLevel = Math.min(this.level, this.maxLevels);
+                    this.levelElement.textContent = `${displayLevel}/${this.maxLevels}`;
+                }
+                
+                this.updateTargetCount();
+            }
+
+            updateErrorCount() {
+                // 更新错误次数显示（格式：当前/最大）
+                if (this.errorCountElement) {
+                    this.errorCountElement.textContent = `${this.errorCount}/${this.maxErrors}`;
+                }
+            }
+        }
+
+        // 初始化游戏
+        new VisualMemoryGame();
+        
+        // 游戏加载完成时发送消息
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+    </script>
+</body>
+</html>
