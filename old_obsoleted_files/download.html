@@ -236,6 +236,32 @@
         };
       }
 
+      // 发送下载统计请求
+      function sendDownloadRequest(platform) {
+        // 生成随机字符串避免缓存
+        const randomStr = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        
+        let url = '';
+        if (platform === 'ios') {
+          url = `https://xq.maseai.com/ios/downloadrequest?platform=${encodeURIComponent(platform)}&random=${randomStr}`;
+        } else if (platform === 'android') {
+          url = `https://xq.maseai.com/android/downloadrequest?platform=${encodeURIComponent(platform)}&random=${randomStr}`;
+        } else if (platform === 'taptap') {
+          url = `https://xq.maseai.com/taptap/downloadrequest?platform=${encodeURIComponent(platform)}&random=${randomStr}`;
+        }
+        
+        // 发送GET请求
+        if (url) {
+          fetch(url, {
+            method: 'GET',
+            mode: 'no-cors' // 使用no-cors模式以避免跨域问题
+          }).catch(err => {
+            // 忽略错误，不影响主要功能
+            console.log('Download request sent:', url);
+          });
+        }
+      }
+
       // 重新排序下载选项
       function reorderDownloadOptions() {
         const device = detectDevice();
@@ -573,6 +599,11 @@
           web: GLOBAL_CONFIG.webUrl,
         };
 
+        // 发送下载统计请求
+        if (type === "ios-appstore") {
+          sendDownloadRequest("ios");
+        }
+
         if (type === "wechat") {
           // 显示二维码弹窗
           showQRCode();
@@ -604,6 +635,10 @@
           const device = detectDevice();
           if (!device.isWeChat) {
             apkDownloadButton.href = GLOBAL_CONFIG.apkDownloadUrl;
+            // 添加点击事件发送统计请求
+            apkDownloadButton.onclick = function(e) {
+              sendDownloadRequest("android");
+            };
           } else {
             apkDownloadButton.onclick = onClickDownloadAPK;
             apkDownloadButton.removeAttribute('href');
@@ -615,6 +650,7 @@
         if (taptapDownloadButton) {
           taptapDownloadButton.href = GLOBAL_CONFIG.taptapUrl;
           taptapDownloadButton.onclick = function() {
+            sendDownloadRequest("taptap");
             window.parent.postMessage({ 
               type: 'navigate', 
               url: GLOBAL_CONFIG.taptapUrl 
