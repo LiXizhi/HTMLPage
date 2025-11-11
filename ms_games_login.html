@@ -103,6 +103,18 @@
         line-height: 1.4;
       }
       
+      /* 游戏标题（副标题） */
+      .welcome-game-title {
+        font-size: 2.8rem;
+        font-weight: 600;
+        color: #ffd700;
+        text-shadow: 0 0 1rem rgba(136, 117, 9, 0.8);
+        margin-top: 2rem;
+        text-align: center;
+        animation: fadeInDown 1s ease-out 0.2s both;
+        display: none;
+      }
+      
       .planet-name {
         color: #07dd12;
         text-shadow: 0 0 1rem rgba(8, 87, 6, 0.8);
@@ -935,7 +947,10 @@
   <body>
     <!-- 欢迎界面 - 显示在没有token时 -->
     <div id="welcomeScreen" class="welcome-screen">
-      <h1 class="welcome-title">🌟<span class="planet-name">麦思星球</span>：让每个孩子在自己的世界里<span class="shine-text">自由发光</span>🌟</h1>
+      <div>
+        <h1 class="welcome-title">🌟<span class="planet-name">麦思星球</span>：让每个孩子在自己的世界里<span class="shine-text">自由发光</span>🌟</h1>
+        <div class="welcome-game-title" id="welcomeGameTitle"></div>
+      </div>
       <div class="welcome-buttons">
         <button type="button" class="welcome-btn" onclick="showPhoneLoginScreen()">
           <span>手机号</span>
@@ -1032,7 +1047,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <div class="modal-title">隐私政策</div>
-          <span class="close" onclick="closeModal('privacyModal')">&times;</span>
+          <span class="close" onclick="closePrivacyModal()">&times;</span>
         </div>
         <div class="modal-body" id="privacyContent">
           <div class="modal-loading">正在加载隐私政策...</div>
@@ -1822,10 +1837,20 @@
         const loginGameTitle = urlParams.get("loginGameTitle");
 
         if (loginGameTitle) {
+          const decodedTitle = decodeURIComponent(loginGameTitle);
+          
+          // 更新登录容器中的游戏标题
           const gameTitleElement = document.getElementById("gameTitle");
           if (gameTitleElement) {
-            gameTitleElement.textContent = decodeURIComponent(loginGameTitle);
+            gameTitleElement.textContent = decodedTitle;
             gameTitleElement.style.display = "block";
+          }
+          
+          // 更新欢迎界面中的游戏标题
+          const welcomeGameTitleElement = document.getElementById("welcomeGameTitle");
+          if (welcomeGameTitleElement) {
+            welcomeGameTitleElement.textContent = decodedTitle;
+            welcomeGameTitleElement.style.display = "block";
           }
         }
       }
@@ -1967,6 +1992,20 @@
         document.getElementById(modalId).style.display = "none";
       }
 
+      // 关闭隐私政策弹窗（用于关闭按钮）
+      function closePrivacyModal() {
+        closeModal('privacyModal');
+        
+        // 关闭应用
+        try {
+          if (typeof AndroidInterface !== 'undefined' && typeof AndroidInterface.finishApp === 'function') {
+            AndroidInterface.finishApp();
+          }
+        } catch (e) {
+          console.warn('调用AndroidInterface.finishApp失败:', e);
+        }
+      }
+
       // 打开注册弹窗
       function openRegisterModal() {
         const modal = document.getElementById("registerModal");
@@ -2024,6 +2063,15 @@
           console.warn("设置复选框状态失败", e);
         }
         closeModal("privacyModal");
+        
+        // 初始化TapTap
+        try {
+          if (typeof AndroidInterface !== 'undefined' && typeof AndroidInterface.taptapInit === 'function') {
+            AndroidInterface.taptapInit();
+          }
+        } catch (e) {
+          console.warn('调用AndroidInterface.taptapInit失败:', e);
+        }
       }
 
       // 拒绝隐私政策按钮：仅关闭弹窗
@@ -2037,6 +2085,15 @@
           console.warn("设置复选框状态失败", e);
         }
         closeModal("privacyModal");
+        
+        // 关闭应用
+        try {
+          if (typeof AndroidInterface !== 'undefined' && typeof AndroidInterface.finishApp === 'function') {
+            AndroidInterface.finishApp();
+          }
+        } catch (e) {
+          console.warn('调用AndroidInterface.finishApp失败:', e);
+        }
       } // 检查登录状态
       async function checkLoginStatus() {
         let isNeedCheck = true;
@@ -2293,8 +2350,11 @@
         const taptapBtn = document.querySelector(".welcome-btn.taptap");
         if (taptapBtn) {
           if (platform === 'android') {
-            // taptapBtn.style.display = "flex";
-            taptapBtn.style.display = "none";
+            if (AndroidInterface && AndroidInterface.isTaptapLoggedIn) {
+              taptapBtn.style.display = "flex";
+            } else {
+              taptapBtn.style.display = "none";
+            }
           } else {
             taptapBtn.style.display = "none";
           }
@@ -2512,10 +2572,9 @@
               
               // 获取位置信息并跳转
               try {
-                // const locationInfo = await getParentLocationWithTimeout(500);
-                // console.log('locationInfo: ', locationInfo)
-                // await navigateToMSGames();
-                window.location.href = 'https://api.keepwork.com/core/v0/repos/maisi%2Fmaisi/files/maisi%2Fmaisi%2Fwebgames%2Fdata%2Fcustom_loader1.md'
+                const locationInfo = await getParentLocationWithTimeout(500);
+                console.log('locationInfo: ', locationInfo)
+                await navigateToMSGames();
               } catch (error) {
                 console.error('获取location信息失败:', error);
                 showMessage("登录成功，但跳转失败");
@@ -2784,10 +2843,9 @@
             
             // 获取位置信息并跳转
             try {
-              // const locationInfo = await getParentLocationWithTimeout(5000);
-              // console.log('locationInfo: ', locationInfo)
-              // await navigateToMSGames();
-              window.location.href = 'https://api.keepwork.com/core/v0/repos/maisi%2Fmaisi/files/maisi%2Fmaisi%2Fwebgames%2Fdata%2Fcustom_loader1.md'
+              const locationInfo = await getParentLocationWithTimeout(5000);
+              console.log('locationInfo: ', locationInfo)
+              await navigateToMSGames();
             } catch (error) {
               console.error('获取location信息失败:', error);
               showMessage("登录成功，但跳转失败");
@@ -2952,10 +3010,9 @@
           
           // 获取位置信息并跳转
           try {
-            // const locationInfo = await getParentLocationWithTimeout(5000);
-            // console.log('locationInfo: ', locationInfo)
-            // await navigateToMSGames();
-            window.location.href = 'https://api.keepwork.com/core/v0/repos/maisi%2Fmaisi/files/maisi%2Fmaisi%2Fwebgames%2Fdata%2Fcustom_loader1.md'
+            const locationInfo = await getParentLocationWithTimeout(5000);
+            console.log('locationInfo: ', locationInfo)
+            await navigateToMSGames();
           } catch (error) {
             console.error('获取location信息失败:', error);
             showMessage("登录成功，但跳转失败");
@@ -3691,7 +3748,17 @@
       }
 
       async function maybeShowPrivacyPolicy() {
-        if (await hasPrivacyConsent()) return;
+        if (await hasPrivacyConsent()) {
+          // 用户已同意隐私协议，直接初始化TapTap
+          try {
+            if (typeof AndroidInterface !== 'undefined' && typeof AndroidInterface.taptapInit === 'function') {
+              AndroidInterface.taptapInit();
+            }
+          } catch (e) {
+            console.warn('调用AndroidInterface.taptapInit失败:', e);
+          }
+          return;
+        }
         // 未有同意记录 -> 自动弹出，但不写入同意标记，等待用户登录成功后再标记
         openPrivacyModal();
       }
