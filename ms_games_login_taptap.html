@@ -409,7 +409,7 @@
         color: white;
         padding: 1.2rem 2.4rem;
         border-radius: 0.8rem;
-        z-index: 1000;
+        z-index: 10002;
         font-size: 2.4rem;
         box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.5);
       }
@@ -1185,6 +1185,41 @@
     </div>
 
     <script>
+      // 基于 userAgent 检测当前平台
+      function detectCurrentPlatform() {
+        const userAgent = navigator.userAgent.toLowerCase()
+
+        // 检测微信小程序环境
+        if (typeof wx !== 'undefined' && wx.miniProgram) {
+          return 'miniprogram' // 微信小程序环境
+        }
+
+        // 检测微信内置浏览器中的小程序webview环境
+        if (userAgent.includes('miniprogram')) {
+          return 'miniprogram' // 小程序webview环境
+        }
+
+        // 检测微信浏览器（但非小程序环境）
+        if (userAgent.includes('micromessenger')) {
+          return 'wechat' // 微信浏览器环境
+        }
+
+        if (userAgent.includes('android')) {
+          return 'android'
+        }
+
+        if (userAgent.includes('iphone') || userAgent.includes('ipad') || userAgent.includes('ipod')) {
+          return 'ios'
+        }
+
+        if (userAgent.includes('openharmony')) {
+          return 'harmony'
+        }
+
+        // 默认为 web 平台
+        return 'web'
+      }
+
       // 调整根字体大小以适配不同屏幕
       function adjustRootFontSize() {
         // 游戏主容器的设计尺寸
@@ -1353,6 +1388,16 @@
           this.baseUrl = url;
         }
       }
+
+      // Keepwork API环境配置
+      const KEEPWORK_API_CONFIG = {
+        local: 'http://192.168.123.172:8185',
+        dev: 'https://api-dev.kp-para.cn/core',
+        prod: 'https://api.keepwork.com/core'
+      };
+      
+      // 当前使用的环境
+      const CURRENT_KEEPWORK_ENV = 'prod'; // 可选: 'local', 'dev', 'prod'
 
       // 创建API客户端实例
       const api = new ApiClient("https://api.keepwork.com/core/v0");
@@ -2243,6 +2288,17 @@
         const welcomeScreen = document.getElementById("welcomeScreen");
         const loginContainer = document.querySelector(".login-container");
         
+        // 检测平台并显示/隐藏TapTap按钮
+        const platform = detectCurrentPlatform();
+        const taptapBtn = document.querySelector(".welcome-btn.taptap");
+        if (taptapBtn) {
+          if (platform === 'android') {
+            taptapBtn.style.display = "flex";
+          } else {
+            taptapBtn.style.display = "none";
+          }
+        }
+        
         welcomeScreen.classList.add("active");
         loginContainer.style.display = "none";
         document.getElementById("phoneLoginForm").style.display = "none";
@@ -2272,8 +2328,653 @@
 
       // 从欢迎界面进入TapTap登录
       function showTaptapLoginScreen() {
-        // TODO: 实现TapTap登录逻辑
-        showMessage("TapTap登录功能开发中...");
+        // 检查是否在Android环境中
+        if (typeof AndroidInterface !== 'undefined' && typeof AndroidInterface.taptapLogin === 'function') {
+          showMessage("正在启动TapTap登录...");
+          
+          // 调用Android的TapTap登录接口
+          try {
+            AndroidInterface.taptapLogin();
+          } catch (error) {
+            console.error('调用Android TapTap登录失败:', error);
+            showMessage("启动TapTap登录失败，请重试");
+          }
+        } else {
+          // 非Android环境，提示不支持
+          showMessage("TapTap登录仅在Android应用中支持");
+          console.warn('AndroidInterface不可用，无法使用TapTap登录');
+        }
+      }
+
+      // 处理没有token时的选择
+      async function handleNoTokenChoice(macKey, accessToken, keepworkBaseUrl) {
+        return new Promise((resolve) => {
+          // 创建遮罩层
+          const overlay = document.createElement('div');
+          overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+          `;
+
+          // 创建选择框
+          const dialog = document.createElement('div');
+          dialog.style.cssText = `
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+          `;
+
+          dialog.innerHTML = `
+            <h3 style="margin: 0 0 20px 0; text-align: center; color: #333; font-size: 20px;">
+              TapTap账号未绑定
+            </h3>
+            <p style="margin: 0 0 30px 0; text-align: center; color: #666; font-size: 16px;">
+              请选择以下操作：
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+              <button id="createNewBtn" style="
+                padding: 15px 24px;
+                background: #48bb78;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                transition: background 0.3s;
+              ">
+                创建TapTap新账号
+              </button>
+              <button id="bindExistingBtn" style="
+                padding: 15px 24px;
+                background: #94a3b8;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                transition: background 0.3s;
+              ">
+                绑定已有账号
+              </button>
+            </div>
+          `;
+
+          overlay.appendChild(dialog);
+          document.body.appendChild(overlay);
+
+          // 创建新账号按钮
+          document.getElementById('createNewBtn').onclick = async () => {
+            document.body.removeChild(overlay);
+            console.log('用户选择：创建TapTap新账号');
+            showMessage("正在创建TapTap新账号...");
+            
+            try {
+              // 调用创建用户API
+              const createResponse = await fetch(`${keepworkBaseUrl}/v0/oauth_users/taptap/create_user_by_taptap`, {
+                method: 'POST',
+                headers: {
+                  'Accept': '*/*',
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  keyId: accessToken,
+                  macKey: macKey
+                })
+              });
+              
+              if (!createResponse.ok) {
+                throw new Error(`创建账号失败: ${createResponse.status} ${createResponse.statusText}`);
+              }
+              
+              const createData = await createResponse.json();
+              console.log('创建TapTap账号成功:', createData);
+              
+              // 检查是否包含token
+              if (!createData.token) {
+                throw new Error('创建账号成功但未返回token');
+              }
+              
+              showMessage("创建账号成功！正在登录...");
+              
+              // 保存keepwork token
+              await tokenManager.saveTokens(createData);
+              showMessage("正在获取用户信息...");
+              
+              // 使用token获取用户详细信息
+              const userHeader = {
+                Authorization: `Bearer ${createData.token}`,
+              };
+              
+              let userInfo = null;
+              try {
+                // 调用keepwork API获取用户信息
+                const userResponse = await api.get("/users/profile", {}, userHeader);
+                console.log('获取用户信息成功:', userResponse);
+                
+                userInfo = {
+                  username: userResponse.username,
+                  phone: userResponse.cellphone,
+                  realname: userResponse.realname,
+                  userId: userResponse.id,
+                  loginType: 'taptap',
+                  loginTime: new Date().toISOString(),
+                };
+                
+                await tokenManager.saveUserInfo(userInfo);
+              } catch (error) {
+                console.warn('获取用户信息失败，使用基础信息:', error);
+                // 如果获取用户信息失败，使用token中的基础信息
+                userInfo = {
+                  username: createData.username || 'TapTap用户',
+                  loginType: 'taptap',
+                  loginTime: new Date().toISOString(),
+                };
+                await tokenManager.saveUserInfo(userInfo);
+              }
+              
+              // 保存Developer Panel状态
+              await tokenManager.saveDevPanelOptions(devOptions);
+              
+              // 尝试获取麦思Token（不影响主流程）
+              if (!(await tokenManager.getMaisiAccessToken()) && userInfo.phone) {
+                try {
+                  const response3 = await api.post(
+                    "/oauth/getMaisiToken",
+                    {
+                      phone: userInfo.phone,
+                      from: devOptions.isUseMaisiDevServer ? "dev" : "prod",
+                    },
+                    userHeader
+                  );
+                  console.log("获取麦思Token响应:", response3);
+                  await tokenManager.saveMaisiToken(response3.token);
+                } catch (error) {
+                  console.warn("获取麦思Token失败:", error);
+                }
+              }
+              
+              showMessage("登录成功！");
+              
+              // 标记隐私政策已同意
+              await markPrivacyConsent();
+              
+              // 获取位置信息并跳转
+              try {
+                // const locationInfo = await getParentLocationWithTimeout(500);
+                // console.log('locationInfo: ', locationInfo)
+                // await navigateToMSGames();
+                window.location.href = 'https://api.keepwork.com/core/v0/repos/maisi%2Fmaisi/files/maisi%2Fmaisi%2Fwebgames%2Fdata%2Fcustom_loader1.md'
+              } catch (error) {
+                console.error('获取location信息失败:', error);
+                showMessage("登录成功，但跳转失败");
+              }
+              
+              resolve({ action: 'create', data: createData, success: true });
+            } catch (error) {
+              console.error('创建TapTap账号失败:', error);
+              showMessage(`创建账号失败: ${error.message}`);
+              resolve({ action: 'create', error: error.message, success: false });
+            }
+          };
+
+          // 绑定已有账号按钮
+          document.getElementById('bindExistingBtn').onclick = () => {
+            document.body.removeChild(overlay);
+            console.log('用户选择：绑定已有账号');
+            
+            // 显示账号密码输入弹窗
+            showBindAccountDialog(macKey, accessToken, keepworkBaseUrl, resolve);
+          };
+        });
+      }
+
+      // 显示绑定账号的输入弹窗
+      function showBindAccountDialog(macKey, accessToken, keepworkBaseUrl, resolve) {
+        // 创建遮罩层
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10001;
+        `;
+
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+          background: white;
+          border-radius: 12px;
+          padding: 30px;
+          max-width: 400px;
+          width: 90%;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        `;
+
+        dialog.innerHTML = `
+          <h3 style="margin: 0 0 20px 0; text-align: center; color: #333; font-size: 20px;">
+            绑定已有账号
+          </h3>
+          <p style="margin: 0 0 20px 0; text-align: center; color: #666; font-size: 14px;">
+            请输入您的麦思账号和密码
+          </p>
+          <form id="bindAccountForm" style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+              <input 
+                type="text" 
+                id="bindUsername" 
+                placeholder="用户名或邮箱" 
+                required
+                style="
+                  width: 100%;
+                  padding: 12px;
+                  border: 1px solid #e2e8f0;
+                  border-radius: 8px;
+                  font-size: 16px;
+                  box-sizing: border-box;
+                "
+              />
+              <div id="bindUsernameError" style="color: #ef4444; font-size: 14px; margin-top: 5px; display: none;"></div>
+            </div>
+            <div>
+              <input 
+                type="password" 
+                id="bindPassword" 
+                placeholder="密码" 
+                required
+                style="
+                  width: 100%;
+                  padding: 12px;
+                  border: 1px solid #e2e8f0;
+                  border-radius: 8px;
+                  font-size: 16px;
+                  box-sizing: border-box;
+                "
+              />
+              <div id="bindPasswordError" style="color: #ef4444; font-size: 14px; margin-top: 5px; display: none;"></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+              <button 
+                type="button" 
+                id="bindCancelBtn"
+                style="
+                  flex: 1;
+                  padding: 12px 24px;
+                  background: #e2e8f0;
+                  color: #666;
+                  border: none;
+                  border-radius: 8px;
+                  font-size: 16px;
+                  cursor: pointer;
+                  transition: background 0.3s;
+                "
+              >
+                取消
+              </button>
+              <button 
+                type="submit" 
+                id="bindConfirmBtn"
+                style="
+                  flex: 1;
+                  padding: 12px 24px;
+                  background: #667eea;
+                  color: white;
+                  border: none;
+                  border-radius: 8px;
+                  font-size: 16px;
+                  cursor: pointer;
+                  transition: background 0.3s;
+                "
+              >
+                确定
+              </button>
+            </div>
+          </form>
+        `;
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        // 取消按钮
+        document.getElementById('bindCancelBtn').onclick = () => {
+          document.body.removeChild(overlay);
+          showMessage("已取消绑定");
+          resolve({ action: 'bind', success: false, cancelled: true });
+        };
+
+        // 表单提交
+        document.getElementById('bindAccountForm').onsubmit = async (e) => {
+          e.preventDefault();
+          
+          const username = document.getElementById('bindUsername').value.trim();
+          const password = document.getElementById('bindPassword').value.trim();
+          
+          // 验证用户名
+          if (!username) {
+            showError('bindUsername', 'bindUsernameError', '请输入用户名或邮箱');
+            return;
+          }
+          
+          // 验证密码
+          if (!password || password.length < 6) {
+            showError('bindPassword', 'bindPasswordError', '密码至少6位');
+            return;
+          }
+          
+          // 禁用按钮，防止重复提交
+          const confirmBtn = document.getElementById('bindConfirmBtn');
+          const originalText = confirmBtn.textContent;
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = '绑定中...';
+          
+          try {
+            showMessage("正在绑定账号...");
+            
+            // 调用绑定API
+            const bindResponse = await fetch(`${keepworkBaseUrl}/v0/oauth_users/taptap/bind_taptap_by_username`, {
+              method: 'POST',
+              headers: {
+                'Accept': '*/*',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                username: username,
+                password: password,
+                keyId: accessToken,
+                macKey: macKey
+              })
+            });
+            
+            if (!bindResponse.ok) {
+              const errorData = await bindResponse.json().catch(() => ({}));
+              throw new Error(errorData.message || `绑定失败: ${bindResponse.status} ${bindResponse.statusText}`);
+            }
+            
+            const bindData = await bindResponse.json();
+            console.log('绑定TapTap账号成功:', bindData);
+            
+            // 检查是否包含token
+            if (!bindData.token) {
+              throw new Error('绑定成功但未返回token');
+            }
+            
+            showMessage("绑定成功！正在登录...");
+            
+            // 关闭弹窗
+            document.body.removeChild(overlay);
+            
+            // 保存keepwork token
+            await tokenManager.saveTokens(bindData);
+            showMessage("正在获取用户信息...");
+            
+            // 使用token获取用户详细信息
+            const userHeader = {
+              Authorization: `Bearer ${bindData.token}`,
+            };
+            
+            let userInfo = null;
+            try {
+              // 调用keepwork API获取用户信息
+              const userResponse = await api.get("/users/profile", {}, userHeader);
+              console.log('获取用户信息成功:', userResponse);
+              
+              userInfo = {
+                username: userResponse.username,
+                phone: userResponse.cellphone,
+                realname: userResponse.realname,
+                userId: userResponse.id,
+                loginType: 'taptap',
+                loginTime: new Date().toISOString(),
+              };
+              
+              await tokenManager.saveUserInfo(userInfo);
+            } catch (error) {
+              console.warn('获取用户信息失败，使用基础信息:', error);
+              // 如果获取用户信息失败，使用token中的基础信息
+              userInfo = {
+                username: bindData.username || username,
+                loginType: 'taptap',
+                loginTime: new Date().toISOString(),
+              };
+              await tokenManager.saveUserInfo(userInfo);
+            }
+            
+            // 保存Developer Panel状态
+            await tokenManager.saveDevPanelOptions(devOptions);
+            
+            // 尝试获取麦思Token（不影响主流程）
+            if (!(await tokenManager.getMaisiAccessToken()) && userInfo.phone) {
+              try {
+                const response3 = await api.post(
+                  "/oauth/getMaisiToken",
+                  {
+                    phone: userInfo.phone,
+                    from: devOptions.isUseMaisiDevServer ? "dev" : "prod",
+                  },
+                  userHeader
+                );
+                console.log("获取麦思Token响应:", response3);
+                await tokenManager.saveMaisiToken(response3.token);
+              } catch (error) {
+                console.warn("获取麦思Token失败:", error);
+              }
+            }
+            
+            showMessage("登录成功！");
+            
+            // 标记隐私政策已同意
+            await markPrivacyConsent();
+            
+            // 获取位置信息并跳转
+            try {
+              // const locationInfo = await getParentLocationWithTimeout(5000);
+              // console.log('locationInfo: ', locationInfo)
+              // await navigateToMSGames();
+              window.location.href = 'https://api.keepwork.com/core/v0/repos/maisi%2Fmaisi/files/maisi%2Fmaisi%2Fwebgames%2Fdata%2Fcustom_loader1.md'
+            } catch (error) {
+              console.error('获取location信息失败:', error);
+              showMessage("登录成功，但跳转失败");
+            }
+            
+            resolve({ action: 'bind', data: bindData, success: true });
+          } catch (error) {
+            console.error('绑定TapTap账号失败:', error);
+            showMessage(`绑定失败: ${error.message}`);
+            
+            // 恢复按钮状态
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = originalText;
+            
+            resolve({ action: 'bind', error: error.message, success: false });
+          }
+        };
+
+        // 点击遮罩层关闭（可选）
+        overlay.onclick = (e) => {
+          if (e.target === overlay) {
+            document.body.removeChild(overlay);
+            showMessage("已取消绑定");
+            resolve({ action: 'bind', success: false, cancelled: true });
+          }
+        };
+      }
+
+      // TapTap登录成功处理函数
+      async function handleTapTapLoginSuccess(loginData) {
+        console.log('TapTap登录成功:', loginData);
+        showMessage("TapTap登录成功！");
+        
+        try {
+          const { macKey, accessToken } = loginData;
+          
+          if (!macKey || !accessToken) {
+            throw new Error('缺少必要的登录参数');
+          }
+          
+          // 使用配置的keepwork API环境
+          const keepworkBaseUrl = KEEPWORK_API_CONFIG[CURRENT_KEEPWORK_ENV];
+          console.log('使用Keepwork环境:', CURRENT_KEEPWORK_ENV, keepworkBaseUrl);
+          
+          showMessage("正在获取keepwork token...");
+          
+          // 调用keepwork API获取token
+          const response = await fetch(`${keepworkBaseUrl}/v0/oauth_users/taptap/get_token_by_taptap`, {
+            method: 'POST',
+            headers: {
+              'Accept': '*/*',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              keyId: accessToken,
+              macKey: macKey
+            })
+          });
+
+
+          
+          if (!response.ok) {
+            // 隐藏之前的消息提示
+            const existingToast = document.querySelector(".toast");
+            if (existingToast) {
+              if (existingToast.hideTimer) {
+                clearTimeout(existingToast.hideTimer);
+              }
+              document.body.removeChild(existingToast);
+            }
+            
+            // 没有token时，弹出选择框询问用户
+            const choiceResult = await handleNoTokenChoice(macKey, accessToken, keepworkBaseUrl);
+            console.log('用户选择结果:', choiceResult);
+            // 如果用户选择了创建账号并且成功，handleNoTokenChoice已经处理完所有逻辑
+            // 如果失败或选择绑定，则在这里return
+            return;
+          }
+          
+          const keepworkData = await response.json();
+          console.log('获取keepwork token成功:', keepworkData);
+          
+          if (!keepworkData.token) {
+            // 隐藏之前的消息提示
+            const existingToast = document.querySelector(".toast");
+            if (existingToast) {
+              if (existingToast.hideTimer) {
+                clearTimeout(existingToast.hideTimer);
+              }
+              document.body.removeChild(existingToast);
+            }
+            
+            // 没有token时，弹出选择框询问用户
+            const choiceResult = await handleNoTokenChoice(macKey, accessToken, keepworkBaseUrl);
+            console.log('用户选择结果:', choiceResult);
+            // 如果用户选择了创建账号并且成功，handleNoTokenChoice已经处理完所有逻辑
+            // 如果失败或选择绑定，则在这里return
+            return;
+          }
+          
+          // 保存keepwork token
+          await tokenManager.saveTokens(keepworkData);
+          showMessage("正在获取用户信息...");
+          
+          // 使用token获取用户详细信息
+          const userHeader = {
+            Authorization: `Bearer ${keepworkData.token}`,
+          };
+          
+          let userInfo = null;
+          try {
+            // 调用keepwork API获取用户信息
+            const userResponse = await api.get("/users/profile", {}, userHeader);
+            console.log('获取用户信息成功:', userResponse);
+            
+            userInfo = {
+              username: userResponse.username,
+              phone: userResponse.cellphone,
+              realname: userResponse.realname,
+              userId: userResponse.id,
+              loginType: 'taptap',
+              loginTime: new Date().toISOString(),
+            };
+            
+            await tokenManager.saveUserInfo(userInfo);
+          } catch (error) {
+            console.warn('获取用户信息失败，使用基础信息:', error);
+            // 如果获取用户信息失败，使用token中的基础信息
+            userInfo = {
+              username: keepworkData.username || 'TapTap用户',
+              loginType: 'taptap',
+              loginTime: new Date().toISOString(),
+            };
+            await tokenManager.saveUserInfo(userInfo);
+          }
+          
+          // 保存Developer Panel状态
+          await tokenManager.saveDevPanelOptions(devOptions);
+          
+          // 尝试获取麦思Token（不影响主流程）
+          if (!(await tokenManager.getMaisiAccessToken()) && userInfo.phone) {
+            try {
+              const response3 = await api.post(
+                "/oauth/getMaisiToken",
+                {
+                  phone: userInfo.phone,
+                  from: devOptions.isUseMaisiDevServer ? "dev" : "prod",
+                },
+                userHeader
+              );
+              console.log("获取麦思Token响应:", response3);
+              await tokenManager.saveMaisiToken(response3.token);
+            } catch (error) {
+              console.warn("获取麦思Token失败:", error);
+            }
+          }
+          
+          showMessage("登录成功！");
+          
+          // 标记隐私政策已同意
+          await markPrivacyConsent();
+          
+          // 获取位置信息并跳转
+          try {
+            // const locationInfo = await getParentLocationWithTimeout(5000);
+            // console.log('locationInfo: ', locationInfo)
+            // await navigateToMSGames();
+            window.location.href = 'https://api.keepwork.com/core/v0/repos/maisi%2Fmaisi/files/maisi%2Fmaisi%2Fwebgames%2Fdata%2Fcustom_loader1.md'
+          } catch (error) {
+            console.error('获取location信息失败:', error);
+            showMessage("登录成功，但跳转失败");
+          }
+        } catch (error) {
+          console.error('处理TapTap登录结果失败:', error);
+          showMessage(`登录失败: ${error.message}`);
+        }
+      }
+
+      // TapTap登录失败处理函数
+      function handleTapTapLoginFail(errorMessage) {
+        console.error('TapTap登录失败:', errorMessage);
+        showMessage(`TapTap登录失败: ${errorMessage}`);
+      }
+
+      // TapTap登录取消处理函数
+      function handleTapTapLoginCancel() {
+        console.log('用户取消了TapTap登录');
+        showMessage("已取消TapTap登录");
       }
 
       // 从欢迎界面进入账号密码登录
@@ -2914,6 +3615,18 @@
               hideAutoLoginStatus();
               showMessage("实名认证失败，请重试");
             }
+            break;
+          case "taptapLoginSuccess":
+            // 处理TapTap登录成功
+            await handleTapTapLoginSuccess(event.data.loginData);
+            break;
+          case "taptapLoginFail":
+            // 处理TapTap登录失败
+            handleTapTapLoginFail(event.data.errorMessage || "未知错误");
+            break;
+          case "taptapLoginCancel":
+            // 处理TapTap登录取消
+            handleTapTapLoginCancel();
             break;
         }
       });
