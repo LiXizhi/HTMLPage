@@ -203,7 +203,17 @@
                     <textarea name="description" required rows="2" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
                   </div>
                   <div class="mt-4">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-800">⚙ 系统提示词 *</h3>
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-lg font-semibold text-gray-800">⚙ 系统提示词 *</h3>
+                      <button
+                        type="button"
+                        onclick="autoGenerateSystemPrompt()"
+                        class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm flex items-center gap-2"
+                      >
+                        <span class="text-lg">✨</span>
+                        <span>自动生成</span>
+                      </button>
+                    </div>
                     <textarea
                       name="system_prompt"
                       required
@@ -297,12 +307,6 @@
               <!-- Objective Tab -->
               <div id="tab-content-objective" class="tab-content space-y-6 hidden">
                 <div class="bg-gray-50 p-6 rounded-lg">
-                  <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold text-gray-800">🎯 目标设定</h3>
-                    <button type="button" onclick="clearObjectiveFields()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm flex items-center gap-2">
-                      🗑️ 清空目标
-                    </button>
-                  </div>
                   <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div class="flex items-center gap-4">
@@ -1155,20 +1159,6 @@
         const input = document.querySelector(`input[name="quick_reply_${index}"]`);
         if (input && input.parentElement) {
           input.parentElement.remove();
-        }
-      }
-
-      // Clear objective fields
-      function clearObjectiveFields() {
-        if (confirm('确定要清空所有目标设定吗？')) {
-          const form = document.getElementById("createCharacterForm");
-          form.objective_title.value = "";
-          form.objective_description.value = "";
-          form.wikiword.value = "";
-          form.completion_title.value = "";
-          form.completion_description.value = "";
-          form.completion_icon.value = "";
-          showToast("目标设定已清空", "success");
         }
       }
 
@@ -2316,6 +2306,81 @@
         
         showToast(`已选择模型: ${displayName}`, 'success');
         closeModelSelector();
+      }
+
+      // Auto-generate system prompt using code assembly
+      function autoGenerateSystemPrompt() {
+        const form = document.getElementById('createCharacterForm');
+        
+        // Collect character information from form
+        const name = form.name.value.trim();
+        const age = form.age.value.trim();
+        const gender = form.gender.value;
+        const role = form.role.value.trim();
+        const description = form.description.value.trim();
+        
+        // Validate required fields
+        if (!name) {
+          showToast('请先填写角色名称', 'warning');
+          return;
+        }
+        
+        if (!description) {
+          showToast('请先填写角色描述', 'warning');
+          return;
+        }
+        
+        // Build system prompt using template
+        let systemPrompt = `你是${name}`;
+        
+        // Add age if provided
+        if (age) {
+          systemPrompt += `，${age}岁`;
+        }
+        
+        // Add gender description
+        if (gender === 'male') {
+          systemPrompt += `，一位男性`;
+        } else if (gender === 'female') {
+          systemPrompt += `，一位女性`;
+        }
+        
+        // Add role/identity
+        if (role) {
+          systemPrompt += role.includes('，') || gender ? role : `，${role}`;
+        }
+        
+        systemPrompt += `。`;
+        
+        // Add description
+        systemPrompt += `${description}`;
+        
+        // Add interaction guidelines
+        systemPrompt += `\n\n在对话中，你应该：`;
+        systemPrompt += `\n- 保持角色的性格特点和说话风格`;
+        systemPrompt += `\n- 用自然、亲切的语气与用户交流`;
+        systemPrompt += `\n- 根据对话内容给出恰当的回应`;
+        systemPrompt += `\n- 必要时可以表达情绪，使对话更生动`;
+        
+        // Add role-specific guidelines
+        if (role) {
+          if (role.includes('老师') || role.includes('教师') || role.includes('教育')) {
+            systemPrompt += `\n- 耐心解答问题，用通俗易懂的方式解释概念`;
+            systemPrompt += `\n- 鼓励用户思考，引导而不是直接给出答案`;
+          } else if (role.includes('助手') || role.includes('助理')) {
+            systemPrompt += `\n- 高效、专业地协助用户完成任务`;
+            systemPrompt += `\n- 提供清晰的建议和解决方案`;
+          } else if (role.includes('朋友') || role.includes('伙伴')) {
+            systemPrompt += `\n- 像朋友一样关心用户，给予情感支持`;
+            systemPrompt += `\n- 分享有趣的想法和经历`;
+          }
+        }
+        
+        systemPrompt += `\n\n请始终保持角色设定，用第一人称与用户对话。`;
+        
+        // Set the generated prompt to the textarea
+        form.system_prompt.value = systemPrompt;
+        showToast('系统提示词生成成功！', 'success');
       }
 
       // Initialize page
