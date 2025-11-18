@@ -28,6 +28,34 @@ This repository contains a collection of single-page HTML5 educational games and
 - Use viewport height units (`vh`) and flexbox for responsive full-screen layouts
 - See `typing_game.html` for responsive stats panel implementation
 
+#### Use Rem instead of Px
+Set base font-size, so that 1rem = 10px. Use Rem instead of px for everthing to allow for easier scaling across devices. Use this function to adjust root font size based on viewport dimensions:
+```javascript 
+function adjustRootFontSize() {
+  // 游戏主容器的设计尺寸
+  const DESIGN_WIDTH = 1280;
+  const DESIGN_HEIGHT = 720;
+  
+  // 获取视口尺寸
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  
+  // 计算基于宽度和高度的缩放比例
+  const scaleByWidth = viewportWidth / DESIGN_WIDTH;
+  const scaleByHeight = viewportHeight / DESIGN_HEIGHT;
+  
+  // 取较小的缩放比例，确保内容完全可见（等比例缩放）
+  const scale = Math.min(scaleByWidth, scaleByHeight);
+  
+  // 设置根元素的 font-size
+  // 假设设计稿基准是 1rem = 10px，则调整后的 font-size = 10 * scale
+  const baseFontSize = 10; // 设计稿基准
+  const finalFontSize = baseFontSize * scale;
+  
+  document.documentElement.style.fontSize = `${finalFontSize}px`;
+}
+```      
+
 #### Common UI Components
 - **Rules Modal**: Initial popup showing game instructions with "Start Game" button
   - Example in `guess_cubes.html` lines 308-332
