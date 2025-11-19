@@ -1,0 +1,530 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家园成长手册</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script>
+        // Configure Tailwind to use rem-based text sizes that respond to root font-size
+        tailwind.config = {
+            theme: {
+                fontSize: {
+                    'xs': '1.2rem',    // 12px at 10px base
+                    'sm': '1.4rem',    // 14px at 10px base
+                    'base': '1.6rem',  // 16px at 10px base
+                    'lg': '1.8rem',    // 18px at 10px base
+                    'xl': '2.0rem',    // 20px at 10px base
+                    '2xl': '2.4rem',   // 24px at 10px base
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Set base font-size so 1rem = 10px for easier scaling */
+        html {
+            font-size: 10px;
+        }
+        body {
+            font-size: 1.6rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div class="flex h-screen overflow-hidden">
+        <!-- 左侧等级任务列表 -->
+        <div class="w-1/2 bg-white border-r-4 border-blue-300 overflow-y-auto p-6" id="levelListContainer">
+            <h1 class="text-2xl font-bold text-center mb-6 text-blue-600">🏠 家园成长手册</h1>
+            <!-- Levels will be dynamically generated here -->
+        </div>
+
+        <!-- 右侧任务详情 -->
+        <div class="w-1/2 bg-blue-50 overflow-y-auto p-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="border-l-4 border-blue-400 pl-4 mb-6">
+                    <h2 class="text-2xl font-bold text-blue-700" id="task-title">【期待家园 📦】</h2>
+                    <span class="text-red-500 font-semibold"></span>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-3">描述：</h3>
+                    <p class="text-gray-700 leading-relaxed" id="task-description">
+                        欢迎来到Paracraft！创建你的第一个家园世界，开启你的创作之旅。学习如何使用基础工具，了解界面布局和基本操作。
+                    </p>
+                </div>
+
+                <div class="mb-6">
+                    <div class="rounded-lg border-2 border-gray-300 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center min-h-[28rem]">
+                        <div class="text-center">
+                            <svg class="w-20 h-20 mx-auto text-gray-400 mb-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
+                            </svg>
+                            <p class="text-gray-500 text-lg font-semibold" id="video-title">视频1 - 创建家园世界</p>
+                        </div>
+                    </div>
+                    <button class="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition">
+                        播放视频
+                    </button>
+                </div>
+
+                <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                    <p class="text-gray-700 mb-2">
+                        <span class="font-semibold">目标：</span>
+                        <span id="task-goal">创建并进入你的第一个家园世界</span>
+                    </p>
+                    <p class="text-gray-700">
+                        <span class="font-semibold">奖励：</span>
+                        <span class="text-red-600 font-bold" id="task-reward">500 知识豆</span>
+                    </p>
+                </div>
+
+                <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg shadow-lg text-lg transition">
+                    完成任务
+                </button>
+
+                <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold text-gray-700 mb-2">💡 提示：</h4>
+                    <ul class="text-base text-gray-600 space-y-1" id="task-tips">
+                        <li>• 点击"创建世界"按钮</li>
+                        <li>• 选择"家园"模板</li>
+                        <li>• 给你的世界起一个名字</li>
+                        <li>• 点击"开始创作"</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // User progress data - this would typically come from a server or localStorage
+        const userData = {
+            currentLevel: 2,
+            completedTasks: ['expect-homeland'], // List of completed task IDs
+            inProgressTasks: ['colorful-blocks'], // List of tasks currently in progress
+        };
+
+        // Level configuration data
+        // Helper: Convert Chinese/emoji task name to English id (slugify)
+        function slugifyTaskName(name) {
+            // Remove brackets, emoji, and spaces, then use pinyin or fallback to ascii
+            // For demo: just use ascii letters, numbers, and hyphens
+            return name
+                .replace(/[【】\s📦]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/[^a-zA-Z0-9\-]/g, '')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase();
+        }
+
+        const levelsData = [
+            {
+                level: 1,
+                name: '萌新创造家',
+                unlocks: '【存档容量100】【3000知识币】',
+                tasks: [
+                    { name: '【期待家园 📦】', optional: false },
+                    { name: '【彩色方块】', optional: false },
+                    { name: '【给家起个名字】', optional: true },
+                    { name: '【窗户】【门】【围栏】', optional: true }
+                ]
+            },
+            {
+                level: 2,
+                name: '初级创造家',
+                unlocks: '【获得称号X】【5000知识币】',
+                tasks: [
+                    { name: '【床】【餐桌】【桌子 📦 】', optional: false },
+                    { name: '【双人床】【杯子】【台灯 📦 】', optional: false }
+                ]
+            },
+            {
+                level: 3,
+                name: '中级创造家',
+                unlocks: '【存档墙+3】【6000知识币】',
+                tasks: [
+                    { name: '【按钮】【导线】【电灯】', optional: false },
+                    { name: '【压力板】【复制】【拉伸】', optional: false },
+                    { name: '【代码方块】【电影方块】【告示牌】', optional: true }
+                ]
+            },
+            {
+                level: 4,
+                name: '高级创造家',
+                unlocks: '【存档墙+3】【8000知识币】',
+                tasks: [
+                    { name: '【3D建模基础】【CAD方块】', optional: false },
+                    { name: '【骨骼动画】【人物动作】', optional: false },
+                    { name: '【粒子特效】【音效设计】', optional: true }
+                ]
+            },
+            {
+                level: 5,
+                name: '专家创造家',
+                unlocks: '【存档墙+5】【10000知识币】',
+                tasks: [
+                    { name: '【编程入门】【条件判断】', optional: true },
+                    { name: '【循环语句】【变量使用】', optional: true },
+                    { name: '【函数定义】【事件触发】', optional: true }
+                ]
+            }
+        ];
+
+        // Generate the level list dynamically
+        function generateLevelList() {
+            const container = document.getElementById('levelListContainer');
+            container.innerHTML = '';
+            let firstUnfinishedTaskDiv = null;
+            let firstUnfinishedTaskId = null;
+            levelsData.forEach((levelInfo, levelIdx) => {
+                const isUnlocked = levelInfo.level <= userData.currentLevel;
+                // Assign English id to each task
+                levelInfo.tasks.forEach((task, idx) => {
+                    if (!task.id) {
+                        task.id = slugifyTaskName(task.name);
+                    }
+                });
+                const completedCount = levelInfo.tasks.filter(task => 
+                    userData.completedTasks.includes(task.id)
+                ).length;
+                const totalTasks = levelInfo.tasks.length;
+                // Create level container
+                const levelDiv = document.createElement('div');
+                levelDiv.className = 'mb-6';
+                // Level header styling based on unlock status
+                const headerClass = isUnlocked 
+                    ? 'bg-orange-50 border-l-4 border-orange-400 p-4 mb-3'
+                    : 'bg-orange-50 border-l-4 border-gray-300 p-4 mb-3 opacity-50';
+                const titleColor = isUnlocked ? 'text-orange-600' : 'text-gray-500';
+                const progressColor = completedCount > 0 ? 'text-green-600' : 'text-gray-500';
+                const unlockColor = isUnlocked ? 'text-gray-600' : 'text-gray-500';
+                // Build level header
+                levelDiv.innerHTML = `
+                    <div class="${headerClass}">
+                        <h2 class="text-lg font-bold ${titleColor}">等级${levelInfo.level} - ${levelInfo.name}：<span class="${progressColor}">(${completedCount}/${totalTasks})</span></h2>
+                        <p class="text-base ${unlockColor}">解锁：${levelInfo.unlocks}</p>
+                    </div>
+                `;
+                // Create tasks container
+                const tasksDiv = document.createElement('div');
+                tasksDiv.className = isUnlocked ? 'space-y-2 ml-4' : 'space-y-2 ml-4 opacity-50';
+                // Generate each task
+                levelInfo.tasks.forEach(task => {
+                    const taskDiv = document.createElement('div');
+                    const isCompleted = userData.completedTasks.includes(task.id);
+                    const isInProgress = userData.inProgressTasks.includes(task.id);
+                    // Determine task styling
+                    let taskClass = 'p-3 border border-gray-200 rounded';
+                    if (isUnlocked) {
+                        taskClass += ' cursor-pointer';
+                        if (isCompleted) {
+                            taskClass += ' bg-blue-100 border-l-4 border-l-blue-500';
+                        } else {
+                            taskClass += ' hover:bg-sky-50 transition-colors';
+                        }
+                    }
+                    taskDiv.className = taskClass;
+                    if (isUnlocked) {
+                        taskDiv.onclick = () => showTaskDetail(task.id);
+                        taskDiv.setAttribute('data-task-id', task.id);
+                    }
+                    // Build task content
+                    let taskHTML = `<span class="font-semibold${isInProgress ? ' text-red-600' : ''}">${task.name}</span>`;
+                    if (isInProgress) {
+                        taskHTML += ' <span class="text-red-500 text-base">（进行中）</span>';
+                    }
+                    if (task.optional) {
+                        taskHTML += ' <span class="inline-block bg-green-300 text-green-900 px-2 py-0.5 rounded text-xs ml-1">可选</span>';
+                    }
+                    taskDiv.innerHTML = taskHTML;
+                    tasksDiv.appendChild(taskDiv);
+                    // Find first unfinished, non-optional, unlocked task
+                    if (isUnlocked && !isCompleted && !task.optional && !firstUnfinishedTaskDiv) {
+                        firstUnfinishedTaskDiv = taskDiv;
+                        firstUnfinishedTaskId = task.id;
+                    }
+                });
+                levelDiv.appendChild(tasksDiv);
+                container.appendChild(levelDiv);
+            });
+            // Auto-scroll to first unfinished, non-optional task
+            if (firstUnfinishedTaskDiv) {
+                setTimeout(() => {
+                    firstUnfinishedTaskDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Optionally highlight or auto-select
+                    showTaskDetail(firstUnfinishedTaskId);
+                }, 100);
+            }
+        }
+
+        // Adjust root font size based on viewport dimensions
+        function adjustRootFontSize() {
+            // Design dimensions for the main container
+            const DESIGN_WIDTH = 800;
+            const DESIGN_HEIGHT = 600;
+            
+            // Get viewport dimensions
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Calculate scale ratios based on width and height
+            const scaleByWidth = viewportWidth / DESIGN_WIDTH;
+            const scaleByHeight = viewportHeight / DESIGN_HEIGHT;
+            
+            // Use the smaller scale to ensure content is fully visible (maintain aspect ratio)
+            const scale = Math.min(scaleByWidth, scaleByHeight);
+            
+            // Set root font-size
+            // Assuming design baseline is 1rem = 10px, adjusted font-size = 10 * scale
+            const baseFontSize = 10; // Design baseline
+            const finalFontSize = baseFontSize * scale;
+            
+            document.documentElement.style.fontSize = `${finalFontSize}px`;
+        }
+
+        // Initialize and listen for resize events
+        adjustRootFontSize();
+        window.addEventListener('resize', adjustRootFontSize);
+
+        // Task detail data
+        const taskData = {
+            'level1-task1': {
+                title: '【期待家园 📦】',
+                status: '',
+                description: '欢迎来到Paracraft！创建你的第一个家园世界，开启你的创作之旅。学习如何使用基础工具，了解界面布局和基本操作。',
+                video: '视频1 - 创建家园世界',
+                goal: '创建并进入你的第一个家园世界',
+                reward: '500 知识豆',
+                tips: [
+                    '• 点击"创建世界"按钮',
+                    '• 选择"家园"模板',
+                    '• 给你的世界起一个名字',
+                    '• 点击"开始创作"'
+                ]
+            },
+            'level1-task2': {
+                title: '【彩色方块】',
+                status: '（进行中）',
+                description: '彩色方块是构建家园的重要物品。学习如何使用不同颜色的方块来装饰你的家园，让它变得更加美丽和个性化。',
+                video: '视频2 - 使用彩色方块',
+                goal: '在家园中放置<span class="text-red-600 font-bold">6个</span>彩色方块',
+                reward: '1000 知识豆',
+                tips: [
+                    '• 点击工具栏中的彩色方块图标',
+                    '• 选择你喜欢的颜色',
+                    '• 在家园中点击即可放置',
+                    '• 即使不完成任务，你也可以查看后续等级的教学视频'
+                ]
+            },
+            'level1-task3': {
+                title: '【给家起个名字】',
+                status: '（可选）',
+                description: '为你的家园起一个独特的名字，让它更有个性。学习如何使用告示牌和文字工具来标记你的创作。',
+                video: '视频3 - 命名你的家园',
+                goal: '使用告示牌为你的家园添加名字',
+                reward: '800 知识豆',
+                tips: [
+                    '• 选择告示牌工具',
+                    '• 放置在合适的位置',
+                    '• 输入你的家园名称',
+                    '• 这是可选任务，不完成也能升级'
+                ]
+            },
+            'level1-task4': {
+                title: '【窗户】【门】【围栏】',
+                status: '（可选）',
+                description: '学习如何为你的房子添加窗户、门和围栏，让建筑更加真实和完整。掌握这些基础建筑元素的使用方法。',
+                video: '视频4 - 建筑基础元素',
+                goal: '为你的房子添加至少1个门、2个窗户和围栏',
+                reward: '1200 知识豆',
+                tips: [
+                    '• 门可以打开和关闭',
+                    '• 窗户可以选择不同样式',
+                    '• 围栏可以连接形成完整的边界',
+                    '• 这是可选任务，但建议完成以获得更多经验'
+                ]
+            },
+            'level2-task1': {
+                title: '【床】【餐桌】【桌子 📦】',
+                status: '',
+                description: '学习如何放置家具，让你的家园更加舒适。床、餐桌和桌子是家居生活的基本元素。',
+                video: '视频5 - 基础家具摆放',
+                goal: '在家园中放置床、餐桌和桌子各1个',
+                reward: '1500 知识豆',
+                tips: [
+                    '• 从家具分类中选择物品',
+                    '• 注意家具的朝向',
+                    '• 合理安排家具布局',
+                    '• 可以使用旋转工具调整方向'
+                ]
+            },
+            'level2-task2': {
+                title: '【双人床】【杯子】【台灯 📦】',
+                status: '',
+                description: '继续装饰你的家园，添加更多细节物品。学习如何摆放小物件，让家更有生活气息。',
+                video: '视频6 - 细节装饰',
+                goal: '放置双人床、杯子和台灯，提升家园舒适度',
+                reward: '1500 知识豆',
+                tips: [
+                    '• 小物件可以放在桌子上',
+                    '• 台灯可以发光（需要连接电路）',
+                    '• 双人床比单人床更大',
+                    '• 注意物品之间的搭配'
+                ]
+            },
+            'level3-task1': {
+                title: '【按钮】【导线】【电灯】',
+                status: '',
+                description: '进入红石电路的世界！学习如何使用按钮、导线和电灯创建简单的电路系统，为你的家园添加交互功能。',
+                video: '视频7 - 电路基础',
+                goal: '创建一个按钮控制电灯的简单电路',
+                reward: '2000 知识豆',
+                tips: [
+                    '• 按钮可以发出信号',
+                    '• 导线传输信号',
+                    '• 电灯接收信号后会亮起',
+                    '• 注意导线的连接方式'
+                ]
+            },
+            'level3-task2': {
+                title: '【压力板】【复制】【拉伸】',
+                status: '',
+                description: '学习更多建造技巧。压力板可以创建自动门，复制和拉伸工具能大大提高建造效率。',
+                video: '视频8 - 高级建造工具',
+                goal: '使用压力板创建自动门，并使用复制和拉伸工具',
+                reward: '2000 知识豆',
+                tips: [
+                    '• 压力板踩上去会触发信号',
+                    '• 复制工具：Ctrl+C 复制，Ctrl+V 粘贴',
+                    '• 拉伸工具可以快速创建墙面',
+                    '• 合理使用工具可以节省大量时间'
+                ]
+            },
+            'level3-task3': {
+                title: '【代码方块】【电影方块】【告示牌】',
+                status: '（可选）',
+                description: '探索Paracraft的高级功能！代码方块可以编程，电影方块可以制作动画，这些是创作复杂作品的基础。',
+                video: '视频9 - 高级创作工具',
+                goal: '了解代码方块、电影方块和告示牌的基本用法',
+                reward: '2500 知识豆',
+                tips: [
+                    '• 代码方块可以使用Lua编程',
+                    '• 电影方块用于制作动画和过场',
+                    '• 告示牌可以显示文字和图片',
+                    '• 这是可选任务，适合对编程感兴趣的创作者'
+                ]
+            },
+            'level4-task1': {
+                title: '【3D建模基础】【CAD方块】',
+                status: '',
+                description: '开始学习3D建模！使用CAD方块创建自定义的3D模型，让你的创作更加独特和精美。',
+                video: '视频10 - 3D建模入门',
+                goal: '使用CAD方块创建一个简单的3D模型',
+                reward: '3000 知识豆',
+                tips: [
+                    '• CAD方块可以创建复杂的3D形状',
+                    '• 学习基本的建模命令',
+                    '• 可以导入和导出模型',
+                    '• 耐心练习，建模需要时间掌握'
+                ]
+            },
+            'level4-task2': {
+                title: '【骨骼动画】【人物动作】',
+                status: '',
+                description: '为你的角色添加动画！学习如何使用骨骼系统创建流畅的人物动作和表情。',
+                video: '视频11 - 角色动画制作',
+                goal: '创建一个带有骨骼动画的角色',
+                reward: '3000 知识豆',
+                tips: [
+                    '• 骨骼系统控制角色动作',
+                    '• 可以创建走路、跑步等动画',
+                    '• 学习关键帧动画原理',
+                    '• 动画制作是高级技能'
+                ]
+            },
+            'level4-task3': {
+                title: '【粒子特效】【音效设计】',
+                status: '（可选）',
+                description: '提升作品的视听体验！学习如何添加粒子特效和音效，让你的世界更加生动和有趣。',
+                video: '视频12 - 特效与音效',
+                goal: '为场景添加粒子特效和背景音乐',
+                reward: '3500 知识豆',
+                tips: [
+                    '• 粒子可以创建火焰、烟雾等效果',
+                    '• 音效增强沉浸感',
+                    '• 注意特效性能影响',
+                    '• 这是可选任务，但能大幅提升作品质量'
+                ]
+            },
+            'level5-task1': {
+                title: '【编程入门】【条件判断】',
+                status: '（可选）',
+                description: '进入编程的世界！学习使用Lua语言编写简单的程序，通过条件判断实现智能交互。',
+                video: '视频13 - 编程基础',
+                goal: '编写一个使用条件判断的简单程序',
+                reward: '4000 知识豆',
+                tips: [
+                    '• 学习if-then-else语句',
+                    '• 理解布尔值和比较运算',
+                    '• 从简单的例子开始',
+                    '• 编程需要逻辑思维'
+                ]
+            },
+            'level5-task2': {
+                title: '【循环语句】【变量使用】',
+                status: '（可选）',
+                description: '掌握编程的核心概念！学习使用循环和变量，编写更复杂和高效的程序。',
+                video: '视频14 - 循环与变量',
+                goal: '使用循环和变量完成一个编程任务',
+                reward: '4000 知识豆',
+                tips: [
+                    '• for和while循环的使用',
+                    '• 变量存储和修改数据',
+                    '• 循环可以简化重复操作',
+                    '• 多练习才能熟练'
+                ]
+            },
+            'level5-task3': {
+                title: '【函数定义】【事件触发】',
+                status: '（可选）',
+                description: '成为编程高手！学习定义函数和处理事件，创建复杂的交互系统和游戏机制。',
+                video: '视频15 - 函数与事件',
+                goal: '创建一个使用函数和事件的交互系统',
+                reward: '5000 知识豆',
+                tips: [
+                    '• 函数可以组织代码结构',
+                    '• 事件响应用户操作',
+                    '• 这是制作游戏的基础',
+                    '• 完成后你就是专家创造家了！'
+                ]
+            }
+        };
+
+        function showTaskDetail(taskId) {
+            const task = taskData[taskId];
+            if (!task) return;
+
+            // 更新活动状态
+            document.querySelectorAll('[onclick^="showTaskDetail"]').forEach(item => {
+                item.classList.remove('bg-blue-100', 'border-l-4', 'border-l-blue-500');
+                item.classList.add('hover:bg-sky-50');
+            });
+            event.currentTarget.classList.remove('hover:bg-sky-50');
+            event.currentTarget.classList.add('bg-blue-100', 'border-l-4', 'border-l-blue-500');
+
+            // 更新右侧内容
+            document.getElementById('task-title').innerHTML = task.title + ' <span class="text-red-500 font-semibold">' + task.status + '</span>';
+            document.getElementById('task-description').innerHTML = task.description;
+            document.getElementById('video-title').textContent = task.video;
+            document.getElementById('task-goal').innerHTML = task.goal;
+            document.getElementById('task-reward').textContent = task.reward;
+            
+            const tipsList = document.getElementById('task-tips');
+            tipsList.innerHTML = task.tips.map(tip => `<li>${tip}</li>`).join('');
+        }
+
+    // Initialize: Generate level list and auto-scroll/select first unfinished task
+    generateLevelList();
+    </script>
+</body>
+</html>

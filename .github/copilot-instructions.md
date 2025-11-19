@@ -56,6 +56,22 @@ function adjustRootFontSize() {
 }
 ```      
 
+if you want to use tailwind font size like text-xl, configure tailwind like this:
+```javascript
+// Configure Tailwind to use rem-based text sizes that respond to root font-size
+tailwind.config = {
+    theme: {
+        fontSize: {
+            'xs': '1.2rem',    // 12px at 10px base
+            'sm': '1.4rem',    // 14px at 10px base
+            'base': '1.6rem',  // 16px at 10px base
+            'lg': '1.8rem',    // 18px at 10px base
+            'xl': '2.0rem',    // 20px at 10px base
+            '2xl': '2.4rem',   // 24px at 10px base
+        }
+    }
+}
+```
 #### Common UI Components
 - **Rules Modal**: Initial popup showing game instructions with "Start Game" button
   - Example in `guess_cubes.html` lines 308-332

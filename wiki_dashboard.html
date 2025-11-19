@@ -271,9 +271,13 @@
         timeout: 30000,
       });
       console.log(`Keepwork SDK initialized token: ${sdk.token}`);      // Check URL parameters for config and update title
+      // Supports both hash (#) and query (?) parameters to avoid 414 errors
       function checkUrlParamsAndUpdateTitle() {
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
         const urlParams = new URLSearchParams(window.location.search);
-        const config = urlParams.get('config');
+        
+        // Try to get config from hash first, then fallback to query string
+        const config = hashParams.get('config') || urlParams.get('config');
         
         if (config) {
           try {
@@ -869,11 +873,17 @@
         }
         // replace current href's wiki_dashboard with characterAI.
         let url = window.location.href;
-        url = url.split("?")[0];
+        // Remove both query string and hash to rebuild with hash parameters (to avoid 414 errors)
+        url = url.split("?")[0].split("#")[0];
         url = url.replace("wiki_dashboard", "characterAI");
 
         // Forward all existing URL parameters plus the new objective parameter
-        const urlParams = new URLSearchParams(window.location.search);
+        // Prioritize hash parameters, fallback to query parameters
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        const queryParams = new URLSearchParams(window.location.search);
+        
+        // Use hash params if they exist, otherwise use query params
+        const urlParams = hashParams.has('config') ? hashParams : queryParams;
         urlParams.set("objective", objective);
         
         // If this is a custom question, also pass the custom question ID
@@ -881,7 +891,8 @@
           urlParams.set("customQuestionId", question.id);
         }
         
-        url = `${url}?${urlParams.toString()}`;
+        // Use hash fragment (#) to avoid 414 errors with long configs
+        url = `${url}#${urlParams.toString()}`;
 
         window.location.replace(url);
 
@@ -1295,8 +1306,11 @@
 
       function checkStartGame(timeoutMs) {
         if (!timeoutMs) {
-          const urlParams = new URLSearchParams(window.location.search);
-          timeoutMs = urlParams.get("parent") === "miniGameProxy" ? 3000 : 200;
+          // Check both hash and query parameters for 'parent' parameter
+          const hashParams = new URLSearchParams(window.location.hash.slice(1));
+          const queryParams = new URLSearchParams(window.location.search);
+          const parentParam = hashParams.get("parent") || queryParams.get("parent");
+          timeoutMs = parentParam === "miniGameProxy" ? 3000 : 200;
         }
 
         let gameStarted = false;

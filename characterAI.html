@@ -3,26 +3,34 @@
   <!--
   AI Character Chat Game - URL Parameters Documentation
   
+  IMPORTANT: Use hash fragment (#param=value) instead of query string (?param=value) for long configs
+  to avoid 414 Request-URI too long errors. Hash fragments are processed client-side only and 
+  don't get sent to the server.
+  
   This HTML file supports various URL parameters to customize the game behavior:
   
-  1. Example: ?objective=天空为何是蓝色？(wikiword)
+  1. Example: #objective=天空为何是蓝色？(wikiword)
      Note: Text in parentheses will be extracted as wikiword for 百度百科 integration
   
-  2. Example: ?objective=什么是人工智能？&customQuestionId=ai_basics_001
+  2. Example: #objective=什么是人工智能？&customQuestionId=ai_basics_001
      Note: customQuestionId is used by user defined objective in wiki_dashboard
   
   3. config - JSON configuration to override default character and game settings
-     Example: ?config=%7B%22character%22%3A%7B%22name%22%3A%22小红%22%2C%22age%22%3A16%7D%7D
+     Example: #config=%7B%22character%22%3A%7B%22name%22%3A%22小红%22%2C%22age%22%3A16%7D%7D
      (URL encoded JSON: {"character":{"name":"小红","age":16}})
+     This should be used with hash (#) prefix to avoid 414 errors with long configs.
   
-  4. ?showToolbar=false (hides the right sidebar AI tools)
-  5. ?showCharInfo=false (hides the left character info panel)
-  6. keepwork token: ?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-  7. ?showClose=true (show close button on right top, and send OnCloseCharacterAI event to parent window)
-  8. ?showAvatar=auto whether show avatar on chat background (only useful when config.videoactions["待机|说话"] are both available.
+  4. #showToolbar=false (hides the right sidebar AI tools)
+  5. #showCharInfo=false (hides the left character info panel)
+  6. keepwork token: #token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  7. #showClose=true (show close button on right top, and send OnCloseCharacterAI event to parent window)
+  8. #showAvatar=auto whether show avatar on chat background (only useful when config.videoactions["待机|说话"] are both available.
   
-  Complete examples:
-  - Minimal UI: ?showToolbar=false&showCharInfo=false&objective=学习编程&config=%7B"character"%3A%7B"name"%3A"小红"%2C"age"%3A16%7D%7D
+  Fallback: Query string parameters (?param=value) are still supported for backward compatibility.
+  
+  Complete examples using hash fragments:
+  - Minimal UI: #showToolbar=false&showCharInfo=false&objective=学习编程&config=%7B"character"%3A%7B"name"%3A"小红"%2C"age"%3A16%7D%7D
+  - With long config: #config={"character":{"name":"小红"}}&objective=学习编程
 -->
   <head>
     <meta charset="UTF-8" />
@@ -1699,8 +1707,12 @@
           this.loadDefaultConfig();
         }
         async start() {
-          let urlObjective = game.urlObjective || new URLSearchParams(window.location.search).get("objective");
-          let customQuestionId = new URLSearchParams(window.location.search).get("customQuestionId");
+          // Support both hash (#) and query (?) parameters to avoid 414 errors
+          const hashParams = new URLSearchParams(window.location.hash.slice(1));
+          const queryParams = new URLSearchParams(window.location.search);
+          
+          let urlObjective = game.urlObjective || hashParams.get("objective") || queryParams.get("objective");
+          let customQuestionId = hashParams.get("customQuestionId") || queryParams.get("customQuestionId");
           if (urlObjective) {
             await this.loadConfigByObjective(urlObjective, customQuestionId);
           }
@@ -1818,6 +1830,7 @@
           this.config.character.role = "宠物";
           this.config.character.description = "喜欢和主人交流。总是喜欢提出一些奇怪的问题，有时还有一些小情绪";
           this.config.character.chat_background = null;
+          this.config.character.voice_id = 'auto'; // Set to 'auto' for age-based voice selection
           this.config.objective.description = `通过耐心的交流, 解决问题: ${objective}`;
           this.config.initial.message = `主人，你好！能帮我解决一个问题么：${objective}？ (期待地看着你)`;
           this.config.quick_replies = [
@@ -1957,6 +1970,7 @@ inner_thoughts: 你此刻真实的内心想法和感受
               gender: "male",
               role: "高二学生",
               chat_background: null,
+              voice_id: 'auto',
               description: "最近沉迷游戏，学习成绩下滑。需要你的帮助重新找回学习动力！",
             },
             voice_language: "", // 语音识别语言，空字符串表示使用系统默认
@@ -2936,7 +2950,14 @@ inner_thoughts: 你此刻真实的内心想法和感受
 
                 // 如果传入了gender和age参数，自动映射per参数
                 const options = {};
-                if (this.config.character?.gender || this.config.character?.age !== undefined) {
+                
+                // Check if voice_id is explicitly set (not 'auto')
+                const voiceId = this.config.character?.voice_id;
+                if (voiceId && voiceId !== 'auto') {
+                  // Use the provided voice_id directly
+                  options.per = voiceId;
+                } else if (this.config.character?.gender || this.config.character?.age !== undefined) {
+                  // Auto mode: deduce voice by age and gender
                   const age = this.config.character?.age || 25;
                   const gender = this.config.character?.gender || "female";
                   options.per = sdk.speech.getVoiceIdByAgeGender(age, gender);
@@ -3917,10 +3938,13 @@ inner_thoughts: 你此刻真实的内心想法和感受
 
       // URL Parameter Handler
       function parseAndApplyURLParams() {
+        // Parse parameters from hash fragment (#param=value) instead of query string (?param=value)
+        // This avoids 414 Request-URI too long errors since hash is client-side only
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
         const urlParams = new URLSearchParams(window.location.search);
 
-        // 1. Handle config parameter first
-        const configParam = urlParams.get("config");
+        // 1. Handle config parameter first (from hash first, fallback to query)
+        const configParam = hashParams.get("config") || urlParams.get("config");
         if (configParam) {
           try {
             const decodedConfig = decodeURIComponent(configParam);
@@ -3931,8 +3955,8 @@ inner_thoughts: 你此刻真实的内心想法和感受
           } catch (error) {
             console.error("Error parsing config parameter:", error);
           }
-        } // 2. Handle showToolbar parameter
-        const showToolbar = urlParams.get("showToolbar");
+        } // 2. Handle showToolbar parameter (from hash first, fallback to query)
+        const showToolbar = hashParams.get("showToolbar") || urlParams.get("showToolbar");
         if (showToolbar === "false") {
           const toolbar = document.querySelector(".ai-toolbox");
           const chatArea = document.querySelector(".flex-1.flex.flex-col.bg-white.shadow-lg");
@@ -3955,8 +3979,8 @@ inner_thoughts: 你此刻真实的内心想法和感受
           }
         }
 
-        // 3. Handle showCharInfo parameter
-        const showCharInfo = urlParams.get("showCharInfo");
+        // 3. Handle showCharInfo parameter (from hash first, fallback to query)
+        const showCharInfo = hashParams.get("showCharInfo") || urlParams.get("showCharInfo");
         if (showCharInfo === "false") {
           const charInfo = document.querySelector(".w-1\\/3.bg-white.shadow-lg.p-6.flex.flex-col");
           const chatArea = document.querySelector(".flex-1.flex.flex-col.bg-white.shadow-lg");
@@ -3965,7 +3989,7 @@ inner_thoughts: 你此刻真实的内心想法和感受
           }
           if (chatArea) {
             // Check if toolbar is also hidden
-            const showToolbar = urlParams.get("showToolbar");
+            const showToolbar = hashParams.get("showToolbar") || urlParams.get("showToolbar");
             if (showToolbar === "false") {
               chatArea.classList.remove("no-toolbar-chat");
               chatArea.classList.add("full-width-chat");
@@ -3973,8 +3997,8 @@ inner_thoughts: 你此刻真实的内心想法和感受
               chatArea.classList.remove("no-toolbar-chat"); // Chat area will take remaining space naturally
             }
           }
-        } // 4. Handle showClose parameter
-        const showClose = urlParams.get("showClose");
+        } // 4. Handle showClose parameter (from hash first, fallback to query)
+        const showClose = hashParams.get("showClose") || urlParams.get("showClose");
         if (showClose === "true") {
           const closeBtn = document.getElementById("close-btn");
           if (closeBtn) {
@@ -3982,8 +4006,8 @@ inner_thoughts: 你此刻真实的内心想法和感受
           }
         }
 
-        // 5. Handle showAvatar parameter
-        const showAvatar = urlParams.get("showAvatar");
+        // 5. Handle showAvatar parameter (from hash first, fallback to query)
+        const showAvatar = hashParams.get("showAvatar") || urlParams.get("showAvatar");
         window.showAvatarBackground = showAvatar !== "false";
       }
 
