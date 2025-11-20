@@ -2348,8 +2348,8 @@ inner_thoughts: 你此刻真实的内心想法和感受
           this.elements.progressBar.style.width = "0%";
           this.elements.progressText.textContent = "0/100";
 
-          // System prompt already includes Markdown format requirements in config
-          // Ensure system prompt has JSON format requirements
+          // System prompt already includes format requirements in config
+          // Ensure system prompt has output format specified, check for "progress_change" text in the prompt
             if (this.config.objective && this.config.objective.title && this.config.system_prompt && !this.config.system_prompt.toLowerCase().includes("progress_change")) {
             this.config.system_prompt += `
 
@@ -3392,6 +3392,8 @@ inner_thoughts: 你此刻真实的内心想法和感受
           }
           if (contentElement) {
             contentElement.innerHTML = this.processMessage(text);
+            // 保存原始文本用于后续动作检测（在 data 属性中）
+            contentElement.setAttribute('data-original-text', text);
             this.elements.chatContainer.scrollTop = this.elements.chatContainer.scrollHeight;
           }
         }
@@ -3406,6 +3408,9 @@ inner_thoughts: 你此刻真实的内心想法和感受
           const contentElement = messageDiv.querySelector(".streaming-content");
           if (contentElement) {
             const messageText = contentElement.textContent || contentElement.innerText;
+            
+            // 从 data 属性中获取原始文本（包含括号格式）
+            const originalText = contentElement.getAttribute('data-original-text') || messageText;
 
             // Check if messageDiv is part of a message group
             const messageGroup = messageDiv.closest(".message-group");
@@ -3427,7 +3432,8 @@ inner_thoughts: 你此刻真实的内心想法和感受
               messageDiv.appendChild(audioBtn);
             }
 
-            this.checkAndPlayVideoAction(messageText);
+            // 使用原始文本进行动作检测（包含括号）
+            this.checkAndPlayVideoAction(originalText);
 
             // Switch avatar back to idle after streaming is complete
             if (avatarManager.isEnabled) {
