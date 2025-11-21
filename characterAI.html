@@ -2670,6 +2670,17 @@ inner_thoughts: 你此刻真实的内心想法和感受
             }
           });
 
+          // Step 1.5: Check if there's text before the first separator
+          let textBeforeFirstSeparator = "";
+          if (separators.length > 0) {
+            const firstSeparator = separators[0];
+            if (firstSeparator.lineIndex > 0) {
+              // Extract all lines before the first separator
+              const linesBeforeFirst = lines.slice(0, firstSeparator.lineIndex);
+              textBeforeFirstSeparator = linesBeforeFirst.join("\n").trim();
+            }
+          }
+
           // Step 2: Extract content between separators
           for (let i = 0; i < separators.length; i++) {
             const current = separators[i];
@@ -2692,6 +2703,11 @@ inner_thoughts: 你此刻真实的内心想法和感受
               continue; // Skip to next field
             }
 
+            // For the first separator, prepend any text that came before it
+            if (i === 0 && textBeforeFirstSeparator) {
+              content = textBeforeFirstSeparator;
+            }
+
             // For other fields, collect all lines after the separator until next separator
             for (let lineIdx = startLine; lineIdx < endLine; lineIdx++) {
               if (lineIdx === startLine) {
@@ -2700,6 +2716,7 @@ inner_thoughts: 你此刻真实的内心想法和感受
                 if (colonIndex !== -1) {
                   const afterColon = lines[lineIdx].substring(colonIndex + 1).trim();
                   if (afterColon) {
+                    if (content) content += "\n";
                     content += afterColon;
                   }
                 }
@@ -3009,7 +3026,9 @@ inner_thoughts: 你此刻真实的内心想法和感受
 
           // Then process action text (text in parentheses that are NOT part of markdown)
           // This regex avoids matching parentheses that are part of already-processed HTML
+          // Support both English () and Chinese （） parentheses
           processed = processed.replace(/\(([^)]+)\)(?![^<]*>)/g, '<span class="action-text">($1)</span>');
+          processed = processed.replace(/（([^）]+)）(?![^<]*>)/g, '<span class="action-text">（$1）</span>');
 
           return processed;
         }
@@ -3021,12 +3040,15 @@ inner_thoughts: 你此刻真实的内心想法和感受
         checkAndPlayVideoAction(message) {
           if (!this.config.videoActions || !message) return;
 
-          // 提取所有括号中的文字
-          const actionMatches = message.match(/\(([^)]+)\)/g);
-          if (!actionMatches) return;
+          // 提取所有括号中的文字 (支持英文括号和中文括号)
+          const actionMatchesEnglish = message.match(/\(([^)]+)\)/g) || [];
+          const actionMatchesChinese = message.match(/（([^）]+)）/g) || [];
+          const actionMatches = [...actionMatchesEnglish, ...actionMatchesChinese];
+          
+          if (actionMatches.length === 0) return;
 
           // 合并所有括号中的文字
-          const allActions = actionMatches.map((match) => match.replace(/[()]/g, "")).join(" ");
+          const allActions = actionMatches.map((match) => match.replace(/[()（）]/g, "")).join(" ");
 
           // 检查是否包含配置中的动作关键词
           for (const actionKey in this.config.videoActions) {
@@ -3131,7 +3153,7 @@ inner_thoughts: 你此刻真实的内心想法和感受
 
         // 移除括号内容用于语音播放
         removeBracketsContent(text) {
-          // 移除中文括号和英文括号中的内容
+          // 移除英文括号和中文括号中的内容
           return text
             .replace(/\([^)]*\)/g, "")
             .replace(/（[^）]*）/g, "")
