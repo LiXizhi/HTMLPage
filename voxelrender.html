@@ -1,0 +1,300 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-Voxel Renderer</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        /* Custom scrollbar for the textarea */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+    </style>
+    <!-- 
+ you are an voxel designer. 
+
+Your goal is to generate: "a fish, with purple and yellow strips" 
+
+output command:
+#ff0000
+x,y,z
+x,y,z
+...
+the command changes current block color and then followed by 3d positions. Y is up. and make sure y>=0. the max number of blocks is 100
+ 
+      -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <!-- UI Overlay -->
+    <div class="absolute top-4 left-4 z-10 w-80 flex flex-col gap-3 bg-gray-900/90 backdrop-blur-sm p-4 rounded-xl border border-gray-700 shadow-2xl text-gray-100">
+        <div>
+            <h1 class="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Voxel Commander</h1>
+            <p class="text-xs text-gray-400 mt-1">Parse coordinates to 3D blocks</p>
+        </div>
+
+        <div class="flex flex-col gap-1">
+            <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Input Script</label>
+            <textarea id="voxelInput" rows="10" class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 text-sm font-mono focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-y placeholder-gray-600" spellcheck="false">#ff3333
+0,0,0
+1,0,0
+2,0,0
+0,1,0
+0,2,0
+
+#33ff33
+1,1,0
+2,1,0
+1,2,0
+
+#3388ff
+0,0,1
+1,0,1
+0,1,1</textarea>
+        </div>
+
+        <div class="flex gap-2">
+            <button id="renderBtn" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded-md font-medium transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                Build Voxels
+            </button>
+            <button id="clearBtn" class="px-3 bg-gray-700 hover:bg-gray-600 rounded-md text-gray-200 transition-colors" title="Clear Input">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+            </button>
+        </div>
+        
+        <div class="text-[10px] text-gray-500 border-t border-gray-700 pt-2 mt-1">
+            <p>Format:</p>
+            <p class="font-mono text-gray-400">#RRGGBB (Set Color)</p>
+            <p class="font-mono text-gray-400">x,y,z (Place Block)</p>
+            <p class="font-mono text-gray-400 mt-1">Separators: newline, space, ;</p>
+        </div>
+        <div id="stats" class="text-[10px] text-blue-400 font-mono">Blocks: 0</div>
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuration ---
+        const CONFIG = {
+            voxelSize: 1,
+            gap: 0.05, // Small gap between blocks allows seeing edges better
+            defaultColor: '#ffffff',
+            bgColor: '#111111'
+        };
+
+        // --- Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(CONFIG.bgColor);
+        // Add fog for depth perception
+        scene.fog = new THREE.Fog(CONFIG.bgColor, 20, 100);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(10, 10, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // --- Controls ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.enableZoom = true;
+        controls.zoomSpeed = 1.5;
+        controls.enablePan = true;
+        controls.panSpeed = 0.8;
+        controls.minDistance = 1;
+        controls.maxDistance = 100;
+        controls.screenSpacePanning = true;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x404040, 1.5); // Soft white light
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const backLight = new THREE.DirectionalLight(0x5555ff, 0.5);
+        backLight.position.set(-10, 5, -10);
+        scene.add(backLight);
+
+        // --- Helpers ---
+        const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x222222);
+        scene.add(gridHelper);
+        
+        const axesHelper = new THREE.AxesHelper(2);
+        scene.add(axesHelper);
+
+        // --- Voxel Logic ---
+        let voxelGroup = new THREE.Group();
+        scene.add(voxelGroup);
+
+        // Reusable Geometry (InstancedMesh is better for performance, but Group is easier for this specific parsing logic)
+        // We'll use a slightly chamfered box if possible, but standard box is fine.
+        const geometry = new THREE.BoxGeometry(
+            CONFIG.voxelSize - CONFIG.gap, 
+            CONFIG.voxelSize - CONFIG.gap, 
+            CONFIG.voxelSize - CONFIG.gap
+        );
+
+        function parseAndRender() {
+            // 1. Clear previous voxels
+            // Dispose of materials to prevent memory leaks
+            voxelGroup.children.forEach(child => {
+                if (child.material) child.material.dispose();
+            });
+            voxelGroup.clear();
+
+            // 2. Get Input
+            const rawText = document.getElementById('voxelInput').value;
+            // Split by newlines, spaces, semicolons (one or more)
+            const lines = rawText.split(/[\s;]+/);
+
+            let currentColor = CONFIG.defaultColor;
+            let blockCount = 0;
+
+            // 3. Parse Command by Command
+            lines.forEach((line, index) => {
+                line = line.trim();
+                // Ignore empty lines
+                if (!line) return;
+
+                // Check for Color Command
+                if (line.startsWith('#')) {
+                    // Basic validation for hex code
+                    if (/^#[0-9A-F]{6}$/i.test(line) || /^#[0-9A-F]{3}$/i.test(line)) {
+                        currentColor = line;
+                    }
+                    return;
+                }
+
+                // Check for Coordinates
+                // Format: x,y,z (allow spaces and negative numbers)
+                const parts = line.split(',').map(s => s.trim());
+                
+                if (parts.length === 3) {
+                    const x = parseFloat(parts[0]);
+                    const y = parseFloat(parts[1]);
+                    const z = parseFloat(parts[2]);
+
+                    // Support negative coordinates and decimal values
+                    if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+                        createVoxel(x, y, z, currentColor);
+                        blockCount++;
+                    }
+                }
+            });
+
+            // Update Stats
+            document.getElementById('stats').innerText = `Blocks: ${blockCount}`;
+            
+            // Center camera logic (optional, generally helpful)
+            if (blockCount > 0) {
+                centerCameraOnVoxels();
+            }
+        }
+
+        function createVoxel(x, y, z, colorStr) {
+            const material = new THREE.MeshStandardMaterial({ 
+                color: colorStr,
+                roughness: 0.3,
+                metalness: 0.1
+            });
+            
+            const voxel = new THREE.Mesh(geometry, material);
+            voxel.position.set(x, y, z);
+            
+            voxel.castShadow = true;
+            voxel.receiveShadow = true;
+
+            // Animate entry (pop in)
+            voxel.scale.set(0,0,0);
+            
+            voxelGroup.add(voxel);
+            
+            // Simple pop-in animation target (handled in loop potentially, but keeping it simple here)
+            // For this demo, we just set it to 1 immediately or use a simple tween if we added a library.
+            // Let's do a manual lerp in the animate loop for a "pop" effect if we wanted, 
+            // but for instant rendering:
+            voxel.scale.set(1,1,1);
+        }
+
+        function centerCameraOnVoxels() {
+            // Calculate bounding box of the group
+            const box = new THREE.Box3().setFromObject(voxelGroup);
+            const center = box.getCenter(new THREE.Vector3());
+            
+            // We adjust the OrbitControls target, we don't necessarily move the camera position
+            // unless we want to "Frame" it.
+            // Let's just move the target to the center of the creation.
+            
+            // simple animation of target
+            const startTarget = controls.target.clone();
+            
+            // We can't easily animate inside this function without a tween engine, 
+            // so we snap the target.
+            controls.target.copy(center);
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('renderBtn').addEventListener('click', parseAndRender);
+        
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('voxelInput').value = '';
+            parseAndRender();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initial Render
+        parseAndRender();
+        animate();
+
+    </script>
+</body>
+</html>
