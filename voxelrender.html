@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Text-to-Voxel Renderer</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three%400.128.0/build/three.min.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #1a1a1a; }
         #canvas-container { width: 100vw; height: 100vh; }
@@ -25,7 +27,7 @@
         }
     </style>
     <!-- 
- you are an voxel designer. 
+you are an voxel designer. 
 
 Your goal is to generate: "a fish, with purple and yellow strips" 
 
@@ -36,15 +38,20 @@ x,y,z
 ...
 the command changes current block color and then followed by 3d positions. Y is up. and make sure y>=0. the max number of blocks is 100
  
-      -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
+-->
+
+ <!-- 
+you are an voxel designer. 
+
+Your goal is to generate: "a fish, with purple and yellow strips" 
+
+output command:
+
+x,y,z,#ff0000
+x,y,z,#ff0000
+...
+Y is up. and make sure y>=0. the max number of blocks is 100
+-->
 </head>
 <body>
 
@@ -56,7 +63,10 @@ the command changes current block color and then followed by 3d positions. Y is 
         </div>
 
         <div class="flex flex-col gap-1">
-            <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Input Script</label>
+            <div class="flex justify-between items-center">
+                <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Input Script</label>
+                <button id="copyPromptBtn" class="text-[10px] bg-gray-700 hover:bg-gray-600 text-blue-300 px-2 py-0.5 rounded transition-colors cursor-pointer">Copy AI Prompt</button>
+            </div>
             <textarea id="voxelInput" rows="10" class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 text-sm font-mono focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-y placeholder-gray-600" spellcheck="false">#ff3333
 0,0,0
 1,0,0
@@ -89,18 +99,23 @@ the command changes current block color and then followed by 3d positions. Y is 
             <p>Format:</p>
             <p class="font-mono text-gray-400">#RRGGBB (Set Color)</p>
             <p class="font-mono text-gray-400">x,y,z (Place Block)</p>
-            <p class="font-mono text-gray-400 mt-1">Separators: newline, space, ;</p>
+            <p class="font-mono text-gray-400">x,y,z,#RRGGBB (Block with Color)</p>
+            <p class="font-mono text-gray-400 mt-1">Separators: newline</p>
         </div>
         <div id="stats" class="text-[10px] text-blue-400 font-mono">Blocks: 0</div>
+    </div>
+
+    <!-- Timeline Slider -->
+    <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 w-2/3 max-w-2xl z-10 bg-gray-900/90 backdrop-blur-sm p-3 rounded-xl border border-gray-700 shadow-2xl flex items-center gap-4">
+        <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Sequence</span>
+        <input type="range" id="buildSlider" min="0" max="100" value="100" class="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+        <span id="buildCount" class="text-xs font-mono text-blue-400 w-16 text-right">0/0</span>
     </div>
 
     <!-- 3D Canvas -->
     <div id="canvas-container"></div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
+    <script>
         // --- Configuration ---
         const CONFIG = {
             voxelSize: 1,
@@ -126,7 +141,7 @@ the command changes current block color and then followed by 3d positions. Y is 
         container.appendChild(renderer.domElement);
 
         // --- Controls ---
-        const controls = new OrbitControls(camera, renderer.domElement);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.enableZoom = true;
@@ -193,7 +208,7 @@ the command changes current block color and then followed by 3d positions. Y is 
                 // Ignore empty lines
                 if (!line) return;
 
-                // Check for Color Command
+                // Check for Color Command on its own line
                 if (line.startsWith('#')) {
                     // Basic validation for hex code
                     if (/^#[0-9A-F]{6}$/i.test(line) || /^#[0-9A-F]{3}$/i.test(line)) {
@@ -203,17 +218,29 @@ the command changes current block color and then followed by 3d positions. Y is 
                 }
 
                 // Check for Coordinates
-                // Format: x,y,z (allow spaces and negative numbers)
+                // Format: x,y,z or x,y,z,#color
                 const parts = line.split(',').map(s => s.trim());
                 
-                if (parts.length === 3) {
+                if (parts.length >= 3) {
                     const x = parseFloat(parts[0]);
                     const y = parseFloat(parts[1]);
                     const z = parseFloat(parts[2]);
 
+                    let blockColor = currentColor;
+
+                    // Check for optional 4th parameter (color)
+                    if (parts.length >= 4) {
+                        const colorPart = parts[3];
+                        if (colorPart.startsWith('#')) {
+                             if (/^#[0-9A-F]{6}$/i.test(colorPart) || /^#[0-9A-F]{3}$/i.test(colorPart)) {
+                                blockColor = colorPart;
+                            }
+                        }
+                    }
+
                     // Support negative coordinates and decimal values
                     if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
-                        createVoxel(x, y, z, currentColor);
+                        createVoxel(x, y, z, blockColor);
                         blockCount++;
                     }
                 }
@@ -221,6 +248,13 @@ the command changes current block color and then followed by 3d positions. Y is 
 
             // Update Stats
             document.getElementById('stats').innerText = `Blocks: ${blockCount}`;
+
+            // Update Slider
+            const slider = document.getElementById('buildSlider');
+            const counter = document.getElementById('buildCount');
+            slider.max = blockCount;
+            slider.value = blockCount;
+            counter.innerText = `${blockCount}/${blockCount}`;
             
             // Center camera logic (optional, generally helpful)
             if (blockCount > 0) {
@@ -273,9 +307,39 @@ the command changes current block color and then followed by 3d positions. Y is 
         // --- Event Listeners ---
         document.getElementById('renderBtn').addEventListener('click', parseAndRender);
         
+        document.getElementById('buildSlider').addEventListener('input', (e) => {
+            const count = parseInt(e.target.value);
+            const total = voxelGroup.children.length;
+            document.getElementById('buildCount').innerText = `${count}/${total}`;
+            
+            voxelGroup.children.forEach((voxel, index) => {
+                voxel.visible = index < count;
+            });
+        });
+
         document.getElementById('clearBtn').addEventListener('click', () => {
             document.getElementById('voxelInput').value = '';
             parseAndRender();
+        });
+
+        const AI_PROMPT = `you are an voxel designer. 
+
+Your goal is to generate: "a fish, with purple and yellow strips" 
+
+output command:
+#ff0000
+x,y,z
+x,y,z
+...
+the command changes current block color and then followed by 3d positions. Y is up. and make sure y>=0. the max number of blocks is 100`;
+
+        document.getElementById('copyPromptBtn').addEventListener('click', () => {
+            navigator.clipboard.writeText(AI_PROMPT).then(() => {
+                const btn = document.getElementById('copyPromptBtn');
+                const originalText = btn.innerText;
+                btn.innerText = 'Copied!';
+                setTimeout(() => btn.innerText = originalText, 2000);
+            });
         });
 
         window.addEventListener('resize', () => {
