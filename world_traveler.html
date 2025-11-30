@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -45,6 +44,48 @@
             text-shadow: 0 1px 2px black;
             z-index: 10;
         }
+        
+        /* Destination label highlight */
+        .station-label.destination {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #000;
+            font-size: 16px;
+            padding: 6px 16px;
+            border: 2px solid #fff;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.4);
+            animation: destination-pulse 1.5s ease-in-out infinite;
+            z-index: 15;
+        }
+        
+        @keyframes destination-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(251, 191, 36, 1), 0 0 60px rgba(251, 191, 36, 0.6); }
+        }
+        
+        /* Off-screen destination indicator */
+        .destination-indicator {
+            position: fixed;
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            border: 2px solid #fff;
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.8);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            animation: indicator-pulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes indicator-pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 15px rgba(251, 191, 36, 0.8); }
+            50% { opacity: 0.9; box-shadow: 0 0 25px rgba(251, 191, 36, 1); }
+        }
     </style>
 </head>
 <body>
@@ -54,33 +95,68 @@
 
     <!-- Labels Layer (Dynamic HTML for 3D objects) -->
     <div id="labels-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden"></div>
+    
+    <!-- Off-screen Destination Indicator -->
+    <div id="destination-indicator" class="destination-indicator hidden">
+        <span>🎯</span>
+        <span>目的地: </span>
+        <span id="indicator-name">---</span>
+        <span id="indicator-arrow">→</span>
+    </div>
 
     <!-- UI Layer -->
     <div id="ui-layer" class="flex flex-col justify-between p-4">
         
+        <!-- Airport Button -->
+        <button onclick="game.toggleMap()" class="hud-panel absolute top-4 right-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg border-2 border-white z-50 pointer-events-auto transition-transform hover:scale-110" title="切换城市">
+            ✈️
+        </button>
+        
         <!-- Top Info Bar -->
         <div class="flex justify-between w-full max-w-4xl mx-auto pointer-events-none">
             <!-- P1 Info -->
-            <div class="hud-panel bg-blue-900/90 text-white p-4 rounded-xl border-2 border-blue-400 shadow-lg w-48 transition-all pointer-events-auto" id="p1-panel">
+            <div class="hud-panel bg-blue-900/90 text-white p-4 rounded-xl border-2 border-blue-400 shadow-lg w-48 transition-all pointer-events-auto cursor-pointer hover:border-yellow-400" id="p1-panel" onclick="game.focusOnPlayer(0)">
                 <h2 class="text-xl font-bold flex items-center gap-2">
                     <div class="w-4 h-4 rounded-full bg-blue-400"></div> 玩家 (P1)
                 </h2>
                 <p class="text-yellow-300 text-2xl font-mono mt-1">¥<span id="p1-money">0</span></p>
                 <p class="text-xs text-gray-300 mt-1">资产: ¥<span id="p1-assets">0</span></p>
+                <p class="text-xs text-cyan-300 mt-1">📍 距目的地: <span id="p1-distance">--</span> 站</p>
             </div>
 
             <!-- Turn Indicator -->
             <div class="hud-panel bg-gray-800/80 text-white px-6 py-2 rounded-full border border-gray-600 h-fit mt-2 pointer-events-auto">
                 <span id="turn-indicator" class="font-bold text-lg tracking-widest">等待开始...</span>
             </div>
+            
+            <!-- Destination & Time Info -->
+            <div class="hud-panel absolute top-20 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-900/90 to-pink-900/90 text-white px-6 py-3 rounded-xl border-2 border-yellow-400 shadow-lg pointer-events-auto hidden" id="destination-panel">
+                <div class="flex items-center gap-4">
+                    <div class="text-center">
+                        <div class="text-xs text-gray-300">📅 当前时间</div>
+                        <div class="text-lg font-bold text-yellow-300"><span id="game-year">1</span>年<span id="game-month">4</span>月</div>
+                    </div>
+                    <div class="w-px h-10 bg-gray-500"></div>
+                    <div class="text-center">
+                        <div class="text-xs text-gray-300">🎯 目的地</div>
+                        <div class="text-lg font-bold text-green-300" id="destination-name">---</div>
+                    </div>
+                    <div class="w-px h-10 bg-gray-500"></div>
+                    <div class="text-center">
+                        <div class="text-xs text-gray-300">💰 援助金</div>
+                        <div class="text-lg font-bold text-yellow-400">¥5000</div>
+                    </div>
+                </div>
+            </div>
 
             <!-- COM Info -->
-            <div class="hud-panel bg-red-900/90 text-white p-4 rounded-xl border-2 border-red-400 shadow-lg w-48 transition-all opacity-70 pointer-events-auto" id="com-panel">
+            <div class="hud-panel bg-red-900/90 text-white p-4 rounded-xl border-2 border-red-400 shadow-lg w-48 transition-all opacity-70 pointer-events-auto cursor-pointer hover:border-yellow-400" id="com-panel" onclick="game.focusOnPlayer(1)">
                 <h2 class="text-xl font-bold flex items-center gap-2">
                     <div class="w-4 h-4 rounded-full bg-red-500"></div> 电脑 (COM)
                 </h2>
                 <p class="text-yellow-300 text-2xl font-mono mt-1">¥<span id="com-money">0</span></p>
                 <p class="text-xs text-gray-300 mt-1">资产: ¥<span id="com-assets">0</span></p>
+                <p class="text-xs text-cyan-300 mt-1">📍 距目的地: <span id="com-distance">--</span> 站</p>
             </div>
         </div>
 
@@ -99,6 +175,17 @@
         </div>
     </div>
 
+    <!-- Money Change Modal -->
+    <div id="money-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border-4 relative text-center transform transition-all scale-100">
+            <div id="money-modal-icon" class="text-6xl mb-4">💰</div>
+            <h3 class="text-2xl font-black text-gray-800 mb-2" id="money-modal-title">玩家</h3>
+            <div class="text-2xl font-bold mb-2" id="money-modal-delta"></div>
+            <div class="text-5xl font-mono font-bold my-4 text-gray-800" id="money-modal-amount">¥0</div>
+            <div class="text-gray-500 text-sm" id="money-modal-desc">资金变动</div>
+        </div>
+    </div>
+
     <!-- Property Buy Modal -->
     <div id="buy-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
         <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full border-4 border-green-600 relative">
@@ -106,6 +193,7 @@
                 到达车站
             </div>
             <h3 class="text-2xl font-bold text-center mt-4 mb-2 text-gray-800" id="station-name">东京站</h3>
+            <div class="text-center text-yellow-600 font-bold text-xl mb-2">持有资金: ¥<span id="buy-modal-money">0</span></div>
             <p class="text-center text-gray-500 mb-4">这块地皮看起来很有潜力！要投资吗？</p>
             
             <div id="building-list" class="space-y-3 mb-6">
@@ -151,17 +239,404 @@ const BUILDING_COSTS = [1000, 5000, 20000];
 const BUILDING_NAMES = ["拉面摊", "商务酒店", "摩天大楼"];
 const BUILDING_INCOME = [200, 800, 4000];
 
+// 目的地奖励金额
+const DESTINATION_REWARD = 5000;
+// 一年的回合数（每月一回合，12回合=1年，3月决算）
+const TURNS_PER_YEAR = 12;
+const SETTLEMENT_MONTH = 3; // 3月决算
+
 const STATION_NAMES = [
     "罗湖口岸", "国贸", "老街", "大剧院", "科学馆", "华强路", "岗厦", 
     "会展中心", "购物公园", "香蜜湖", "车公庙", "竹子林", "侨城东", 
     "华侨城", "世界之窗", "白石洲", "高新园", "深大", "桃园", "大新", 
     "前海湾", "宝安中心", "深圳北站", "市民中心", "少年宫", "莲花北", 
-    "上梅林", "福民", "福田口岸", "后海", "科苑", "红树湾"
+    "上梅林", "福民", "福田口岸", "后海", "科苑", "红树湾", "飞机场"
 ];
 
 // --- Utilities ---
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Home city - always shown on map in green
+let homeCity = "深圳";
+
+// Global toast function for notifications
+function showToast(msg, color = 'white') {
+    const logEl = document.getElementById('game-log');
+    const entry = document.createElement('div');
+    entry.innerHTML = `<span style="color:${color}; text-shadow: 1px 1px 0 #000">${msg}</span>`;
+    logEl.appendChild(entry);
+    if (logEl.children.length > 5) logEl.removeChild(logEl.firstChild);
+    setTimeout(() => {
+        entry.style.opacity = '0';
+        setTimeout(() => entry.remove(), 500);
+    }, 4000);
+}
+
+// --- Load World Map Data from External File ---
+let CITIES = [];
+let CONTINENTS = {}; // continents loaded from data file (if any)
+
+async function loadCitiesData() {
+    // Fallback default cities
+    const defaultCities = [
+        { name: "深圳", lat: 22.5431, lon: 114.0579, population: 12590000, level: 1 },
+        { name: "东京", lat: 35.6762, lon: 139.6503, population: 13960000, level: 1 }
+    ];
+
+    try {
+        const response = await fetch('world_traveler_data.md');
+        const text = await response.text();
+        
+        // Extract JSON array from markdown (between [ and ])
+        // The data file may either be a JSON array (legacy) or a JSON object with { cities: [], continents: {} }
+        const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+            if (jsonMatch) {
+                // Clean up the JSON text: remove comments
+                const jsonText = jsonMatch[0].replace(/\/\/.*$/gm, '');
+                const parsed = JSON.parse(jsonText);
+                if (Array.isArray(parsed)) {
+                    CITIES = parsed;
+                    CONTINENTS = {};
+                } else {
+                    CITIES = parsed.cities || defaultCities;
+                    CONTINENTS = parsed.continents || {};
+                }
+            console.log(`Loaded ${CITIES.length} cities from world_traveler_data.md`);
+        } else {
+            console.error('Could not parse cities data from world_traveler_data.md');
+            CITIES = defaultCities;
+        }
+    } catch (error) {
+        console.error('Error loading cities data:', error);
+        CITIES = defaultCities;
+    }
+}
+
+// --- World Map Class ---
+class WorldMapManager {
+    constructor(game) {
+        this.game = game;
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x000000);
+        this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        // Center camera on initial location with zoom to show level 1 and 2
+        const initialLat = 25;
+        const initialLon = 105;
+        const cameraDistance = 28; // Close enough to show level 2 (threshold is 35)
+        const phi = (90 - initialLat) * (Math.PI / 180);
+        const theta = (initialLon + 180) * (Math.PI / 180);
+        const camX = -(cameraDistance * Math.sin(phi) * Math.cos(theta));
+        const camZ = (cameraDistance * Math.sin(phi) * Math.sin(theta));
+        const camY = (cameraDistance * Math.cos(phi));
+        this.camera.position.set(camX, camY, camZ);
+        
+        this.group = new THREE.Group();
+        this.scene.add(this.group);
+        
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
+        
+        this.cities = [];
+        this.controls = new THREE.OrbitControls(this.camera, this.game.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.dampingFactor = 0.05;
+        this.controls.minDistance = 15;
+        this.controls.maxDistance = 60;
+        this.controls.enablePan = false;
+
+        this.init();
+    }
+
+    init() {
+        // Earth Sphere
+        const geometry = new THREE.SphereGeometry(10, 64, 64);
+        const material = new THREE.MeshPhongMaterial({ 
+            color: 0x1a237e,
+            emissive: 0x112244,
+            specular: 0x111111,
+            shininess: 10
+        });
+        this.earth = new THREE.Mesh(geometry, material);
+        this.group.add(this.earth);
+
+        // Atmosphere glow
+        const atmGeo = new THREE.SphereGeometry(10.2, 64, 64);
+        const atmMat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.1, side: THREE.BackSide });
+        this.group.add(new THREE.Mesh(atmGeo, atmMat));
+
+        // Continent outlines
+        this.createContinentOutlines();
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        this.scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(50, 30, 50);
+        this.scene.add(dirLight);
+
+        // Cities
+        this.createCities();
+        
+        // Event Listeners
+        window.addEventListener('click', (e) => this.onClick(e));
+    }
+
+    // Create continent outline curves on globe
+    createContinentOutlines() {
+        const radius = 10.05; // Slightly above earth surface
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x44ff88, linewidth: 2, transparent: true, opacity: 0.8 });
+
+    // Continent outline data (simplified lat/lon coordinates)
+    const defaultContinents = {
+            // 亚洲 (Asia) - simplified outline
+            asia: [
+                [66, 170], [70, 140], [75, 100], [70, 70], [55, 60], [45, 35], [35, 35],
+                [25, 55], [10, 75], [8, 80], [20, 90], [22, 90], [25, 95], [10, 100],
+                [5, 105], [1, 104], [-8, 110], [-8, 115], [-5, 120], [5, 120], [10, 125],
+                [20, 120], [25, 122], [35, 130], [40, 130], [45, 140], [50, 140], [55, 160],
+                [60, 170], [66, 170]
+            ],
+    };
+    const continents = (typeof CONTINENTS !== 'undefined' && Object.keys(CONTINENTS).length > 0) ? CONTINENTS : defaultContinents;
+
+        // Draw each continent outline
+        Object.values(continents).forEach(coords => {
+            const points = [];
+            // Create points for each coordinate, with interpolation along sphere surface
+            for (let i = 0; i < coords.length; i++) {
+                const [lat1, lon1] = coords[i];
+                const [lat2, lon2] = coords[(i + 1) % coords.length]; // Wrap to first point for closure
+                
+                // Add start point
+                points.push(this.latLonToVector3(lat1, lon1, radius));
+                
+                // Interpolate points along the great circle to keep lines on sphere surface
+                const segments = 5; // Number of intermediate points between each pair
+                for (let j = 1; j < segments; j++) {
+                    const t = j / segments;
+                    const latInterp = lat1 + (lat2 - lat1) * t;
+                    const lonInterp = lon1 + (lon2 - lon1) * t;
+                    points.push(this.latLonToVector3(latInterp, lonInterp, radius));
+                }
+            }
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, lineMaterial);
+            this.group.add(line);
+        });
+    }
+
+    latLonToVector3(lat, lon, radius) {
+        const phi = (90 - lat) * (Math.PI / 180);
+        const theta = (lon + 180) * (Math.PI / 180);
+        const x = -(radius * Math.sin(phi) * Math.cos(theta));
+        const z = (radius * Math.sin(phi) * Math.sin(theta));
+        const y = (radius * Math.cos(phi));
+        return new THREE.Vector3(x, y, z);
+    }
+
+    createCities() {
+        // Sort cities by population (descending) - higher population has priority
+        const sortedCities = [...CITIES].sort((a, b) => b.population - a.population);
+        
+        // Initialize city positions
+        const cityData = sortedCities.map(city => ({
+            city,
+            pos: this.latLonToVector3(city.lat, city.lon, 10),
+            mass: city.population // Use population as mass
+        }));
+        
+        const minMarkerDistance = 0.5; // Minimum distance between markers on sphere
+        const maxIterations = 50; // Max iterations for separation
+        
+        // Iteratively separate overlapping markers using mass-based repulsion
+        for (let iter = 0; iter < maxIterations; iter++) {
+            let hasOverlap = false;
+            
+            for (let i = 0; i < cityData.length; i++) {
+                for (let j = i + 1; j < cityData.length; j++) {
+                    const a = cityData[i];
+                    const b = cityData[j];
+                    const dist = a.pos.distanceTo(b.pos);
+                    
+                    if (dist < minMarkerDistance && dist > 0.001) {
+                        hasOverlap = true;
+                        
+                        // Calculate repulsion direction (from a to b)
+                        const direction = new THREE.Vector3().subVectors(b.pos, a.pos).normalize();
+                        
+                        // Calculate displacement based on mass ratio
+                        // Heavier (more population) moves less
+                        const totalMass = a.mass + b.mass;
+                        const overlap = minMarkerDistance - dist;
+                        const moveA = overlap * (b.mass / totalMass); // Lighter moves more
+                        const moveB = overlap * (a.mass / totalMass);
+                        
+                        // Move positions apart along sphere surface
+                        a.pos.addScaledVector(direction, -moveA);
+                        b.pos.addScaledVector(direction, moveB);
+                        
+                        // Re-project onto sphere surface (radius = 10)
+                        a.pos.normalize().multiplyScalar(10);
+                        b.pos.normalize().multiplyScalar(10);
+                    }
+                }
+            }
+            
+            if (!hasOverlap) break;
+        }
+        
+        // Create markers and labels
+        cityData.forEach(({ city, pos }) => {
+            // Marker size based on level
+            const markerSize = city.level === 1 ? 0.25 : (city.level === 2 ? 0.18 : 0.12);
+            const markerGeo = new THREE.SphereGeometry(markerSize, 16, 16);
+            
+            // Color based on level and home city
+            let color;
+            if (city.name === homeCity) {
+                color = 0x00ff00; // Green for home city
+            } else if (city.level === 1) {
+                color = 0xffaa00; // Orange for level 1
+            } else if (city.level === 2) {
+                color = 0x88aaff; // Light blue for level 2
+            } else {
+                color = 0xaaaaaa; // Gray for level 3
+            }
+            
+            const markerMat = new THREE.MeshBasicMaterial({ color: color });
+            const marker = new THREE.Mesh(markerGeo, markerMat);
+            marker.position.copy(pos);
+            marker.userData = { city: city };
+            this.group.add(marker);
+            
+            // Simple Label (using Sprite) - size based on population/level
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            const fontSize = city.level === 1 ? 28 : (city.level === 2 ? 22 : 18);
+            context.font = `Bold ${fontSize}px Arial`;
+            context.fillStyle = city.level === 1 ? '#ffffff' : (city.level === 2 ? '#ccddff' : '#999999');
+            context.textAlign = 'center';
+            context.fillText(city.name, 128, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMat);
+            
+            // Position label above marker
+            const labelPos = pos.clone().normalize().multiplyScalar(10.5);
+            sprite.position.copy(labelPos);
+            
+            // Scale based on level
+            const spriteScale = city.level === 1 ? 2.5 : (city.level === 2 ? 2.0 : 1.5);
+            sprite.scale.set(spriteScale, spriteScale * 0.25, 1);
+            
+            this.group.add(sprite);
+
+            this.cities.push({ marker, sprite, data: city, basePos: pos.clone() });
+        });
+    }
+
+    onClick(event) {
+        if (this.game.mode !== 'MAP') return;
+
+        this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const markers = this.cities.map(c => c.marker);
+        const intersects = this.raycaster.intersectObjects(markers);
+
+        if (intersects.length > 0) {
+            const city = intersects[0].object.userData.city;
+            this.game.selectCity(city);
+        }
+    }
+
+    update() {
+        this.controls.update();
+        
+        // Level of Detail logic based on zoom distance
+        const dist = this.camera.position.distanceTo(new THREE.Vector3(0, 0, 0));
+        
+        // Zoom thresholds for showing different levels
+        const showLevel2 = dist < 35; // Show level 2 when closer
+        const showLevel3 = dist < 22; // Show level 3 when even closer
+        
+        // Collect visible labels for overlap detection
+        const visibleLabels = [];
+        
+        // First pass: determine visibility based on level
+        this.cities.forEach(c => {
+            const level = c.data.level || 1;
+            const isHomeCity = c.data.name === homeCity;
+            let shouldShowByLevel = false;
+            
+            if (isHomeCity || level === 1) {
+                shouldShowByLevel = true; // Always show home city and level 1
+            } else if (level === 2) {
+                shouldShowByLevel = showLevel2;
+            } else if (level === 3) {
+                shouldShowByLevel = showLevel3;
+            }
+            
+            // Check if in front of camera using dot product (more stable than screenZ)
+            const cameraPos = this.camera.position.clone().normalize();
+            const markerDir = c.marker.position.clone().normalize();
+            const dotProduct = markerDir.dot(cameraPos);
+            const isFrontFacing = dotProduct > -0.1; // Visible if on front hemisphere
+            
+            const shouldShow = shouldShowByLevel && isFrontFacing;
+            
+            c.marker.visible = shouldShow;
+            c.sprite.visible = false; // Default to hidden, will be shown in overlap pass
+            c.potentiallyVisible = shouldShow;
+            
+            if (shouldShow) {
+                // Calculate screen position for overlap detection
+                const screenPos = c.marker.position.clone().project(this.camera);
+                c.screenX = (screenPos.x + 1) / 2 * window.innerWidth;
+                c.screenY = (-screenPos.y + 1) / 2 * window.innerHeight;
+                
+                visibleLabels.push(c);
+            }
+        });
+        
+        // Sort by population (higher population has priority for label display)
+        visibleLabels.sort((a, b) => b.data.population - a.data.population);
+        
+        // Second pass: show non-overlapping labels (keep higher population visible)
+        const labelRadius = 50; // Approximate label radius in screen pixels
+        const shownLabels = [];
+        
+        visibleLabels.forEach(c => {
+            let hasOverlap = false;
+            
+            for (const shown of shownLabels) {
+                const dx = c.screenX - shown.screenX;
+                const dy = c.screenY - shown.screenY;
+                const screenDist = Math.sqrt(dx * dx + dy * dy);
+                
+                // Smaller overlap threshold for higher level cities
+                const minDist = labelRadius * (c.data.level === 1 ? 1.2 : (c.data.level === 2 ? 1.0 : 0.8));
+                
+                if (screenDist < minDist) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+            
+            if (!hasOverlap) {
+                c.sprite.visible = true;
+                shownLabels.push(c);
+            }
+        });
+    }
+}
 
 // --- Game Classes ---
 
@@ -239,11 +714,26 @@ class Game {
         this.cameraLocked = true;
         this.isUserInteracting = false;
         
+        // 目的地竞速系统
+        this.destinationTile = null;
+        this.destinationMarker = null;
+        
+        // 时间系统（年/月）
+        this.gameYear = 1;
+        this.gameMonth = 4; // 从4月开始
+        this.totalTurns = 0;
+        
+        this.mode = 'MAP'; // 'MAP' or 'GAME'
+        this.worldMap = null;
+        this.currentCity = null;
+
         this.initThree();
-        this.initGame();
+        // this.initGame(); // Delayed until city selection
 
         window.addEventListener('resize', () => this.onResize());
         document.getElementById('roll-btn').onclick = () => this.playerRoll();
+        
+        this.initWorldMap();
         
         // Start Loop
         this.animate();
@@ -267,13 +757,16 @@ class Game {
         this.camera.lookAt(this.scene.position); // Will be updated to follow player
 
         // 3. Renderer
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        this.renderer.setSize(this.width, this.height);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.container.appendChild(this.renderer.domElement);
+        if (!this.renderer) {
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            this.renderer.setSize(this.width, this.height);
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.container.appendChild(this.renderer.domElement);
+        }
 
         // Controls
+        if (this.controls) this.controls.dispose();
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
@@ -325,7 +818,64 @@ class Game {
         this.scene.add(dirLight);
     }
 
-    initGame() {
+    initWorldMap() {
+        this.worldMap = new WorldMapManager(this);
+        if (this.controls) this.controls.enabled = false;
+        
+        // Hide Game UI initially
+        document.getElementById('ui-layer').style.display = 'none';
+        document.getElementById('labels-layer').style.display = 'none';
+    }
+
+    selectCity(city) {
+        this.currentCity = city;
+        this.mode = 'GAME';
+        
+        if (this.worldMap) this.worldMap.controls.enabled = false;
+
+        // Reset Game Scene if needed or just init
+        // Clear existing map if any?
+        while(this.scene.children.length > 0){ 
+            this.scene.remove(this.scene.children[0]); 
+        }
+        
+        // 重置目的地标记
+        this.destinationTile = null;
+        this.destinationMarker = null;
+        
+        // 清空标签层
+        document.getElementById('labels-layer').innerHTML = '';
+        
+        this.initThree(); // Re-init scene/camera/lights for Game
+        this.initGame(); // Generate city map
+        
+        // Update UI
+        document.getElementById('ui-layer').style.display = 'flex';
+        document.getElementById('labels-layer').style.display = 'block';
+    }
+
+    toggleMap() {
+        if (this.mode === 'GAME') {
+            this.mode = 'MAP';
+            if (this.controls) this.controls.enabled = false;
+            if (this.worldMap) this.worldMap.controls.enabled = true;
+            
+            document.getElementById('ui-layer').style.display = 'none';
+            document.getElementById('labels-layer').style.display = 'none';
+            document.getElementById('destination-indicator').classList.add('hidden');
+        } else {
+            if (this.currentCity) {
+                this.mode = 'GAME';
+                if (this.worldMap) this.worldMap.controls.enabled = false;
+                if (this.controls) this.controls.enabled = true;
+
+                document.getElementById('ui-layer').style.display = 'flex';
+                document.getElementById('labels-layer').style.display = 'block';
+            }
+        }
+    }
+
+    async initGame() {
         // Materials Cache
         this.materials = {
             road: new THREE.MeshLambertMaterial({ color: COLORS.road }),
@@ -365,6 +915,13 @@ class Game {
         this.camera.position.set(p1Pos.x, p1Pos.y + 60, p1Pos.z + 60);
         this.controls.target.copy(p1Pos);
         this.controls.update();
+        
+        // 初始化目的地和时间
+        this.gameYear = 1;
+        this.gameMonth = 4;
+        this.totalTurns = 0;
+        await this.setNewDestination();
+        document.getElementById('destination-panel').classList.remove('hidden');
         
         this.updateUI();
         this.startTurn();
@@ -673,6 +1230,30 @@ class Game {
         div.innerText = tile.stationName;
         document.getElementById('labels-layer').appendChild(div);
         tile.labelElement = div;
+        
+        // Determine best label position: prefer non-road adjacent tiles
+        // Check left (-x), right (+x), and top (-z) directions
+        const leftKey = `${tile.gridX - 1},${tile.gridY}`;
+        const rightKey = `${tile.gridX + 1},${tile.gridY}`;
+        const topKey = `${tile.gridX},${tile.gridY - 1}`;
+        
+        const leftTile = this.tilesMap.get(leftKey);
+        const rightTile = this.tilesMap.get(rightKey);
+        const topTile = this.tilesMap.get(topKey);
+        
+        // Check if tile is a road/walkable tile (not environment)
+        const isRoadTile = (t) => t && t.isRoad;
+        
+        // Priority: place label toward non-road areas (top > left > right)
+        if (!isRoadTile(topTile)) {
+            tile.labelOffset = { x: 0, y: -30, align: 'center' }; // top (default)
+        } else if (!isRoadTile(leftTile)) {
+            tile.labelOffset = { x: -50, y: 0, align: 'right' }; // left side
+        } else if (!isRoadTile(rightTile)) {
+            tile.labelOffset = { x: 50, y: 0, align: 'left' }; // right side
+        } else {
+            tile.labelOffset = { x: 0, y: -30, align: 'center' }; // fallback to top
+        }
     }
 
     getRandomColoredType() {
@@ -681,6 +1262,532 @@ class Game {
         if (r < 0.5) return 'red';
         if (r < 0.75) return 'yellow';
         return 'blue';
+    }
+    
+    // --- 目的地竞速系统 ---
+    
+    async setNewDestination() {
+        // 获取所有车站（绿色格子），排除当前起始点和玩家所在位置
+        const stations = this.map.filter(t => t.type === 'green' && 
+            t !== this.destinationTile &&
+            !this.players.some(p => p.currentTile === t));
+        
+        if (stations.length === 0) return;
+        
+        // 移除旧目的地的高亮样式
+        if (this.destinationTile && this.destinationTile.labelElement) {
+            this.destinationTile.labelElement.classList.remove('destination');
+        }
+        
+        // 随机选择一个车站作为目的地
+        const newDest = stations[Math.floor(Math.random() * stations.length)];
+        
+        // 显示抽奖动画
+        await this.showDestinationLottery(stations, newDest);
+        
+        this.destinationTile = newDest;
+        
+        // 更新UI显示
+        document.getElementById('destination-name').innerText = newDest.stationName;
+        
+        // 添加目的地标签高亮样式
+        if (newDest.labelElement) {
+            newDest.labelElement.classList.add('destination');
+        }
+        
+        // 移除旧的目的地标记
+        if (this.destinationMarker) {
+            this.scene.remove(this.destinationMarker);
+        }
+        
+        // 创建新的目的地标记（发光的圆柱+旗帜）
+        this.createDestinationMarker(newDest);
+        
+        this.log(`🎯 新目的地: ${newDest.stationName}`, "#fbbf24");
+        showToast(`🎯 目的地已更新: ${newDest.stationName}`, '#fbbf24');
+        
+        // 更新距离显示
+        this.updateDistanceDisplay();
+    }
+    
+    // 使用BFS计算从一个格子到目的地的最短距离（站数）
+    calculateDistanceToDestination(fromTile) {
+        if (!this.destinationTile || !fromTile) return -1;
+        if (fromTile === this.destinationTile) return 0;
+        
+        // BFS搜索最短路径
+        const visited = new Set();
+        const queue = [{ tile: fromTile, distance: 0 }];
+        visited.add(fromTile);
+        
+        while (queue.length > 0) {
+            const { tile, distance } = queue.shift();
+            
+            for (const neighbor of tile.neighbors) {
+                if (neighbor === this.destinationTile) {
+                    // 只计算彩色格子（有效步数）
+                    return distance + (neighbor.isColored ? 1 : 0);
+                }
+                
+                if (!visited.has(neighbor)) {
+                    visited.add(neighbor);
+                    // 只有彩色格子才算一步
+                    const newDist = distance + (neighbor.isColored ? 1 : 0);
+                    queue.push({ tile: neighbor, distance: newDist });
+                }
+            }
+        }
+        
+        return -1; // 无法到达
+    }
+    
+    // AI选择最优方向：选择距离目的地最近的路径
+    chooseBestDirection(options) {
+        if (!this.destinationTile || options.length === 0) {
+            return options[Math.floor(Math.random() * options.length)];
+        }
+        
+        let bestTile = options[0];
+        let bestDistance = this.calculateDistanceToDestination(options[0]);
+        
+        for (let i = 1; i < options.length; i++) {
+            const dist = this.calculateDistanceToDestination(options[i]);
+            // 选择距离更短的（如果距离为-1表示无法到达，跳过）
+            if (dist >= 0 && (bestDistance < 0 || dist < bestDistance)) {
+                bestDistance = dist;
+                bestTile = options[i];
+            }
+        }
+        
+        return bestTile;
+    }
+    
+    // 更新所有玩家的距离显示
+    updateDistanceDisplay() {
+        if (!this.destinationTile || this.players.length === 0) return;
+        
+        // 玩家1距离
+        const p1Dist = this.calculateDistanceToDestination(this.players[0].currentTile);
+        document.getElementById('p1-distance').innerText = p1Dist >= 0 ? p1Dist : '--';
+        
+        // 电脑距离
+        if (this.players.length > 1) {
+            const comDist = this.calculateDistanceToDestination(this.players[1].currentTile);
+            document.getElementById('com-distance').innerText = comDist >= 0 ? comDist : '--';
+        }
+    }
+    
+    // 更新屏幕外目的地指示器
+    updateDestinationIndicator() {
+        const indicator = document.getElementById('destination-indicator');
+        if (!indicator) return;
+        
+        // 如果没有目的地，隐藏指示器
+        if (!this.destinationTile) {
+            indicator.classList.add('hidden');
+            return;
+        }
+        
+        // 获取目的地在屏幕上的位置
+        const destPos = this.getScreenPosition(this.destinationTile.mesh.position);
+        const margin = 80; // 边缘margin
+        
+        // 检查目的地是否在屏幕可见范围内
+        const isOnScreen = destPos.x >= margin && destPos.x <= this.width - margin &&
+                           destPos.y >= margin && destPos.y <= this.height - margin;
+        
+        if (isOnScreen) {
+            // 目的地在屏幕内，隐藏指示器
+            indicator.classList.add('hidden');
+            return;
+        }
+        
+        // 目的地在屏幕外，显示指示器
+        indicator.classList.remove('hidden');
+        
+        // 更新目的地名称
+        document.getElementById('indicator-name').innerText = this.destinationTile.stationName;
+        
+        // 计算屏幕中心到目的地位置的方向
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const dx = destPos.x - centerX;
+        const dy = destPos.y - centerY;
+        const angle = Math.atan2(dy, dx);
+        
+        // 计算指示器在屏幕边缘的位置
+        const edgeMargin = 60;
+        let indicatorX, indicatorY;
+        
+        // 根据角度确定指示器位置（在屏幕边缘）
+        const maxX = this.width - edgeMargin;
+        const maxY = this.height - edgeMargin;
+        const minX = edgeMargin;
+        const minY = edgeMargin;
+        
+        // 计算与屏幕边缘的交点
+        const tanAngle = Math.tan(angle);
+        
+        // 检查右边缘
+        if (dx > 0) {
+            const y = centerY + (maxX - centerX) * tanAngle;
+            if (y >= minY && y <= maxY) {
+                indicatorX = maxX;
+                indicatorY = y;
+            }
+        }
+        // 检查左边缘
+        if (dx < 0) {
+            const y = centerY + (minX - centerX) * tanAngle;
+            if (y >= minY && y <= maxY) {
+                indicatorX = minX;
+                indicatorY = y;
+            }
+        }
+        // 检查下边缘
+        if (dy > 0 && (indicatorX === undefined)) {
+            const x = centerX + (maxY - centerY) / tanAngle;
+            if (x >= minX && x <= maxX) {
+                indicatorX = x;
+                indicatorY = maxY;
+            }
+        }
+        // 检查上边缘
+        if (dy < 0 && (indicatorX === undefined)) {
+            const x = centerX + (minY - centerY) / tanAngle;
+            if (x >= minX && x <= maxX) {
+                indicatorX = x;
+                indicatorY = minY;
+            }
+        }
+        
+        // 如果还没有确定位置，使用简单的clamping
+        if (indicatorX === undefined) {
+            indicatorX = Math.max(minX, Math.min(maxX, destPos.x));
+            indicatorY = Math.max(minY, Math.min(maxY, destPos.y));
+        }
+        
+        // 设置指示器位置，根据边缘位置调整transform避免超出屏幕
+        let finalX = indicatorX;
+        let finalY = indicatorY;
+        
+        // 根据指示器在屏幕的位置调整对齐方式
+        let transformX = '-50%';
+        let transformY = '-50%';
+        
+        const padding = 10; // 距离屏幕边缘的padding
+        
+        // 靠近右边缘时，向左对齐（元素右边贴着屏幕右边）
+        if (indicatorX >= this.width - edgeMargin) {
+            transformX = '-100%';
+            finalX = this.width - padding;
+        }
+        // 靠近左边缘时，向右对齐（元素左边贴着屏幕左边）
+        else if (indicatorX <= edgeMargin) {
+            transformX = '0%';
+            finalX = padding;
+        }
+        
+        // 靠近下边缘时，向上对齐（元素下边贴着屏幕下边）
+        if (indicatorY >= this.height - edgeMargin) {
+            transformY = '-100%';
+            finalY = this.height - padding;
+        }
+        // 靠近上边缘时，向下对齐（元素上边贴着屏幕上边）
+        else if (indicatorY <= edgeMargin) {
+            transformY = '0%';
+            finalY = padding;
+        }
+        
+        indicator.style.left = `${finalX}px`;
+        indicator.style.top = `${finalY}px`;
+        indicator.style.transform = `translate(${transformX}, ${transformY})`;
+        
+        // 更新箭头方向
+        const arrowEl = document.getElementById('indicator-arrow');
+        if (arrowEl) {
+            // 根据方向选择箭头
+            const degAngle = angle * 180 / Math.PI;
+            let arrow = '→';
+            if (degAngle > -22.5 && degAngle <= 22.5) arrow = '→';
+            else if (degAngle > 22.5 && degAngle <= 67.5) arrow = '↘';
+            else if (degAngle > 67.5 && degAngle <= 112.5) arrow = '↓';
+            else if (degAngle > 112.5 && degAngle <= 157.5) arrow = '↙';
+            else if (degAngle > 157.5 || degAngle <= -157.5) arrow = '←';
+            else if (degAngle > -157.5 && degAngle <= -112.5) arrow = '↖';
+            else if (degAngle > -112.5 && degAngle <= -67.5) arrow = '↑';
+            else if (degAngle > -67.5 && degAngle <= -22.5) arrow = '↗';
+            
+            arrowEl.innerText = arrow;
+        }
+    }
+    
+    // 显示目的地抽奖动画
+    async showDestinationLottery(stations, finalDest) {
+        // 创建全屏弹窗
+        const overlay = document.createElement('div');
+        overlay.id = 'lottery-overlay';
+        overlay.className = 'fixed inset-0 flex items-center justify-center z-50';
+        overlay.style.background = 'rgba(0,0,0,0.9)';
+        overlay.style.backdropFilter = 'blur(8px)';
+        
+        overlay.innerHTML = `
+            <div class="text-center">
+                <div class="text-2xl text-gray-400 mb-4">🎲 正在选择目的地...</div>
+                <div class="relative overflow-hidden h-32 w-80 mx-auto mb-6 rounded-xl" style="background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(30,30,50,0.9) 50%, rgba(0,0,0,0.8) 100%);">
+                    <div class="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-black to-transparent z-10"></div>
+                    <div class="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black to-transparent z-10"></div>
+                    <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y-2 border-yellow-400 bg-yellow-400/10 z-10"></div>
+                    <div id="lottery-scroll" class="absolute inset-x-0 transition-transform" style="top: 50%; transform: translateY(-50%);">
+                        <!-- 地名会在这里滚动 -->
+                    </div>
+                </div>
+                <div id="lottery-result" class="text-5xl font-black text-yellow-400 mb-4 opacity-0 transition-opacity duration-500"></div>
+                <div id="lottery-subtitle" class="text-xl text-gray-300 opacity-0 transition-opacity duration-500">出发吧!</div>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        const scrollContainer = document.getElementById('lottery-scroll');
+        
+        // 创建滚动内容（所有车站名随机排列，重复多次）
+        const allNames = stations.map(s => s.stationName);
+        // 打乱顺序
+        for (let i = allNames.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [allNames[i], allNames[j]] = [allNames[j], allNames[i]];
+        }
+        
+        // 确保最终目的地在最后
+        const finalIndex = allNames.indexOf(finalDest.stationName);
+        if (finalIndex > -1) {
+            allNames.splice(finalIndex, 1);
+        }
+        
+        // 创建滚动列表（重复多次 + 最终目的地）
+        const repeatCount = 4;
+        let scrollItems = [];
+        for (let i = 0; i < repeatCount; i++) {
+            scrollItems = scrollItems.concat([...allNames].sort(() => Math.random() - 0.5));
+        }
+        scrollItems.push(finalDest.stationName); // 最终停在这里
+        
+        // 渲染滚动项
+        const itemHeight = 48;
+        scrollContainer.innerHTML = scrollItems.map((name, idx) => `
+            <div class="h-12 flex items-center justify-center text-2xl font-bold ${name === finalDest.stationName && idx === scrollItems.length - 1 ? 'text-yellow-400' : 'text-white'}" 
+                 style="height: ${itemHeight}px;">${name}</div>
+        `).join('');
+        
+        // 设置初始位置（从第一个开始）
+        scrollContainer.style.transform = `translateY(-${itemHeight / 2}px)`;
+        scrollContainer.style.transition = 'none';
+        
+        await wait(100);
+        
+        // 开始滚动动画
+        const totalItems = scrollItems.length;
+        const finalOffset = (totalItems - 1) * itemHeight + itemHeight / 2;
+        
+        // 先快后慢的滚动效果
+        scrollContainer.style.transition = 'transform 3s cubic-bezier(0.15, 0.85, 0.35, 1)';
+        scrollContainer.style.transform = `translateY(-${finalOffset}px)`;
+        
+        // 等待滚动完成
+        await wait(3200);
+        
+        // 显示结果
+        document.getElementById('lottery-result').innerText = `🎯 ${finalDest.stationName}`;
+        document.getElementById('lottery-result').style.opacity = '1';
+        document.getElementById('lottery-subtitle').style.opacity = '1';
+        
+        // 等待展示
+        await wait(1500);
+        
+        // 淡出
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.5s';
+        await wait(500);
+        overlay.remove();
+    }
+    
+    createDestinationMarker(tile) {
+        const group = new THREE.Group();
+        
+        // 发光圆环
+        const ringGeo = new THREE.TorusGeometry(2.5, 0.2, 8, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.8 });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.3;
+        group.add(ring);
+        
+        // 旗杆
+        const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 6, 8);
+        const poleMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.position.set(1.5, 3, 1.5);
+        group.add(pole);
+        
+        // 旗帜
+        const flagGeo = new THREE.BoxGeometry(2, 1.5, 0.1);
+        const flagMat = new THREE.MeshLambertMaterial({ color: 0xff4444, side: THREE.DoubleSide });
+        const flag = new THREE.Mesh(flagGeo, flagMat);
+        flag.position.set(2.5, 5, 1.5);
+        group.add(flag);
+        
+        // 上下浮动动画的星星
+        const starGeo = new THREE.OctahedronGeometry(0.5, 0);
+        const starMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const star = new THREE.Mesh(starGeo, starMat);
+        star.position.y = 3;
+        star.userData.baseY = 3;
+        star.userData.animate = true;
+        group.add(star);
+        
+        // 定位到目的地格子
+        group.position.copy(tile.worldPos);
+        group.position.y = 1;
+        
+        this.scene.add(group);
+        this.destinationMarker = group;
+        
+        // 星星动画
+        const animateStar = () => {
+            if (!this.destinationMarker) return;
+            const star = this.destinationMarker.children.find(c => c.userData.animate);
+            if (star) {
+                star.position.y = star.userData.baseY + Math.sin(Date.now() * 0.003) * 0.5;
+                star.rotation.y += 0.02;
+            }
+            requestAnimationFrame(animateStar);
+        };
+        animateStar();
+    }
+    
+    // 显示到达目的地的结算动画
+    async showDestinationArrival(player) {
+        if (!this.destinationTile) return;
+        
+        const destName = this.destinationTile.stationName;
+        
+        // 创建结算动画弹窗
+        const overlay = document.createElement('div');
+        overlay.id = 'arrival-overlay';
+        overlay.className = 'fixed inset-0 flex items-center justify-center z-50';
+        overlay.style.background = 'rgba(0,0,0,0.8)';
+        overlay.style.backdropFilter = 'blur(4px)';
+        
+        overlay.innerHTML = `
+            <div class="text-center transform scale-0 transition-transform duration-500" id="arrival-content">
+                <div class="text-8xl mb-6 animate-bounce">🏆</div>
+                <div class="text-4xl font-black text-white mb-4">到达目的地!</div>
+                <div class="text-3xl font-bold text-yellow-400 mb-6">${destName}</div>
+                <div class="text-6xl font-mono font-black text-green-400 mb-4">+¥${DESTINATION_REWARD}</div>
+                <div class="text-xl text-gray-300">${player.name} 获得援助金!</div>
+                <div class="mt-6 flex justify-center gap-2">
+                    <span class="text-4xl">🎉</span>
+                    <span class="text-4xl">🎊</span>
+                    <span class="text-4xl">✨</span>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        // 弹出动画
+        await wait(100);
+        document.getElementById('arrival-content').style.transform = 'scale(1)';
+        
+        // 播放金币音效（可选）
+        this.log(`🏆 ${player.name} 到达目的地 ${destName}!`, "#22c55e");
+        showToast(`🏆 ${player.name} 获得援助金 ¥${DESTINATION_REWARD}!`, '#22c55e');
+        
+        player.money += DESTINATION_REWARD;
+        this.updateUI();
+        
+        // 等待动画展示
+        await wait(2500);
+        
+        // 淡出动画
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.5s';
+        await wait(500);
+        overlay.remove();
+        
+        // 设置新的目的地
+        await this.setNewDestination();
+    }
+    
+    // --- 年度决算系统 ---
+    
+    advanceTime() {
+        this.totalTurns++;
+        this.gameMonth++;
+        
+        if (this.gameMonth > 12) {
+            this.gameMonth = 1;
+            this.gameYear++;
+        }
+        
+        // 更新时间显示
+        document.getElementById('game-year').innerText = this.gameYear;
+        document.getElementById('game-month').innerText = this.gameMonth;
+        
+        // 检查是否到达决算月（3月）
+        if (this.gameMonth === SETTLEMENT_MONTH) {
+            return true; // 需要决算
+        }
+        return false;
+    }
+    
+    async performSettlement() {
+        this.log(`📊 ${this.gameYear}年度决算开始！`, "#fbbf24");
+        showToast(`📊 ${this.gameYear}年度决算！`, '#fbbf24');
+        
+        await wait(500);
+        
+        for (const player of this.players) {
+            let totalIncome = 0;
+            const ownedStations = new Map(); // stationName -> buildingCount
+            
+            // 统计每个车站的物件
+            this.map.forEach(tile => {
+                if (tile.type === 'green' && tile.owner === player.id) {
+                    const stationBuildings = tile.buildings.length;
+                    if (stationBuildings > 0) {
+                        ownedStations.set(tile.stationName, stationBuildings);
+                        
+                        // 计算该车站的收益
+                        let stationIncome = 0;
+                        tile.buildings.forEach(tierIndex => {
+                            stationIncome += BUILDING_INCOME[tierIndex];
+                        });
+                        
+                        // 独占奖励：如果拥有全部3种物件，收益翻倍
+                        const isMonopoly = tile.buildings.length === 3;
+                        if (isMonopoly) {
+                            stationIncome *= 2;
+                            this.log(`🏆 ${tile.stationName} 独占加成！`, "#a855f7");
+                        }
+                        
+                        totalIncome += stationIncome;
+                    }
+                }
+            });
+            
+            if (totalIncome > 0) {
+                player.money += totalIncome;
+                this.log(`💰 ${player.name} 收到红利 ¥${totalIncome}`, player.color === 0x3b82f6 ? '#60a5fa' : '#f87171');
+                await this.showMoneyChangeDialog(player, totalIncome);
+            } else {
+                this.log(`${player.name} 没有物件收益`, "#9ca3af");
+            }
+        }
+        
+        this.updateUI();
+        await wait(500);
     }
 
     // --- UI & Interaction ---
@@ -703,6 +1810,9 @@ class Game {
         }
         const p = this.players[this.turn];
         document.getElementById('turn-indicator').innerText = `${p.name} 的回合`;
+        
+        // Center camera on the current player
+        this.centerCameraOnPlayer(p);
         
         const p1Panel = document.getElementById('p1-panel');
         const comPanel = document.getElementById('com-panel');
@@ -745,6 +1855,7 @@ class Game {
         this.log(`${player.name} 掷出了 ${steps} 点!`, "#fbbf24");
 
         let remainingSteps = steps;
+        let reachedDestination = false;
         
         while (remainingSteps > 0) {
             const current = player.currentTile;
@@ -761,7 +1872,7 @@ class Game {
                 nextTile = validNext[0];
             } else if (validNext.length > 1) {
                 if (player.isAI) {
-                    nextTile = validNext[Math.floor(Math.random() * validNext.length)];
+                    nextTile = this.chooseBestDirection(validNext);
                 } else {
                     nextTile = await this.askDirection(player, validNext);
                 }
@@ -774,6 +1885,15 @@ class Game {
             player.currentTile = nextTile;
             
             await this.animateMove(player, nextTile.worldPos);
+            
+            // 更新距离显示
+            this.updateDistanceDisplay();
+            
+            // 检查是否路过目的地（即使还有步数也算到达）
+            if (!reachedDestination && this.destinationTile && nextTile === this.destinationTile) {
+                reachedDestination = true;
+                await this.showDestinationArrival(player);
+            }
 
             if (nextTile.isColored) {
                 remainingSteps--;
@@ -781,7 +1901,7 @@ class Game {
         }
 
         await wait(300);
-        await this.triggerTileEvent(player);
+        await this.triggerTileEvent(player, reachedDestination);
     }
 
     animateMove(player, targetVec3) {
@@ -819,7 +1939,10 @@ class Game {
         });
     }
 
-    askDirection(player, options) {
+    async askDirection(player, options) {
+        // Center camera on the player before showing direction options
+        await this.centerCameraOnPlayer(player, 300);
+        
         return new Promise(resolve => {
             const overlay = document.createElement('div');
             overlay.className = 'absolute inset-0 pointer-events-auto z-50';
@@ -827,7 +1950,9 @@ class Game {
             document.getElementById('ui-layer').appendChild(overlay);
 
             options.forEach(tile => {
-                const screenPos = this.getScreenPosition(tile.mesh.position);
+                // Lift the icon slightly so it appears on top of the tile
+                const targetPos = tile.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+                const screenPos = this.getScreenPosition(targetPos);
                 
                 let label = '📍';
                 const dx = tile.gridX - player.currentTile.gridX;
@@ -838,42 +1963,105 @@ class Game {
                 else if (dy > 0) label = '⬇️'; // Z+ is down on screen roughly
                 else if (dy < 0) label = '⬆️';
 
+                // Container for positioning (handles centering)
+                const container = document.createElement('div');
+                container.className = 'absolute';
+                container.style.left = `${screenPos.x}px`;
+                container.style.top = `${screenPos.y}px`;
+                container.style.transform = 'translate(-50%, -50%)';
+
+                // Button for appearance and interaction (handles animation)
                 const btn = document.createElement('button');
                 btn.innerText = label; 
-                btn.className = 'absolute w-12 h-12 bg-yellow-400 hover:bg-white rounded-full text-2xl shadow-xl border-4 border-yellow-600 animate-bounce-custom cursor-pointer';
-                btn.style.left = `${screenPos.x}px`;
-                btn.style.top = `${screenPos.y}px`;
-                btn.style.transform = 'translate(-50%, -50%)';
-
-                // Keep button moving with camera by storing reference (simplified here to static for moment)
-                // Ideally we update position in render loop, but since game pauses for input, this is okay if camera doesn't move.
+                btn.className = 'w-12 h-12 bg-yellow-400 hover:bg-white rounded-full text-2xl shadow-xl border-4 border-yellow-600 animate-bounce-custom cursor-pointer';
                 
                 btn.onclick = () => {
                     document.getElementById('direction-overlay').remove();
                     resolve(tile);
                 };
-                overlay.appendChild(btn);
+
+                container.appendChild(btn);
+
+                // Store 3D position on container for frame updates
+                container.target3D = targetPos;
+                
+                overlay.appendChild(container);
             });
         });
     }
 
-    async triggerTileEvent(player) {
+    async showMoneyChangeDialog(player, changeAmount) {
+        return new Promise(resolve => {
+            const modal = document.getElementById('money-modal');
+            const title = document.getElementById('money-modal-title');
+            const amountEl = document.getElementById('money-modal-amount');
+            const deltaEl = document.getElementById('money-modal-delta');
+            const icon = document.getElementById('money-modal-icon');
+            const container = modal.firstElementChild;
+
+            modal.classList.remove('hidden');
+            
+            const endMoney = player.money;
+            const startMoneyVal = endMoney - changeAmount;
+
+            const isGain = changeAmount > 0;
+            const colorClass = isGain ? 'text-blue-600' : 'text-red-600';
+            const borderClass = isGain ? 'border-blue-500' : 'border-red-500';
+            
+            container.className = `bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border-4 relative text-center transform transition-all scale-100 ${borderClass}`;
+            
+            title.innerText = player.name;
+            icon.innerText = isGain ? '🤑' : '💸';
+            
+            deltaEl.className = `text-3xl font-black mb-2 ${colorClass}`;
+            deltaEl.innerText = (isGain ? '+' : '') + '¥' + changeAmount;
+            
+            // Animation
+            const duration = 1500;
+            const startTime = Date.now();
+            
+            const animate = () => {
+                const now = Date.now();
+                const progress = Math.min((now - startTime) / duration, 1);
+                const ease = 1 - Math.pow(1 - progress, 4); // Ease out
+                
+                const currentVal = Math.floor(startMoneyVal + (changeAmount * ease));
+                amountEl.innerText = '¥' + currentVal;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    amountEl.innerText = '¥' + endMoney;
+                    setTimeout(() => {
+                        modal.classList.add('hidden');
+                        resolve();
+                    }, 800); 
+                }
+            };
+            
+            animate();
+        });
+    }
+
+    async triggerTileEvent(player, alreadyReachedDestination = false) {
         this.state = 'EVENT';
         const tile = player.currentTile;
         let endTurn = true;
+        
+        // 目的地到达已在移动过程中处理，不再重复检查
 
         switch (tile.type) {
             case 'blue':
                 const bonus = rand(500, 2000);
                 player.money += bonus;
-                this.log(`幸运！获得资金 ¥${bonus}`, "#60a5fa");
-                this.spawnFloatingText(player.mesh.position, `+¥${bonus}`, '#60a5fa');
+                this.log(`幸运！获得资金 ¥${bonus}`, "#60a5a5");
+                await this.showMoneyChangeDialog(player, bonus);
                 break;
             case 'red':
                 const loss = rand(500, 1500);
                 player.money -= loss;
                 this.log(`倒霉！损失 ¥${loss}`, "#f87171");
-                this.spawnFloatingText(player.mesh.position, `-¥${loss}`, '#ef4444');
+                await this.showMoneyChangeDialog(player, -loss);
                 break;
             case 'yellow':
                 this.log(`卡牌事件 (未实装)`, "#fbbf24");
@@ -911,13 +2099,14 @@ class Game {
 
     async handleStation(player, tile) {
         if (player.isAI) {
-            // Simple AI
+            // AI策略：优先考虑是否要购买
             let bought = false;
-            for (let i = 0; i < 3; i++) {
+            for (let i = 2; i >= 0; i--) { // 从高级物件开始考虑
                 if (!tile.buildings.includes(i) && player.money >= BUILDING_COSTS[i] * 1.2) {
                      this.doBuy(player, tile, i);
                      bought = true;
                      await wait(800);
+                     // AI不贪婪，一次只买一个
                      break;
                 }
             }
@@ -933,29 +2122,56 @@ class Game {
         const modal = document.getElementById('buy-modal');
         const list = document.getElementById('building-list');
         document.getElementById('station-name').innerText = tile.stationName;
+        document.getElementById('buy-modal-money').innerText = this.players[0].money;
         list.innerHTML = '';
+        
+        // 显示是否为目的地
+        const isDestination = tile === this.destinationTile;
+        if (isDestination) {
+            const destBadge = document.createElement('div');
+            destBadge.className = 'bg-yellow-500 text-black text-center py-1 px-3 rounded-full text-sm font-bold mb-3';
+            destBadge.innerText = '🎯 当前目的地！';
+            list.appendChild(destBadge);
+        }
 
         BUILDING_NAMES.forEach((name, index) => {
             const cost = BUILDING_COSTS[index];
+            const income = BUILDING_INCOME[index];
             const isOwned = tile.buildings.includes(index);
             const canAfford = this.players[0].money >= cost;
             
             const div = document.createElement('div');
             div.className = `flex justify-between items-center p-3 rounded border ${isOwned ? 'bg-blue-100 border-blue-500' : 'bg-gray-50 border-gray-200'}`;
             
-            let btnHtml = isOwned ? 
-                `<span class="text-blue-600 font-bold text-sm">已拥有</span>` : 
-                (canAfford ? `<button onclick="game.playerBuy(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm shadow">购买</button>` : `<span class="text-red-400 text-sm">缺钱</span>`);
+            let btnHtml = '';
+            if (isOwned) {
+                let ownerName = '未知';
+                if (tile.owner) {
+                    const owner = this.players.find(p => p.id === tile.owner);
+                    if (owner) {
+                        ownerName = (owner.id === this.players[0].id) ? '我' : owner.name;
+                    }
+                }
+                btnHtml = `<span class="text-blue-600 font-bold text-sm">已拥有 (${ownerName})</span>`;
+            } else {
+                btnHtml = canAfford ? `<button onclick="game.playerBuy(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm shadow">购买</button>` : `<span class="text-red-400 text-sm">缺钱</span>`;
+            }
 
             div.innerHTML = `
                 <div>
                     <div class="font-bold text-gray-800">${name}</div>
-                    <div class="text-xs text-gray-500">¥${cost}</div>
+                    <div class="text-xs text-gray-500">¥${cost} · <span class="text-green-600">年收益 ¥${income}</span></div>
                 </div>
                 <div>${btnHtml}</div>
             `;
             list.appendChild(div);
         });
+        
+        // 显示独占奖励提示
+        const monopolyHint = document.createElement('div');
+        monopolyHint.className = 'text-xs text-center text-purple-600 mt-2';
+        monopolyHint.innerText = tile.buildings.length === 3 ? '🏆 已独占！收益翻倍！' : '💡 买齐3种物件可获得独占加成(收益x2)';
+        list.appendChild(monopolyHint);
 
         modal.classList.remove('hidden');
     }
@@ -1035,7 +2251,16 @@ class Game {
         this.nextTurn();
     }
 
-    nextTurn() {
+    async nextTurn() {
+        // 时间推进（每两个回合（P1+COM各走一次）算一个月）
+        // 这里每个玩家回合结束后，如果是COM回合结束，则推进一个月
+        if (this.turn === 1) { // COM刚结束回合
+            const needSettlement = this.advanceTime();
+            if (needSettlement) {
+                await this.performSettlement();
+            }
+        }
+        
         this.turn = (this.turn + 1) % 2;
         this.startTurn();
     }
@@ -1047,6 +2272,9 @@ class Game {
         document.getElementById('p1-assets').innerText = p1.assets.toLocaleString();
         document.getElementById('com-money').innerText = com.money.toLocaleString();
         document.getElementById('com-assets').innerText = com.assets.toLocaleString();
+        
+        // 更新距离显示
+        this.updateDistanceDisplay();
     }
 
     // --- Rendering Loop ---
@@ -1059,18 +2287,86 @@ class Game {
         return { x, y };
     }
 
+    centerCameraOnPlayer(player, duration = 500) {
+        return new Promise(resolve => {
+            if (!player || !player.mesh) {
+                resolve();
+                return;
+            }
+            
+            const targetPos = player.mesh.position.clone();
+            const startTarget = this.controls.target.clone();
+            const startCamPos = this.camera.position.clone();
+            
+            // Calculate camera offset from current target
+            const offset = startCamPos.clone().sub(startTarget);
+            const endCamPos = targetPos.clone().add(offset);
+            
+            const startTime = Date.now();
+            
+            const animateCamera = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Ease out cubic for smooth deceleration
+                const eased = 1 - Math.pow(1 - progress, 3);
+                
+                this.controls.target.lerpVectors(startTarget, targetPos, eased);
+                this.camera.position.lerpVectors(startCamPos, endCamPos, eased);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateCamera);
+                } else {
+                    resolve();
+                }
+            };
+            
+            animateCamera();
+        });
+    }
+    
+    // Focus camera on a specific player by index (0 = P1, 1 = COM)
+    focusOnPlayer(playerIndex) {
+        if (this.mode !== 'GAME') return;
+        if (playerIndex < 0 || playerIndex >= this.players.length) return;
+        
+        const player = this.players[playerIndex];
+        if (!player || !player.mesh) return;
+        
+        // Temporarily disable camera lock to allow manual focus
+        this.cameraLocked = false;
+        
+        // Center camera on the selected player
+        this.centerCameraOnPlayer(player, 400);
+    }
+
     onResize() {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         
-        // Update Perspective frustum
+        // Update Game Camera
         this.camera.aspect = this.width / this.height;
         this.camera.updateProjectionMatrix();
+        
+        // Update Map Camera
+        if (this.worldMap) {
+            this.worldMap.camera.aspect = this.width / this.height;
+            this.worldMap.camera.updateProjectionMatrix();
+        }
+
         this.renderer.setSize(this.width, this.height);
     }
 
     animate() {
         requestAnimationFrame(() => this.animate());
+
+        if (this.mode === 'MAP') {
+            if (this.worldMap) {
+                this.worldMap.update();
+                this.renderer.render(this.worldMap.scene, this.worldMap.camera);
+            }
+            return;
+        }
 
         // Camera Follow Logic
         if (this.cameraLocked) {
@@ -1095,8 +2391,21 @@ class Game {
             if (tile.labelElement) {
                 // Only update if visible (optional optimization)
                 const pos = this.getScreenPosition(tile.mesh.position);
-                // Offset label to float above the station block
-                tile.labelElement.style.transform = `translate(${pos.x}px, ${pos.y - 30}px) translate(-50%, -100%)`;
+                const offset = tile.labelOffset || { x: 0, y: -30, align: 'center' };
+                
+                // Apply position based on label alignment
+                let transform;
+                if (offset.align === 'left') {
+                    // Label on right side of station, align left edge
+                    transform = `translate(${pos.x + offset.x}px, ${pos.y + offset.y}px) translate(0%, -50%)`;
+                } else if (offset.align === 'right') {
+                    // Label on left side of station, align right edge
+                    transform = `translate(${pos.x + offset.x}px, ${pos.y + offset.y}px) translate(-100%, -50%)`;
+                } else {
+                    // Label on top (default), center aligned
+                    transform = `translate(${pos.x + offset.x}px, ${pos.y + offset.y}px) translate(-50%, -100%)`;
+                }
+                tile.labelElement.style.transform = transform;
                 
                 // Hide if offscreen
                 if (pos.x < 0 || pos.x > this.width || pos.y < 0 || pos.y > this.height) {
@@ -1106,12 +2415,20 @@ class Game {
                 }
             }
         });
+        
+        // Update off-screen destination indicator
+        this.updateDestinationIndicator();
 
         // Update Overlay Buttons if active
         const overlay = document.getElementById('direction-overlay');
         if (overlay) {
-            // Re-calc positions for buttons in case camera moved
-            // (Omitted for brevity/performance, but would be here)
+            Array.from(overlay.children).forEach(btn => {
+                if (btn.target3D) {
+                    const screenPos = this.getScreenPosition(btn.target3D);
+                    btn.style.left = `${screenPos.x}px`;
+                    btn.style.top = `${screenPos.y}px`;
+                }
+            });
         }
 
         this.renderer.render(this.scene, this.camera);
@@ -1119,7 +2436,10 @@ class Game {
 }
 
 // Boot
-window.onload = () => {
+window.onload = async () => {
+    // Load cities data first
+    await loadCitiesData();
+    // Then initialize the game
     window.game = new Game();
 };
 
