@@ -86,6 +86,68 @@
             0%, 100% { opacity: 1; box-shadow: 0 0 15px rgba(251, 191, 36, 0.8); }
             50% { opacity: 0.9; box-shadow: 0 0 25px rgba(251, 191, 36, 1); }
         }
+        
+        /* 穷神相关样式 */
+        .binbougami-indicator {
+            animation: binbougami-shake 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes binbougami-shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px) rotate(-1deg); }
+            75% { transform: translateX(2px) rotate(1deg); }
+        }
+        
+        .binbougami-effect {
+            animation: binbougami-appear 0.5s ease-out;
+        }
+        
+        @keyframes binbougami-appear {
+            0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        
+        /* 穷神大魔王模式 */
+        .binbougami-king {
+            animation: king-pulse 1s ease-in-out infinite;
+            filter: drop-shadow(0 0 10px #ff0000);
+        }
+        
+        @keyframes king-pulse {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px #ff0000); }
+            50% { transform: scale(1.1); filter: drop-shadow(0 0 20px #ff4444); }
+        }
+        
+        /* 卡牌样式 */
+        .card-item {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .card-item:hover {
+            transform: translateY(-8px) scale(1.05);
+            z-index: 100;
+        }
+        
+        .card-rarity-common { border-color: #9ca3af; background: linear-gradient(135deg, #f3f4f6, #e5e7eb); }
+        .card-rarity-rare { border-color: #3b82f6; background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+        .card-rarity-epic { border-color: #8b5cf6; background: linear-gradient(135deg, #ede9fe, #ddd6fe); }
+        .card-rarity-legendary { border-color: #f59e0b; background: linear-gradient(135deg, #fef3c7, #fde68a); box-shadow: 0 0 15px rgba(245, 158, 11, 0.5); }
+        
+        .card-panel {
+            max-height: 120px;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+        
+        .card-panel::-webkit-scrollbar {
+            height: 4px;
+        }
+        
+        .card-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }
     </style>
 </head>
 <body>
@@ -104,6 +166,12 @@
         <span id="indicator-arrow">→</span>
     </div>
 
+    <!-- Title and Subtitle (Outside UI Layer) -->
+    <div id="game-title" class="absolute top-4 left-4 z-50 pointer-events-auto">
+        <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 drop-shadow-lg" style="font-family: 'Arial Black', sans-serif; -webkit-text-stroke: 1px white;">HelloWorld</h1>
+        <p class="text-sm text-white font-semibold tracking-wider drop-shadow-md mt-1 ml-1">powered by Hello Talk</p>
+    </div>
+
     <!-- UI Layer -->
     <div id="ui-layer" class="flex flex-col justify-between p-4">
         
@@ -118,10 +186,12 @@
             <div class="hud-panel bg-blue-900/90 text-white p-4 rounded-xl border-2 border-blue-400 shadow-lg w-48 transition-all pointer-events-auto cursor-pointer hover:border-yellow-400" id="p1-panel" onclick="game.focusOnPlayer(0)">
                 <h2 class="text-xl font-bold flex items-center gap-2">
                     <div class="w-4 h-4 rounded-full bg-blue-400"></div> 玩家 (P1)
+                    <span id="p1-binbougami" class="hidden text-2xl binbougami-indicator" title="穷神附身中">👻</span>
                 </h2>
                 <p class="text-yellow-300 text-2xl font-mono mt-1">¥<span id="p1-money">0</span></p>
                 <p class="text-xs text-gray-300 mt-1">资产: ¥<span id="p1-assets">0</span></p>
                 <p class="text-xs text-cyan-300 mt-1">📍 距目的地: <span id="p1-distance">--</span> 站</p>
+                <p class="text-xs text-amber-300 mt-1">🃏 手牌: <span id="p1-cards">0</span>张</p>
             </div>
 
             <!-- Turn Indicator -->
@@ -153,10 +223,12 @@
             <div class="hud-panel bg-red-900/90 text-white p-4 rounded-xl border-2 border-red-400 shadow-lg w-48 transition-all opacity-70 pointer-events-auto cursor-pointer hover:border-yellow-400" id="com-panel" onclick="game.focusOnPlayer(1)">
                 <h2 class="text-xl font-bold flex items-center gap-2">
                     <div class="w-4 h-4 rounded-full bg-red-500"></div> 电脑 (COM)
+                    <span id="com-binbougami" class="hidden text-2xl binbougami-indicator" title="穷神附身中">👻</span>
                 </h2>
                 <p class="text-yellow-300 text-2xl font-mono mt-1">¥<span id="com-money">0</span></p>
                 <p class="text-xs text-gray-300 mt-1">资产: ¥<span id="com-assets">0</span></p>
                 <p class="text-xs text-cyan-300 mt-1">📍 距目的地: <span id="com-distance">--</span> 站</p>
+                <p class="text-xs text-amber-300 mt-1">🃏 手牌: <span id="com-cards">0</span>张</p>
             </div>
         </div>
 
@@ -168,10 +240,24 @@
         </div>
 
         <!-- Bottom Controls -->
-        <div class="flex justify-center items-end mb-8 pointer-events-none">
-            <button id="roll-btn" class="hud-panel pointer-events-auto bg-gradient-to-b from-yellow-400 to-yellow-600 text-black font-black text-2xl px-12 py-4 rounded-2xl shadow-xl border-b-4 border-yellow-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden">
-                🎲 掷骰子
-            </button>
+        <div class="flex flex-col items-center gap-4 mb-4 pointer-events-none">
+            <!-- 卡牌手牌区域 -->
+            <div id="card-hand-panel" class="hud-panel pointer-events-auto bg-gray-900/80 px-4 py-2 rounded-xl border border-gray-600 hidden">
+                <div class="text-xs text-gray-400 mb-1 text-center">🃏 手牌 (点击使用)</div>
+                <div id="card-hand" class="card-panel flex gap-2">
+                    <!-- 卡牌会动态插入 -->
+                </div>
+            </div>
+            
+            <!-- 按钮区域 -->
+            <div class="flex gap-3">
+                <button id="use-card-btn" class="hud-panel pointer-events-auto bg-gradient-to-b from-purple-400 to-purple-600 text-white font-bold text-lg px-6 py-3 rounded-xl shadow-lg border-b-4 border-purple-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden">
+                    🃏 使用卡牌
+                </button>
+                <button id="roll-btn" class="hud-panel pointer-events-auto bg-gradient-to-b from-yellow-400 to-yellow-600 text-black font-black text-2xl px-12 py-4 rounded-2xl shadow-xl border-b-4 border-yellow-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden">
+                    🎲 掷骰子
+                </button>
+            </div>
         </div>
     </div>
 
@@ -203,6 +289,61 @@
             <div class="flex gap-3">
                 <button onclick="game.closeBuyModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">
                     离开
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 穷神效果弹窗 -->
+    <div id="binbougami-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="bg-gradient-to-b from-gray-900 to-purple-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-purple-500 relative text-center">
+            <div id="binbougami-modal-icon" class="text-8xl mb-4 binbougami-effect">👻</div>
+            <h3 class="text-3xl font-black text-purple-300 mb-2" id="binbougami-modal-title">穷神来袭！</h3>
+            <p class="text-xl text-gray-300 mb-4" id="binbougami-modal-desc">穷神正在捣乱...</p>
+            <div class="text-4xl font-mono font-bold text-red-400 mb-4" id="binbougami-modal-effect"></div>
+            <div class="text-sm text-gray-400" id="binbougami-modal-hint"></div>
+        </div>
+    </div>
+
+    <!-- 穷神附身全屏动画 -->
+    <div id="possession-modal" class="fixed inset-0 flex items-center justify-center hidden z-[100] bg-black/90 backdrop-blur-sm transition-opacity duration-500">
+        <div class="text-center transform transition-all duration-500 scale-0" id="possession-content">
+            <div class="text-9xl mb-8 animate-bounce">👻</div>
+            <h1 class="text-6xl font-black text-purple-500 mb-4 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]">穷神附身！</h1>
+            <p class="text-4xl text-white font-bold" id="possession-text">玩家 XX 被穷神附身了！</p>
+        </div>
+    </div>
+    
+    <!-- 卡牌获取弹窗 -->
+    <div id="card-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="bg-gradient-to-b from-amber-900 to-yellow-900 p-6 rounded-2xl shadow-2xl max-w-lg w-full border-4 border-yellow-500 relative">
+            <div class="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-black px-6 py-1 rounded-full font-bold shadow-lg">
+                🃏 卡片站
+            </div>
+            <h3 class="text-2xl font-bold text-center mt-4 mb-4 text-yellow-300">获取卡牌</h3>
+            <div id="card-modal-content" class="space-y-3 mb-4">
+                <!-- 卡牌选项会动态插入 -->
+            </div>
+            <div class="flex gap-3">
+                <button onclick="game.closeCardModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition">
+                    离开
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 使用卡牌选择弹窗 -->
+    <div id="use-card-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="bg-gradient-to-b from-indigo-900 to-purple-900 p-6 rounded-2xl shadow-2xl max-w-2xl w-full border-4 border-indigo-400 relative">
+            <div class="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-indigo-500 text-white px-6 py-1 rounded-full font-bold shadow-lg">
+                🃏 选择要使用的卡牌
+            </div>
+            <div id="use-card-list" class="flex flex-wrap gap-3 justify-center mt-6 mb-4">
+                <!-- 卡牌会动态插入 -->
+            </div>
+            <div class="flex gap-3">
+                <button onclick="game.closeUseCardModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition">
+                    取消
                 </button>
             </div>
         </div>
@@ -241,6 +382,58 @@ const BUILDING_INCOME = [200, 800, 4000];
 
 // 目的地奖励金额
 const DESTINATION_REWARD = 5000;
+
+// --- 穷神系统 ---
+const BINBOUGAMI_EFFECTS = {
+    // 普通穷神效果
+    normal: [
+        { type: 'loseMoney', min: 300, max: 1500, msg: '穷神偷走了你的钱！' },
+        { type: 'loseMoney', min: 500, max: 2000, msg: '穷神请客吃饭，用的是你的钱！' },
+        { type: 'sellProperty', msg: '穷神强行半价卖掉了你的物件！' },
+        { type: 'nothing', msg: '穷神今天心情好，放过你了~' },
+        { type: 'loseMoney', min: 200, max: 800, msg: '穷神打碎了你的存钱罐！' },
+    ],
+    // 大魔王穷神效果（升级后）
+    king: [
+        { type: 'loseMoney', min: 2000, max: 5000, msg: '大魔王穷神疯狂吞噬你的财产！' },
+        { type: 'sellAllProperty', msg: '大魔王穷神吞噬了你所有的物件！' },
+        { type: 'debt', min: 3000, max: 8000, msg: '大魔王穷神让你背上巨额债务！' },
+        { type: 'loseMoney', min: 1500, max: 4000, msg: '大魔王穷神召开豪华宴会，账单给你！' },
+    ]
+};
+// 穷神升级所需的回合数
+const BINBOUGAMI_UPGRADE_TURNS = 8;
+
+// --- 卡牌系统 ---
+const CARD_TYPES = {
+    // 移动类卡牌
+    express: { name: '急行卡', desc: '掷2个骰子', icon: '🚃', type: 'move', diceCount: 2, rarity: 'common', price: 500 },
+    superExpress: { name: '特急卡', desc: '掷3个骰子', icon: '🚄', type: 'move', diceCount: 3, rarity: 'rare', price: 1500 },
+    rocket: { name: '火箭卡', desc: '掷4个骰子', icon: '🚀', type: 'move', diceCount: 4, rarity: 'epic', price: 3000 },
+    backward: { name: '后退卡', desc: '可以向后移动', icon: '⏪', type: 'special', effect: 'backward', rarity: 'common', price: 300 },
+    teleport: { name: '任意门', desc: '传送到任意车站', icon: '🚪', type: 'special', effect: 'teleport', rarity: 'legendary', price: 5000 },
+    
+    // 攻击/妨碍类卡牌
+    hibernate: { name: '冬眠卡', desc: '让对手停1回合', icon: '💤', type: 'attack', effect: 'skip', rarity: 'rare', price: 1200 },
+    fart: { name: '放屁卡', desc: '吹飞对手1-3格', icon: '💨', type: 'attack', effect: 'blowAway', rarity: 'common', price: 600 },
+    trap: { name: '陷阱卡', desc: '在当前格子设置陷阱', icon: '🕳️', type: 'attack', effect: 'trap', rarity: 'rare', price: 800 },
+    
+    // 防御/特殊类卡牌
+    shield: { name: '护身符', desc: '免疫一次穷神效果', icon: '🛡️', type: 'defense', effect: 'immunity', rarity: 'rare', price: 2000 },
+    exorcism: { name: '驱魔符', desc: '立即驱除穷神', icon: '📿', type: 'special', effect: 'exorcise', rarity: 'epic', price: 4000 },
+    doubleIncome: { name: '倍收卡', desc: '下次决算收益翻倍', icon: '💎', type: 'buff', effect: 'doubleIncome', rarity: 'epic', price: 3500 },
+};
+
+// 卡牌抽取池（按稀有度分类）
+const CARD_POOL = {
+    common: ['express', 'backward', 'fart'],
+    rare: ['superExpress', 'hibernate', 'trap', 'shield'],
+    epic: ['rocket', 'exorcism', 'doubleIncome'],
+    legendary: ['teleport']
+};
+
+// 最大手牌数
+const MAX_HAND_SIZE = 8;
 // 一年的回合数（每月一回合，12回合=1年，3月决算）
 const TURNS_PER_YEAR = 12;
 const SETTLEMENT_MONTH = 3; // 3月决算
@@ -285,7 +478,7 @@ async function loadCitiesData() {
     ];
 
     try {
-        const response = await fetch('world_traveler_data.md');
+        const response = await fetch('world_traveler_data');
         const text = await response.text();
         
         // Extract JSON array from markdown (between [ and ])
@@ -692,6 +885,18 @@ class Player {
         // For smooth movement animation
         this.animating = false;
         this.targetPos = new THREE.Vector3();
+        
+        // --- 穷神系统 ---
+        this.hasBinbougami = false;     // 是否被穷神附身
+        this.binbougamiTurns = 0;       // 穷神附身回合数
+        this.binbougamiLevel = 0;       // 0=普通, 1=大魔王
+        this.binbougamiMesh = null;     // 穷神3D模型
+        
+        // --- 卡牌系统 ---
+        this.cards = [];                // 手牌
+        this.skipNextTurn = false;      // 下回合是否跳过（冬眠效果）
+        this.doubleIncomeNext = false;  // 下次决算收益翻倍
+        this.hasShield = false;         // 是否有护身符保护
     }
 }
 
@@ -825,6 +1030,7 @@ class Game {
         // Hide Game UI initially
         document.getElementById('ui-layer').style.display = 'none';
         document.getElementById('labels-layer').style.display = 'none';
+        document.getElementById('game-title').classList.remove('hidden');
     }
 
     selectCity(city) {
@@ -852,6 +1058,7 @@ class Game {
         // Update UI
         document.getElementById('ui-layer').style.display = 'flex';
         document.getElementById('labels-layer').style.display = 'block';
+        document.getElementById('game-title').classList.add('hidden');
     }
 
     toggleMap() {
@@ -863,6 +1070,7 @@ class Game {
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('labels-layer').style.display = 'none';
             document.getElementById('destination-indicator').classList.add('hidden');
+            document.getElementById('game-title').classList.remove('hidden');
         } else {
             if (this.currentCity) {
                 this.mode = 'GAME';
@@ -871,6 +1079,7 @@ class Game {
 
                 document.getElementById('ui-layer').style.display = 'flex';
                 document.getElementById('labels-layer').style.display = 'block';
+                document.getElementById('game-title').classList.add('hidden');
             }
         }
     }
@@ -1705,6 +1914,39 @@ class Game {
         showToast(`🏆 ${player.name} 获得援助金 ¥${DESTINATION_REWARD}!`, '#22c55e');
         
         player.money += DESTINATION_REWARD;
+        
+        // --- 穷神附身逻辑 ---
+        // 寻找距离目的地最远的玩家（除了到达者）
+        let maxDist = -1;
+        let victim = null;
+        
+        // 计算所有其他玩家到当前目的地的距离
+        for (const p of this.players) {
+            if (p === player) continue; 
+            
+            const dist = this.calculateDistanceToDestination(p.currentTile);
+            // 如果无法到达(-1)，视为无穷远
+            const effectiveDist = dist === -1 ? 9999 : dist;
+            
+            if (effectiveDist > maxDist) {
+                maxDist = effectiveDist;
+                victim = p;
+            } else if (effectiveDist === maxDist) {
+                // 距离相同时，随机选择
+                if (Math.random() > 0.5) victim = p;
+            }
+        }
+        
+        if (victim) {
+            // 如果穷神已经在某人身上，且那个人不是victim，则转移
+            // 如果穷神还没出现（游戏刚开始），则附身victim
+            const currentOwner = this.players.find(p => p.hasBinbougami);
+            if (currentOwner !== victim) {
+                await wait(500);
+                await this.attachBinbougami(victim);
+            }
+        }
+        
         this.updateUI();
         
         // 等待动画展示
@@ -1826,12 +2068,28 @@ class Game {
         comPanel.classList.toggle('border-yellow-400', this.turn === 1);
 
         this.state = 'IDLE';
+        
+        // Check for skip turn (Hibernate)
+        if (p.skipNextTurn) {
+            p.skipNextTurn = false;
+            this.log(`💤 ${p.name} 正在冬眠，跳过回合`, "#9ca3af");
+            setTimeout(() => this.nextTurn(), 1500);
+            return;
+        }
 
         if (p.isAI) {
             document.getElementById('roll-btn').classList.add('hidden');
+            document.getElementById('use-card-btn').classList.add('hidden');
             setTimeout(() => this.aiAction(), 1000);
         } else {
             document.getElementById('roll-btn').classList.remove('hidden');
+            const useCardBtn = document.getElementById('use-card-btn');
+            if (p.cards.length > 0) {
+                useCardBtn.classList.remove('hidden');
+                useCardBtn.onclick = () => this.openUseCardModal();
+            } else {
+                useCardBtn.classList.add('hidden');
+            }
         }
     }
 
@@ -1847,12 +2105,19 @@ class Game {
         await this.processMove();
     }
 
-    async processMove() {
+    async processMove(diceCount = 1) {
         this.state = 'MOVING';
-        const steps = rand(1, 6);
-        const player = this.players[this.turn];
+        // Calculate steps based on dice count
+        let steps = 0;
+        const rolls = [];
+        for(let i=0; i<diceCount; i++) {
+            const r = rand(1, 6);
+            rolls.push(r);
+            steps += r;
+        }
         
-        this.log(`${player.name} 掷出了 ${steps} 点!`, "#fbbf24");
+        const player = this.players[this.turn];
+        this.log(`${player.name} 掷出了 ${rolls.join('+')} = ${steps} 点!`, "#fbbf24");
 
         let remainingSteps = steps;
         let reachedDestination = false;
@@ -1885,6 +2150,23 @@ class Game {
             player.currentTile = nextTile;
             
             await this.animateMove(player, nextTile.worldPos);
+            
+            // --- Binbougami Transfer Check ---
+            // Check if we passed another player
+            for (const other of this.players) {
+                if (other !== player && other.currentTile === player.currentTile) {
+                    // Collision!
+                    if (player.hasBinbougami) {
+                        // Transfer FROM player TO other
+                        this.log(`👻 穷神从 ${player.name} 转移到了 ${other.name}！`, "#a855f7");
+                        await this.attachBinbougami(other);
+                    } else if (other.hasBinbougami) {
+                        // Transfer FROM other TO player
+                        this.log(`👻 穷神从 ${other.name} 转移到了 ${player.name}！`, "#a855f7");
+                        await this.attachBinbougami(player);
+                    }
+                }
+            }
             
             // 更新距离显示
             this.updateDistanceDisplay();
@@ -2043,6 +2325,464 @@ class Game {
         });
     }
 
+    // --- 穷神系统方法 ---
+
+    async attachBinbougami(player) {
+        // Remove from current owner
+        const currentOwner = this.players.find(p => p.hasBinbougami);
+        if (currentOwner) {
+            currentOwner.hasBinbougami = false;
+            // Remove visual from current owner
+            if (currentOwner.binbougamiMesh) {
+                currentOwner.mesh.remove(currentOwner.binbougamiMesh);
+                currentOwner.binbougamiMesh = null;
+            }
+        }
+        
+        // Attach to new player
+        player.hasBinbougami = true;
+        player.binbougamiTurns = 0;
+        player.binbougamiLevel = 0; // Reset to normal
+        
+        this.log(`👻 穷神附身在了 ${player.name} 身上！`, "#a855f7");
+
+        // Play possession sequence
+        await this.showBinbougamiPossessionSequence(player);
+        
+        this.updateUI();
+    }
+
+    async showBinbougamiPossessionSequence(player) {
+        // 1. Show Fullscreen UI
+        const modal = document.getElementById('possession-modal');
+        const content = document.getElementById('possession-content');
+        const text = document.getElementById('possession-text');
+        
+        if (modal && content && text) {
+            text.innerText = `${player.name} 被穷神附身了！`;
+            modal.classList.remove('hidden');
+            
+            // Trigger animation
+            // Force reflow
+            void modal.offsetWidth;
+            
+            content.classList.remove('scale-0');
+            content.classList.add('scale-100');
+            
+            // Wait for UI
+            await new Promise(resolve => setTimeout(resolve, 2500));
+            
+            // Hide UI
+            content.classList.remove('scale-100');
+            content.classList.add('scale-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 500);
+        }
+        
+        // 2. Move Camera to Player
+        this.cameraLocked = false;
+        await this.centerCameraOnPlayer(player, 800);
+        
+        // 3. Create Falling Binbougami
+        this.createBinbougamiMesh(player, true);
+        
+        // Wait for fall animation (approx 1s)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Shake effect (simple camera shake)
+        const originalPos = this.camera.position.clone();
+        for(let i=0; i<10; i++) {
+            this.camera.position.x = originalPos.x + (Math.random() - 0.5) * 2;
+            this.camera.position.y = originalPos.y + (Math.random() - 0.5) * 2;
+            this.camera.position.z = originalPos.z + (Math.random() - 0.5) * 2;
+            await new Promise(r => setTimeout(r, 30));
+        }
+        this.camera.position.copy(originalPos);
+        
+        // Restore camera lock if in game mode
+        if (this.mode === 'GAME') {
+            this.cameraLocked = true;
+        }
+    }
+
+    createBinbougamiMesh(player, animateFalling = false) {
+        if (player.binbougamiMesh) return;
+        
+        const group = new THREE.Group();
+        const scale = 8.0; // 8x larger
+        
+        // Simple Ghost Shape
+        const bodyGeo = new THREE.SphereGeometry(0.4, 16, 16);
+        const bodyMat = new THREE.MeshLambertMaterial({ color: 0xa855f7 }); // Purple
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.5;
+        group.add(body);
+        
+        // Tail
+        const tailGeo = new THREE.ConeGeometry(0.2, 0.6, 16);
+        const tail = new THREE.Mesh(tailGeo, bodyMat);
+        tail.position.y = 0.1;
+        tail.rotation.x = Math.PI;
+        group.add(tail);
+        
+        // Eyes
+        const eyeGeo = new THREE.SphereGeometry(0.1, 8, 8);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.15, 0.55, 0.3);
+        group.add(leftEye);
+        
+        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(0.15, 0.55, 0.3);
+        group.add(rightEye);
+        
+        // Apply scale
+        group.scale.set(scale, scale, scale);
+        
+        // Float animation helper
+        group.userData.animate = true;
+        
+        // Position relative to player (floating above/behind)
+        const targetY = 10.0; // Adjusted for larger scale
+        
+        if (animateFalling) {
+            group.position.set(0, 50, 0); // Start high
+            
+            // Animate falling
+            const startY = 50;
+            const endY = targetY;
+            const startTime = Date.now();
+            const duration = 800; // 0.8 second fall
+            
+            const animateFall = () => {
+                if (!player.binbougamiMesh) return; // Check if still exists
+                
+                const now = Date.now();
+                const progress = Math.min((now - startTime) / duration, 1);
+                
+                // Quadratic ease in (accelerate)
+                const y = startY - (startY - endY) * (progress * progress);
+                
+                group.position.y = y;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateFall);
+                } else {
+                    this.animateBinbougamiHover(group, targetY);
+                }
+            };
+            animateFall();
+        } else {
+            group.position.set(0, targetY, 0);
+            this.animateBinbougamiHover(group, targetY);
+        }
+        
+        player.mesh.add(group);
+        player.binbougamiMesh = group;
+    }
+
+    animateBinbougamiHover(group, baseY) {
+        const animate = () => {
+            if (!group.parent) return; // Removed from scene
+            
+            const time = Date.now() * 0.002;
+            group.position.y = baseY + Math.sin(time) * 0.5;
+            group.rotation.y = Math.sin(time * 0.5) * 0.2; // Slight rotation
+            
+            requestAnimationFrame(animate);
+        };
+        animate();
+    }
+
+    async handleBinbougamiAction(player) {
+        if (!player.hasBinbougami) return;
+        
+        player.binbougamiTurns++;
+        
+        // 检查是否升级为大魔王 (例如8回合后)
+        if (player.binbougamiLevel === 0 && player.binbougamiTurns >= BINBOUGAMI_UPGRADE_TURNS) {
+            player.binbougamiLevel = 1;
+            this.log(`👻 穷神进化为大魔王了！`, "#ef4444");
+            showToast(`👻 穷神进化为大魔王了！`, '#ef4444');
+            // Update visual to look scarier (scale up, turn red)
+            if (player.binbougamiMesh) {
+                player.binbougamiMesh.children[0].material.color.setHex(0xef4444); // Red body
+                player.binbougamiMesh.scale.set(12.0, 12.0, 12.0);
+            }
+            await wait(1000);
+        }
+        
+        // 决定效果
+        const effects = player.binbougamiLevel === 1 ? BINBOUGAMI_EFFECTS.king : BINBOUGAMI_EFFECTS.normal;
+        const effect = effects[Math.floor(Math.random() * effects.length)];
+        
+        // 显示弹窗
+        await this.showBinbougamiDialog(player, effect);
+        
+        // 执行效果
+        switch (effect.type) {
+            case 'loseMoney':
+                const amount = rand(effect.min, effect.max);
+                player.money -= amount;
+                this.log(`${player.name} 损失了 ¥${amount}`, "#ef4444");
+                break;
+            case 'debt':
+                const debt = rand(effect.min, effect.max);
+                player.money -= debt;
+                this.log(`${player.name} 背负了 ¥${debt} 债务`, "#ef4444");
+                break;
+            case 'sellProperty':
+                await this.sellRandomProperty(player);
+                break;
+            case 'sellAllProperty':
+                // Sell multiple properties
+                let count = 0;
+                while(await this.sellRandomProperty(player, false) && count < 5) {
+                    count++;
+                }
+                break;
+            case 'nothing':
+                this.log("穷神什么也没做", "#9ca3af");
+                break;
+        }
+        
+        this.updateUI();
+    }
+    
+    async sellRandomProperty(player, showLog = true) {
+        // Find owned properties
+        const ownedTiles = this.map.filter(t => t.owner === player.id && t.buildings.length > 0);
+        if (ownedTiles.length === 0) {
+            if (showLog) this.log("穷神想卖地，但你一无所有...", "#9ca3af");
+            return false;
+        }
+        
+        const tile = ownedTiles[Math.floor(Math.random() * ownedTiles.length)];
+        // Sell the most expensive building on this tile
+        const buildingIdx = tile.buildings.pop(); // Remove last added
+        
+        const sellPrice = Math.floor(BUILDING_COSTS[buildingIdx] / 2);
+        player.money += sellPrice;
+        player.assets -= BUILDING_COSTS[buildingIdx];
+        
+        // If no buildings left, clear owner
+        if (tile.buildings.length === 0) {
+            tile.owner = null;
+        }
+        
+        this.removeBuildingVisually(tile);
+        
+        if (showLog) this.log(`穷神卖掉了 ${tile.stationName} 的物件，获得 ¥${sellPrice}`, "#ef4444");
+        return true;
+    }
+
+    removeBuildingVisually(stationTile) {
+        // Find environment tiles around station
+        const range = 2;
+        const candidates = [];
+        for(let x = stationTile.gridX - range; x <= stationTile.gridX + range; x++) {
+            for(let z = stationTile.gridY - range; z <= stationTile.gridY + range; z++) {
+                const t = this.tilesMap.get(`${x},${z}`);
+                if (t && !t.isRoad && t.mesh.children.length > 0) {
+                    candidates.push(t);
+                }
+            }
+        }
+        
+        if (candidates.length > 0) {
+            // Pick one and remove a child
+            const target = candidates[Math.floor(Math.random() * candidates.length)];
+            if (target.mesh.children.length > 0) {
+                target.mesh.remove(target.mesh.children[target.mesh.children.length - 1]);
+            }
+        }
+    }
+
+    async showBinbougamiDialog(player, effect) {
+        return new Promise(resolve => {
+            const modal = document.getElementById('binbougami-modal');
+            const title = document.getElementById('binbougami-modal-title');
+            const desc = document.getElementById('binbougami-modal-desc');
+            const effectEl = document.getElementById('binbougami-modal-effect');
+            const hint = document.getElementById('binbougami-modal-hint');
+            
+            modal.classList.remove('hidden');
+            
+            title.innerText = player.binbougamiLevel === 1 ? "大魔王降临！" : "穷神来袭！";
+            desc.innerText = effect.msg;
+            effectEl.innerText = ""; 
+            hint.innerText = "点击任意处继续...";
+            
+            // Auto close after delay
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                resolve();
+            }, 2500);
+        });
+    }
+
+    // --- 卡牌系统方法 ---
+
+    async handleCardStation(player) {
+        // Randomly pick a card from pool based on rarity weights
+        const r = Math.random();
+        let pool = CARD_POOL.common;
+        if (r > 0.7) pool = CARD_POOL.rare;
+        if (r > 0.95) pool = CARD_POOL.epic;
+        
+        const cardKey = pool[Math.floor(Math.random() * pool.length)];
+        const card = CARD_TYPES[cardKey];
+        
+        // Add to player hand
+        if (player.cards.length < MAX_HAND_SIZE) {
+            player.cards.push(cardKey);
+            this.log(`🎴 ${player.name} 获得了 [${card.name}]`, "#fbbf24");
+            await this.showCardGetDialog(player, card);
+        } else {
+            this.log(`🎴 ${player.name} 找到了 [${card.name}]，但是手牌满了...`, "#9ca3af");
+            showToast("手牌已满，无法获取新卡片", "gray");
+        }
+    }
+
+    async showCardGetDialog(player, card) {
+        return new Promise(resolve => {
+            const modal = document.getElementById('card-modal');
+            const content = document.getElementById('card-modal-content');
+            
+            modal.classList.remove('hidden');
+            content.innerHTML = `
+                <div class="text-center">
+                    <div class="text-6xl mb-4">${card.icon}</div>
+                    <div class="text-3xl font-bold text-gray-800 mb-2">${card.name}</div>
+                    <div class="text-gray-600">${card.desc}</div>
+                    <div class="mt-4 text-sm text-yellow-600 font-bold">稀有度: ${card.rarity.toUpperCase()}</div>
+                </div>
+            `;
+            
+            if (player.isAI) {
+                setTimeout(() => {
+                    this.closeCardModal();
+                    resolve();
+                }, 1500);
+            } else {
+                this._resolveCardModal = resolve;
+            }
+        });
+    }
+
+    closeCardModal() {
+        document.getElementById('card-modal').classList.add('hidden');
+        if (this._resolveCardModal) {
+            this._resolveCardModal();
+            this._resolveCardModal = null;
+        }
+    }
+
+    openUseCardModal() {
+        const player = this.players[0]; // Human player
+        if (player.cards.length === 0) return;
+        
+        const modal = document.getElementById('use-card-modal');
+        const list = document.getElementById('use-card-list');
+        list.innerHTML = '';
+        
+        player.cards.forEach((cardKey, index) => {
+            const card = CARD_TYPES[cardKey];
+            const div = document.createElement('div');
+            div.className = `card-item w-32 p-3 rounded-xl border-2 flex flex-col items-center gap-2 bg-white shadow-md card-rarity-${card.rarity}`;
+            div.onclick = () => this.useCard(index);
+            
+            div.innerHTML = `
+                <div class="text-3xl">${card.icon}</div>
+                <div class="font-bold text-sm text-center">${card.name}</div>
+                <div class="text-xs text-gray-600 text-center leading-tight">${card.desc}</div>
+            `;
+            list.appendChild(div);
+        });
+        
+        modal.classList.remove('hidden');
+    }
+
+    closeUseCardModal() {
+        document.getElementById('use-card-modal').classList.add('hidden');
+    }
+
+    async useCard(cardIndex) {
+        this.closeUseCardModal();
+        const player = this.players[0];
+        const cardKey = player.cards[cardIndex];
+        const card = CARD_TYPES[cardKey];
+        
+        // Remove card from hand
+        player.cards.splice(cardIndex, 1);
+        this.updateUI();
+        
+        this.log(`🃏 ${player.name} 使用了 [${card.name}]`, "#a855f7");
+        
+        // Hide buttons
+        document.getElementById('roll-btn').classList.add('hidden');
+        document.getElementById('use-card-btn').classList.add('hidden');
+        
+        // Execute Effect
+        if (card.type === 'move') {
+            await this.processMove(card.diceCount);
+        } else if (card.type === 'attack') {
+            await this.handleAttackCard(player, card);
+            this.nextTurn();
+        } else if (card.type === 'special') {
+            await this.handleSpecialCard(player, card);
+            this.nextTurn();
+        }
+    }
+
+    async handleAttackCard(player, card) {
+        const target = this.players.find(p => p !== player); // Simple 1v1 logic
+        
+        if (card.effect === 'skip') {
+            target.skipNextTurn = true;
+            this.log(`💤 ${target.name} 下回合将无法行动！`, "#3b82f6");
+            showToast(`${target.name} 进入冬眠！`, "#3b82f6");
+        } else if (card.effect === 'blowAway') {
+            const randomTile = this.map[Math.floor(Math.random() * this.map.length)];
+            target.currentTile = randomTile;
+            target.mesh.position.copy(randomTile.worldPos);
+            target.mesh.position.y = 1.5;
+            this.log(`💨 ${target.name} 被吹飞到了不知名的地方！`, "#3b82f6");
+            this.updateDistanceDisplay();
+        } else if (card.effect === 'trap') {
+            this.log("陷阱卡尚未实装", "gray");
+        }
+        await wait(1000);
+    }
+
+    async handleSpecialCard(player, card) {
+        if (card.effect === 'backward') {
+            this.log("后退卡尚未实装", "gray");
+        } else if (card.effect === 'teleport') {
+            const stations = this.map.filter(t => t.type === 'green');
+            const target = stations[Math.floor(Math.random() * stations.length)];
+            player.currentTile = target;
+            player.mesh.position.copy(target.worldPos);
+            player.mesh.position.y = 1.5;
+            this.log(`🚪 ${player.name} 使用任意门传送到了 ${target.stationName}`, "#a855f7");
+            this.updateDistanceDisplay();
+        } else if (card.effect === 'exorcise') {
+            if (player.hasBinbougami) {
+                player.hasBinbougami = false;
+                if (player.binbougamiMesh) {
+                    player.mesh.remove(player.binbougamiMesh);
+                    player.binbougamiMesh = null;
+                }
+                this.log(`📿 穷神被驱散了！`, "#fbbf24");
+            } else {
+                this.log("你身上没有穷神...", "gray");
+            }
+        }
+        await wait(1000);
+    }
+
     async triggerTileEvent(player, alreadyReachedDestination = false) {
         this.state = 'EVENT';
         const tile = player.currentTile;
@@ -2064,12 +2804,18 @@ class Game {
                 await this.showMoneyChangeDialog(player, -loss);
                 break;
             case 'yellow':
-                this.log(`卡牌事件 (未实装)`, "#fbbf24");
+                await this.handleCardStation(player);
                 break;
             case 'green':
                 endTurn = false;
                 await this.handleStation(player, tile);
                 break;
+        }
+        
+        // Handle Binbougami at end of turn
+        if (player.hasBinbougami) {
+            await wait(500);
+            await this.handleBinbougamiAction(player);
         }
 
         this.updateUI();
@@ -2272,6 +3018,42 @@ class Game {
         document.getElementById('p1-assets').innerText = p1.assets.toLocaleString();
         document.getElementById('com-money').innerText = com.money.toLocaleString();
         document.getElementById('com-assets').innerText = com.assets.toLocaleString();
+        
+        // Update Binbougami Indicators
+        const p1Binbougami = document.getElementById('p1-binbougami');
+        const comBinbougami = document.getElementById('com-binbougami');
+        
+        if (this.players[0].hasBinbougami) p1Binbougami.classList.remove('hidden');
+        else p1Binbougami.classList.add('hidden');
+        
+        if (this.players[1].hasBinbougami) comBinbougami.classList.remove('hidden');
+        else comBinbougami.classList.add('hidden');
+        
+        // Update Cards Display
+        const p1Cards = document.getElementById('p1-cards');
+        const comCards = document.getElementById('com-cards');
+        p1Cards.innerText = this.players[0].cards.length;
+        comCards.innerText = this.players[1].cards.length;
+        
+        // Update Hand Panel (for P1)
+        const handPanel = document.getElementById('card-hand-panel');
+        const handContainer = document.getElementById('card-hand');
+        
+        if (this.turn === 0 && !this.players[0].isAI && this.players[0].cards.length > 0) {
+            handPanel.classList.remove('hidden');
+            handContainer.innerHTML = '';
+            this.players[0].cards.forEach((cardKey, index) => {
+                const card = CARD_TYPES[cardKey];
+                const div = document.createElement('div');
+                div.className = `flex-shrink-0 w-16 h-20 bg-white rounded border-2 flex flex-col items-center justify-center cursor-pointer hover:scale-110 transition-transform card-rarity-${card.rarity}`;
+                div.title = `${card.name}: ${card.desc}`;
+                div.onclick = () => this.useCard(index);
+                div.innerHTML = `<div class="text-2xl">${card.icon}</div><div class="text-[10px] font-bold truncate w-full text-center">${card.name}</div>`;
+                handContainer.appendChild(div);
+            });
+        } else {
+            handPanel.classList.add('hidden');
+        }
         
         // 更新距离显示
         this.updateDistanceDisplay();
