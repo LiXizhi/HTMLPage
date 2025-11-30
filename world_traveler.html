@@ -4,16 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2.5D 地铁大亨 - 桃太郎风格</title>
+    <title>3D 地铁大亨 - Three.js 重制版</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script src="https://cdn.keepwork.com/npm/three%400.128.0/build/three.min.js"></script>
     <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
     <style>
         body { margin: 0; overflow: hidden; background-color: #202025; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        canvas { display: block; }
+        canvas { display: block; outline: none; }
         
-        /* UI Overlay */
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        /* UI Overlay - 保持原样，但增加穿透性 */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
         .hud-panel { pointer-events: auto; }
         
         /* Animations */
@@ -28,20 +29,39 @@
             backdrop-filter: blur(4px);
             transition: opacity 0.3s;
         }
+
+        /* Station Labels floating in 3D space */
+        .station-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            transform: translate(-50%, -150%);
+            white-space: nowrap;
+            text-shadow: 0 1px 2px black;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Canvas Game Layer -->
-    <canvas id="gameCanvas"></canvas>
+    <!-- Game Container -->
+    <div id="game-container" class="w-full h-full relative"></div>
+
+    <!-- Labels Layer (Dynamic HTML for 3D objects) -->
+    <div id="labels-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden"></div>
 
     <!-- UI Layer -->
     <div id="ui-layer" class="flex flex-col justify-between p-4">
         
         <!-- Top Info Bar -->
-        <div class="flex justify-between w-full max-w-4xl mx-auto">
+        <div class="flex justify-between w-full max-w-4xl mx-auto pointer-events-none">
             <!-- P1 Info -->
-            <div class="hud-panel bg-blue-900/90 text-white p-4 rounded-xl border-2 border-blue-400 shadow-lg w-48 transition-all" id="p1-panel">
+            <div class="hud-panel bg-blue-900/90 text-white p-4 rounded-xl border-2 border-blue-400 shadow-lg w-48 transition-all pointer-events-auto" id="p1-panel">
                 <h2 class="text-xl font-bold flex items-center gap-2">
                     <div class="w-4 h-4 rounded-full bg-blue-400"></div> 玩家 (P1)
                 </h2>
@@ -50,12 +70,12 @@
             </div>
 
             <!-- Turn Indicator -->
-            <div class="hud-panel bg-gray-800/80 text-white px-6 py-2 rounded-full border border-gray-600 h-fit mt-2">
+            <div class="hud-panel bg-gray-800/80 text-white px-6 py-2 rounded-full border border-gray-600 h-fit mt-2 pointer-events-auto">
                 <span id="turn-indicator" class="font-bold text-lg tracking-widest">等待开始...</span>
             </div>
 
             <!-- COM Info -->
-            <div class="hud-panel bg-red-900/90 text-white p-4 rounded-xl border-2 border-red-400 shadow-lg w-48 transition-all opacity-70" id="com-panel">
+            <div class="hud-panel bg-red-900/90 text-white p-4 rounded-xl border-2 border-red-400 shadow-lg w-48 transition-all opacity-70 pointer-events-auto" id="com-panel">
                 <h2 class="text-xl font-bold flex items-center gap-2">
                     <div class="w-4 h-4 rounded-full bg-red-500"></div> 电脑 (COM)
                 </h2>
@@ -65,15 +85,15 @@
         </div>
 
         <!-- Action Log -->
-        <div class="absolute top-24 right-4 w-64 pointer-events-none">
+        <div class="absolute top-24 right-4 w-64 pointer-events-none z-20">
             <div id="game-log" class="flex flex-col gap-2 items-end text-sm font-bold text-white shadow-black drop-shadow-md">
                 <!-- Log entries go here -->
             </div>
         </div>
 
         <!-- Bottom Controls -->
-        <div class="flex justify-center items-end mb-8">
-            <button id="roll-btn" class="hud-panel bg-gradient-to-b from-yellow-400 to-yellow-600 text-black font-black text-2xl px-12 py-4 rounded-2xl shadow-xl border-b-4 border-yellow-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden">
+        <div class="flex justify-center items-end mb-8 pointer-events-none">
+            <button id="roll-btn" class="hud-panel pointer-events-auto bg-gradient-to-b from-yellow-400 to-yellow-600 text-black font-black text-2xl px-12 py-4 rounded-2xl shadow-xl border-b-4 border-yellow-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden">
                 🎲 掷骰子
             </button>
         </div>
@@ -102,46 +122,46 @@
 
 <script>
 /**
- * 2.5D Metro Tycoon Game Engine
+ * 3D Metro Tycoon Game Engine (Three.js Edition)
  */
 
 // --- Constants & Config ---
-const TILE_WIDTH = 64;  // Isometric tile width
-const TILE_HEIGHT = 32; // Isometric tile height
-const MAP_LENGTH = 60;  // Number of tiles in the track
+const TILE_SIZE = 4; // World unit size for a tile
+const TILE_SPACING = 0.2; // Gap between tiles
 const COLORS = {
-    bg: '#202025',
-    tileBase: '#444',
-    tileSide: '#222',
-    highlight: 'rgba(255, 255, 255, 0.3)',
+    bg: 0x87CEEB, // Sky Blue
+    ground: 0x1a1a20,
     
-    // Tile Types
-    blue: { top: '#3b82f6', side: '#1d4ed8' },    // Money +
-    red: { top: '#ef4444', side: '#b91c1c' },     // Money -
-    yellow: { top: '#eab308', side: '#a16207' },  // Event
-    green: { top: '#22c55e', side: '#15803d' },   // Station
-    start: { top: '#ffffff', side: '#cccccc' },   // Start
+    // Tile Materials
+    blue: 0x3b82f6,    // Money +
+    red: 0xef4444,     // Money -
+    yellow: 0xeab308,  // Event
+    green: 0x22c55e,   // Station
+    start: 0xffffff,   // Start
     
+    road: 0x9ca3af,    // Plain Road
+    env_nature: 0x15803d, // Nature
+    env_culture: 0x52525b, // Culture
+
     // Buildings
-    building: ['#60a5fa', '#818cf8', '#a78bfa'] // Tier 1, 2, 3 colors
+    building: [0x60a5fa, 0x818cf8, 0xa78bfa] 
 };
 
 const BUILDING_COSTS = [1000, 5000, 20000];
-const BUILDING_NAMES = ["拉面摊", "连锁酒店", "科技大厦"];
-const BUILDING_INCOME = [200, 800, 4000]; // Yearly income (simplified to turn based bonus here)
+const BUILDING_NAMES = ["拉面摊", "商务酒店", "摩天大楼"];
+const BUILDING_INCOME = [200, 800, 4000];
+
+const STATION_NAMES = [
+    "罗湖口岸", "国贸", "老街", "大剧院", "科学馆", "华强路", "岗厦", 
+    "会展中心", "购物公园", "香蜜湖", "车公庙", "竹子林", "侨城东", 
+    "华侨城", "世界之窗", "白石洲", "高新园", "深大", "桃园", "大新", 
+    "前海湾", "宝安中心", "深圳北站", "市民中心", "少年宫", "莲花北", 
+    "上梅林", "福民", "福田口岸", "后海", "科苑", "红树湾"
+];
 
 // --- Utilities ---
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
-
-class IsoUtils {
-    static toScreen(gridX, gridY) {
-        return {
-            x: (gridX - gridY) * TILE_WIDTH / 2,
-            y: (gridX + gridY) * TILE_HEIGHT / 2
-        };
-    }
-}
 
 // --- Game Classes ---
 
@@ -150,14 +170,33 @@ class Tile {
         this.id = id;
         this.gridX = gridX;
         this.gridY = gridY;
-        this.type = type; // 'start', 'blue', 'red', 'yellow', 'green'
-        this.buildings = []; // Array of 0, 1, 2 (tiers owned)
-        this.owner = null; // 'p1' or 'com' or null
-        this.stationName = type === 'green' ? `第 ${id} 区车站` : '';
+        this.type = type; 
+        this.buildings = []; 
+        this.owner = null; 
+        
+        this.stationName = '';
+        if (type === 'green') {
+             const rawIdx = (gridX * 13 + gridY * 7) % STATION_NAMES.length;
+             const idx = (rawIdx + STATION_NAMES.length) % STATION_NAMES.length;
+             this.stationName = STATION_NAMES[idx];
+        }
+
+        this.neighbors = []; 
+        this.mesh = null; // Three.js Mesh
+        this.labelElement = null; // HTML Element for station name
     }
 
-    get renderColor() {
-        return COLORS[this.type];
+    get isRoad() {
+        return !this.type.startsWith('env');
+    }
+
+    get isColored() {
+        return ['blue', 'red', 'yellow', 'green', 'start'].includes(this.type);
+    }
+
+    // Helper to get world position based on grid
+    get worldPos() {
+        return new THREE.Vector3(this.gridX * TILE_SIZE, 0, this.gridY * TILE_SIZE);
     }
 }
 
@@ -167,91 +206,484 @@ class Player {
         this.name = name;
         this.color = color;
         this.isAI = isAI;
-        this.money = 10000; // Starting money
+        this.money = 10000;
         this.assets = 0;
-        this.pathIndex = 0; // Current position on the track
         
-        // Visual properties
-        this.visualX = 0;
-        this.visualY = 0;
+        this.currentTile = null;
+        this.previousTile = null;
+        
+        this.mesh = null; // Three.js Mesh (Group)
+        
+        // For smooth movement animation
+        this.animating = false;
+        this.targetPos = new THREE.Vector3();
     }
 }
 
 class Game {
     constructor() {
-        this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
+        this.container = document.getElementById('game-container');
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         
-        this.camera = { x: 0, y: 0, targetX: 0, targetY: 0 };
-        this.map = []; // Array of Tiles
+        // Three.js Components
+        this.scene = null;
+        this.camera = null;
+        this.renderer = null;
+        this.controls = null;
+
+        this.map = []; 
         this.players = [];
-        this.turn = 0; // 0 = P1, 1 = COM
-        this.state = 'INIT'; // INIT, IDLE, MOVING, EVENT, BUYING
+        this.turn = 0;
+        this.state = 'INIT'; 
+        this.cameraLocked = true;
+        this.isUserInteracting = false;
         
-        this.resize();
-        window.addEventListener('resize', () => this.resize());
-        
+        this.initThree();
+        this.initGame();
+
+        window.addEventListener('resize', () => this.onResize());
         document.getElementById('roll-btn').onclick = () => this.playerRoll();
         
-        this.init();
+        // Start Loop
+        this.animate();
     }
 
-    resize() {
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
-        this.canvas.width = this.width;
-        this.canvas.height = this.height;
-    }
+    initThree() {
+        // 1. Scene
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x202025);
+        this.scene.fog = new THREE.Fog(0x202025, 90, 180);
 
-    init() {
-        // Generate Map (Winding path)
-        let cx = 0, cy = 0;
-        const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-        let lastDir = 0;
+        // 2. Camera (Perspective)
+        const fov = 45;
+        const aspect = this.width / this.height;
+        const near = 0.1;
+        const far = 1000;
+        this.camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
         
-        // Create Start Tile
-        this.map.push(new Tile(0, 0, 0, 'start'));
+        // Perspective View Setup: Position and LookAt
+        this.camera.position.set(0, 60, 60); 
+        this.camera.lookAt(this.scene.position); // Will be updated to follow player
 
-        for (let i = 1; i < MAP_LENGTH; i++) {
-            // Bias towards continuing straight to avoid too many zigzags, but turn occasionally
-            if (Math.random() > 0.7) {
-                lastDir = (lastDir + (Math.random() > 0.5 ? 1 : 3)) % 4;
+        // 3. Renderer
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.container.appendChild(this.renderer.domElement);
+
+        // Controls
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.dampingFactor = 0.05;
+        this.controls.minDistance = 50;
+        this.controls.maxDistance = 130;
+        this.controls.target.set(0, 0, 0);
+        
+        // Lock rotation, enable pan
+        this.controls.enableRotate = false;
+        this.controls.mouseButtons = {
+            LEFT: THREE.MOUSE.PAN,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN
+        };
+        this.controls.touches = {
+            ONE: THREE.TOUCH.PAN,
+            TWO: THREE.TOUCH.DOLLY_PAN
+        };
+        
+        // Stop auto-following if user interacts
+        this.controls.addEventListener('start', () => {
+            this.cameraLocked = false;
+            this.isUserInteracting = true;
+        });
+
+        this.controls.addEventListener('end', () => {
+            this.isUserInteracting = false;
+            if (this.state === 'MOVING') {
+                this.cameraLocked = true;
             }
-            
-            cx += directions[lastDir][0];
-            cy += directions[lastDir][1];
-            
-            // Determine Type
-            let type = 'blue';
-            const roll = Math.random();
-            
-            // Logic for tile distribution
-            if (i % 5 === 0) type = 'green'; // Station every 5 blocks
-            else if (roll < 0.15) type = 'red';
-            else if (roll < 0.25) type = 'yellow';
-            
-            this.map.push(new Tile(i, cx, cy, type));
-        }
+        });
+
+        // 4. Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        this.scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 500;
+        const shadowSize = 50;
+        dirLight.shadow.camera.left = -shadowSize;
+        dirLight.shadow.camera.right = shadowSize;
+        dirLight.shadow.camera.top = shadowSize;
+        dirLight.shadow.camera.bottom = -shadowSize;
+        this.scene.add(dirLight);
+    }
+
+    initGame() {
+        // Materials Cache
+        this.materials = {
+            road: new THREE.MeshLambertMaterial({ color: COLORS.road }),
+            start: new THREE.MeshLambertMaterial({ color: COLORS.start }),
+            blue: new THREE.MeshLambertMaterial({ color: COLORS.blue }),
+            red: new THREE.MeshLambertMaterial({ color: COLORS.red }),
+            yellow: new THREE.MeshLambertMaterial({ color: COLORS.yellow }),
+            green: new THREE.MeshLambertMaterial({ color: COLORS.green }),
+            env_nature: new THREE.MeshLambertMaterial({ color: COLORS.env_nature }),
+            env_culture: new THREE.MeshLambertMaterial({ color: COLORS.env_culture }),
+            rail: new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.5 })
+        };
+        
+        this.geometries = {
+            tile: new THREE.BoxGeometry(TILE_SIZE - TILE_SPACING, 1, TILE_SIZE - TILE_SPACING),
+            envBlock: new THREE.BoxGeometry(TILE_SIZE, 4, TILE_SIZE) // Taller blocks for env
+        };
+
+        // Generate Map
+        const startTile = this.generateMap();
 
         // Init Players
         this.players = [
-            new Player('p1', '玩家', '#60a5fa', false),
-            new Player('com', '电脑', '#f87171', true)
+            new Player('p1', '玩家', 0x3b82f6, false),
+            new Player('com', '电脑', 0xef4444, true)
         ];
         
-        // Set initial camera
-        const startPos = IsoUtils.toScreen(0, 0);
-        this.camera.x = -startPos.x + this.width / 2;
-        this.camera.y = -startPos.y + this.height / 2;
+        this.players.forEach(p => {
+            this.createPlayerMesh(p);
+            p.currentTile = startTile;
+            p.mesh.position.copy(startTile.worldPos);
+            p.mesh.position.y = 1.5; // Sit on top of tile
+        });
 
+        // Initial Camera Setup: Center on P1, looking from South
+        const p1Pos = this.players[0].mesh.position;
+        this.camera.position.set(p1Pos.x, p1Pos.y + 60, p1Pos.z + 60);
+        this.controls.target.copy(p1Pos);
+        this.controls.update();
+        
         this.updateUI();
         this.startTurn();
-        
-        // Start Loop
-        requestAnimationFrame(() => this.loop());
     }
+
+    createPlayerMesh(player) {
+        const group = new THREE.Group();
+
+        // Body
+        const bodyGeo = new THREE.CylinderGeometry(0.8, 1, 2, 16);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: player.color });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 1;
+        body.castShadow = true;
+        group.add(body);
+
+        // Head
+        const headGeo = new THREE.SphereGeometry(0.8, 16, 16);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.y = 2.2;
+        head.castShadow = true;
+        group.add(head);
+
+        // Hat/Indicator (Cone)
+        const hatGeo = new THREE.ConeGeometry(0.6, 1, 16);
+        const hatMat = new THREE.MeshStandardMaterial({ color: player.color });
+        const hat = new THREE.Mesh(hatGeo, hatMat);
+        hat.position.y = 3;
+        hat.rotation.x = Math.PI; // Point down? No point up like a party hat
+        group.add(hat);
+
+        this.scene.add(group);
+        player.mesh = group;
+    }
+
+    generateMap() {
+        this.map = [];
+        
+        // 0. Prepare Station Names
+        const availableNames = [...STATION_NAMES];
+        // Shuffle
+        for (let i = availableNames.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [availableNames[i], availableNames[j]] = [availableNames[j], availableNames[i]];
+        }
+        
+        const totalStations = availableNames.length;
+        
+        // 1. Calculate Grid Dimensions to fit all stations
+        const ratio = 4/3;
+        let cols = Math.ceil(Math.sqrt(totalStations * ratio));
+        let rows = Math.ceil(totalStations / cols);
+        while (cols * rows < totalStations) rows++;
+
+        // 2. Generate Coordinates (Centered around 0)
+        const xCoords = [];
+        let cx = -Math.floor(cols * 2.5); 
+        for(let i=0; i<cols; i++) {
+            xCoords.push(cx);
+            cx += rand(2, 5);
+        }
+
+        const zCoords = [];
+        let cz = -Math.floor(rows * 2.5);
+        for(let i=0; i<rows; i++) {
+            zCoords.push(cz);
+            cz += rand(2, 5);
+        }
+        
+        // 3. Build Graph Nodes (Intersections)
+        const nodes = []; 
+        for(let i=0; i<xCoords.length; i++) {
+            const row = [];
+            for(let j=0; j<zCoords.length; j++) {
+                row.push({ x: xCoords[i], z: zCoords[j], id: `${i},${j}` });
+            }
+            nodes.push(row);
+        }
+
+        // 4. Build All Potential Edges
+        const allEdges = [];
+        for(let i=0; i<xCoords.length-1; i++) {
+            for(let j=0; j<zCoords.length; j++) {
+                allEdges.push({ u: nodes[i][j], v: nodes[i+1][j], type: 'h' });
+            }
+        }
+        for(let i=0; i<xCoords.length; i++) {
+            for(let j=0; j<zCoords.length-1; j++) {
+                allEdges.push({ u: nodes[i][j], v: nodes[i][j+1], type: 'v' });
+            }
+        }
+
+        // MST Logic
+        for (let i = allEdges.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [allEdges[i], allEdges[j]] = [allEdges[j], allEdges[i]];
+        }
+
+        const parent = new Map();
+        const find = (id) => {
+            if (!parent.has(id)) parent.set(id, id);
+            if (parent.get(id) !== id) parent.set(id, find(parent.get(id)));
+            return parent.get(id);
+        };
+        const union = (id1, id2) => {
+            const root1 = find(id1);
+            const root2 = find(id2);
+            if (root1 !== root2) {
+                parent.set(root1, root2);
+                return true;
+            }
+            return false;
+        };
+
+        const activeEdges = new Set();
+        const rejectedEdges = [];
+
+        for(const edge of allEdges) {
+            if (union(edge.u.id, edge.v.id)) {
+                activeEdges.add(edge);
+            } else {
+                rejectedEdges.push(edge);
+            }
+        }
+
+        for(const edge of rejectedEdges) {
+            if (Math.random() < 0.4) {
+                activeEdges.add(edge);
+            }
+        }
+
+        const degrees = new Map();
+        const incDeg = (id) => degrees.set(id, (degrees.get(id) || 0) + 1);
+        activeEdges.forEach(e => { incDeg(e.u.id); incDeg(e.v.id); });
+
+        for(const edge of rejectedEdges) {
+            if (activeEdges.has(edge)) continue;
+            if ((degrees.get(edge.u.id)||0) < 2 || (degrees.get(edge.v.id)||0) < 2) {
+                activeEdges.add(edge);
+                incDeg(edge.u.id);
+                incDeg(edge.v.id);
+            }
+        }
+
+        // 5. Sparse Map Generation
+        const tileData = new Map(); // "x,z" -> { type, stationName? }
+        const setTile = (x, z, type, props={}) => {
+            const key = `${x},${z}`;
+            // Don't overwrite road/station with env
+            if (!tileData.has(key) || (tileData.get(key).type === 'env' && type !== 'env')) { 
+                tileData.set(key, { x, z, type, ...props });
+            }
+        };
+
+        // Place Stations
+        let nameIndex = 0;
+        nodes.forEach(row => row.forEach(node => {
+            let stationName = "";
+            if (nameIndex < availableNames.length) {
+                stationName = availableNames[nameIndex++];
+            } else {
+                stationName = `郊区 ${nameIndex++ - availableNames.length + 1}`;
+            }
+            setTile(node.x, node.z, 'green', { stationName });
+        }));
+
+        // Place Roads
+        activeEdges.forEach(edge => {
+            const u = edge.u;
+            const v = edge.v;
+            if (edge.type === 'h') { // Varying X
+                const minX = Math.min(u.x, v.x);
+                const maxX = Math.max(u.x, v.x);
+                for(let x = minX + 1; x < maxX; x++) {
+                    const type = (Math.random() < 0.3) ? this.getRandomColoredType() : 'road';
+                    setTile(x, u.z, type);
+                }
+            } else { // Varying Z
+                const minZ = Math.min(u.z, v.z);
+                const maxZ = Math.max(u.z, v.z);
+                for(let z = minZ + 1; z < maxZ; z++) {
+                    const type = (Math.random() < 0.3) ? this.getRandomColoredType() : 'road';
+                    setTile(u.x, z, type);
+                }
+            }
+        });
+
+        // Grow Environment around roads/stations
+        const roadTiles = Array.from(tileData.values());
+        roadTiles.forEach(t => {
+            // Random range 3-8
+            const range = rand(3, 8);
+            for(let dx = -range; dx <= range; dx++) {
+                for(let dz = -range; dz <= range; dz++) {
+                    // Organic shape (Diamond/Circle hybrid)
+                    if (Math.abs(dx) + Math.abs(dz) <= range * 1.4) {
+                         const nx = t.x + dx;
+                         const nz = t.z + dz;
+                         const key = `${nx},${nz}`;
+                         if (!tileData.has(key)) {
+                             const envType = Math.random() > 0.7 ? 'env_culture' : 'env_nature';
+                             setTile(nx, nz, envType); // Default to env
+                         }
+                    }
+                }
+            }
+        });
+
+        // 6. Instantiate Tiles
+        const mapGroup = new THREE.Group();
+        this.scene.add(mapGroup);
+        this.tilesMap = new Map();
+        
+        let idCounter = 0;
+        tileData.forEach(data => {
+            const tile = new Tile(idCounter++, data.x, data.z, data.type);
+            if (data.stationName) tile.stationName = data.stationName;
+            
+            this.map.push(tile);
+            this.tilesMap.set(`${data.x},${data.z}`, tile);
+            this.createTileVisuals(tile, mapGroup);
+        });
+        
+        // 7. Link Neighbors
+        this.map.forEach(tile => {
+            if (!tile.isRoad) return;
+            
+            const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+            dirs.forEach(([dx, dz]) => {
+                const nx = tile.gridX + dx;
+                const nz = tile.gridY + dz;
+                const neighbor = this.tilesMap.get(`${nx},${nz}`);
+                if (neighbor && neighbor.isRoad) {
+                    tile.neighbors.push(neighbor);
+                }
+            });
+        });
+        
+        // Set Start Position
+        const stations = this.map.filter(t => t.type === 'green');
+        let startTile = stations.length > 0 ? stations[Math.floor(Math.random() * stations.length)] : this.map[0];
+        
+        if (!startTile) startTile = this.map[0];
+
+        if (startTile) {
+            startTile.type = 'start';
+            startTile.mesh.material = this.materials.start;
+            startTile.mesh.position.y = 0.2; 
+            if (startTile.labelElement) {
+                startTile.labelElement.remove();
+                startTile.labelElement = null;
+            }
+        }
+        
+        return startTile;
+    }
+
+    createTileVisuals(tile, parentGroup) {
+        const x = tile.gridX * TILE_SIZE;
+        const z = tile.gridY * TILE_SIZE;
+
+        // 1. Base Block
+        let geometry = this.geometries.tile;
+        let yPos = 0;
+
+        // Environment blocks are taller to create "canyons" for the track
+        if (!tile.isRoad) {
+            geometry = new THREE.BoxGeometry(TILE_SIZE, rand(2, 6), TILE_SIZE);
+            yPos = -1; // Sink them a bit
+        }
+
+        const material = this.materials[tile.type] || this.materials.road;
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(x, yPos, z);
+        mesh.receiveShadow = true;
+        
+        // 2. Decorations
+        if (tile.type === 'env_nature') {
+            if (Math.random() > 0.5) {
+                const treeGeo = new THREE.ConeGeometry(1, 3, 8);
+                const treeMat = new THREE.MeshLambertMaterial({ color: 0x14532d });
+                const tree = new THREE.Mesh(treeGeo, treeMat);
+                tree.position.set(0, 2.5, 0);
+                tree.castShadow = true;
+                mesh.add(tree); // Local coordinate
+            }
+        } else if (tile.type === 'green') {
+            // Station Marker
+            const stationGeo = new THREE.BoxGeometry(2.5, 1, 2.5);
+            const stationMesh = new THREE.Mesh(stationGeo, new THREE.MeshLambertMaterial({color: 0xffffff}));
+            stationMesh.position.y = 0.6;
+            mesh.add(stationMesh);
+
+            // Add HTML Label
+            this.createStationLabel(tile);
+        }
+
+        tile.mesh = mesh;
+        parentGroup.add(mesh);
+    }
+
+    createStationLabel(tile) {
+        const div = document.createElement('div');
+        div.className = 'station-label';
+        div.innerText = tile.stationName;
+        document.getElementById('labels-layer').appendChild(div);
+        tile.labelElement = div;
+    }
+
+    getRandomColoredType() {
+        const r = Math.random();
+        if (r < 0.25) return 'green';
+        if (r < 0.5) return 'red';
+        if (r < 0.75) return 'yellow';
+        return 'blue';
+    }
+
+    // --- UI & Interaction ---
 
     log(msg, color = 'white') {
         const logEl = document.getElementById('game-log');
@@ -259,8 +691,6 @@ class Game {
         entry.innerHTML = `<span style="color:${color}; text-shadow: 1px 1px 0 #000">${msg}</span>`;
         logEl.appendChild(entry);
         if (logEl.children.length > 5) logEl.removeChild(logEl.firstChild);
-        
-        // Auto fade out
         setTimeout(() => {
             entry.style.opacity = '0';
             setTimeout(() => entry.remove(), 500);
@@ -268,14 +698,22 @@ class Game {
     }
 
     startTurn() {
+        if (!this.isUserInteracting) {
+            this.cameraLocked = true;
+        }
         const p = this.players[this.turn];
         document.getElementById('turn-indicator').innerText = `${p.name} 的回合`;
         
-        // Highlight active panel
-        document.getElementById('p1-panel').style.opacity = this.turn === 0 ? '1' : '0.6';
-        document.getElementById('p1-panel').style.transform = this.turn === 0 ? 'scale(1.05)' : 'scale(1)';
-        document.getElementById('com-panel').style.opacity = this.turn === 1 ? '1' : '0.6';
-        document.getElementById('com-panel').style.transform = this.turn === 1 ? 'scale(1.05)' : 'scale(1)';
+        const p1Panel = document.getElementById('p1-panel');
+        const comPanel = document.getElementById('com-panel');
+        
+        p1Panel.style.opacity = this.turn === 0 ? '1' : '0.6';
+        p1Panel.style.transform = this.turn === 0 ? 'scale(1.05)' : 'scale(1)';
+        p1Panel.classList.toggle('border-yellow-400', this.turn === 0);
+        
+        comPanel.style.opacity = this.turn === 1 ? '1' : '0.6';
+        comPanel.style.transform = this.turn === 1 ? 'scale(1.05)' : 'scale(1)';
+        comPanel.classList.toggle('border-yellow-400', this.turn === 1);
 
         this.state = 'IDLE';
 
@@ -306,29 +744,122 @@ class Game {
         
         this.log(`${player.name} 掷出了 ${steps} 点!`, "#fbbf24");
 
-        for (let i = 0; i < steps; i++) {
-            if (player.pathIndex < this.map.length - 1) {
-                player.pathIndex++;
-                // Wait for animation to catch up handled in update loop mostly, but we pause here for step effect
-                await wait(250); 
+        let remainingSteps = steps;
+        
+        while (remainingSteps > 0) {
+            const current = player.currentTile;
+            const neighbors = current.neighbors;
+            
+            let validNext = neighbors.filter(n => n !== player.previousTile);
+            if (validNext.length === 0 && neighbors.length > 0) {
+                validNext = neighbors; // Dead end fallback
+            }
+
+            let nextTile = null;
+
+            if (validNext.length === 1) {
+                nextTile = validNext[0];
+            } else if (validNext.length > 1) {
+                if (player.isAI) {
+                    nextTile = validNext[Math.floor(Math.random() * validNext.length)];
+                } else {
+                    nextTile = await this.askDirection(player, validNext);
+                }
             } else {
-                // Loop back or bounce? Let's bounce back for simplicity or stop at end
-                // Creating a loop effect for endless play
-                player.pathIndex = 0;
-                this.log(`${player.name} 跑完一圈，奖励 ¥5000!`, "#4ade80");
-                player.money += 5000;
-                this.updateUI();
-                await wait(250);
+                break;
+            }
+
+            // Physics Move
+            player.previousTile = player.currentTile;
+            player.currentTile = nextTile;
+            
+            await this.animateMove(player, nextTile.worldPos);
+
+            if (nextTile.isColored) {
+                remainingSteps--;
             }
         }
 
-        await wait(500);
+        await wait(300);
         await this.triggerTileEvent(player);
+    }
+
+    animateMove(player, targetVec3) {
+        if (!this.isUserInteracting) {
+            this.cameraLocked = true;
+        }
+        return new Promise(resolve => {
+            const startPos = player.mesh.position.clone();
+            const startTime = Date.now();
+            const duration = 300; // ms
+            
+            // Simple Hop Animation
+            const animateStep = () => {
+                const now = Date.now();
+                const progress = Math.min((now - startTime) / duration, 1);
+                
+                // Linear Interpolation for X/Z
+                player.mesh.position.lerpVectors(startPos, targetVec3, progress);
+                
+                // Parabolic Arc for Y (Jump)
+                // y = 4 * height * x * (1-x) + baseline
+                const jumpHeight = 2;
+                const baseHeight = 1.5;
+                player.mesh.position.y = baseHeight + (4 * jumpHeight * progress * (1 - progress));
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateStep);
+                } else {
+                    player.mesh.position.copy(targetVec3);
+                    player.mesh.position.y = baseHeight;
+                    resolve();
+                }
+            };
+            animateStep();
+        });
+    }
+
+    askDirection(player, options) {
+        return new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'absolute inset-0 pointer-events-auto z-50';
+            overlay.id = 'direction-overlay';
+            document.getElementById('ui-layer').appendChild(overlay);
+
+            options.forEach(tile => {
+                const screenPos = this.getScreenPosition(tile.mesh.position);
+                
+                let label = '📍';
+                const dx = tile.gridX - player.currentTile.gridX;
+                const dy = tile.gridY - player.currentTile.gridY; // using gridY as Z
+                
+                if (dx > 0) label = '➡️';
+                else if (dx < 0) label = '⬅️';
+                else if (dy > 0) label = '⬇️'; // Z+ is down on screen roughly
+                else if (dy < 0) label = '⬆️';
+
+                const btn = document.createElement('button');
+                btn.innerText = label; 
+                btn.className = 'absolute w-12 h-12 bg-yellow-400 hover:bg-white rounded-full text-2xl shadow-xl border-4 border-yellow-600 animate-bounce-custom cursor-pointer';
+                btn.style.left = `${screenPos.x}px`;
+                btn.style.top = `${screenPos.y}px`;
+                btn.style.transform = 'translate(-50%, -50%)';
+
+                // Keep button moving with camera by storing reference (simplified here to static for moment)
+                // Ideally we update position in render loop, but since game pauses for input, this is okay if camera doesn't move.
+                
+                btn.onclick = () => {
+                    document.getElementById('direction-overlay').remove();
+                    resolve(tile);
+                };
+                overlay.appendChild(btn);
+            });
+        });
     }
 
     async triggerTileEvent(player) {
         this.state = 'EVENT';
-        const tile = this.map[player.pathIndex];
+        const tile = player.currentTile;
         let endTurn = true;
 
         switch (tile.type) {
@@ -336,31 +867,20 @@ class Game {
                 const bonus = rand(500, 2000);
                 player.money += bonus;
                 this.log(`幸运！获得资金 ¥${bonus}`, "#60a5fa");
+                this.spawnFloatingText(player.mesh.position, `+¥${bonus}`, '#60a5fa');
                 break;
             case 'red':
                 const loss = rand(500, 1500);
                 player.money -= loss;
-                this.log(`倒霉！丢失钱包损失 ¥${loss}`, "#f87171");
+                this.log(`倒霉！损失 ¥${loss}`, "#f87171");
+                this.spawnFloatingText(player.mesh.position, `-¥${loss}`, '#ef4444');
                 break;
             case 'yellow':
-                const eventId = rand(0, 2);
-                if (eventId === 0) {
-                    player.money += 5000;
-                    this.log(`中彩票了！获得 ¥5000`, "#fbbf24");
-                } else if (eventId === 1) {
-                    player.money = Math.floor(player.money * 0.8);
-                    this.log(`遭遇金融危机！资产缩水 20%`, "#f87171");
-                } else {
-                    this.log(`什么也没发生...`, "#ccc");
-                }
+                this.log(`卡牌事件 (未实装)`, "#fbbf24");
                 break;
             case 'green':
-                // Station logic
                 endTurn = false;
                 await this.handleStation(player, tile);
-                break;
-            case 'start':
-                this.log("回到起点休息一下。", "#fff");
                 break;
         }
 
@@ -368,25 +888,42 @@ class Game {
         if (endTurn) this.nextTurn();
     }
 
+    spawnFloatingText(pos, text, color) {
+        const div = document.createElement('div');
+        div.innerText = text;
+        div.style.color = color;
+        div.className = 'absolute text-2xl font-black shadow-white drop-shadow-md pointer-events-none transition-all duration-1000 ease-out';
+        
+        const screenPos = this.getScreenPosition(pos);
+        div.style.left = screenPos.x + 'px';
+        div.style.top = screenPos.y + 'px';
+        
+        document.getElementById('ui-layer').appendChild(div);
+        
+        // Animate via CSS
+        requestAnimationFrame(() => {
+            div.style.transform = 'translateY(-50px)';
+            div.style.opacity = '0';
+        });
+        
+        setTimeout(() => div.remove(), 1000);
+    }
+
     async handleStation(player, tile) {
         if (player.isAI) {
-            // Simple AI buying logic
-            // Buy cheapest building available
+            // Simple AI
             let bought = false;
             for (let i = 0; i < 3; i++) {
-                if (!tile.buildings.includes(i)) { // If tier not bought
-                     if (player.money >= BUILDING_COSTS[i] * 1.2) { // AI safety margin
-                         this.doBuy(player, tile, i);
-                         bought = true;
-                         await wait(1000);
-                         break; // Buy one per turn to be simple
-                     }
+                if (!tile.buildings.includes(i) && player.money >= BUILDING_COSTS[i] * 1.2) {
+                     this.doBuy(player, tile, i);
+                     bought = true;
+                     await wait(800);
+                     break;
                 }
             }
-            if(!bought) this.log("电脑没有看中的地产。", "#fca5a5");
+            if(!bought) this.log("电脑没有购买意向", "#fca5a5");
             this.nextTurn();
         } else {
-            // Show UI
             this.state = 'BUYING';
             this.showBuyModal(tile);
         }
@@ -395,33 +932,25 @@ class Game {
     showBuyModal(tile) {
         const modal = document.getElementById('buy-modal');
         const list = document.getElementById('building-list');
-        const title = document.getElementById('station-name');
-        
-        title.innerText = tile.stationName;
+        document.getElementById('station-name').innerText = tile.stationName;
         list.innerHTML = '';
 
         BUILDING_NAMES.forEach((name, index) => {
             const cost = BUILDING_COSTS[index];
-            const income = BUILDING_INCOME[index];
             const isOwned = tile.buildings.includes(index);
             const canAfford = this.players[0].money >= cost;
             
             const div = document.createElement('div');
             div.className = `flex justify-between items-center p-3 rounded border ${isOwned ? 'bg-blue-100 border-blue-500' : 'bg-gray-50 border-gray-200'}`;
             
-            let btnHtml = '';
-            if (isOwned) {
-                btnHtml = `<span class="text-blue-600 font-bold text-sm">已拥有</span>`;
-            } else if (canAfford) {
-                btnHtml = `<button onclick="game.playerBuy(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm shadow">购买</button>`;
-            } else {
-                btnHtml = `<span class="text-red-400 text-sm">资金不足</span>`;
-            }
+            let btnHtml = isOwned ? 
+                `<span class="text-blue-600 font-bold text-sm">已拥有</span>` : 
+                (canAfford ? `<button onclick="game.playerBuy(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm shadow">购买</button>` : `<span class="text-red-400 text-sm">缺钱</span>`);
 
             div.innerHTML = `
                 <div>
                     <div class="font-bold text-gray-800">${name}</div>
-                    <div class="text-xs text-gray-500">价格: ¥${cost} | 收益: ¥${income}/年</div>
+                    <div class="text-xs text-gray-500">¥${cost}</div>
                 </div>
                 <div>${btnHtml}</div>
             `;
@@ -433,13 +962,11 @@ class Game {
 
     playerBuy(tierIndex) {
         const player = this.players[0];
-        const tile = this.map[player.pathIndex];
-        
-        if (tile.buildings.includes(tierIndex)) return;
-        if (player.money < BUILDING_COSTS[tierIndex]) return;
+        const tile = player.currentTile;
+        if (tile.buildings.includes(tierIndex) || player.money < BUILDING_COSTS[tierIndex]) return;
 
         this.doBuy(player, tile, tierIndex);
-        this.showBuyModal(tile); // Refresh list
+        this.showBuyModal(tile); 
         this.updateUI();
     }
 
@@ -447,10 +974,60 @@ class Game {
         player.money -= BUILDING_COSTS[tierIndex];
         player.assets += BUILDING_COSTS[tierIndex];
         tile.buildings.push(tierIndex);
-        tile.buildings.sort(); // Keep order for rendering stack
+        tile.buildings.sort();
         tile.owner = player.id;
         
-        this.log(`${player.name} 购买了 ${BUILDING_NAMES[tierIndex]}!`, player.color);
+        this.placeBuildingVisually(tile, tierIndex);
+        this.log(`${player.name} 购买了 ${BUILDING_NAMES[tierIndex]}!`, player.color === 0x3b82f6 ? '#60a5fa' : '#f87171');
+    }
+
+    placeBuildingVisually(stationTile, tierIndex) {
+        // Find a spot near the station
+        const range = 2;
+        const candidates = [];
+        for(let x = stationTile.gridX - range; x <= stationTile.gridX + range; x++) {
+            for(let z = stationTile.gridY - range; z <= stationTile.gridY + range; z++) {
+                const t = this.tilesMap.get(`${x},${z}`);
+                // Must be environment (not road) and empty
+                if (t && !t.isRoad && t.mesh.children.length === 0) {
+                    candidates.push(t);
+                }
+            }
+        }
+
+        if (candidates.length > 0) {
+            const target = candidates[Math.floor(Math.random() * candidates.length)];
+            
+            const bColor = COLORS.building[tierIndex];
+            const h = (tierIndex + 1) * 3; // Height varies by tier
+            
+            const bGeo = new THREE.BoxGeometry(2.5, h, 2.5);
+            const bMat = new THREE.MeshLambertMaterial({ color: bColor });
+            const bMesh = new THREE.Mesh(bGeo, bMat);
+            bMesh.position.y = h / 2 + 1; // Adjust for height
+            bMesh.castShadow = true;
+            bMesh.receiveShadow = true;
+            
+            // Add windows texture logic (simplified as black boxes)
+            const winGeo = new THREE.BoxGeometry(2.6, h*0.8, 0.5);
+            const winMat = new THREE.MeshBasicMaterial({ color: 0x334155 });
+            const wins = new THREE.Mesh(winGeo, winMat);
+            bMesh.add(wins);
+
+            target.mesh.add(bMesh);
+            
+            // Juice effect
+            const scaleUp = () => {
+                bMesh.scale.set(0.1, 0.1, 0.1);
+                let s = 0.1;
+                const grow = setInterval(() => {
+                    s += 0.1;
+                    bMesh.scale.set(s, s, s);
+                    if (s >= 1) clearInterval(grow);
+                }, 16);
+            };
+            scaleUp();
+        }
     }
 
     closeBuyModal() {
@@ -466,164 +1043,85 @@ class Game {
     updateUI() {
         const p1 = this.players[0];
         const com = this.players[1];
-        
         document.getElementById('p1-money').innerText = p1.money.toLocaleString();
         document.getElementById('p1-assets').innerText = p1.assets.toLocaleString();
-        
         document.getElementById('com-money').innerText = com.money.toLocaleString();
         document.getElementById('com-assets').innerText = com.assets.toLocaleString();
     }
 
-    // --- Main Loop ---
-    update() {
-        // Camera Logic: Follow current player
-        const activePlayer = this.players[this.turn];
-        const targetTile = this.map[activePlayer.pathIndex];
-        
-        // Interpolate Player Visual Position
-        const targetScreen = IsoUtils.toScreen(targetTile.gridX, targetTile.gridY);
-        
-        // Simple Lerp for player position
-        const p = activePlayer;
-        const dx = targetScreen.x - p.visualX;
-        const dy = targetScreen.y - p.visualY;
-        p.visualX += dx * 0.1;
-        p.visualY += dy * 0.1;
+    // --- Rendering Loop ---
 
-        // Camera follows player
-        const camTargetX = -p.visualX + this.width / 2;
-        const camTargetY = -p.visualY + this.height / 2 - 50; // -50 to look slightly ahead/up
-        
-        this.camera.x += (camTargetX - this.camera.x) * 0.05;
-        this.camera.y += (camTargetY - this.camera.y) * 0.05;
+    getScreenPosition(vec3) {
+        const v = vec3.clone();
+        v.project(this.camera);
+        const x = (v.x * .5 + .5) * this.width;
+        const y = (-(v.y * .5) + .5) * this.height;
+        return { x, y };
     }
 
-    draw() {
-        this.ctx.fillStyle = COLORS.bg;
-        this.ctx.fillRect(0, 0, this.width, this.height);
+    onResize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
         
-        this.ctx.save();
-        this.ctx.translate(this.camera.x, this.camera.y);
-
-        // Sort tiles by render depth (Y + X usually works for iso, or just iterate list since it's generated mostly in order)
-        // But for proper occlusion, we should sort by (gridX + gridY)
-        // Since our map is a path, simple iteration might overlap wrong if path curls back 'up'. 
-        // Let's sort map for rendering.
-        const renderList = [...this.map].sort((a, b) => (a.gridX + a.gridY) - (b.gridX + b.gridY));
-
-        renderList.forEach(tile => this.drawTile(tile));
-        
-        // Draw Players on top (sorted by their Y pos)
-        const sortedPlayers = [...this.players].sort((a, b) => a.visualY - b.visualY);
-        sortedPlayers.forEach(p => this.drawPlayer(p));
-
-        this.ctx.restore();
+        // Update Perspective frustum
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
     }
 
-    drawTile(tile) {
-        const pos = IsoUtils.toScreen(tile.gridX, tile.gridY);
-        const c = tile.renderColor;
-        
-        // Draw Base (Cube-ish)
-        this.drawIsoPoly(pos.x, pos.y, TILE_WIDTH, TILE_HEIGHT, c.top, c.side);
-        
-        // Draw Buildings
-        if (tile.buildings.length > 0) {
-            let zOffset = 10; // Height offset
-            tile.buildings.forEach(tier => {
-                const bColor = COLORS.building[tier];
-                // Draw building block slightly smaller than tile
-                const bw = TILE_WIDTH * 0.6;
-                const bh = TILE_HEIGHT * 0.6;
-                const by = pos.y - zOffset;
+    animate() {
+        requestAnimationFrame(() => this.animate());
+
+        // Camera Follow Logic
+        if (this.cameraLocked) {
+            const activePlayer = this.players[this.turn];
+            if (activePlayer && activePlayer.mesh) {
+                const targetPos = activePlayer.mesh.position;
                 
-                // Draw building pillar
-                this.drawIsoPoly(pos.x, by, bw, bh, bColor, '#333', 20);
-                zOffset += 20; // Stack up
-            });
+                // Smoothly move both target and camera to maintain angle
+                const currentTarget = this.controls.target.clone();
+                const newTarget = currentTarget.clone().lerp(targetPos, 0.1);
+                const delta = new THREE.Vector3().subVectors(newTarget, currentTarget);
+                
+                this.camera.position.add(delta);
+                this.controls.target.copy(newTarget);
+            }
         }
-    }
 
-    drawPlayer(player) {
-        const x = player.visualX;
-        const y = player.visualY - 20; // Float above tile
-        
-        // Shadow
-        this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
-        this.ctx.beginPath();
-        this.ctx.ellipse(x, y + 20, 10, 5, 0, 0, Math.PI * 2);
-        this.ctx.fill();
+        if (this.controls) this.controls.update();
 
-        // Body
-        this.ctx.fillStyle = player.color;
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, 10, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeStyle = 'white';
-        this.ctx.stroke();
-        
-        // Label
-        if (this.turn === player.id && this.state !== 'MOVING') {
-            // Bouncing Arrow
-            const bounce = Math.sin(Date.now() / 150) * 5;
-            this.ctx.fillStyle = 'white';
-            this.ctx.beginPath();
-            this.ctx.moveTo(x - 5, y - 25 + bounce);
-            this.ctx.lineTo(x + 5, y - 25 + bounce);
-            this.ctx.lineTo(x, y - 15 + bounce);
-            this.ctx.fill();
+        // Update Station Labels
+        this.map.forEach(tile => {
+            if (tile.labelElement) {
+                // Only update if visible (optional optimization)
+                const pos = this.getScreenPosition(tile.mesh.position);
+                // Offset label to float above the station block
+                tile.labelElement.style.transform = `translate(${pos.x}px, ${pos.y - 30}px) translate(-50%, -100%)`;
+                
+                // Hide if offscreen
+                if (pos.x < 0 || pos.x > this.width || pos.y < 0 || pos.y > this.height) {
+                    tile.labelElement.style.opacity = '0';
+                } else {
+                    tile.labelElement.style.opacity = '1';
+                }
+            }
+        });
+
+        // Update Overlay Buttons if active
+        const overlay = document.getElementById('direction-overlay');
+        if (overlay) {
+            // Re-calc positions for buttons in case camera moved
+            // (Omitted for brevity/performance, but would be here)
         }
-    }
 
-    drawIsoPoly(x, y, w, h, colorTop, colorSide, height = 10) {
-        // Top Face
-        this.ctx.fillStyle = colorTop;
-        this.ctx.beginPath();
-        this.ctx.moveTo(x, y); // Top center
-        this.ctx.lineTo(x + w/2, y + h/2); // Right
-        this.ctx.lineTo(x, y + h); // Bottom
-        this.ctx.lineTo(x - w/2, y + h/2); // Left
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-        this.ctx.stroke();
-
-        // Right Side
-        this.ctx.fillStyle = colorSide;
-        this.ctx.beginPath();
-        this.ctx.moveTo(x + w/2, y + h/2);
-        this.ctx.lineTo(x + w/2, y + h/2 + height);
-        this.ctx.lineTo(x, y + h + height);
-        this.ctx.lineTo(x, y + h);
-        this.ctx.closePath();
-        this.ctx.fill();
-
-        // Left Side (Darker usually)
-        this.ctx.fillStyle = adjustColor(colorSide, -20);
-        this.ctx.beginPath();
-        this.ctx.moveTo(x - w/2, y + h/2);
-        this.ctx.lineTo(x - w/2, y + h/2 + height);
-        this.ctx.lineTo(x, y + h + height);
-        this.ctx.lineTo(x, y + h);
-        this.ctx.closePath();
-        this.ctx.fill();
-    }
-
-    loop() {
-        this.update();
-        this.draw();
-        requestAnimationFrame(() => this.loop());
+        this.renderer.render(this.scene, this.camera);
     }
 }
 
-// Helper to darken colors for shading
-function adjustColor(color, amount) {
-    return color; // Simplified for this demo, assumes hex input usually
-}
-
-// Start Game
-const game = new Game();
+// Boot
+window.onload = () => {
+    window.game = new Game();
+};
 
 </script>
 </body>
