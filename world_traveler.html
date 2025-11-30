@@ -1,0 +1,630 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2.5D 地铁大亨 - 桃太郎风格</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three%400.128.0/build/three.min.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #202025; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: block; }
+        
+        /* UI Overlay */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .hud-panel { pointer-events: auto; }
+        
+        /* Animations */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-bounce-custom { animation: bounce 1s infinite; }
+        
+        .modal {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas Game Layer -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Layer -->
+    <div id="ui-layer" class="flex flex-col justify-between p-4">
+        
+        <!-- Top Info Bar -->
+        <div class="flex justify-between w-full max-w-4xl mx-auto">
+            <!-- P1 Info -->
+            <div class="hud-panel bg-blue-900/90 text-white p-4 rounded-xl border-2 border-blue-400 shadow-lg w-48 transition-all" id="p1-panel">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <div class="w-4 h-4 rounded-full bg-blue-400"></div> 玩家 (P1)
+                </h2>
+                <p class="text-yellow-300 text-2xl font-mono mt-1">¥<span id="p1-money">0</span></p>
+                <p class="text-xs text-gray-300 mt-1">资产: ¥<span id="p1-assets">0</span></p>
+            </div>
+
+            <!-- Turn Indicator -->
+            <div class="hud-panel bg-gray-800/80 text-white px-6 py-2 rounded-full border border-gray-600 h-fit mt-2">
+                <span id="turn-indicator" class="font-bold text-lg tracking-widest">等待开始...</span>
+            </div>
+
+            <!-- COM Info -->
+            <div class="hud-panel bg-red-900/90 text-white p-4 rounded-xl border-2 border-red-400 shadow-lg w-48 transition-all opacity-70" id="com-panel">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <div class="w-4 h-4 rounded-full bg-red-500"></div> 电脑 (COM)
+                </h2>
+                <p class="text-yellow-300 text-2xl font-mono mt-1">¥<span id="com-money">0</span></p>
+                <p class="text-xs text-gray-300 mt-1">资产: ¥<span id="com-assets">0</span></p>
+            </div>
+        </div>
+
+        <!-- Action Log -->
+        <div class="absolute top-24 right-4 w-64 pointer-events-none">
+            <div id="game-log" class="flex flex-col gap-2 items-end text-sm font-bold text-white shadow-black drop-shadow-md">
+                <!-- Log entries go here -->
+            </div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="flex justify-center items-end mb-8">
+            <button id="roll-btn" class="hud-panel bg-gradient-to-b from-yellow-400 to-yellow-600 text-black font-black text-2xl px-12 py-4 rounded-2xl shadow-xl border-b-4 border-yellow-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden">
+                🎲 掷骰子
+            </button>
+        </div>
+    </div>
+
+    <!-- Property Buy Modal -->
+    <div id="buy-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full border-4 border-green-600 relative">
+            <div class="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-1 rounded-full font-bold shadow-lg">
+                到达车站
+            </div>
+            <h3 class="text-2xl font-bold text-center mt-4 mb-2 text-gray-800" id="station-name">东京站</h3>
+            <p class="text-center text-gray-500 mb-4">这块地皮看起来很有潜力！要投资吗？</p>
+            
+            <div id="building-list" class="space-y-3 mb-6">
+                <!-- Buildings injected here -->
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="game.closeBuyModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">
+                    离开
+                </button>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * 2.5D Metro Tycoon Game Engine
+ */
+
+// --- Constants & Config ---
+const TILE_WIDTH = 64;  // Isometric tile width
+const TILE_HEIGHT = 32; // Isometric tile height
+const MAP_LENGTH = 60;  // Number of tiles in the track
+const COLORS = {
+    bg: '#202025',
+    tileBase: '#444',
+    tileSide: '#222',
+    highlight: 'rgba(255, 255, 255, 0.3)',
+    
+    // Tile Types
+    blue: { top: '#3b82f6', side: '#1d4ed8' },    // Money +
+    red: { top: '#ef4444', side: '#b91c1c' },     // Money -
+    yellow: { top: '#eab308', side: '#a16207' },  // Event
+    green: { top: '#22c55e', side: '#15803d' },   // Station
+    start: { top: '#ffffff', side: '#cccccc' },   // Start
+    
+    // Buildings
+    building: ['#60a5fa', '#818cf8', '#a78bfa'] // Tier 1, 2, 3 colors
+};
+
+const BUILDING_COSTS = [1000, 5000, 20000];
+const BUILDING_NAMES = ["拉面摊", "连锁酒店", "科技大厦"];
+const BUILDING_INCOME = [200, 800, 4000]; // Yearly income (simplified to turn based bonus here)
+
+// --- Utilities ---
+const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+class IsoUtils {
+    static toScreen(gridX, gridY) {
+        return {
+            x: (gridX - gridY) * TILE_WIDTH / 2,
+            y: (gridX + gridY) * TILE_HEIGHT / 2
+        };
+    }
+}
+
+// --- Game Classes ---
+
+class Tile {
+    constructor(id, gridX, gridY, type) {
+        this.id = id;
+        this.gridX = gridX;
+        this.gridY = gridY;
+        this.type = type; // 'start', 'blue', 'red', 'yellow', 'green'
+        this.buildings = []; // Array of 0, 1, 2 (tiers owned)
+        this.owner = null; // 'p1' or 'com' or null
+        this.stationName = type === 'green' ? `第 ${id} 区车站` : '';
+    }
+
+    get renderColor() {
+        return COLORS[this.type];
+    }
+}
+
+class Player {
+    constructor(id, name, color, isAI) {
+        this.id = id;
+        this.name = name;
+        this.color = color;
+        this.isAI = isAI;
+        this.money = 10000; // Starting money
+        this.assets = 0;
+        this.pathIndex = 0; // Current position on the track
+        
+        // Visual properties
+        this.visualX = 0;
+        this.visualY = 0;
+    }
+}
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        
+        this.camera = { x: 0, y: 0, targetX: 0, targetY: 0 };
+        this.map = []; // Array of Tiles
+        this.players = [];
+        this.turn = 0; // 0 = P1, 1 = COM
+        this.state = 'INIT'; // INIT, IDLE, MOVING, EVENT, BUYING
+        
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        
+        document.getElementById('roll-btn').onclick = () => this.playerRoll();
+        
+        this.init();
+    }
+
+    resize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+    }
+
+    init() {
+        // Generate Map (Winding path)
+        let cx = 0, cy = 0;
+        const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+        let lastDir = 0;
+        
+        // Create Start Tile
+        this.map.push(new Tile(0, 0, 0, 'start'));
+
+        for (let i = 1; i < MAP_LENGTH; i++) {
+            // Bias towards continuing straight to avoid too many zigzags, but turn occasionally
+            if (Math.random() > 0.7) {
+                lastDir = (lastDir + (Math.random() > 0.5 ? 1 : 3)) % 4;
+            }
+            
+            cx += directions[lastDir][0];
+            cy += directions[lastDir][1];
+            
+            // Determine Type
+            let type = 'blue';
+            const roll = Math.random();
+            
+            // Logic for tile distribution
+            if (i % 5 === 0) type = 'green'; // Station every 5 blocks
+            else if (roll < 0.15) type = 'red';
+            else if (roll < 0.25) type = 'yellow';
+            
+            this.map.push(new Tile(i, cx, cy, type));
+        }
+
+        // Init Players
+        this.players = [
+            new Player('p1', '玩家', '#60a5fa', false),
+            new Player('com', '电脑', '#f87171', true)
+        ];
+        
+        // Set initial camera
+        const startPos = IsoUtils.toScreen(0, 0);
+        this.camera.x = -startPos.x + this.width / 2;
+        this.camera.y = -startPos.y + this.height / 2;
+
+        this.updateUI();
+        this.startTurn();
+        
+        // Start Loop
+        requestAnimationFrame(() => this.loop());
+    }
+
+    log(msg, color = 'white') {
+        const logEl = document.getElementById('game-log');
+        const entry = document.createElement('div');
+        entry.innerHTML = `<span style="color:${color}; text-shadow: 1px 1px 0 #000">${msg}</span>`;
+        logEl.appendChild(entry);
+        if (logEl.children.length > 5) logEl.removeChild(logEl.firstChild);
+        
+        // Auto fade out
+        setTimeout(() => {
+            entry.style.opacity = '0';
+            setTimeout(() => entry.remove(), 500);
+        }, 4000);
+    }
+
+    startTurn() {
+        const p = this.players[this.turn];
+        document.getElementById('turn-indicator').innerText = `${p.name} 的回合`;
+        
+        // Highlight active panel
+        document.getElementById('p1-panel').style.opacity = this.turn === 0 ? '1' : '0.6';
+        document.getElementById('p1-panel').style.transform = this.turn === 0 ? 'scale(1.05)' : 'scale(1)';
+        document.getElementById('com-panel').style.opacity = this.turn === 1 ? '1' : '0.6';
+        document.getElementById('com-panel').style.transform = this.turn === 1 ? 'scale(1.05)' : 'scale(1)';
+
+        this.state = 'IDLE';
+
+        if (p.isAI) {
+            document.getElementById('roll-btn').classList.add('hidden');
+            setTimeout(() => this.aiAction(), 1000);
+        } else {
+            document.getElementById('roll-btn').classList.remove('hidden');
+        }
+    }
+
+    async playerRoll() {
+        if (this.state !== 'IDLE') return;
+        document.getElementById('roll-btn').classList.add('hidden');
+        await this.processMove();
+    }
+
+    async aiAction() {
+        this.log("电脑正在思考...", "#fca5a5");
+        await wait(1000);
+        await this.processMove();
+    }
+
+    async processMove() {
+        this.state = 'MOVING';
+        const steps = rand(1, 6);
+        const player = this.players[this.turn];
+        
+        this.log(`${player.name} 掷出了 ${steps} 点!`, "#fbbf24");
+
+        for (let i = 0; i < steps; i++) {
+            if (player.pathIndex < this.map.length - 1) {
+                player.pathIndex++;
+                // Wait for animation to catch up handled in update loop mostly, but we pause here for step effect
+                await wait(250); 
+            } else {
+                // Loop back or bounce? Let's bounce back for simplicity or stop at end
+                // Creating a loop effect for endless play
+                player.pathIndex = 0;
+                this.log(`${player.name} 跑完一圈，奖励 ¥5000!`, "#4ade80");
+                player.money += 5000;
+                this.updateUI();
+                await wait(250);
+            }
+        }
+
+        await wait(500);
+        await this.triggerTileEvent(player);
+    }
+
+    async triggerTileEvent(player) {
+        this.state = 'EVENT';
+        const tile = this.map[player.pathIndex];
+        let endTurn = true;
+
+        switch (tile.type) {
+            case 'blue':
+                const bonus = rand(500, 2000);
+                player.money += bonus;
+                this.log(`幸运！获得资金 ¥${bonus}`, "#60a5fa");
+                break;
+            case 'red':
+                const loss = rand(500, 1500);
+                player.money -= loss;
+                this.log(`倒霉！丢失钱包损失 ¥${loss}`, "#f87171");
+                break;
+            case 'yellow':
+                const eventId = rand(0, 2);
+                if (eventId === 0) {
+                    player.money += 5000;
+                    this.log(`中彩票了！获得 ¥5000`, "#fbbf24");
+                } else if (eventId === 1) {
+                    player.money = Math.floor(player.money * 0.8);
+                    this.log(`遭遇金融危机！资产缩水 20%`, "#f87171");
+                } else {
+                    this.log(`什么也没发生...`, "#ccc");
+                }
+                break;
+            case 'green':
+                // Station logic
+                endTurn = false;
+                await this.handleStation(player, tile);
+                break;
+            case 'start':
+                this.log("回到起点休息一下。", "#fff");
+                break;
+        }
+
+        this.updateUI();
+        if (endTurn) this.nextTurn();
+    }
+
+    async handleStation(player, tile) {
+        if (player.isAI) {
+            // Simple AI buying logic
+            // Buy cheapest building available
+            let bought = false;
+            for (let i = 0; i < 3; i++) {
+                if (!tile.buildings.includes(i)) { // If tier not bought
+                     if (player.money >= BUILDING_COSTS[i] * 1.2) { // AI safety margin
+                         this.doBuy(player, tile, i);
+                         bought = true;
+                         await wait(1000);
+                         break; // Buy one per turn to be simple
+                     }
+                }
+            }
+            if(!bought) this.log("电脑没有看中的地产。", "#fca5a5");
+            this.nextTurn();
+        } else {
+            // Show UI
+            this.state = 'BUYING';
+            this.showBuyModal(tile);
+        }
+    }
+
+    showBuyModal(tile) {
+        const modal = document.getElementById('buy-modal');
+        const list = document.getElementById('building-list');
+        const title = document.getElementById('station-name');
+        
+        title.innerText = tile.stationName;
+        list.innerHTML = '';
+
+        BUILDING_NAMES.forEach((name, index) => {
+            const cost = BUILDING_COSTS[index];
+            const income = BUILDING_INCOME[index];
+            const isOwned = tile.buildings.includes(index);
+            const canAfford = this.players[0].money >= cost;
+            
+            const div = document.createElement('div');
+            div.className = `flex justify-between items-center p-3 rounded border ${isOwned ? 'bg-blue-100 border-blue-500' : 'bg-gray-50 border-gray-200'}`;
+            
+            let btnHtml = '';
+            if (isOwned) {
+                btnHtml = `<span class="text-blue-600 font-bold text-sm">已拥有</span>`;
+            } else if (canAfford) {
+                btnHtml = `<button onclick="game.playerBuy(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm shadow">购买</button>`;
+            } else {
+                btnHtml = `<span class="text-red-400 text-sm">资金不足</span>`;
+            }
+
+            div.innerHTML = `
+                <div>
+                    <div class="font-bold text-gray-800">${name}</div>
+                    <div class="text-xs text-gray-500">价格: ¥${cost} | 收益: ¥${income}/年</div>
+                </div>
+                <div>${btnHtml}</div>
+            `;
+            list.appendChild(div);
+        });
+
+        modal.classList.remove('hidden');
+    }
+
+    playerBuy(tierIndex) {
+        const player = this.players[0];
+        const tile = this.map[player.pathIndex];
+        
+        if (tile.buildings.includes(tierIndex)) return;
+        if (player.money < BUILDING_COSTS[tierIndex]) return;
+
+        this.doBuy(player, tile, tierIndex);
+        this.showBuyModal(tile); // Refresh list
+        this.updateUI();
+    }
+
+    doBuy(player, tile, tierIndex) {
+        player.money -= BUILDING_COSTS[tierIndex];
+        player.assets += BUILDING_COSTS[tierIndex];
+        tile.buildings.push(tierIndex);
+        tile.buildings.sort(); // Keep order for rendering stack
+        tile.owner = player.id;
+        
+        this.log(`${player.name} 购买了 ${BUILDING_NAMES[tierIndex]}!`, player.color);
+    }
+
+    closeBuyModal() {
+        document.getElementById('buy-modal').classList.add('hidden');
+        this.nextTurn();
+    }
+
+    nextTurn() {
+        this.turn = (this.turn + 1) % 2;
+        this.startTurn();
+    }
+
+    updateUI() {
+        const p1 = this.players[0];
+        const com = this.players[1];
+        
+        document.getElementById('p1-money').innerText = p1.money.toLocaleString();
+        document.getElementById('p1-assets').innerText = p1.assets.toLocaleString();
+        
+        document.getElementById('com-money').innerText = com.money.toLocaleString();
+        document.getElementById('com-assets').innerText = com.assets.toLocaleString();
+    }
+
+    // --- Main Loop ---
+    update() {
+        // Camera Logic: Follow current player
+        const activePlayer = this.players[this.turn];
+        const targetTile = this.map[activePlayer.pathIndex];
+        
+        // Interpolate Player Visual Position
+        const targetScreen = IsoUtils.toScreen(targetTile.gridX, targetTile.gridY);
+        
+        // Simple Lerp for player position
+        const p = activePlayer;
+        const dx = targetScreen.x - p.visualX;
+        const dy = targetScreen.y - p.visualY;
+        p.visualX += dx * 0.1;
+        p.visualY += dy * 0.1;
+
+        // Camera follows player
+        const camTargetX = -p.visualX + this.width / 2;
+        const camTargetY = -p.visualY + this.height / 2 - 50; // -50 to look slightly ahead/up
+        
+        this.camera.x += (camTargetX - this.camera.x) * 0.05;
+        this.camera.y += (camTargetY - this.camera.y) * 0.05;
+    }
+
+    draw() {
+        this.ctx.fillStyle = COLORS.bg;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        
+        this.ctx.save();
+        this.ctx.translate(this.camera.x, this.camera.y);
+
+        // Sort tiles by render depth (Y + X usually works for iso, or just iterate list since it's generated mostly in order)
+        // But for proper occlusion, we should sort by (gridX + gridY)
+        // Since our map is a path, simple iteration might overlap wrong if path curls back 'up'. 
+        // Let's sort map for rendering.
+        const renderList = [...this.map].sort((a, b) => (a.gridX + a.gridY) - (b.gridX + b.gridY));
+
+        renderList.forEach(tile => this.drawTile(tile));
+        
+        // Draw Players on top (sorted by their Y pos)
+        const sortedPlayers = [...this.players].sort((a, b) => a.visualY - b.visualY);
+        sortedPlayers.forEach(p => this.drawPlayer(p));
+
+        this.ctx.restore();
+    }
+
+    drawTile(tile) {
+        const pos = IsoUtils.toScreen(tile.gridX, tile.gridY);
+        const c = tile.renderColor;
+        
+        // Draw Base (Cube-ish)
+        this.drawIsoPoly(pos.x, pos.y, TILE_WIDTH, TILE_HEIGHT, c.top, c.side);
+        
+        // Draw Buildings
+        if (tile.buildings.length > 0) {
+            let zOffset = 10; // Height offset
+            tile.buildings.forEach(tier => {
+                const bColor = COLORS.building[tier];
+                // Draw building block slightly smaller than tile
+                const bw = TILE_WIDTH * 0.6;
+                const bh = TILE_HEIGHT * 0.6;
+                const by = pos.y - zOffset;
+                
+                // Draw building pillar
+                this.drawIsoPoly(pos.x, by, bw, bh, bColor, '#333', 20);
+                zOffset += 20; // Stack up
+            });
+        }
+    }
+
+    drawPlayer(player) {
+        const x = player.visualX;
+        const y = player.visualY - 20; // Float above tile
+        
+        // Shadow
+        this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        this.ctx.beginPath();
+        this.ctx.ellipse(x, y + 20, 10, 5, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Body
+        this.ctx.fillStyle = player.color;
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, 10, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = 'white';
+        this.ctx.stroke();
+        
+        // Label
+        if (this.turn === player.id && this.state !== 'MOVING') {
+            // Bouncing Arrow
+            const bounce = Math.sin(Date.now() / 150) * 5;
+            this.ctx.fillStyle = 'white';
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - 5, y - 25 + bounce);
+            this.ctx.lineTo(x + 5, y - 25 + bounce);
+            this.ctx.lineTo(x, y - 15 + bounce);
+            this.ctx.fill();
+        }
+    }
+
+    drawIsoPoly(x, y, w, h, colorTop, colorSide, height = 10) {
+        // Top Face
+        this.ctx.fillStyle = colorTop;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y); // Top center
+        this.ctx.lineTo(x + w/2, y + h/2); // Right
+        this.ctx.lineTo(x, y + h); // Bottom
+        this.ctx.lineTo(x - w/2, y + h/2); // Left
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        this.ctx.stroke();
+
+        // Right Side
+        this.ctx.fillStyle = colorSide;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + w/2, y + h/2);
+        this.ctx.lineTo(x + w/2, y + h/2 + height);
+        this.ctx.lineTo(x, y + h + height);
+        this.ctx.lineTo(x, y + h);
+        this.ctx.closePath();
+        this.ctx.fill();
+
+        // Left Side (Darker usually)
+        this.ctx.fillStyle = adjustColor(colorSide, -20);
+        this.ctx.beginPath();
+        this.ctx.moveTo(x - w/2, y + h/2);
+        this.ctx.lineTo(x - w/2, y + h/2 + height);
+        this.ctx.lineTo(x, y + h + height);
+        this.ctx.lineTo(x, y + h);
+        this.ctx.closePath();
+        this.ctx.fill();
+    }
+
+    loop() {
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    }
+}
+
+// Helper to darken colors for shading
+function adjustColor(color, amount) {
+    return color; // Simplified for this demo, assumes hex input usually
+}
+
+// Start Game
+const game = new Game();
+
+</script>
+</body>
+</html>
