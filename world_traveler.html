@@ -677,6 +677,8 @@
           this.controls.enablePan = false;
 
           this.autoRotate = true;
+          this.clock = new THREE.Clock();
+          this.cameraRestoreAnim = null; // {fromPos, toPos, fromTarget, toTarget, t, duration}
           this.init();
         }
 
@@ -713,6 +715,8 @@
           canvas.addEventListener("pointerdown", (e) => {
             downX = e.clientX;
             downY = e.clientY;
+            // Stop auto-rotation when user starts interacting
+            this.autoRotate = false;
           });
 
           canvas.addEventListener("pointerup", (e) => {
@@ -721,6 +725,11 @@
             if (moveDist < 10) {
               this.onClick(e);
             }
+          });
+
+          // Also stop auto-rotation when OrbitControls detects drag start
+          this.controls.addEventListener("start", () => {
+            this.autoRotate = false;
           });
         }
 
@@ -1111,22 +1120,29 @@
                     } catch (e) {}
                   }
                   this.group.remove(mesh);
-                  // restore control state
+                  // Restore control state but keep the camera at the destination
                   if (this.controls && typeof anim.prevControlsEnabled !== "undefined") {
                     this.controls.enabled = anim.prevControlsEnabled;
                   }
-                  // restore camera position and controls target
+                  // Instead of restoring the previous camera position, honor the desired camera distance
+                  // and center the map on the destination (anim.end). This keeps the camera distance
+                  // consistent while focusing on the new map location.
                   try {
-                    // Only restore camera and control target if explicitly enabled for this animation.
-                    if (anim.restoreCameraOnComplete !== false) {
-                      if (anim.prevCameraPos) {
-                        this.camera.position.copy(anim.prevCameraPos);
-                      }
-                      if (this.controls && anim.prevControlsTarget) {
-                        this.controls.target.copy(anim.prevControlsTarget);
-                        this.controls.update();
-                      }
-                    }
+                    // Determine camera distance to preserve (fallback to current camera length)
+                    const preservedDistance = anim.prevCameraLen || this.camera.position.length();
+                    // Direction from origin to destination (for final camera radial position)
+                    const toDir = anim.end ? anim.end.clone().normalize() : this.camera.position.clone().normalize();
+                    const toPos = toDir.clone().multiplyScalar(preservedDistance);
+
+                    // Queue a smooth camera restore animation instead of snapping the camera.
+                    this.cameraRestoreAnim = {
+                      fromPos: this.camera.position.clone(),
+                      toPos: toPos,
+                      fromTarget: this.controls ? this.controls.target.clone() : new THREE.Vector3(0, 0, 0),
+                      toTarget: new THREE.Vector3(0, 0, 0),
+                      t: 0,
+                      duration: 0.35, // seconds for smooth transition
+                    };
                   } catch (e) {}
                   // Hide destination UI indicator
                   try {
@@ -1196,6 +1212,27 @@
               this.planes.splice(toRemove[r], 1);
             }
           }
+
+          // Smooth camera restore animation (if queued)
+          try {
+            const dt = this.clock.getDelta();
+            if (this.cameraRestoreAnim) {
+              const a = this.cameraRestoreAnim;
+              a.t = Math.min(a.duration, a.t + dt);
+              const u = Math.min(1, a.t / a.duration);
+              // Interpolate camera world position and controls target
+              if (a.fromPos && a.toPos) {
+                this.camera.position.lerpVectors(a.fromPos, a.toPos, u);
+              }
+              if (this.controls && a.fromTarget && a.toTarget) {
+                this.controls.target.lerpVectors(a.fromTarget, a.toTarget, u);
+                this.controls.update();
+              }
+              if (u >= 1) {
+                this.cameraRestoreAnim = null;
+              }
+            }
+          } catch (e) {}
         }
 
         // --- Plane animation helpers ---
@@ -1263,7 +1300,6 @@
             trailColor = 0xffffff,
             zoomLandingDistance = 14,
             zoomLandingSpeed = 0.06,
-            restoreCameraOnComplete = false,
           } = {}
         ) {
           if (!this.cities || this.cities.length === 0) return;
@@ -1312,7 +1348,6 @@
           anim.prevCameraPos = this.camera.position.clone();
           anim.prevControlsTarget = this.controls ? this.controls.target.clone() : new THREE.Vector3(0, 0, 0);
           anim.prevCameraLen = this.camera.position.length();
-          anim.restoreCameraOnComplete = restoreCameraOnComplete;
 
           // trail initialization (dashed line)
           anim.trailPoints = [];
@@ -1569,12 +1604,7 @@
           document.getElementById("game-title").classList.remove("hidden");
 
           if (this.worldMap) {
-            this.worldMap.autoRotate = false;
-            // Start travel to Shenzhen (or currentCity) and enter when finished
-            if (typeof this.travelToCity === "function") {
-              // On initial startup flight, avoid restoring the camera afterwards so user's camera orientation remains.
-              this.travelToCity(homeCity, false, { restoreCameraOnComplete: false });
-            }
+            // this.worldMap.autoRotate = false;
           }
         }
 
@@ -1608,7 +1638,7 @@
         }
 
         // Travel from current city (or homeCity) to the provided city. Will perform plane animation then select City
-        travelToCity(cityOrName, enterCity = true, options = {}) {
+        travelToCity(cityOrName, enterCity = true) {
           let cityObj = null;
           if (!cityOrName) return;
           if (typeof cityOrName === "string") {
@@ -1642,7 +1672,6 @@
                 this.selectCity(cityObj);
               }
             },
-            restoreCameraOnComplete: options.restoreCameraOnComplete,
           });
         }
 
@@ -3054,68 +3083,43 @@
           // Apply scale
           group.scale.set(scale, scale, scale);
 
-          // Float animation helper
-          group.userData.animate = true;
+          // 简化位置算法：直接挂在 player.mesh 上，使用固定高度
+          // 玩家模型高度约为 3 单位（头顶 hat 在 y=3），穷神显示在 y=4.5 的位置
+          const fixedHeight = 4.5;
 
-          // Position relative to player's head (world space) - compute desired world positions for start and end
-          const headWorldPos = new THREE.Vector3();
-          if (player.headMesh && typeof player.headMesh.getWorldPosition === "function") {
-            player.headMesh.getWorldPosition(headWorldPos);
-          } else {
-            // fallback: compute from player.mesh position + head local position
-            headWorldPos.copy(player.mesh.position);
-            headWorldPos.y += player.headMesh && player.headMesh.position ? player.headMesh.position.y : 2.2;
-          }
-          const targetWorldPos = headWorldPos.clone().add(new THREE.Vector3(0, 1.1, 0)); // 1.1 units above head world-wise
-          const startWorldPos = headWorldPos.clone().add(new THREE.Vector3(0, 25, 0)); // start high above head
+          // 先附加到玩家mesh并设置引用，这样动画回调可以正常工作
+          player.mesh.add(group);
+          player.binbougamiMesh = group;
 
           if (animateFalling) {
-            // Convert world positions to the player's local coordinate frame (so group stays attached)
-            const parentForAttachment = player.headMesh && typeof player.headMesh.worldToLocal === "function" ? player.headMesh : player.mesh;
-            const startLocal = parentForAttachment.worldToLocal(startWorldPos.clone());
-            const targetLocal = parentForAttachment.worldToLocal(targetWorldPos.clone());
-            group.position.copy(startLocal);
+            const startHeight = fixedHeight + 10; // 从上方10单位落下
+            group.position.set(0, startHeight, 0);
 
-            // Animate falling toward the local target position above head
-            const startY = startLocal.y;
-            const endY = targetLocal.y;
             const startTime = Date.now();
-            const duration = 800; // 0.8 second fall
+            const duration = 600; // 0.6 second fall
 
             const animateFall = () => {
-              if (!player.binbougamiMesh) return; // Check if still exists
+              if (!player.binbougamiMesh || !group.parent) return;
 
               const now = Date.now();
               const progress = Math.min((now - startTime) / duration, 1);
 
               // Quadratic ease in (accelerate)
-              const localY = startY - (startY - endY) * (progress * progress);
-              // Use full 3D interpolation to avoid discrepancies when parent moves
-              group.position.lerpVectors(startLocal, targetLocal, progress);
+              const currentY = startHeight - (startHeight - fixedHeight) * (progress * progress);
+              group.position.y = currentY;
 
               if (progress < 1) {
                 requestAnimationFrame(animateFall);
               } else {
-                // Snap to final position
-                group.position.copy(targetLocal);
-                this.animateBinbougamiHover(group, targetLocal.y);
+                group.position.y = fixedHeight;
+                this.animateBinbougamiHover(group, fixedHeight);
               }
             };
             animateFall();
           } else {
-            const parentForAttachment = player.headMesh && typeof player.headMesh.worldToLocal === "function" ? player.headMesh : player.mesh;
-            const targetLocal = parentForAttachment.worldToLocal(targetWorldPos.clone());
-            group.position.copy(targetLocal);
-            this.animateBinbougamiHover(group, targetLocal.y);
+            group.position.set(0, fixedHeight, 0);
+            this.animateBinbougamiHover(group, fixedHeight);
           }
-
-          // Attach to headMesh when available so it follows any head transform
-          if (player.headMesh && typeof player.headMesh.add === "function") {
-            player.headMesh.add(group);
-          } else {
-            player.mesh.add(group);
-          }
-          player.binbougamiMesh = group;
         }
 
         animateBinbougamiHover(group, baseY) {
