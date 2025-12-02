@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data-Driven Monopoly Map</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', monospace; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        #ui-panel {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9); border: 1px solid #475569; border-radius: 12px;
+            padding: 16px 32px; color: #fff; display: flex; gap: 30px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+        }
+        .stat-item { display: flex; flex-direction: column; min-width: 100px; }
+        .label { font-size: 11px; color: #94a3b8; letter-spacing: 1.5px; font-weight: 600; margin-bottom: 4px; }
+        .value { font-size: 18px; font-weight: 700; color: #f1f5f9; }
+        .highlight { color: #38bdf8; }
+        
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; z-index: 99; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; color: #fff;
+        }
+        .loading-step { font-size: 14px; color: #64748b; margin-top: 10px; }
+
+        #labels-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden;
+        }
+        .city-label {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.6);
+            color: #cbd5e1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            pointer-events: auto;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            border: 1px solid #334155;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .city-label:hover {
+            background: #38bdf8;
+            color: #0f172a;
+            z-index: 50;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+        .city-label.neighbor {
+            border-color: #38bdf8;
+            color: #38bdf8;
+            font-weight: bold;
+            background: rgba(56, 189, 248, 0.1);
+        }
+    </style>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three%400.128.0/build/three.min.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.keepwork.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+</head>
+<body>
+
+<div id="loading">
+    <h2 id="load-title">Initializing Real-World Simulation</h2>
+    <div class="loading-step" id="load-status">Loading...</div>
+</div>
+<div id="canvas-container"></div>
+<div id="labels-container"></div>
+
+<div id="ui-panel">
+    <div class="stat-item">
+        <span class="label">CURRENT CITY</span>
+        <span class="value highlight" id="ui-name">--</span>
+    </div>
+    <div class="stat-item">
+        <span class="label">COORDINATES</span>
+        <span class="value" id="ui-coord">--</span>
+    </div>
+    <div class="stat-item">
+        <span class="label">TERRAIN TYPE</span>
+        <span class="value" id="ui-biome">--</span>
+    </div>
+</div>
+
+<script>
+    // --- CONFIG ---
+    const CONFIG = {
+        scale: 100,    // Scale factor for lat/lon to grid units
+        renderRadius: 10, // Radius to render around cities
+        colors: {
+            water: 0x1e3a8a,
+            sand: 0xfde047,
+            grass: 0x22c55e,
+            forest: 0x15803d,
+            mountain: 0x65a30d,
+            road: 0x888888, 
+            city: 0xe11d48,
+            station: 0x2563eb
+        }
+    };
+
+    // --- STATE ---
+    const worldMap = new Map(); // Key: "x,z", Value: { h: height, obj: objectType }
+    let nodes = []; // The city objects
+
+    // --- THREE JS ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB);
+    scene.fog = new THREE.Fog(0x87CEEB, 50, 180);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 70, 60);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0, 0);
+    controls.update();
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    sun.position.set(50, 100, 50);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 2048;
+    sun.shadow.mapSize.height = 2048;
+    const d = 100;
+    sun.shadow.camera.left = -d;
+    sun.shadow.camera.right = d;
+    sun.shadow.camera.top = d;
+    sun.shadow.camera.bottom = -d;
+    scene.add(sun);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+    // --- ALGORITHM START ---
+    const simplex = new SimplexNoise();
+
+    async function initGame() {
+        updateStatus("Fetching Real World Data...");
+        
+        let rawPoints = [];
+        try {
+            const response = await fetch("world_traveler_map_data");
+            let data = await response.json();
+            data = data.cities;
+            
+            // Calculate bounds
+            let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+            data.forEach(d => {
+                if (d.lat < minLat) minLat = d.lat;
+                if (d.lat > maxLat) maxLat = d.lat;
+                if (d.lng < minLng) minLng = d.lng;
+                if (d.lng > maxLng) maxLng = d.lng;
+            });
+            
+            const centerLat = (minLat + maxLat) / 2;
+            const centerLng = (minLng + maxLng) / 2;
+
+            rawPoints = data.map(d => ({
+                x: (d.lng - centerLng) * CONFIG.scale,
+                z: -(d.lat - centerLat) * CONFIG.scale,
+                originalName: d.name,
+                landscape: d.landscape,
+                population: d.population,
+                level: d.level
+            }));
+
+        } catch (e) {
+            console.error("Failed to fetch data", e);
+            // Fallback
+            for(let i=0; i<50; i++) { 
+                rawPoints.push({
+                    x: (Math.random() - 0.5) * 100,
+                    z: (Math.random() - 0.5) * 100,
+                    originalName: `LOC-${i}`,
+                    landscape: null
+                });
+            }
+        }
+
+        updateStatus("Processing Locations...");
+        await delay(100);
+
+        nodes = [];
+        const occupied = new Set();
+
+        rawPoints.forEach((p, index) => {
+            let gx = Math.round(p.x);
+            let gz = Math.round(p.z);
+            let key = `${gx},${gz}`;
+
+            if (!occupied.has(key)) {
+                occupied.add(key);
+                let type = (index % 10 === 0) ? 'station' : 'city';
+                let node = {
+                    id: nodes.length,
+                    x: gx, 
+                    z: gz,
+                    type: type,
+                    name: p.originalName,
+                    landscape: p.landscape,
+                    population: p.population,
+                    level: p.level,
+                    neighbors: []
+                };
+                nodes.push(node);
+                setCell(gx, gz, { h: 1, obj: type === 'station' ? 3 : 2 });
+            }
+        });
+
+        updateStatus("Generating Terrain...");
+        await delay(100);
+
+        // Generate terrain around cities
+        nodes.forEach(node => {
+            for(let dx = -CONFIG.renderRadius; dx <= CONFIG.renderRadius; dx++) {
+                for(let dz = -CONFIG.renderRadius; dz <= CONFIG.renderRadius; dz++) {
+                    let wx = node.x + dx;
+                    let wz = node.z + dz;
+                    if (!worldMap.has(`${wx},${wz}`)) {
+                        let h = getNoiseHeight(wx, wz);
+                        setCell(wx, wz, { h: h, obj: 0 });
+                    }
+                }
+            }
+        });
+
+        updateStatus("Connecting Infrastructure...");
+        await delay(100);
+
+        // Connect Roads: MST + Minimum Degree 2
+        const edges = [];
+        for(let i=0; i<nodes.length; i++) {
+            for(let j=i+1; j<nodes.length; j++) {
+                const distSq = (nodes[i].x - nodes[j].x)**2 + (nodes[i].z - nodes[j].z)**2;
+                if(distSq < 40000) { // Increased range to ensure connectivity
+                    edges.push({ a: i, b: j, distSq: distSq });
+                }
+            }
+        }
+        edges.sort((a,b) => a.distSq - b.distSq);
+
+        const parent = new Array(nodes.length).fill(0).map((_,i)=>i);
+        function find(i) { if(parent[i]===i) return i; return parent[i]=find(parent[i]); }
+        function union(i, j) { 
+            let rootA = find(i), rootB = find(j); 
+            if(rootA!==rootB) { parent[rootA]=rootB; return true; } 
+            return false; 
+        }
+
+        let roadsBuilt = 0;
+        
+        // Pass 1: MST
+        for(let e of edges) {
+            if(union(e.a, e.b)) {
+                const u = nodes[e.a];
+                const v = nodes[e.b];
+                createRoad(u, v);
+                if(!u.neighbors.includes(v.id)) u.neighbors.push(v.id);
+                if(!v.neighbors.includes(u.id)) v.neighbors.push(u.id);
+                roadsBuilt++;
+                if(roadsBuilt % 5 === 0) await delay(20);
+            }
+        }
+
+        // Pass 2: Ensure Degree >= 2
+        for(let e of edges) {
+            const u = nodes[e.a];
+            const v = nodes[e.b];
+            
+            if(u.neighbors.includes(v.id)) continue;
+
+            if(u.neighbors.length < 2 || v.neighbors.length < 2) {
+                createRoad(u, v);
+                if(!u.neighbors.includes(v.id)) u.neighbors.push(v.id);
+                if(!v.neighbors.includes(u.id)) v.neighbors.push(u.id);
+                roadsBuilt++;
+                if(roadsBuilt % 5 === 0) await delay(20);
+            }
+        }
+
+        updateStatus("Rendering Voxel World...");
+        renderWorld();
+        createLabels();
+        
+        document.getElementById('loading').style.display = 'none';
+        
+        // Start Game
+        startPawn();
+    }
+
+    function setCell(x, z, data) {
+        worldMap.set(`${x},${z}`, data);
+    }
+
+    function getCell(x, z) {
+        return worldMap.get(`${x},${z}`);
+    }
+
+    function getNoiseHeight(x, z) {
+        let n = simplex.noise2D(x*0.03, z*0.03); 
+        let n2 = simplex.noise2D(x*0.1, z*0.1);
+        let h = -1;
+        if (n > -0.2) h = 1; 
+        if (n > 0.5) h = 3; 
+        if (h === 1 && n2 > 0.4) h = 2;
+        return h;
+    }
+
+    function isRoad(x, z) {
+        let cell = getCell(x, z);
+        // Treat cities/stations as "road-like" for cluster checking to prevent roads hugging cities
+        return cell && (cell.obj === 1 || cell.obj === 2 || cell.obj === 3);
+    }
+
+    function causesCluster(x, z) {
+        // Check 4 corners for 2x2 road clusters
+        // Top-Left
+        if (isRoad(x-1, z) && isRoad(x, z-1) && isRoad(x-1, z-1)) return true;
+        // Top-Right
+        if (isRoad(x+1, z) && isRoad(x, z-1) && isRoad(x+1, z-1)) return true;
+        // Bottom-Left
+        if (isRoad(x-1, z) && isRoad(x, z+1) && isRoad(x-1, z+1)) return true;
+        // Bottom-Right
+        if (isRoad(x+1, z) && isRoad(x, z+1) && isRoad(x+1, z+1)) return true;
+        return false;
+    }
+
+    function createRoad(n1, n2) {
+        const start = { x: n1.x, z: n1.z };
+        const end = { x: n2.x, z: n2.z };
+        
+        // A* Pathfinding
+        const openList = [];
+        const closedSet = new Set();
+        const cameFrom = new Map();
+        const gScore = new Map();
+        
+        const startKey = `${start.x},${start.z}`;
+        gScore.set(startKey, 0);
+        
+        openList.push({ x: start.x, z: start.z, f: heuristic(start, end) });
+        
+        let bestPath = null;
+        let iterations = 0;
+        const MAX_ITER = 15000; 
+
+        while (openList.length > 0) {
+            iterations++;
+            if (iterations > MAX_ITER) break;
+            
+            // Pop lowest f
+            openList.sort((a, b) => b.f - a.f);
+            const current = openList.pop();
+            const currentKey = `${current.x},${current.z}`;
+            
+            if (current.x === end.x && current.z === end.z) {
+                bestPath = [];
+                let curr = currentKey;
+                while (cameFrom.has(curr)) {
+                    const [cx, cz] = curr.split(',').map(Number);
+                    bestPath.push({ x: cx, z: cz });
+                    curr = cameFrom.get(curr);
+                }
+                bestPath.push(start);
+                break;
+            }
+            
+            closedSet.add(currentKey);
+            
+            const neighbors = [
+                { x: current.x + 1, z: current.z },
+                { x: current.x - 1, z: current.z },
+                { x: current.x, z: current.z + 1 },
+                { x: current.x, z: current.z - 1 }
+            ];
+            
+            for (const neighbor of neighbors) {
+                const nKey = `${neighbor.x},${neighbor.z}`;
+                if (closedSet.has(nKey)) continue;
+                
+                // Check validity: Don't create 2x2 clusters
+                // If neighbor is NOT already a road/city, check if making it one causes a cluster
+                if (!isRoad(neighbor.x, neighbor.z) && causesCluster(neighbor.x, neighbor.z)) {
+                    continue; 
+                }
+                
+                const isExisting = isRoad(neighbor.x, neighbor.z);
+                
+                // Cost calculation
+                let stepCost = 1;
+                if (isExisting) stepCost = 0.2; // Prefer existing roads
+                
+                // Add turn penalty
+                if (cameFrom.has(currentKey)) {
+                    const prevKey = cameFrom.get(currentKey);
+                    const [px, pz] = prevKey.split(',').map(Number);
+                    const dx1 = current.x - px;
+                    const dz1 = current.z - pz;
+                    const dx2 = neighbor.x - current.x;
+                    const dz2 = neighbor.z - current.z;
+                    
+                    if (dx1 !== dx2 || dz1 !== dz2) {
+                        stepCost += 0.5; // Penalty for turning
+                    }
+                }
+
+                const tentativeG = gScore.get(currentKey) + stepCost;
+                
+                if (!gScore.has(nKey) || tentativeG < gScore.get(nKey)) {
+                    cameFrom.set(nKey, currentKey);
+                    gScore.set(nKey, tentativeG);
+                    
+                    const existingIdx = openList.findIndex(item => item.x === neighbor.x && item.z === neighbor.z);
+                    if (existingIdx !== -1) {
+                        openList[existingIdx].f = tentativeG + heuristic(neighbor, end);
+                    } else {
+                        openList.push({ x: neighbor.x, z: neighbor.z, f: tentativeG + heuristic(neighbor, end) });
+                    }
+                }
+            }
+        }
+        
+        if (bestPath) {
+            for (const p of bestPath) {
+                // Don't overwrite cities/stations
+                let cell = getCell(p.x, p.z);
+                if (cell && (cell.obj === 2 || cell.obj === 3)) continue;
+                ensureRoad(p.x, p.z);
+            }
+        }
+    }
+    
+    function heuristic(a, b) {
+        return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
+    }
+
+    function ensureRoad(x, z) {
+        let cell = getCell(x, z);
+        if (!cell) {
+            setCell(x, z, { h: 1, obj: 1 });
+        } else {
+            if (cell.obj === 0) {
+                cell.obj = 1;
+                cell.h = Math.max(cell.h, 1);
+                setCell(x, z, cell);
+            }
+        }
+        
+        // Padding
+        for(let dx=-1; dx<=1; dx++) {
+            for(let dz=-1; dz<=1; dz++) {
+                if(dx===0 && dz===0) continue;
+                let px = x+dx, pz = z+dz;
+                if(!worldMap.has(`${px},${pz}`)) {
+                     let h = getNoiseHeight(px, pz);
+                     if(h < 1) h = 1; 
+                     setCell(px, pz, { h: h, obj: 0 });
+                }
+            }
+        }
+    }
+
+    // --- RENDER LOGIC ---
+    function renderWorld() {
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+        
+        // Optimization: Remove bottom face
+        const indices = boxGeo.index.array;
+        const normals = boxGeo.attributes.normal.array;
+        const newIndices = [];
+        for(let i=0; i<indices.length; i+=3) {
+            if(normals[indices[i]*3 + 1] > -0.9) {
+                newIndices.push(indices[i], indices[i+1], indices[i+2]);
+            }
+        }
+        boxGeo.setIndex(newIndices);
+
+        const coneGeo = new THREE.ConeGeometry(1, 1, 8, 1, true);
+        const meshes = {
+            sand: [], grass: [], forest: [], mountain: [],
+            road: [], city: [], station: [], tree: []
+        };
+
+        // Single Water Plane
+        const waterGeo = new THREE.PlaneGeometry(10000, 10000);
+        const waterMat = new THREE.MeshLambertMaterial({ color: CONFIG.colors.water });
+        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+        waterMesh.rotation.x = -Math.PI / 2;
+        waterMesh.position.set(0, -0.3, 0);
+        waterMesh.receiveShadow = false;
+        scene.add(waterMesh);
+
+        worldMap.forEach((cell, key) => {
+            const [xStr, zStr] = key.split(',');
+            const x = parseInt(xStr);
+            const z = parseInt(zStr);
+            
+            let h = cell.h;
+            let obj = cell.obj;
+
+            if (h === -1) return;
+
+            // Ground Logic
+            let type = 'grass';
+            let y = 0;
+            let sy = 0.1;
+
+            if (h === 0) type = 'sand';
+            else if (h === 1) type = 'grass';
+            else if (h === 2) type = 'forest';
+            else if (h === 3) type = 'mountain';
+            
+            if(h===1 && isBeach(x,z)) type='sand';
+
+            y = 0; 
+            sy = 0.1;
+
+            if (type === 'mountain') {
+                let n = simplex.noise2D(x*0.03, z*0.03);
+                let level = Math.floor(Math.max(0, n - 0.5) * 10);
+                sy = 0.3 + level * 0.3; 
+                y = sy / 2; 
+            }
+            
+            if(obj !== 0) { 
+                type = 'grass'; 
+                y = 0; 
+                sy = 0.1; 
+            }
+
+            let mat = new THREE.Matrix4();
+            mat.setPosition(x, y, z);
+            mat.scale(new THREE.Vector3(1, sy, 1));
+            if(meshes[type]) meshes[type].push(mat.clone());
+
+            // Object Logic
+            if(obj !== 0) {
+                mat = new THREE.Matrix4();
+                const baseH = 0.05; 
+
+                if(obj === 1) { // Road
+                    mat.setPosition(x, baseH + 0.01, z);
+                    mat.scale(new THREE.Vector3(1, 0.02, 1));
+                    meshes['road'].push(mat);
+                } else if (obj === 2) { // City
+                    mat.setPosition(x, baseH + 0.05, z);
+                    mat.scale(new THREE.Vector3(0.8, 0.1, 0.8));
+                    meshes['city'].push(mat);
+                } else if (obj === 3) { // Station
+                    mat.setPosition(x, baseH + 0.1, z);
+                    mat.scale(new THREE.Vector3(0.8, 0.2, 0.8));
+                    meshes['station'].push(mat);
+                }
+            } else {
+                // Tree Logic
+                if (type === 'grass' || type === 'forest' || type === 'mountain') {
+                    let chance = 0;
+                    if (type === 'forest') chance = 0.5;
+                    else if (type === 'grass') chance = 0.05;
+                    else if (type === 'mountain') chance = 0.1;
+
+                    if (Math.random() < chance) {
+                        let groundTop = y + sy/2;
+                        let layers = Math.floor(Math.random() * 3) + 1; 
+                        let totalHeight = 0.4 + Math.random() * 0.4;
+                        let maxRadius = 0.1 + Math.random() * 0.15;
+                        
+                        let layerHeight = totalHeight / layers;
+                        
+                        for(let l=0; l<layers; l++) {
+                            let treeMat = new THREE.Matrix4();
+                            let radius = maxRadius * (1 - l * 0.25); 
+                            let py = groundTop + (layerHeight * 0.5) + (l * layerHeight * 0.7);
+                            
+                            treeMat.setPosition(x, py, z);
+                            treeMat.scale(new THREE.Vector3(radius, layerHeight, radius));
+                            meshes['tree'].push(treeMat);
+                        }
+                    }
+                }
+            }
+        });
+
+        const materials = {
+            sand: new THREE.MeshLambertMaterial({ color: CONFIG.colors.sand }),
+            grass: new THREE.MeshLambertMaterial({ color: CONFIG.colors.grass }),
+            forest: new THREE.MeshLambertMaterial({ color: CONFIG.colors.forest }),
+            mountain: new THREE.MeshLambertMaterial({ color: CONFIG.colors.mountain }),
+            road: new THREE.MeshLambertMaterial({ color: CONFIG.colors.road }),
+            city: new THREE.MeshLambertMaterial({ color: CONFIG.colors.city }),
+            station: new THREE.MeshLambertMaterial({ color: CONFIG.colors.station }),
+            tree: new THREE.MeshLambertMaterial({ color: 0x14532d })
+        };
+
+        Object.keys(meshes).forEach(k => {
+            if(meshes[k].length === 0) return;
+            const geo = (k === 'tree') ? coneGeo : boxGeo;
+            const mesh = new THREE.InstancedMesh(geo, materials[k], meshes[k].length);
+            for(let i=0; i<meshes[k].length; i++) mesh.setMatrixAt(i, meshes[k][i]);
+            
+            if (k === 'tree') {
+                mesh.castShadow = true;
+                mesh.receiveShadow = false;
+            } else {
+                mesh.receiveShadow = true;
+                mesh.castShadow = false;
+            }
+            
+            scene.add(mesh);
+        });
+    }
+
+    function isBeach(x, z) {
+        const neighbors = [[x-1,z], [x+1,z], [x,z-1], [x,z+1]];
+        for(let [nx, nz] of neighbors) {
+            let cell = getCell(nx, nz);
+            if (!cell || cell.h === -1) return true;
+        }
+        return false;
+    }
+
+    // --- PAWN LOGIC ---
+    const pawn = new THREE.Mesh(
+        new THREE.ConeGeometry(0.5, 1.2, 16),
+        new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xb45309 })
+    );
+    scene.add(pawn);
+
+    let currentNode = null;
+    let isMoving = false;
+    let cityLabels = [];
+
+    function createLabels() {
+        const container = document.getElementById('labels-container');
+        nodes.forEach(node => {
+            // Only show labels for populous cities (e.g. > 500k) or high level (level 1)
+            const isPopulous = (node.population && node.population > 500000) || (node.level && node.level <= 1);
+            
+            if (isPopulous) {
+                const div = document.createElement('div');
+                div.className = 'city-label';
+                div.innerText = node.name;
+                div.onclick = () => onCityClick(node);
+                container.appendChild(div);
+                cityLabels.push({ div, node });
+            }
+        });
+    }
+
+    function updateLabelPositions() {
+        cityLabels.forEach(item => {
+            const { div, node } = item;
+            const pos = new THREE.Vector3(node.x, 1.0, node.z);
+            pos.project(camera);
+            
+            const x = (pos.x * .5 + .5) * window.innerWidth;
+            const y = (-(pos.y * .5) + .5) * window.innerHeight;
+
+            if (pos.z < 1 && x > 0 && x < window.innerWidth && y > 0 && y < window.innerHeight) {
+                div.style.display = 'block';
+                div.style.left = `${x}px`;
+                div.style.top = `${y}px`;
+                
+                if (currentNode && currentNode.neighbors.includes(node.id)) {
+                    div.classList.add('neighbor');
+                } else {
+                    div.classList.remove('neighbor');
+                }
+            } else {
+                div.style.display = 'none';
+            }
+        });
+    }
+
+    function onCityClick(targetNode) {
+        if (!currentNode || isMoving) return;
+        if (currentNode.neighbors.includes(targetNode.id)) {
+            moveTo(targetNode);
+        }
+    }
+
+    function startPawn() {
+        if(nodes.length === 0) return;
+        currentNode = nodes[0];
+        pawn.position.set(currentNode.x, 1, currentNode.z);
+        updateUI();
+    }
+
+    function updateUI() {
+        if(!currentNode) return;
+        document.getElementById('ui-name').innerText = currentNode.name.toUpperCase();
+        document.getElementById('ui-coord').innerText = `${currentNode.x}, ${currentNode.z}`;
+        let biome = "PLAINS";
+        if(currentNode.type === 'station') biome = "TRANSIT HUB";
+        document.getElementById('ui-biome').innerText = biome;
+    }
+
+    function moveTo(nextNode) {
+        if (isMoving) return;
+        isMoving = true;
+
+        let path = [];
+        let cx = currentNode.x, cz = currentNode.z;
+        while(cx !== nextNode.x) { cx += Math.sign(nextNode.x - cx); path.push({x:cx, z:cz}); }
+        while(cz !== nextNode.z) { cz += Math.sign(nextNode.z - cz); path.push({x:cx, z:cz}); }
+
+        let step = 0;
+        function animate() {
+            if(step >= path.length) {
+                currentNode = nextNode;
+                isMoving = false;
+                updateUI();
+                controls.target.lerp(new THREE.Vector3(currentNode.x, 0, currentNode.z), 0.1);
+                return;
+            }
+            let tgt = path[step];
+            let startPos = pawn.position.clone();
+            let startTime = Date.now();
+
+            function frame() {
+                let p = (Date.now() - startTime) / 100;
+                if(p>=1) { step++; animate(); return; }
+                
+                pawn.position.x = startPos.x + (tgt.x - startPos.x) * p;
+                pawn.position.z = startPos.z + (tgt.z - startPos.z) * p;
+                pawn.position.y = 0.5 + Math.sin(p*Math.PI)*0.5;
+                
+                controls.target.lerp(pawn.position, 0.05);
+                requestAnimationFrame(frame);
+            }
+            frame();
+        }
+        animate();
+    }
+
+    function delay(ms) { return new Promise(res => setTimeout(res, ms)); }
+    function updateStatus(txt) { document.getElementById('load-status').innerText = txt; }
+
+    // --- INTERACTION ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    
+    window.addEventListener('click', (event) => {
+        // Calculate mouse position in normalized device coordinates
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        // Intersect with a ground plane for simple hit testing
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const target = new THREE.Vector3();
+        raycaster.ray.intersectPlane(plane, target);
+
+        if (target) {
+            // Find nearest node
+            let nearest = null;
+            let minDist = 2.0; // Click radius
+
+            nodes.forEach(node => {
+                const dist = Math.sqrt((node.x - target.x)**2 + (node.z - target.z)**2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = node;
+                }
+            });
+
+            if (nearest) {
+                onCityClick(nearest);
+            }
+        }
+    });
+
+    // Animation Loop
+    function loop() {
+        requestAnimationFrame(loop);
+        controls.update();
+        renderer.render(scene, camera);
+        updateLabelPositions();
+    }
+    loop();
+    initGame();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+</script>
+</body>
+</html>
