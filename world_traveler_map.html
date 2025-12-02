@@ -198,12 +198,43 @@
         nodes = [];
         const occupied = new Set();
 
-        rawPoints.forEach((p, index) => {
-            let gx = Math.round(p.x);
-            let gz = Math.round(p.z);
-            let key = `${gx},${gz}`;
+        // Sort by population descending so higher population cities get priority
+        rawPoints.sort((a, b) => (b.population || 0) - (a.population || 0));
 
-            if (!occupied.has(key)) {
+        function findNearestFree(startGx, startGz) {
+            if (!occupied.has(`${startGx},${startGz}`)) return { x: startGx, z: startGz };
+            
+            let radius = 1;
+            // Search in expanding squares
+            while (radius < 50) { // Limit search radius
+                for (let x = -radius; x <= radius; x++) {
+                    for (let z = -radius; z <= radius; z++) {
+                        // Only check the perimeter of the current square
+                        if (Math.abs(x) !== radius && Math.abs(z) !== radius) continue;
+                        
+                        let checkX = startGx + x;
+                        let checkZ = startGz + z;
+                        if (!occupied.has(`${checkX},${checkZ}`)) {
+                            return { x: checkX, z: checkZ };
+                        }
+                    }
+                }
+                radius++;
+            }
+            return null; // Could not find free spot within limit
+        }
+
+        rawPoints.forEach((p, index) => {
+            let desiredGx = Math.round(p.x);
+            let desiredGz = Math.round(p.z);
+            
+            let pos = findNearestFree(desiredGx, desiredGz);
+            
+            if (pos) {
+                let gx = pos.x;
+                let gz = pos.z;
+                let key = `${gx},${gz}`;
+                
                 occupied.add(key);
                 let type = (index % 10 === 0) ? 'station' : 'city';
                 let node = {
@@ -242,54 +273,40 @@
         updateStatus("Connecting Infrastructure...");
         await delay(100);
 
-        // Connect Roads: MST + Minimum Degree 2
-        const edges = [];
-        for(let i=0; i<nodes.length; i++) {
-            for(let j=i+1; j<nodes.length; j++) {
-                const distSq = (nodes[i].x - nodes[j].x)**2 + (nodes[i].z - nodes[j].z)**2;
-                if(distSq < 40000) { // Increased range to ensure connectivity
-                    edges.push({ a: i, b: j, distSq: distSq });
+        // Connect Roads: Closest 2 neighbors within radius 20
+        let roadsBuilt = 0;
+        const RADIUS = 20;
+        const RADIUS_SQ = RADIUS * RADIUS;
+
+        for (let i = 0; i < nodes.length; i++) {
+            const u = nodes[i];
+            // Find all valid neighbors within radius
+            let candidates = [];
+            for (let j = 0; j < nodes.length; j++) {
+                if (i === j) continue;
+                const v = nodes[j];
+                const distSq = (u.x - v.x)**2 + (u.z - v.z)**2;
+                if (distSq <= RADIUS_SQ) {
+                    candidates.push({ node: v, distSq: distSq });
                 }
             }
-        }
-        edges.sort((a,b) => a.distSq - b.distSq);
-
-        const parent = new Array(nodes.length).fill(0).map((_,i)=>i);
-        function find(i) { if(parent[i]===i) return i; return parent[i]=find(parent[i]); }
-        function union(i, j) { 
-            let rootA = find(i), rootB = find(j); 
-            if(rootA!==rootB) { parent[rootA]=rootB; return true; } 
-            return false; 
-        }
-
-        let roadsBuilt = 0;
-        
-        // Pass 1: MST
-        for(let e of edges) {
-            if(union(e.a, e.b)) {
-                const u = nodes[e.a];
-                const v = nodes[e.b];
-                createRoad(u, v);
-                if(!u.neighbors.includes(v.id)) u.neighbors.push(v.id);
-                if(!v.neighbors.includes(u.id)) v.neighbors.push(u.id);
-                roadsBuilt++;
-                if(roadsBuilt % 5 === 0) await delay(20);
-            }
-        }
-
-        // Pass 2: Ensure Degree >= 2
-        for(let e of edges) {
-            const u = nodes[e.a];
-            const v = nodes[e.b];
             
-            if(u.neighbors.includes(v.id)) continue;
-
-            if(u.neighbors.length < 2 || v.neighbors.length < 2) {
-                createRoad(u, v);
-                if(!u.neighbors.includes(v.id)) u.neighbors.push(v.id);
-                if(!v.neighbors.includes(u.id)) v.neighbors.push(u.id);
-                roadsBuilt++;
-                if(roadsBuilt % 5 === 0) await delay(20);
+            // Sort by distance
+            candidates.sort((a, b) => a.distSq - b.distSq);
+            
+            // Take closest 2
+            const closest = candidates.slice(0, 2);
+            
+            for (let c of closest) {
+                const v = c.node;
+                // Check if road already exists
+                if (!u.neighbors.includes(v.id)) {
+                    createRoad(u, v);
+                    u.neighbors.push(v.id);
+                    v.neighbors.push(u.id);
+                    roadsBuilt++;
+                    if (roadsBuilt % 5 === 0) await delay(20);
+                }
             }
         }
 
