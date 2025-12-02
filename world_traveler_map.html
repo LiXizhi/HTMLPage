@@ -122,6 +122,11 @@
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.mouseButtons = {
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.ROTATE
+    };
     controls.target.set(0, 0, 0);
     controls.update();
 
@@ -322,16 +327,11 @@
         return cell && (cell.obj === 1 || cell.obj === 2 || cell.obj === 3);
     }
 
-    function causesCluster(x, z) {
-        // Check 4 corners for 2x2 road clusters
-        // Top-Left
-        if (isRoad(x-1, z) && isRoad(x, z-1) && isRoad(x-1, z-1)) return true;
-        // Top-Right
-        if (isRoad(x+1, z) && isRoad(x, z-1) && isRoad(x+1, z-1)) return true;
-        // Bottom-Left
-        if (isRoad(x-1, z) && isRoad(x, z+1) && isRoad(x-1, z+1)) return true;
-        // Bottom-Right
-        if (isRoad(x+1, z) && isRoad(x, z+1) && isRoad(x+1, z+1)) return true;
+    function hasDiagonalRoadNeighbor(x, z) {
+        if (isRoad(x-1, z-1)) return true;
+        if (isRoad(x+1, z-1)) return true;
+        if (isRoad(x-1, z+1)) return true;
+        if (isRoad(x+1, z+1)) return true;
         return false;
     }
 
@@ -388,10 +388,8 @@
                 const nKey = `${neighbor.x},${neighbor.z}`;
                 if (closedSet.has(nKey)) continue;
                 
-                // Check validity: Don't create 2x2 clusters
-                // If neighbor is NOT already a road/city, check if making it one causes a cluster
-                if (!isRoad(neighbor.x, neighbor.z) && causesCluster(neighbor.x, neighbor.z)) {
-                    continue; 
+                if (!isRoad(neighbor.x, neighbor.z)) {
+                    if (hasDiagonalRoadNeighbor(neighbor.x, neighbor.z)) continue;
                 }
                 
                 const isExisting = isRoad(neighbor.x, neighbor.z);
