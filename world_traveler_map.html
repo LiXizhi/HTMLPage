@@ -273,31 +273,36 @@
         updateStatus("Connecting Infrastructure...");
         await delay(100);
 
-        // Connect Roads: Closest 2 neighbors within radius 20
+        // Connect Roads
         let roadsBuilt = 0;
-        const RADIUS = 20;
-        const RADIUS_SQ = RADIUS * RADIUS;
 
         for (let i = 0; i < nodes.length; i++) {
             const u = nodes[i];
-            // Find all valid neighbors within radius
             let candidates = [];
-            for (let j = 0; j < nodes.length; j++) {
-                if (i === j) continue;
-                const v = nodes[j];
-                const distSq = (u.x - v.x)**2 + (u.z - v.z)**2;
-                if (distSq <= RADIUS_SQ) {
-                    candidates.push({ node: v, distSq: distSq });
+            let radius = 20;
+            let found = false;
+            
+            // Keep expanding radius until we find at least one neighbor
+            while (!found && radius <= 5000) { 
+                const radiusSq = radius * radius;
+                for (let j = 0; j < nodes.length; j++) {
+                    if (i === j) continue;
+                    const v = nodes[j];
+                    const distSq = (u.x - v.x)**2 + (u.z - v.z)**2;
+                    if (distSq <= radiusSq) {
+                        candidates.push({ node: v, distSq: distSq });
+                    }
+                }
+                
+                if (candidates.length > 0) {
+                    found = true;
+                } else {
+                    radius += 10;
                 }
             }
             
-            // Sort by distance
-            candidates.sort((a, b) => a.distSq - b.distSq);
-            
-            // Take closest 2
-            const closest = candidates.slice(0, 2);
-            
-            for (let c of closest) {
+            // Connect to ALL found nodes in the radius
+            for (let c of candidates) {
                 const v = c.node;
                 // Check if road already exists
                 if (!u.neighbors.includes(v.id)) {
@@ -344,11 +349,15 @@
         return cell && (cell.obj === 1 || cell.obj === 2 || cell.obj === 3);
     }
 
-    function hasDiagonalRoadNeighbor(x, z) {
-        if (isRoad(x-1, z-1)) return true;
-        if (isRoad(x+1, z-1)) return true;
-        if (isRoad(x-1, z+1)) return true;
-        if (isRoad(x+1, z+1)) return true;
+    function checkCityAhead(x, z, dx, dz) {
+        for(let k=1; k<=10; k++) {
+            const cx = x + k*dx;
+            const cz = z + k*dz;
+            const cell = getCell(cx, cz);
+            if (!cell) return false;
+            if (cell.obj === 2 || cell.obj === 3) return true; // Found city/station
+            if (cell.obj !== 1) return false; // Not a road, stop looking
+        }
         return false;
     }
 
@@ -369,7 +378,7 @@
         
         let bestPath = null;
         let iterations = 0;
-        const MAX_ITER = 15000; 
+        const MAX_ITER = 50000; 
 
         while (openList.length > 0) {
             iterations++;
@@ -394,41 +403,32 @@
             
             closedSet.add(currentKey);
             
-            const neighbors = [
-                { x: current.x + 1, z: current.z },
-                { x: current.x - 1, z: current.z },
-                { x: current.x, z: current.z + 1 },
-                { x: current.x, z: current.z - 1 }
-            ];
+            // STRICT MANHATTAN NEIGHBORS: Only allow moving towards the target
+            const neighbors = [];
+            if (end.x > current.x) neighbors.push({ x: current.x + 1, z: current.z });
+            if (end.x < current.x) neighbors.push({ x: current.x - 1, z: current.z });
+            if (end.z > current.z) neighbors.push({ x: current.x, z: current.z + 1 });
+            if (end.z < current.z) neighbors.push({ x: current.x, z: current.z - 1 });
             
             for (const neighbor of neighbors) {
                 const nKey = `${neighbor.x},${neighbor.z}`;
                 if (closedSet.has(nKey)) continue;
                 
-                if (!isRoad(neighbor.x, neighbor.z)) {
-                    if (hasDiagonalRoadNeighbor(neighbor.x, neighbor.z)) continue;
-                }
-                
                 const isExisting = isRoad(neighbor.x, neighbor.z);
                 
                 // Cost calculation
                 let stepCost = 1;
-                if (isExisting) stepCost = 0.2; // Prefer existing roads
-                
-                // Add turn penalty
-                if (cameFrom.has(currentKey)) {
-                    const prevKey = cameFrom.get(currentKey);
-                    const [px, pz] = prevKey.split(',').map(Number);
-                    const dx1 = current.x - px;
-                    const dz1 = current.z - pz;
-                    const dx2 = neighbor.x - current.x;
-                    const dz2 = neighbor.z - current.z;
+                if (isExisting) {
+                    stepCost = 0.1; // Prefer existing roads
                     
-                    if (dx1 !== dx2 || dz1 !== dz2) {
-                        stepCost += 0.5; // Penalty for turning
+                    // Check for city ahead within 10 blocks
+                    const dx = neighbor.x - current.x;
+                    const dz = neighbor.z - current.z;
+                    if (checkCityAhead(current.x, current.z, dx, dz)) {
+                        stepCost = -5; // Reward for moving towards a city on an existing road
                     }
                 }
-
+                
                 const tentativeG = gScore.get(currentKey) + stepCost;
                 
                 if (!gScore.has(nKey) || tentativeG < gScore.get(nKey)) {
