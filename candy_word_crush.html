@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gem Rush - 宝石迷阵</title>
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
     <style>
         body {
             font-family: 'Fredoka', sans-serif;
@@ -82,6 +83,14 @@
         .type-4 .gem-inner { background: linear-gradient(135deg, #bf4dff, #7300b3); border: 1px solid #df80ff; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); border-radius: 0; } /* Purple Lozenge */
         .type-5 .gem-inner { background: linear-gradient(135deg, #ffae4d, #b36b00); border: 1px solid #ffce80; border-radius: 30%; } /* Orange Hex */
 
+        .gem.has-word {
+            z-index: 15;
+        }
+
+        .gem.selected {
+            z-index: 50;
+        }
+
         .gem.selected .gem-inner {
             filter: brightness(1.4);
             transform: scale(1.1);
@@ -147,6 +156,30 @@
         }
         .btn-primary:active { transform: scale(0.95); }
 
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 20px;
+            color: #aaa;
+            font-size: 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .btn-secondary.selected {
+            background: #4da6ff;
+            border-color: #4da6ff;
+            color: white;
+            box-shadow: 0 0 10px rgba(77, 166, 255, 0.5);
+        }
+
         /* Word Overlay */
         .gem-word {
             position: absolute;
@@ -158,7 +191,7 @@
             color: white;
             text-shadow: 0 0 4px #000, 0 0 2px #000;
             pointer-events: none;
-            z-index: 15;
+            z-index: 100;
             text-align: center;
             width: 100%;
             line-height: 1.1;
@@ -184,23 +217,53 @@
             z-index: 14;
             border-radius: 20%;
         }
+
+        /* Word Cell Animations */
+        @keyframes pulseShadow {
+            0% { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)); }
+            50% { filter: drop-shadow(0 0 8px rgba(255, 255, 255, 1)); }
+            100% { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)); }
+        }
+
+        @keyframes rainbowGlow {
+            0% { filter: drop-shadow(0 0 3px #ff0000) drop-shadow(0 0 5px #ff0000); }
+            25% { filter: drop-shadow(0 0 3px #ffff00) drop-shadow(0 0 5px #ffff00); }
+            50% { filter: drop-shadow(0 0 3px #00ff00) drop-shadow(0 0 5px #00ff00); }
+            75% { filter: drop-shadow(0 0 3px #00ffff) drop-shadow(0 0 5px #00ffff); }
+            100% { filter: drop-shadow(0 0 3px #ff00ff) drop-shadow(0 0 5px #ff00ff); }
+        }
+
+        /* English Word Style */
+        .gem.lang-en {
+            animation: pulseShadow 2s infinite;
+        }
+
+        /* Chinese Word Style - Special */
+        .gem.lang-cn {
+            animation: rainbowGlow 3s linear infinite;
+        }
+        
+        /* Enhance text readability */
+        .gem.has-word .gem-word {
+            text-shadow: 0 0 4px #000, 0 0 3px #000, 0 0 2px #000;
+        }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <!-- UI Header -->
-    <div class="w-full px-6 mb-4 flex justify-between items-end">
+    <div class="w-full px-6 mb-4 flex justify-between items-end relative">
         <div>
-            <div class="text-sm text-gray-300 opacity-80">SCORE</div>
+            <div class="text-sm text-gray-300 opacity-80">分数</div>
             <div id="score-display" class="text-3xl font-bold text-yellow-400">0</div>
         </div>
         <div class="text-center">
-            <div class="text-sm text-gray-300 opacity-80">LEVEL</div>
+            <div class="text-sm text-gray-300 opacity-80">关卡</div>
             <div id="level-display" class="text-4xl font-bold text-white">1</div>
         </div>
         <div class="text-right">
-            <div class="text-sm text-gray-300 opacity-80">MOVES</div>
+            <div id="moves-label" class="text-sm text-gray-300 opacity-80">步数</div>
             <div id="moves-display" class="text-3xl font-bold text-red-400">20</div>
         </div>
     </div>
@@ -209,7 +272,7 @@
     <div class="w-full max-w-[90%] h-4 bg-gray-800 rounded-full mb-4 overflow-hidden border border-gray-600 relative">
         <div id="progress-fill" class="h-full bg-gradient-to-r from-green-400 to-blue-500 transition-all duration-500" style="width: 0%"></div>
         <div class="absolute inset-0 flex items-center justify-center text-[10px] font-bold tracking-wider text-white drop-shadow-md">
-            TARGET: <span id="target-display">1000</span>
+            目标: <span id="target-display">1000</span>
         </div>
     </div>
 
@@ -217,31 +280,58 @@
     <div id="grid-area">
         <!-- Gems generated by JS -->
     </div>
+
+    <!-- Settings Footer -->
+    <div class="w-full mt-2 flex justify-center gap-3 items-center z-20">
+        <div class="flex flex-col items-start">
+            <label class="text-xs text-gray-400 ml-1">难度</label>
+            <select id="difficulty-select" class="bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-1 focus:outline-none focus:border-blue-500 text-sm">
+                <option value="easy">简单</option>
+                <option value="normal" selected>普通</option>
+                <option value="hard">困难</option>
+            </select>
+        </div>
+        
+        <div class="flex flex-col items-start">
+            <label class="text-xs text-gray-400 ml-1">模式</label>
+            <select id="mode-select" class="bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-1 focus:outline-none focus:border-blue-500 text-sm">
+                <option value="moves" selected>步数</option>
+                <option value="time">倒计时</option>
+            </select>
+        </div>
+
+        <div class="flex flex-col items-start">
+             <label class="text-xs text-transparent ml-1">.</label>
+             <button id="footer-restart-btn" class="bg-gradient-to-b from-red-500 to-red-700 hover:from-red-400 hover:to-red-600 text-white rounded-lg px-4 py-1 font-bold shadow-lg text-sm border border-red-400">
+                重开
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Success Overlay -->
 <div id="success-overlay" class="hidden fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
     <canvas id="confetti-canvas" class="absolute inset-0 w-full h-full"></canvas>
-    <div class="absolute text-6xl font-bold text-yellow-300 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)] animate-bounce">LEVEL COMPLETE!</div>
+    <div class="absolute text-6xl font-bold text-yellow-300 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)] animate-bounce">关卡完成!</div>
 </div>
 
 <!-- Level Complete Modal -->
 <div id="level-modal" class="modal hidden">
     <div class="bg-gray-900 p-8 rounded-2xl border-2 border-yellow-500 text-center max-w-xs w-full transform transition-all scale-100 shadow-2xl">
-        <h2 class="text-3xl font-bold text-yellow-400 mb-2">LEVEL CLEAR!</h2>
-        <p class="text-gray-300 mb-6">Great job!</p>
-        <div class="text-lg mb-6">Score: <span id="level-score-final" class="text-white font-bold">0</span></div>
-        <button id="next-level-btn" class="btn-primary w-full">Next Level</button>
+        <h2 class="text-3xl font-bold text-yellow-400 mb-2">过关!</h2>
+        <p class="text-gray-300 mb-6">做得好!</p>
+        <div class="text-lg mb-6">分数: <span id="level-score-final" class="text-white font-bold">0</span></div>
+        <button id="next-level-btn" class="btn-primary w-full">下一关</button>
     </div>
 </div>
 
 <!-- Game Over Modal -->
 <div id="game-over-modal" class="modal hidden">
     <div class="bg-gray-900 p-8 rounded-2xl border-2 border-red-600 text-center max-w-xs w-full shadow-2xl">
-        <h2 class="text-3xl font-bold text-red-500 mb-2">GAME OVER</h2>
-        <p class="text-gray-300 mb-6">Out of moves!</p>
-        <div class="text-lg mb-6">Final Score: <span id="final-score" class="text-white font-bold">0</span></div>
-        <button id="restart-btn" class="btn-primary w-full">Try Again</button>
+        <h2 class="text-3xl font-bold text-red-500 mb-2">游戏结束</h2>
+        <p class="text-gray-300 mb-6">步数用尽!</p>
+        <div class="text-lg mb-6">最终分数: <span id="final-score" class="text-white font-bold">0</span></div>
+        <button id="restart-btn" class="btn-primary w-full">重试</button>
     </div>
 </div>
 
@@ -265,7 +355,52 @@
         {cn: "熊猫", en: "Panda"}, {cn: "兔子", en: "Rabbit"}, {cn: "书", en: "Book"},
         {cn: "笔", en: "Pen"}, {cn: "学校", en: "School"}, {cn: "老师", en: "Teacher"},
         {cn: "学生", en: "Student"}, {cn: "红", en: "Red"}, {cn: "蓝", en: "Blue"},
-        {cn: "绿", en: "Green"}, {cn: "黄", en: "Yellow"}, {cn: "白", en: "White"}
+        {cn: "绿", en: "Green"}, {cn: "黄", en: "Yellow"}, {cn: "白", en: "White"},
+        {cn: "黑", en: "Black"}, {cn: "灰", en: "Gray"}, {cn: "粉红", en: "Pink"},
+        {cn: "紫", en: "Purple"}, {cn: "棕", en: "Brown"}, {cn: "太阳", en: "Sun"},
+        {cn: "月亮", en: "Moon"}, {cn: "星星", en: "Star"}, {cn: "云", en: "Cloud"},
+        {cn: "雨", en: "Rain"}, {cn: "雪", en: "Snow"}, {cn: "风", en: "Wind"},
+        {cn: "树", en: "Tree"}, {cn: "花", en: "Flower"}, {cn: "草", en: "Grass"},
+        {cn: "山", en: "Mountain"}, {cn: "河", en: "River"}, {cn: "海", en: "Sea"},
+        {cn: "汽车", en: "Car"}, {cn: "飞机", en: "Plane"}, {cn: "火车", en: "Train"},
+        {cn: "船", en: "Boat"}, {cn: "自行车", en: "Bike"}, {cn: "房子", en: "House"},
+        {cn: "门", en: "Door"}, {cn: "窗户", en: "Window"}, {cn: "桌子", en: "Table"},
+        {cn: "椅子", en: "Chair"}, {cn: "床", en: "Bed"}, {cn: "杯子", en: "Cup"},
+        {cn: "盘子", en: "Plate"}, {cn: "碗", en: "Bowl"}, {cn: "筷子", en: "Chopsticks"},
+        {cn: "勺子", en: "Spoon"}, {cn: "叉子", en: "Fork"}, {cn: "刀", en: "Knife"},
+        {cn: "米饭", en: "Rice"}, {cn: "面条", en: "Noodles"}, {cn: "面包", en: "Bread"},
+        {cn: "牛奶", en: "Milk"}, {cn: "水", en: "Water"}, {cn: "茶", en: "Tea"},
+        {cn: "咖啡", en: "Coffee"}, {cn: "果汁", en: "Juice"}, {cn: "爸爸", en: "Dad"},
+        {cn: "妈妈", en: "Mom"}, {cn: "哥哥", en: "Brother"}, {cn: "姐姐", en: "Sister"},
+        {cn: "朋友", en: "Friend"}, {cn: "医生", en: "Doctor"}, {cn: "护士", en: "Nurse"},
+        {cn: "警察", en: "Police"}, {cn: "消防员", en: "Firefighter"}, {cn: "医生", en: "Doctor"},
+        {cn: "护士", en: "Nurse"}, {cn: "农民", en: "Farmer"}, {cn: "工人", en: "Worker"},
+        {cn: "司机", en: "Driver"}, {cn: "厨师", en: "Chef"}, {cn: "画家", en: "Painter"},
+        {cn: "歌手", en: "Singer"}, {cn: "舞者", en: "Dancer"}, {cn: "运动员", en: "Athlete"},
+        {cn: "春天", en: "Spring"}, {cn: "夏天", en: "Summer"}, {cn: "秋天", en: "Autumn"},
+        {cn: "冬天", en: "Winter"}, {cn: "早晨", en: "Morning"}, {cn: "中午", en: "Noon"},
+        {cn: "晚上", en: "Evening"}, {cn: "夜晚", en: "Night"}, {cn: "今天", en: "Today"},
+        {cn: "明天", en: "Tomorrow"}, {cn: "昨天", en: "Yesterday"}, {cn: "星期一", en: "Monday"},
+        {cn: "星期二", en: "Tuesday"}, {cn: "星期三", en: "Wednesday"}, {cn: "星期四", en: "Thursday"},
+        {cn: "星期五", en: "Friday"}, {cn: "星期六", en: "Saturday"}, {cn: "星期日", en: "Sunday"},
+        {cn: "一月", en: "January"}, {cn: "二月", en: "February"}, {cn: "三月", en: "March"},
+        {cn: "四月", en: "April"}, {cn: "五月", en: "May"}, {cn: "六月", en: "June"},
+        {cn: "七月", en: "July"}, {cn: "八月", en: "August"}, {cn: "九月", en: "September"},
+        {cn: "十月", en: "October"}, {cn: "十一月", en: "November"}, {cn: "十二月", en: "December"},
+        {cn: "零", en: "Zero"}, {cn: "一", en: "One"}, {cn: "二", en: "Two"},
+        {cn: "三", en: "Three"}, {cn: "四", en: "Four"}, {cn: "五", en: "Five"},
+        {cn: "六", en: "Six"}, {cn: "七", en: "Seven"}, {cn: "八", en: "Eight"},
+        {cn: "九", en: "Nine"}, {cn: "十", en: "Ten"}, {cn: "百", en: "Hundred"},
+        {cn: "千", en: "Thousand"}, {cn: "万", en: "Ten Thousand"}, {cn: "快乐", en: "Happy"},
+        {cn: "悲伤", en: "Sad"}, {cn: "生气", en: "Angry"}, {cn: "害怕", en: "Scared"},
+        {cn: "惊讶", en: "Surprised"}, {cn: "累", en: "Tired"}, {cn: "饿", en: "Hungry"},
+        {cn: "渴", en: "Thirsty"}, {cn: "热", en: "Hot"}, {cn: "冷", en: "Cold"},
+        {cn: "大", en: "Big"}, {cn: "小", en: "Small"}, {cn: "长", en: "Long"},
+        {cn: "短", en: "Short"}, {cn: "高", en: "Tall"}, {cn: "矮", en: "Short"},
+        {cn: "胖", en: "Fat"}, {cn: "瘦", en: "Thin"}, {cn: "新", en: "New"},
+        {cn: "旧", en: "Old"}, {cn: "好", en: "Good"}, {cn: "坏", en: "Bad"},
+        {cn: "快", en: "Fast"}, {cn: "慢", en: "Slow"}, {cn: "多", en: "Many"},
+        {cn: "少", en: "Few"}, {cn: "远", en: "Far"}, {cn: "近", en: "Near"}
     ];
 
     const gameState = {
@@ -278,13 +413,18 @@
         level: 1,
         targetScore: 1000,
         isLocked: false, // Locks input during animations
-        comboMultiplier: 1
+        comboMultiplier: 1,
+        difficulty: 'normal', // easy, normal, hard
+        mode: 'moves', // moves, time
+        timeLeft: 0,
+        timerInterval: null
     };
 
     const dom = {
         grid: document.getElementById('grid-area'),
         score: document.getElementById('score-display'),
         moves: document.getElementById('moves-display'),
+        movesLabel: document.getElementById('moves-label'),
         level: document.getElementById('level-display'),
         target: document.getElementById('target-display'),
         progress: document.getElementById('progress-fill'),
@@ -293,26 +433,170 @@
         nextLevelBtn: document.getElementById('next-level-btn'),
         restartBtn: document.getElementById('restart-btn'),
         levelScoreFinal: document.getElementById('level-score-final'),
-        finalScore: document.getElementById('final-score')
+        finalScore: document.getElementById('final-score'),
+        diffSelect: document.getElementById('difficulty-select'),
+        modeSelect: document.getElementById('mode-select'),
+        footerRestartBtn: document.getElementById('footer-restart-btn')
     };
 
     /* --- Initialization & Resizing --- */
+
+    // Initialize SDK
+    let sdk = null;
+    try {
+        if (typeof KeepworkSDK !== 'undefined') {
+            sdk = new KeepworkSDK({
+                timeout: 30000
+            });
+            console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+        }
+    } catch (e) {
+        console.error("SDK Init Failed", e);
+    }
+
+    async function speak(text) {
+        if (sdk && sdk.speech) {
+            try {
+                const result = await sdk.speech.textToAudio(text, {
+                    per: 4, 
+                    spd: 5,
+                    pit: 5,
+                    vol: 5
+                });
+                if (result && result.url) {
+                    const audio = new Audio(result.url);
+                    audio.play();
+                    return;
+                }
+            } catch (e) {
+                console.error("SDK TTS failed", e);
+            }
+        }
+        
+        // Fallback
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+        }
+    }
+
+    function animateAndCrush(p1, p2, wordPair) {
+        return new Promise(async (resolve) => {
+            gameState.isLocked = true;
+            
+            const el1 = getGemDOM(p1.r, p1.c);
+            const el2 = getGemDOM(p2.r, p2.c);
+            
+            if (!el1 || !el2) {
+                resolve();
+                return;
+            }
+
+            // Determine which is CN and which is EN
+            const w1 = gameState.wordGrid[p1.r][p1.c];
+            const w2 = gameState.wordGrid[p2.r][p2.c];
+            
+            let cnEl = el1;
+            // Default to el1 being CN if we can't tell, but logic below fixes it
+            if (w1 && w1.lang === 'EN') {
+                cnEl = el2; // el1 is EN, so el2 must be CN
+            } else if (w2 && w2.lang === 'CN') {
+                cnEl = el2;
+            } else {
+                cnEl = el1;
+            }
+
+            // Bring to front
+            el1.style.zIndex = 1000;
+            el2.style.zIndex = 1000;
+
+            // Calculate center
+            const centerPos = GRID_SIZE / 2 - CELL_SIZE / 2;
+            const offset = CELL_SIZE * 0.8; // Vertical offset for stacking
+            
+            el1.style.transition = 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            el2.style.transition = 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            
+            // Force reflow
+            el1.offsetHeight; 
+            
+            // Move to center and scale up significantly
+            // CN on top (visually higher -> smaller Y)
+            // EN on bottom (visually lower -> larger Y)
+            
+            if (cnEl === el1) {
+                el1.style.transform = `translate(${centerPos}px, ${centerPos - offset}px) scale(2.5)`;
+                el2.style.transform = `translate(${centerPos}px, ${centerPos + offset}px) scale(2.5)`;
+            } else {
+                el1.style.transform = `translate(${centerPos}px, ${centerPos + offset}px) scale(2.5)`;
+                el2.style.transform = `translate(${centerPos}px, ${centerPos - offset}px) scale(2.5)`;
+            }
+            
+            // Wait for movement
+            await new Promise(r => setTimeout(r, 600));
+            
+            // Play TTS
+            if(wordPair && wordPair.en) {
+                speak(wordPair.en);
+            }
+            
+            // Wait for reading (approx 1.5s)
+            await new Promise(r => setTimeout(r, 1500));
+            
+            // Create particles at new positions
+            const commonX = centerPos + CELL_SIZE/2;
+            const cnY = centerPos - offset + CELL_SIZE/2;
+            const enY = centerPos + offset + CELL_SIZE/2;
+            
+            if (cnEl === el1) {
+                createParticles(p1.r, p1.c, gameState.grid[p1.r][p1.c], commonX, cnY);
+                createParticles(p2.r, p2.c, gameState.grid[p2.r][p2.c], commonX, enY);
+            } else {
+                createParticles(p1.r, p1.c, gameState.grid[p1.r][p1.c], commonX, enY);
+                createParticles(p2.r, p2.c, gameState.grid[p2.r][p2.c], commonX, cnY);
+            }
+
+            resolve();
+        });
+    }
 
     function init() {
         // Calculate sizes first so we have valid CELL_SIZE
         resizeGrid();
         
-        // Then start level
-        startLevel(1);
+        // Settings Listeners
+        dom.diffSelect.addEventListener('change', (e) => {
+            gameState.difficulty = e.target.value;
+            startLevel(gameState.level);
+        });
+
+        dom.modeSelect.addEventListener('change', (e) => {
+            gameState.mode = e.target.value;
+            startLevel(gameState.level);
+        });
+
+        dom.footerRestartBtn.addEventListener('click', () => {
+             startLevel(gameState.level);
+        });
         
         window.addEventListener('resize', resizeGrid);
         dom.nextLevelBtn.addEventListener('click', () => startLevel(gameState.level + 1));
-        dom.restartBtn.addEventListener('click', () => startLevel(1));
+        dom.restartBtn.addEventListener('click', () => {
+            startLevel(gameState.level);
+            dom.gameOverModal.classList.add('hidden');
+        });
+
+        // Notify parent
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+        
+        // Auto start
+        startLevel(1);
     }
 
     function resizeGrid() {
         const maxWidth = Math.min(window.innerWidth - 30, 500);
-        const maxHeight = window.innerHeight * 0.6; 
+        const maxHeight = window.innerHeight * 0.55; 
         
         let size = Math.min(maxWidth, maxHeight);
         
@@ -338,13 +622,36 @@
         
         gameState.levelStartScore = gameState.score;
 
-        // Infinite Level Logic:
-        // Linear difficulty increase to ensure playability forever
-        const pointsToEarn = 3000 + (lvl * 100); 
+        // Difficulty Multipliers
+        let scoreMult = 1;
+        let movesBase = 30;
+        let timeBase = 90;
+
+        if (gameState.difficulty === 'easy') {
+            scoreMult = 0.8;
+            movesBase = 40;
+            timeBase = 120;
+        } else if (gameState.difficulty === 'hard') {
+            scoreMult = 1.2;
+            movesBase = 20;
+            timeBase = 60;
+        }
+
+        // Infinite Level Logic
+        const pointsToEarn = Math.floor((3000 + (lvl * 100)) * scoreMult); 
         gameState.targetScore = gameState.score + pointsToEarn;
         
-        // Fixed moves per level
-        gameState.moves = 30;
+        // Mode Setup
+        if (gameState.mode === 'time') {
+            gameState.timeLeft = timeBase;
+            dom.movesLabel.textContent = "时间";
+            if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+            gameState.timerInterval = setInterval(updateTimer, 1000);
+        } else {
+            gameState.moves = movesBase;
+            dom.movesLabel.textContent = "步数";
+            if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+        }
         
         gameState.comboMultiplier = 1;
         gameState.isLocked = false;
@@ -354,6 +661,21 @@
         dom.gameOverModal.classList.add('hidden');
         document.getElementById('success-overlay').classList.add('hidden');
 
+        updateUI();
+    }
+
+    function updateTimer() {
+        if (gameState.isLocked) return; // Pause timer during animations? Maybe not. Let's keep it running or pause? Usually pause.
+        // Actually, standard match-3 timers keep running. But if animations are long, it might be unfair.
+        // Let's pause timer if isLocked is true to be fair, as user cannot interact.
+        if (gameState.isLocked) return;
+
+        gameState.timeLeft--;
+        if (gameState.timeLeft <= 0) {
+            gameState.timeLeft = 0;
+            clearInterval(gameState.timerInterval);
+            checkWinCondition();
+        }
         updateUI();
     }
 
@@ -402,6 +724,8 @@
         // Word Overlay
         const wordData = gameState.wordGrid[r] && gameState.wordGrid[r][c];
         if (wordData) {
+            div.classList.add('has-word');
+            div.classList.add(wordData.lang === 'CN' ? 'lang-cn' : 'lang-en');
             const wordEl = document.createElement('div');
             wordEl.classList.add('gem-word');
             wordEl.textContent = wordData.word;
@@ -495,16 +819,26 @@
     async function attemptSwap(p1, p2) {
         gameState.isLocked = true;
 
+        // Visual Swap First
+        await swapAnimation(p1, p2);
+
         // Check Entangled
         const w1 = gameState.wordGrid[p1.r][p1.c];
         const w2 = gameState.wordGrid[p2.r][p2.c];
         if ((w1 && w1.isEntangled) || (w2 && w2.isEntangled)) {
+             // Revert visual swap manually because IDs haven't changed
+             const el1 = getGemDOM(p1.r, p1.c);
+             const el2 = getGemDOM(p2.r, p2.c);
+             if(el1 && el2) {
+                 el1.style.transform = `translate(${p1.c * CELL_SIZE}px, ${p1.r * CELL_SIZE}px)`;
+                 el2.style.transform = `translate(${p2.c * CELL_SIZE}px, ${p2.r * CELL_SIZE}px)`;
+                 await new Promise(r => setTimeout(r, 210));
+             }
              gameState.isLocked = false;
              return;
         }
 
         // Check Word Match
-
         if (w1 && w2 && w1.lang !== w2.lang) {
             // Potential Word Match
             const cn = w1.lang === 'CN' ? w1 : w2;
@@ -514,24 +848,20 @@
             
             if (pair) {
                 // Correct Match!
-                await swapAnimation(p1, p2); 
-                gameState.moves--;
+                if (gameState.mode === 'moves') gameState.moves--;
                 updateUI();
                 processWordMatch(p1, p2, true);
                 return;
             } else {
                 // Wrong Match
-                await swapAnimation(p1, p2);
                 await swapAnimation(p1, p2); // Revert visual
-                gameState.moves--;
+                if (gameState.mode === 'moves') gameState.moves--;
                 updateUI();
                 processWordMatch(p1, p2, false);
                 checkWinCondition();
                 return;
             }
         }
-
-        await swapAnimation(p1, p2);
 
         // Swap Data
         const t = gameState.grid[p1.r][p1.c];
@@ -548,7 +878,7 @@
         const matches = findMatches();
 
         if (matches.length > 0) {
-            gameState.moves--;
+            if (gameState.mode === 'moves') gameState.moves--;
             gameState.comboMultiplier = 1;
             updateUI();
             await processMatches(matches);
@@ -585,12 +915,15 @@
 
                     if (cnPos) {
                         gameState.isLocked = true;
-                        gameState.moves--;
+                        if (gameState.mode === 'moves') gameState.moves--;
+                        
+                        await animateAndCrush(p1, cnPos, gameState.currentPair);
+
                         gameState.score += 500;
                         showFloatingText(500, p1);
                         
-                        removeGem(p1.r, p1.c);
-                        removeGem(cnPos.r, cnPos.c);
+                        removeGem(p1.r, p1.c, true);
+                        removeGem(cnPos.r, cnPos.c, true);
                         
                         advanceWordPair();
                         
@@ -644,10 +977,12 @@
         }
     }
 
-    function removeGem(r, c) {
+    function removeGem(r, c, skipParticles = false) {
         const el = getGemDOM(r, c);
         if (el) {
-            createParticles(r, c, gameState.grid[r][c]);
+            if (!skipParticles) {
+                createParticles(r, c, gameState.grid[r][c]);
+            }
             el.style.transform += " scale(0)";
             el.style.opacity = "0";
         }
@@ -656,13 +991,28 @@
         setTimeout(() => { if(el) el.remove(); }, 300);
     }
 
-    function processWordMatch(p1, p2, isCorrect) {
+    async function processWordMatch(p1, p2, isCorrect) {
         if (isCorrect) {
+            // Find the pair info to get English word
+            const w1 = gameState.wordGrid[p1.r][p1.c];
+            const w2 = gameState.wordGrid[p2.r][p2.c];
+            let pair = gameState.currentPair;
+            
+            // If currentPair doesn't match (e.g. random match), try to find it from w1/w2
+            if (w1 && w2) {
+                 const cn = w1.lang === 'CN' ? w1 : w2;
+                 const en = w1.lang === 'EN' ? w1 : w2;
+                 const found = WORD_PAIRS.find(p => p.cn === cn.word && p.en === en.word);
+                 if(found) pair = found;
+            }
+
+            await animateAndCrush(p1, p2, pair);
+
             gameState.score += 500;
             showFloatingText(500, p1);
             
-            removeGem(p1.r, p1.c);
-            removeGem(p2.r, p2.c);
+            removeGem(p1.r, p1.c, true);
+            removeGem(p2.r, p2.c, true);
             
             advanceWordPair();
             
@@ -861,34 +1211,6 @@
             }
         }
 
-        // Expand matches to all connected gems of same color (Flood Fill)
-        if (matchedSet.size > 0) {
-            const queue = Array.from(matchedSet);
-            let head = 0;
-            
-            while(head < queue.length) {
-                const key = queue[head++];
-                const [r, c] = key.split(',').map(Number);
-                const type = gameState.grid[r][c];
-
-                const neighbors = [
-                    {r: r-1, c: c}, {r: r+1, c: c},
-                    {r: r, c: c-1}, {r: r, c: c+1}
-                ];
-
-                for(const n of neighbors) {
-                    if(n.r >= 0 && n.r < ROWS && n.c >= 0 && n.c < COLS) {
-                        const nKey = `${n.r},${n.c}`;
-                        // If neighbor is same type and not yet matched
-                        if(!matchedSet.has(nKey) && gameState.grid[n.r][n.c] === type) {
-                            matchedSet.add(nKey);
-                            queue.push(nKey);
-                        }
-                    }
-                }
-            }
-        }
-
         return Array.from(matchedSet).map(str => {
             const [r, c] = str.split(',').map(Number);
             return { r, c };
@@ -896,6 +1218,50 @@
     }
 
     async function processMatches(matches) {
+        // Check for EN word match and include CN word if exists
+        // Also check for CN word match and include EN word if exists
+        if (gameState.currentPair) {
+            let enExploded = false;
+            let cnExploded = false;
+            
+            for (const m of matches) {
+                const w = gameState.wordGrid[m.r][m.c];
+                if (w) {
+                    if (w.word === gameState.currentPair.en) enExploded = true;
+                    if (w.word === gameState.currentPair.cn) cnExploded = true;
+                }
+            }
+
+            if (enExploded || cnExploded) {
+                // Find the other part of the pair
+                let targetWord = enExploded ? gameState.currentPair.cn : gameState.currentPair.en;
+                let targetPos = null;
+                
+                // If both exploded, we are good. If only one, find the other.
+                if (!(enExploded && cnExploded)) {
+                    for(let r=0; r<ROWS; r++) {
+                        for(let c=0; c<COLS; c++) {
+                            const w = gameState.wordGrid[r][c];
+                            if (w && w.word === targetWord) {
+                                targetPos = {r, c};
+                                break;
+                            }
+                        }
+                        if(targetPos) break;
+                    }
+
+                    if (targetPos) {
+                        const alreadyMatched = matches.some(m => m.r === targetPos.r && m.c === targetPos.c);
+                        if (!alreadyMatched) {
+                            matches.push(targetPos);
+                            gameState.score += 300; 
+                            showFloatingText("连消!", targetPos);
+                        }
+                    }
+                }
+            }
+        }
+
         // Score
         const baseScore = 100;
         const points = (matches.length * baseScore) * gameState.comboMultiplier;
@@ -916,7 +1282,7 @@
                     }
                     if (w.word === gameState.currentPair.cn || w.word === gameState.currentPair.en) {
                         gameState.score += 200; // Bonus
-                        showFloatingText("BONUS!", m);
+                        showFloatingText("奖励!", m);
                     }
                 }
             }
@@ -944,16 +1310,47 @@
             advanceWordPair();
         }
 
+        // Check for pair animation
+        const animatedGems = new Set();
+        let pairToAnimate = null;
+        let enGem = null;
+        let cnGem = null;
+        
+        for(let i=0; i<matches.length; i++) {
+            const m1 = matches[i];
+            const w1 = gameState.wordGrid[m1.r][m1.c];
+            if(!w1) continue;
+            
+            for(let j=i+1; j<matches.length; j++) {
+                const m2 = matches[j];
+                const w2 = gameState.wordGrid[m2.r][m2.c];
+                if(!w2) continue;
+                
+                if(w1.lang !== w2.lang) {
+                    const cn = w1.lang === 'CN' ? w1 : w2;
+                    const en = w1.lang === 'EN' ? w1 : w2;
+                    const p = WORD_PAIRS.find(wp => wp.cn === cn.word && wp.en === en.word);
+                    if(p) {
+                        pairToAnimate = p;
+                        enGem = w1.lang === 'EN' ? m1 : m2;
+                        cnGem = w1.lang === 'CN' ? m1 : m2;
+                        break;
+                    }
+                }
+            }
+            if(pairToAnimate) break;
+        }
+        
+        if(pairToAnimate && enGem && cnGem) {
+            await animateAndCrush(enGem, cnGem, pairToAnimate);
+            animatedGems.add(`${enGem.r},${enGem.c}`);
+            animatedGems.add(`${cnGem.r},${cnGem.c}`);
+        }
+
         // Remove
         matches.forEach(m => {
-            const el = getGemDOM(m.r, m.c);
-            if (el) {
-                createParticles(m.r, m.c, gameState.grid[m.r][m.c]);
-                el.style.transform += " scale(0)";
-                el.style.opacity = "0";
-            }
-            gameState.grid[m.r][m.c] = null;
-            gameState.wordGrid[m.r][m.c] = null;
+            const skipParticles = animatedGems.has(`${m.r},${m.c}`);
+            removeGem(m.r, m.c, skipParticles);
         });
 
         await new Promise(r => setTimeout(r, 300));
@@ -1090,9 +1487,9 @@
         animate();
     }
 
-    function createParticles(r, c, type) {
-        const centerX = c * CELL_SIZE + CELL_SIZE / 2;
-        const centerY = r * CELL_SIZE + CELL_SIZE / 2;
+    function createParticles(r, c, type, x, y) {
+        const centerX = x !== undefined ? x : (c * CELL_SIZE + CELL_SIZE / 2);
+        const centerY = y !== undefined ? y : (r * CELL_SIZE + CELL_SIZE / 2);
         const colors = ['#ff4d4d', '#4da6ff', '#4dff88', '#ffff4d', '#bf4dff', '#ffae4d'];
         const color = colors[type] || '#fff';
 
@@ -1118,7 +1515,7 @@
     function showFloatingText(text, pos) {
         const el = document.createElement('div');
         el.classList.add('float-text');
-        el.textContent = `+${text}`;
+        el.textContent = typeof text === 'number' ? `+${text}` : text;
         // Safety check for pos
         if(pos && pos.c !== undefined) {
             el.style.left = `${pos.c * CELL_SIZE + CELL_SIZE/2 - 20}px`;
@@ -1130,7 +1527,15 @@
 
     function updateUI() {
         dom.score.textContent = gameState.score;
-        dom.moves.textContent = gameState.moves;
+        
+        if (gameState.mode === 'time') {
+            const m = Math.floor(gameState.timeLeft / 60);
+            const s = gameState.timeLeft % 60;
+            dom.moves.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+        } else {
+            dom.moves.textContent = gameState.moves;
+        }
+        
         dom.level.textContent = gameState.level;
         dom.target.textContent = gameState.targetScore;
 
@@ -1144,20 +1549,47 @@
     function checkWinCondition() {
         if (gameState.score >= gameState.targetScore) {
             gameState.isLocked = true;
+            if (gameState.timerInterval) clearInterval(gameState.timerInterval);
             dom.levelScoreFinal.textContent = gameState.score;
             playWinEffect();
+            
+            // Notify parent of level completion (optional, but good practice)
+            // window.parent.postMessage({ type: 'levelCompleted', score: gameState.score, level: gameState.level }, '*');
+
             setTimeout(() => {
                 // Auto advance to next level
                 startLevel(gameState.level + 1);
             }, 2000);
-        } else if (gameState.moves <= 0) {
-            gameState.isLocked = true;
-            dom.finalScore.textContent = gameState.score;
-            setTimeout(() => {
-                dom.gameOverModal.classList.remove('hidden');
-            }, 500);
         } else {
-            gameState.isLocked = false;
+            let isGameOver = false;
+            if (gameState.mode === 'time') {
+                if (gameState.timeLeft <= 0) isGameOver = true;
+            } else {
+                if (gameState.moves <= 0) isGameOver = true;
+            }
+
+            if (isGameOver) {
+                gameState.isLocked = true;
+                if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+                dom.finalScore.textContent = gameState.score;
+                
+                // Notify parent of game over
+                window.parent.postMessage({ 
+                    type: 'gameFinished', 
+                    data: { 
+                        score: gameState.score, 
+                        level: gameState.level,
+                        difficulty: gameState.difficulty,
+                        mode: gameState.mode
+                    } 
+                }, '*');
+
+                setTimeout(() => {
+                    dom.gameOverModal.classList.remove('hidden');
+                }, 500);
+            } else {
+                gameState.isLocked = false;
+            }
         }
     }
 
@@ -1272,9 +1704,14 @@
         const existing = el.querySelector('.gem-word');
         if (existing) existing.remove();
         el.classList.remove('entangled');
+        el.classList.remove('has-word');
+        el.classList.remove('lang-cn');
+        el.classList.remove('lang-en');
 
         const data = gameState.wordGrid[r][c];
         if (data) {
+            el.classList.add('has-word');
+            el.classList.add(data.lang === 'CN' ? 'lang-cn' : 'lang-en');
             const wordEl = document.createElement('div');
             wordEl.classList.add('gem-word');
             wordEl.textContent = data.word;
