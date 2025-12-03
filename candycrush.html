@@ -1,0 +1,879 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gem Rush - 宝石迷阵</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background: radial-gradient(circle at center, #2b1055 0%, #1a0b2e 100%);
+            color: white;
+            overflow: hidden;
+            touch-action: none; /* Prevent scroll on mobile */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Grid Styling */
+        #grid-area {
+            position: relative;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            border: 4px solid #4c2e85;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            touch-action: none;
+        }
+
+        /* Gem Styles */
+        .gem {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.2s ease;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* GPU Acceleration hint */
+            will-change: transform;
+        }
+
+        .gem-inner {
+            width: 85%;
+            height: 85%;
+            border-radius: 20%;
+            box-shadow: inset 0 4px 8px rgba(255,255,255,0.4), 
+                        inset 0 -4px 8px rgba(0,0,0,0.4),
+                        0 4px 8px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .gem-inner::after {
+            content: '';
+            position: absolute;
+            top: 15%;
+            left: 15%;
+            width: 30%;
+            height: 30%;
+            background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+        }
+
+        /* Gem Colors */
+        .type-0 .gem-inner { background: linear-gradient(135deg, #ff4d4d, #b30000); border: 1px solid #ff8080; } /* Red */
+        .type-1 .gem-inner { background: linear-gradient(135deg, #4da6ff, #0059b3); border: 1px solid #80bfff; border-radius: 50%; } /* Blue Circle */
+        .type-2 .gem-inner { background: linear-gradient(135deg, #4dff88, #00b33c); border: 1px solid #80ffaa; border-radius: 10%; transform: rotate(45deg) scale(0.85); } /* Green Diamond */
+        .type-3 .gem-inner { background: linear-gradient(135deg, #ffff4d, #b3b300); border: 1px solid #ffff80; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); border-radius: 0; width: 80%; height: 80%;} /* Yellow Triangle */
+        .type-4 .gem-inner { background: linear-gradient(135deg, #bf4dff, #7300b3); border: 1px solid #df80ff; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); border-radius: 0; } /* Purple Lozenge */
+        .type-5 .gem-inner { background: linear-gradient(135deg, #ffae4d, #b36b00); border: 1px solid #ffce80; border-radius: 30%; } /* Orange Hex */
+
+        .gem.selected .gem-inner {
+            filter: brightness(1.4);
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+            z-index: 20;
+        }
+
+        /* Particles */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
+            animation: pop 0.6s ease-out forwards;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; top: var(--dest-y); left: var(--dest-x); }
+        }
+
+        /* Floating Text */
+        .float-text {
+            position: absolute;
+            font-weight: bold;
+            font-size: 24px;
+            color: #ffd700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            z-index: 50;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+        
+        .hidden { display: none !important; }
+
+        .btn-primary {
+            background: linear-gradient(to bottom, #ff4d4d, #c41e1e);
+            border: none;
+            padding: 12px 30px;
+            color: white;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 77, 77, 0.4);
+            transition: transform 0.1s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .btn-primary:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- UI Header -->
+    <div class="w-full px-6 mb-4 flex justify-between items-end">
+        <div>
+            <div class="text-sm text-gray-300 opacity-80">SCORE</div>
+            <div id="score-display" class="text-3xl font-bold text-yellow-400">0</div>
+        </div>
+        <div class="text-center">
+            <div class="text-sm text-gray-300 opacity-80">LEVEL</div>
+            <div id="level-display" class="text-4xl font-bold text-white">1</div>
+        </div>
+        <div class="text-right">
+            <div class="text-sm text-gray-300 opacity-80">MOVES</div>
+            <div id="moves-display" class="text-3xl font-bold text-red-400">20</div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="w-full max-w-[90%] h-4 bg-gray-800 rounded-full mb-4 overflow-hidden border border-gray-600 relative">
+        <div id="progress-fill" class="h-full bg-gradient-to-r from-green-400 to-blue-500 transition-all duration-500" style="width: 0%"></div>
+        <div class="absolute inset-0 flex items-center justify-center text-[10px] font-bold tracking-wider text-white drop-shadow-md">
+            TARGET: <span id="target-display">1000</span>
+        </div>
+    </div>
+
+    <!-- Game Board -->
+    <div id="grid-area">
+        <!-- Gems generated by JS -->
+    </div>
+</div>
+
+<!-- Success Overlay -->
+<div id="success-overlay" class="hidden fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+    <canvas id="confetti-canvas" class="absolute inset-0 w-full h-full"></canvas>
+    <div class="absolute text-6xl font-bold text-yellow-300 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)] animate-bounce">LEVEL COMPLETE!</div>
+</div>
+
+<!-- Level Complete Modal -->
+<div id="level-modal" class="modal hidden">
+    <div class="bg-gray-900 p-8 rounded-2xl border-2 border-yellow-500 text-center max-w-xs w-full transform transition-all scale-100 shadow-2xl">
+        <h2 class="text-3xl font-bold text-yellow-400 mb-2">LEVEL CLEAR!</h2>
+        <p class="text-gray-300 mb-6">Great job!</p>
+        <div class="text-lg mb-6">Score: <span id="level-score-final" class="text-white font-bold">0</span></div>
+        <button id="next-level-btn" class="btn-primary w-full">Next Level</button>
+    </div>
+</div>
+
+<!-- Game Over Modal -->
+<div id="game-over-modal" class="modal hidden">
+    <div class="bg-gray-900 p-8 rounded-2xl border-2 border-red-600 text-center max-w-xs w-full shadow-2xl">
+        <h2 class="text-3xl font-bold text-red-500 mb-2">GAME OVER</h2>
+        <p class="text-gray-300 mb-6">Out of moves!</p>
+        <div class="text-lg mb-6">Final Score: <span id="final-score" class="text-white font-bold">0</span></div>
+        <button id="restart-btn" class="btn-primary w-full">Try Again</button>
+    </div>
+</div>
+
+<script>
+    /**
+     * Game Configuration & State
+     */
+    const COLS = 8;
+    const ROWS = 8;
+    const GEM_TYPES = 6; // Number of colors
+    let GRID_SIZE = 0; // Calculated dynamically
+    let CELL_SIZE = 0;
+
+    const gameState = {
+        grid: [], // 2D array storing gem types (0-5) or null
+        selectedGem: null, // {r, c}
+        score: 0,
+        moves: 0,
+        level: 1,
+        targetScore: 1000,
+        isLocked: false, // Locks input during animations
+        comboMultiplier: 1
+    };
+
+    const dom = {
+        grid: document.getElementById('grid-area'),
+        score: document.getElementById('score-display'),
+        moves: document.getElementById('moves-display'),
+        level: document.getElementById('level-display'),
+        target: document.getElementById('target-display'),
+        progress: document.getElementById('progress-fill'),
+        levelModal: document.getElementById('level-modal'),
+        gameOverModal: document.getElementById('game-over-modal'),
+        nextLevelBtn: document.getElementById('next-level-btn'),
+        restartBtn: document.getElementById('restart-btn'),
+        levelScoreFinal: document.getElementById('level-score-final'),
+        finalScore: document.getElementById('final-score')
+    };
+
+    /* --- Initialization & Resizing --- */
+
+    function init() {
+        // Calculate sizes first so we have valid CELL_SIZE
+        resizeGrid();
+        
+        // Then start level
+        startLevel(1);
+        
+        window.addEventListener('resize', resizeGrid);
+        dom.nextLevelBtn.addEventListener('click', () => startLevel(gameState.level + 1));
+        dom.restartBtn.addEventListener('click', () => startLevel(1));
+    }
+
+    function resizeGrid() {
+        const maxWidth = Math.min(window.innerWidth - 30, 500);
+        const maxHeight = window.innerHeight * 0.6; 
+        
+        let size = Math.min(maxWidth, maxHeight);
+        
+        GRID_SIZE = size;
+        CELL_SIZE = (GRID_SIZE - 8) / COLS; // -8 for border
+
+        dom.grid.style.width = `${GRID_SIZE}px`;
+        dom.grid.style.height = `${GRID_SIZE}px`;
+
+        // IMPORTANT: Only render if grid exists
+        if (gameState.grid && gameState.grid.length > 0) {
+            renderGrid(); 
+        }
+    }
+
+    function startLevel(lvl) {
+        gameState.level = lvl;
+        
+        if (lvl === 1) {
+            gameState.score = 0;
+            createInitialGrid();
+        }
+        
+        gameState.levelStartScore = gameState.score;
+
+        // Infinite Level Logic:
+        // Linear difficulty increase to ensure playability forever
+        const pointsToEarn = 3000 + (lvl * 100); 
+        gameState.targetScore = gameState.score + pointsToEarn;
+        
+        // Fixed moves per level
+        gameState.moves = 30;
+        
+        gameState.comboMultiplier = 1;
+        gameState.isLocked = false;
+        gameState.selectedGem = null;
+
+        dom.levelModal.classList.add('hidden');
+        dom.gameOverModal.classList.add('hidden');
+        document.getElementById('success-overlay').classList.add('hidden');
+
+        updateUI();
+    }
+
+    function createInitialGrid() {
+        gameState.grid = [];
+        dom.grid.innerHTML = ''; 
+
+        for (let r = 0; r < ROWS; r++) {
+            gameState.grid[r] = [];
+            for (let c = 0; c < COLS; c++) {
+                let type;
+                // Prevent initial matches
+                do {
+                    type = Math.floor(Math.random() * GEM_TYPES);
+                } while (
+                    (c >= 2 && gameState.grid[r][c-1] === type && gameState.grid[r][c-2] === type) ||
+                    (r >= 2 && gameState.grid[r-1][c] === type && gameState.grid[r-2][c] === type)
+                );
+                gameState.grid[r][c] = type;
+                createGemDOM(r, c, type);
+            }
+        }
+    }
+
+    /* --- DOM Manipulation --- */
+
+    function createGemDOM(r, c, type) {
+        const div = document.createElement('div');
+        div.classList.add('gem', `type-${type}`);
+        div.id = `gem-${r}-${c}`;
+        div.setAttribute('data-r', r);
+        div.setAttribute('data-c', c);
+        
+        div.style.width = `${CELL_SIZE}px`;
+        div.style.height = `${CELL_SIZE}px`;
+        div.style.transform = `translate(${c * CELL_SIZE}px, ${r * CELL_SIZE}px)`;
+        
+        const inner = document.createElement('div');
+        inner.classList.add('gem-inner');
+        div.appendChild(inner);
+
+        // Event Listeners
+        bindInteraction(div, r, c);
+
+        dom.grid.appendChild(div);
+        return div;
+    }
+
+    function getGemDOM(r, c) {
+        return document.getElementById(`gem-${r}-${c}`);
+    }
+
+    function renderGrid() {
+        // Safe check
+        if (!gameState.grid || gameState.grid.length === 0) return;
+
+        for (let r = 0; r < ROWS; r++) {
+            // Extra safety if row is somehow missing
+            if (!gameState.grid[r]) continue;
+
+            for (let c = 0; c < COLS; c++) {
+                if (gameState.grid[r][c] !== null) {
+                    const gem = getGemDOM(r, c);
+                    if (gem) {
+                        gem.style.width = `${CELL_SIZE}px`;
+                        gem.style.height = `${CELL_SIZE}px`;
+                        gem.style.transform = `translate(${c * CELL_SIZE}px, ${r * CELL_SIZE}px)`;
+                    }
+                }
+            }
+        }
+    }
+
+    /* --- Core Logic --- */
+
+    function handleInput(r, c) {
+        if (gameState.isLocked) return;
+        if (gameState.grid[r][c] === null) return;
+
+        const clicked = { r, c };
+
+        // Deselect
+        if (gameState.selectedGem && gameState.selectedGem.r === r && gameState.selectedGem.c === c) {
+            toggleSelectVisual(gameState.selectedGem, false);
+            gameState.selectedGem = null;
+            return;
+        }
+
+        // Select First
+        if (!gameState.selectedGem) {
+            gameState.selectedGem = clicked;
+            toggleSelectVisual(clicked, true);
+            return;
+        }
+
+        // Swap logic
+        if (isAdjacent(gameState.selectedGem, clicked)) {
+            toggleSelectVisual(gameState.selectedGem, false);
+            attemptSwap(gameState.selectedGem, clicked);
+            gameState.selectedGem = null;
+        } else {
+            toggleSelectVisual(gameState.selectedGem, false);
+            gameState.selectedGem = clicked;
+            toggleSelectVisual(clicked, true);
+        }
+    }
+
+    function isAdjacent(p1, p2) {
+        return Math.abs(p1.r - p2.r) + Math.abs(p1.c - p2.c) === 1;
+    }
+
+    function toggleSelectVisual(pos, isSelected) {
+        const el = getGemDOM(pos.r, pos.c);
+        if (el) {
+            if (isSelected) el.classList.add('selected');
+            else el.classList.remove('selected');
+        }
+    }
+
+    async function attemptSwap(p1, p2) {
+        gameState.isLocked = true;
+
+        await swapAnimation(p1, p2);
+
+        // Swap Data
+        const t = gameState.grid[p1.r][p1.c];
+        gameState.grid[p1.r][p1.c] = gameState.grid[p2.r][p2.c];
+        gameState.grid[p2.r][p2.c] = t;
+
+        updateDomIds(p1, p2);
+
+        const matches = findMatches();
+
+        if (matches.length > 0) {
+            gameState.moves--;
+            gameState.comboMultiplier = 1;
+            updateUI();
+            await processMatches(matches);
+        } else {
+            // Invalid Move - Revert
+            await swapAnimation(p1, p2);
+            
+            const t = gameState.grid[p1.r][p1.c];
+            gameState.grid[p1.r][p1.c] = gameState.grid[p2.r][p2.c];
+            gameState.grid[p2.r][p2.c] = t;
+            
+            updateDomIds(p1, p2);
+            gameState.isLocked = false;
+        }
+    }
+
+    function updateDomIds(p1, p2) {
+        const dom1 = document.getElementById(`gem-${p1.r}-${p1.c}`);
+        const dom2 = document.getElementById(`gem-${p2.r}-${p2.c}`);
+        
+        if(dom1 && dom2) {
+            dom1.id = "temp_id";
+            dom2.id = `gem-${p1.r}-${p1.c}`;
+            dom1.id = `gem-${p2.r}-${p2.c}`;
+            
+            // Update event listeners to new coords
+            updateListener(dom1, p2.r, p2.c);
+            updateListener(dom2, p1.r, p1.c);
+        }
+    }
+    
+    function updateListener(el, r, c) {
+        bindInteraction(el, r, c);
+    }
+
+    function bindInteraction(el, r, c) {
+        const startHandler = (e) => {
+            if (e.cancelable && e.type === 'touchstart') e.preventDefault();
+            handleInteractionStart(e, r, c);
+        };
+        el.onmousedown = startHandler;
+        el.ontouchstart = startHandler;
+    }
+
+    let dragStart = null;
+
+    function handleInteractionStart(e, r, c) {
+        if (gameState.isLocked) return;
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        dragStart = {
+            r, c,
+            x: clientX,
+            y: clientY,
+            moved: false
+        };
+
+        document.addEventListener('mousemove', handleInteractionMove);
+        document.addEventListener('mouseup', handleInteractionEnd);
+        document.addEventListener('touchmove', handleInteractionMove, { passive: false });
+        document.addEventListener('touchend', handleInteractionEnd);
+    }
+
+    function handleInteractionMove(e) {
+        if (!dragStart || gameState.isLocked) return;
+
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        const dx = clientX - dragStart.x;
+        const dy = clientY - dragStart.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist > 20) { // Threshold
+            dragStart.moved = true;
+            
+            // Determine direction
+            let targetR = dragStart.r;
+            let targetC = dragStart.c;
+            
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal
+                if (dx > 0) targetC++; else targetC--;
+            } else {
+                // Vertical
+                if (dy > 0) targetR++; else targetR--;
+            }
+
+            // Check bounds
+            if (targetR >= 0 && targetR < ROWS && targetC >= 0 && targetC < COLS) {
+                // Execute Swap
+                const p1 = { r: dragStart.r, c: dragStart.c };
+                const p2 = { r: targetR, c: targetC };
+                
+                // Clear any existing selection
+                if (gameState.selectedGem) {
+                    toggleSelectVisual(gameState.selectedGem, false);
+                    gameState.selectedGem = null;
+                }
+
+                attemptSwap(p1, p2);
+            }
+            
+            // Stop tracking immediately after triggering swap
+            cleanupInteraction();
+        }
+    }
+
+    function handleInteractionEnd(e) {
+        if (dragStart && !dragStart.moved) {
+            // It was a click
+            handleInput(dragStart.r, dragStart.c);
+        }
+        cleanupInteraction();
+    }
+
+    function cleanupInteraction() {
+        dragStart = null;
+        document.removeEventListener('mousemove', handleInteractionMove);
+        document.removeEventListener('mouseup', handleInteractionEnd);
+        document.removeEventListener('touchmove', handleInteractionMove);
+        document.removeEventListener('touchend', handleInteractionEnd);
+    }
+
+    function swapAnimation(p1, p2) {
+        return new Promise(resolve => {
+            const el1 = getGemDOM(p1.r, p1.c);
+            const el2 = getGemDOM(p2.r, p2.c);
+
+            if(!el1 || !el2) { resolve(); return; }
+
+            el1.style.transition = 'transform 0.2s ease';
+            el2.style.transition = 'transform 0.2s ease';
+
+            el1.style.transform = `translate(${p2.c * CELL_SIZE}px, ${p2.r * CELL_SIZE}px)`;
+            el2.style.transform = `translate(${p1.c * CELL_SIZE}px, ${p1.r * CELL_SIZE}px)`;
+
+            setTimeout(() => {
+                resolve();
+            }, 210);
+        });
+    }
+
+    /* --- Matching Engine --- */
+
+    function findMatches() {
+        const matchedSet = new Set();
+
+        // Horizontal
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS - 2; c++) {
+                const type = gameState.grid[r][c];
+                if (type === null) continue;
+                if (gameState.grid[r][c+1] === type && gameState.grid[r][c+2] === type) {
+                    matchedSet.add(`${r},${c}`);
+                    matchedSet.add(`${r},${c+1}`);
+                    matchedSet.add(`${r},${c+2}`);
+                }
+            }
+        }
+
+        // Vertical
+        for (let c = 0; c < COLS; c++) {
+            for (let r = 0; r < ROWS - 2; r++) {
+                const type = gameState.grid[r][c];
+                if (type === null) continue;
+                if (gameState.grid[r+1][c] === type && gameState.grid[r+2][c] === type) {
+                    matchedSet.add(`${r},${c}`);
+                    matchedSet.add(`${r+1},${c}`);
+                    matchedSet.add(`${r+2},${c}`);
+                }
+            }
+        }
+
+        // Expand matches to all connected gems of same color (Flood Fill)
+        if (matchedSet.size > 0) {
+            const queue = Array.from(matchedSet);
+            let head = 0;
+            
+            while(head < queue.length) {
+                const key = queue[head++];
+                const [r, c] = key.split(',').map(Number);
+                const type = gameState.grid[r][c];
+
+                const neighbors = [
+                    {r: r-1, c: c}, {r: r+1, c: c},
+                    {r: r, c: c-1}, {r: r, c: c+1}
+                ];
+
+                for(const n of neighbors) {
+                    if(n.r >= 0 && n.r < ROWS && n.c >= 0 && n.c < COLS) {
+                        const nKey = `${n.r},${n.c}`;
+                        // If neighbor is same type and not yet matched
+                        if(!matchedSet.has(nKey) && gameState.grid[n.r][n.c] === type) {
+                            matchedSet.add(nKey);
+                            queue.push(nKey);
+                        }
+                    }
+                }
+            }
+        }
+
+        return Array.from(matchedSet).map(str => {
+            const [r, c] = str.split(',').map(Number);
+            return { r, c };
+        });
+    }
+
+    async function processMatches(matches) {
+        // Score
+        const baseScore = 100;
+        const points = (matches.length * baseScore) * gameState.comboMultiplier;
+        gameState.score += points;
+        
+        if(matches.length > 0) {
+            showFloatingText(points, matches[0]);
+        }
+        
+        gameState.comboMultiplier++;
+        updateUI();
+
+        // Remove
+        matches.forEach(m => {
+            const el = getGemDOM(m.r, m.c);
+            if (el) {
+                createParticles(m.r, m.c, gameState.grid[m.r][m.c]);
+                el.style.transform += " scale(0)";
+                el.style.opacity = "0";
+            }
+            gameState.grid[m.r][m.c] = null;
+        });
+
+        await new Promise(r => setTimeout(r, 300));
+
+        // Clean DOM
+        matches.forEach(m => {
+            const el = getGemDOM(m.r, m.c);
+            if (el) el.remove();
+        });
+
+        await applyGravity();
+
+        // Cascade
+        const newMatches = findMatches();
+        if (newMatches.length > 0) {
+            await new Promise(r => setTimeout(r, 200));
+            await processMatches(newMatches);
+        } else {
+            checkWinCondition();
+        }
+    }
+
+    async function applyGravity() {
+        const moves = []; 
+
+        // 1. Shift down
+        for (let c = 0; c < COLS; c++) {
+            let emptySlots = 0;
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (gameState.grid[r][c] === null) {
+                    emptySlots++;
+                } else if (emptySlots > 0) {
+                    const type = gameState.grid[r][c];
+                    const newR = r + emptySlots;
+                    
+                    gameState.grid[newR][c] = type;
+                    gameState.grid[r][c] = null;
+
+                    const el = getGemDOM(r, c);
+                    if(el) {
+                        el.id = `gem-${newR}-${c}`;
+                        moves.push({ el, r: newR, c });
+                    }
+                }
+            }
+
+            // 2. Fill top
+            for(let r = 0; r < emptySlots; r++) {
+                const type = Math.floor(Math.random() * GEM_TYPES);
+                gameState.grid[r][c] = type;
+                
+                const div = document.createElement('div');
+                div.classList.add('gem', `type-${type}`);
+                div.id = `gem-${r}-${c}`;
+                div.style.width = `${CELL_SIZE}px`;
+                div.style.height = `${CELL_SIZE}px`;
+                div.style.transform = `translate(${c * CELL_SIZE}px, -${(emptySlots - r + 1) * CELL_SIZE}px)`;
+                
+                const inner = document.createElement('div');
+                inner.classList.add('gem-inner');
+                div.appendChild(inner);
+                
+                dom.grid.appendChild(div);
+                moves.push({ el: div, r: r, c: c });
+            }
+        }
+
+        await new Promise(r => requestAnimationFrame(r));
+
+        moves.forEach(m => {
+            m.el.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+            m.el.style.transform = `translate(${m.c * CELL_SIZE}px, ${m.r * CELL_SIZE}px)`;
+            
+            // Update Listener for new position
+            updateListener(m.el, m.r, m.c);
+        });
+
+        await new Promise(r => setTimeout(r, 400));
+    }
+
+    /* --- VFX & UI --- */
+
+    function playWinEffect() {
+        const overlay = document.getElementById('success-overlay');
+        const canvas = document.getElementById('confetti-canvas');
+        overlay.classList.remove('hidden');
+        
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const particles = [];
+        const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+
+        for(let i=0; i<200; i++) {
+            particles.push({
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                vx: (Math.random() - 0.5) * 30,
+                vy: (Math.random() - 0.5) * 30,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: Math.random() * 10 + 5,
+                life: 100
+            });
+        }
+
+        function animate() {
+            if(overlay.classList.contains('hidden')) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            let active = false;
+            particles.forEach(p => {
+                if(p.life > 0) {
+                    active = true;
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.5; // Gravity
+                    p.life--;
+                    
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x, p.y, p.size, p.size);
+                }
+            });
+
+            if(active) requestAnimationFrame(animate);
+        }
+        
+        animate();
+    }
+
+    function createParticles(r, c, type) {
+        const centerX = c * CELL_SIZE + CELL_SIZE / 2;
+        const centerY = r * CELL_SIZE + CELL_SIZE / 2;
+        const colors = ['#ff4d4d', '#4da6ff', '#4dff88', '#ffff4d', '#bf4dff', '#ffae4d'];
+        const color = colors[type] || '#fff';
+
+        for (let i = 0; i < 8; i++) {
+            const p = document.createElement('div');
+            p.classList.add('particle');
+            p.style.backgroundColor = color;
+            p.style.left = `${centerX}px`;
+            p.style.top = `${centerY}px`;
+            p.style.width = `${Math.random() * 10 + 5}px`;
+            p.style.height = p.style.width;
+            
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = Math.random() * 60 + 20;
+            p.style.setProperty('--dest-x', `${Math.cos(angle) * velocity}px`);
+            p.style.setProperty('--dest-y', `${Math.sin(angle) * velocity}px`);
+            
+            dom.grid.appendChild(p);
+            setTimeout(() => p.remove(), 600);
+        }
+    }
+
+    function showFloatingText(text, pos) {
+        const el = document.createElement('div');
+        el.classList.add('float-text');
+        el.textContent = `+${text}`;
+        // Safety check for pos
+        if(pos && pos.c !== undefined) {
+            el.style.left = `${pos.c * CELL_SIZE + CELL_SIZE/2 - 20}px`;
+            el.style.top = `${pos.r * CELL_SIZE}px`;
+            dom.grid.appendChild(el);
+            setTimeout(() => el.remove(), 1000);
+        }
+    }
+
+    function updateUI() {
+        dom.score.textContent = gameState.score;
+        dom.moves.textContent = gameState.moves;
+        dom.level.textContent = gameState.level;
+        dom.target.textContent = gameState.targetScore;
+
+        const levelEarned = gameState.score - (gameState.levelStartScore || 0);
+        const levelGoal = gameState.targetScore - (gameState.levelStartScore || 0);
+        const progress = levelGoal > 0 ? Math.min(100, (levelEarned / levelGoal) * 100) : 0;
+        
+        dom.progress.style.width = `${progress}%`;
+    }
+
+    function checkWinCondition() {
+        if (gameState.score >= gameState.targetScore) {
+            gameState.isLocked = true;
+            dom.levelScoreFinal.textContent = gameState.score;
+            playWinEffect();
+            setTimeout(() => {
+                // Auto advance to next level
+                startLevel(gameState.level + 1);
+            }, 2000);
+        } else if (gameState.moves <= 0) {
+            gameState.isLocked = true;
+            dom.finalScore.textContent = gameState.score;
+            setTimeout(() => {
+                dom.gameOverModal.classList.remove('hidden');
+            }, 500);
+        } else {
+            gameState.isLocked = false;
+        }
+    }
+
+    // Run
+    init();
+
+</script>
+</body>
+</html>
