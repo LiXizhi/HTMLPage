@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -147,6 +146,44 @@
             font-family: 'Fredoka', sans-serif;
         }
         .btn-primary:active { transform: scale(0.95); }
+
+        /* Word Overlay */
+        .gem-word {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 4px #000, 0 0 2px #000;
+            pointer-events: none;
+            z-index: 15;
+            text-align: center;
+            width: 100%;
+            line-height: 1.1;
+            white-space: nowrap;
+        }
+        
+        .entangled .gem-inner {
+            filter: grayscale(0.8) brightness(0.6);
+            box-shadow: inset 0 0 10px #000;
+        }
+        
+        .entangled::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(0,0,0,0.2),
+                rgba(0,0,0,0.2) 5px,
+                rgba(0,0,0,0.4) 5px,
+                rgba(0,0,0,0.4) 10px
+            );
+            z-index: 14;
+            border-radius: 20%;
+        }
     </style>
 </head>
 <body>
@@ -218,8 +255,23 @@
     let GRID_SIZE = 0; // Calculated dynamically
     let CELL_SIZE = 0;
 
+    const WORD_PAIRS = [
+        {cn: "苹果", en: "Apple"}, {cn: "香蕉", en: "Banana"}, {cn: "橙子", en: "Orange"},
+        {cn: "葡萄", en: "Grape"}, {cn: "西瓜", en: "Watermelon"}, {cn: "草莓", en: "Strawberry"},
+        {cn: "樱桃", en: "Cherry"}, {cn: "柠檬", en: "Lemon"}, {cn: "桃子", en: "Peach"},
+        {cn: "梨", en: "Pear"}, {cn: "猫", en: "Cat"}, {cn: "狗", en: "Dog"},
+        {cn: "鸟", en: "Bird"}, {cn: "鱼", en: "Fish"}, {cn: "大象", en: "Elephant"},
+        {cn: "狮子", en: "Lion"}, {cn: "老虎", en: "Tiger"}, {cn: "猴子", en: "Monkey"},
+        {cn: "熊猫", en: "Panda"}, {cn: "兔子", en: "Rabbit"}, {cn: "书", en: "Book"},
+        {cn: "笔", en: "Pen"}, {cn: "学校", en: "School"}, {cn: "老师", en: "Teacher"},
+        {cn: "学生", en: "Student"}, {cn: "红", en: "Red"}, {cn: "蓝", en: "Blue"},
+        {cn: "绿", en: "Green"}, {cn: "黄", en: "Yellow"}, {cn: "白", en: "White"}
+    ];
+
     const gameState = {
         grid: [], // 2D array storing gem types (0-5) or null
+        wordGrid: [], // 2D array storing word objects {word, lang, pairId, isEntangled}
+        currentPair: null, // {cn, en}
         selectedGem: null, // {r, c}
         score: 0,
         moves: 0,
@@ -307,11 +359,14 @@
 
     function createInitialGrid() {
         gameState.grid = [];
+        gameState.wordGrid = [];
         dom.grid.innerHTML = ''; 
 
         for (let r = 0; r < ROWS; r++) {
             gameState.grid[r] = [];
+            gameState.wordGrid[r] = [];
             for (let c = 0; c < COLS; c++) {
+                gameState.wordGrid[r][c] = null;
                 let type;
                 // Prevent initial matches
                 do {
@@ -324,6 +379,7 @@
                 createGemDOM(r, c, type);
             }
         }
+        ensureWords();
     }
 
     /* --- DOM Manipulation --- */
@@ -342,6 +398,18 @@
         const inner = document.createElement('div');
         inner.classList.add('gem-inner');
         div.appendChild(inner);
+
+        // Word Overlay
+        const wordData = gameState.wordGrid[r] && gameState.wordGrid[r][c];
+        if (wordData) {
+            const wordEl = document.createElement('div');
+            wordEl.classList.add('gem-word');
+            wordEl.textContent = wordData.word;
+            div.appendChild(wordEl);
+            if (wordData.isEntangled) {
+                div.classList.add('entangled');
+            }
+        }
 
         // Event Listeners
         bindInteraction(div, r, c);
@@ -380,6 +448,9 @@
     function handleInput(r, c) {
         if (gameState.isLocked) return;
         if (gameState.grid[r][c] === null) return;
+
+        // Block entangled
+        if (gameState.wordGrid[r][c] && gameState.wordGrid[r][c].isEntangled) return;
 
         const clicked = { r, c };
 
@@ -424,12 +495,53 @@
     async function attemptSwap(p1, p2) {
         gameState.isLocked = true;
 
+        // Check Entangled
+        const w1 = gameState.wordGrid[p1.r][p1.c];
+        const w2 = gameState.wordGrid[p2.r][p2.c];
+        if ((w1 && w1.isEntangled) || (w2 && w2.isEntangled)) {
+             gameState.isLocked = false;
+             return;
+        }
+
+        // Check Word Match
+
+        if (w1 && w2 && w1.lang !== w2.lang) {
+            // Potential Word Match
+            const cn = w1.lang === 'CN' ? w1 : w2;
+            const en = w1.lang === 'EN' ? w1 : w2;
+            
+            const pair = WORD_PAIRS.find(p => p.cn === cn.word && p.en === en.word);
+            
+            if (pair) {
+                // Correct Match!
+                await swapAnimation(p1, p2); 
+                gameState.moves--;
+                updateUI();
+                processWordMatch(p1, p2, true);
+                return;
+            } else {
+                // Wrong Match
+                await swapAnimation(p1, p2);
+                await swapAnimation(p1, p2); // Revert visual
+                gameState.moves--;
+                updateUI();
+                processWordMatch(p1, p2, false);
+                checkWinCondition();
+                return;
+            }
+        }
+
         await swapAnimation(p1, p2);
 
         // Swap Data
         const t = gameState.grid[p1.r][p1.c];
         gameState.grid[p1.r][p1.c] = gameState.grid[p2.r][p2.c];
         gameState.grid[p2.r][p2.c] = t;
+
+        // Swap Word Data
+        const tw = gameState.wordGrid[p1.r][p1.c];
+        gameState.wordGrid[p1.r][p1.c] = gameState.wordGrid[p2.r][p2.c];
+        gameState.wordGrid[p2.r][p2.c] = tw;
 
         updateDomIds(p1, p2);
 
@@ -447,9 +559,142 @@
             const t = gameState.grid[p1.r][p1.c];
             gameState.grid[p1.r][p1.c] = gameState.grid[p2.r][p2.c];
             gameState.grid[p2.r][p2.c] = t;
+
+            const tw = gameState.wordGrid[p1.r][p1.c];
+            gameState.wordGrid[p1.r][p1.c] = gameState.wordGrid[p2.r][p2.c];
+            gameState.wordGrid[p2.r][p2.c] = tw;
             
             updateDomIds(p1, p2);
             gameState.isLocked = false;
+
+            // Check for English word special logic
+            const w1 = gameState.wordGrid[p1.r][p1.c];
+            if (w1 && w1.lang === 'EN') {
+                if (gameState.currentPair && w1.word === gameState.currentPair.en) {
+                    // Remote Match!
+                    let cnPos = null;
+                    for(let r=0; r<ROWS; r++) {
+                        for(let c=0; c<COLS; c++) {
+                            const w = gameState.wordGrid[r][c];
+                            if (w && w.lang === 'CN' && w.word === gameState.currentPair.cn) {
+                                cnPos = {r, c};
+                                break;
+                            }
+                        }
+                    }
+
+                    if (cnPos) {
+                        gameState.isLocked = true;
+                        gameState.moves--;
+                        gameState.score += 500;
+                        showFloatingText(500, p1);
+                        
+                        removeGem(p1.r, p1.c);
+                        removeGem(cnPos.r, cnPos.c);
+                        
+                        advanceWordPair();
+                        
+                        updateUI();
+                        
+                        setTimeout(async () => {
+                            await applyGravity();
+                            ensureWords();
+                            const matches = findMatches();
+                            if(matches.length > 0) {
+                                await processMatches(matches);
+                            } else {
+                                checkWinCondition();
+                            }
+                        }, 300);
+                    } else {
+                         // Should not happen if ensureWords works correctly, but fallback
+                         // If no CN word found, maybe just entangle?
+                         // Or do nothing.
+                         // Let's treat as entangle if we can't find the pair to explode.
+                         w1.isEntangled = true;
+                         let randomPair;
+                         do {
+                             randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+                         } while (randomPair.en === w1.word);
+                         
+                         w1.word = randomPair.en;
+                         updateWordVisuals(p1.r, p1.c);
+                    }
+                } else {
+                    // Entangle
+                    w1.isEntangled = true;
+                    let randomPair;
+                    do {
+                        randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+                    } while (randomPair.en === w1.word);
+                    
+                    w1.word = randomPair.en;
+                    updateWordVisuals(p1.r, p1.c);
+                }
+            }
+        }
+    }
+
+    function advanceWordPair() {
+        if (!gameState.currentPair) return;
+        const currentIndex = WORD_PAIRS.findIndex(p => p.cn === gameState.currentPair.cn);
+        if (currentIndex !== -1) {
+            const nextIndex = (currentIndex + 1) % WORD_PAIRS.length;
+            gameState.currentPair = WORD_PAIRS[nextIndex];
+        }
+    }
+
+    function removeGem(r, c) {
+        const el = getGemDOM(r, c);
+        if (el) {
+            createParticles(r, c, gameState.grid[r][c]);
+            el.style.transform += " scale(0)";
+            el.style.opacity = "0";
+        }
+        gameState.grid[r][c] = null;
+        gameState.wordGrid[r][c] = null;
+        setTimeout(() => { if(el) el.remove(); }, 300);
+    }
+
+    function processWordMatch(p1, p2, isCorrect) {
+        if (isCorrect) {
+            gameState.score += 500;
+            showFloatingText(500, p1);
+            
+            removeGem(p1.r, p1.c);
+            removeGem(p2.r, p2.c);
+            
+            advanceWordPair();
+            
+            updateUI();
+            
+            setTimeout(async () => {
+                await applyGravity();
+                ensureWords();
+                const matches = findMatches();
+                if(matches.length > 0) {
+                    await processMatches(matches);
+                } else {
+                    checkWinCondition();
+                }
+            }, 300);
+            
+        } else {
+            const w1 = gameState.wordGrid[p1.r][p1.c];
+            const w2 = gameState.wordGrid[p2.r][p2.c];
+            let enPos = w1.lang === 'EN' ? p1 : p2;
+            
+            let randomPair;
+            do {
+                randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+            } while (gameState.currentPair && randomPair.en === gameState.currentPair.en);
+            
+            gameState.wordGrid[enPos.r][enPos.c] = {
+                word: randomPair.en,
+                lang: 'EN',
+                isEntangled: true
+            };
+            updateWordVisuals(enPos.r, enPos.c);
         }
     }
 
@@ -485,6 +730,9 @@
 
     function handleInteractionStart(e, r, c) {
         if (gameState.isLocked) return;
+        
+        // Block entangled
+        if (gameState.wordGrid[r][c] && gameState.wordGrid[r][c].isEntangled) return;
         
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -656,9 +904,45 @@
         if(matches.length > 0) {
             showFloatingText(points, matches[0]);
         }
+
+        let cnExploded = false;
+        // Check for words in matches
+        matches.forEach(m => {
+            const w = gameState.wordGrid[m.r][m.c];
+            if (w) {
+                if (gameState.currentPair) {
+                    if (w.word === gameState.currentPair.cn) {
+                        cnExploded = true;
+                    }
+                    if (w.word === gameState.currentPair.cn || w.word === gameState.currentPair.en) {
+                        gameState.score += 200; // Bonus
+                        showFloatingText("BONUS!", m);
+                    }
+                }
+            }
+            
+            // Disentangle neighbors
+            const neighbors = [
+                {r: m.r-1, c: m.c}, {r: m.r+1, c: m.c},
+                {r: m.r, c: m.c-1}, {r: m.r, c: m.c+1}
+            ];
+            neighbors.forEach(n => {
+                if(n.r >= 0 && n.r < ROWS && n.c >= 0 && n.c < COLS) {
+                    const nw = gameState.wordGrid[n.r][n.c];
+                    if(nw && nw.isEntangled) {
+                        nw.isEntangled = false;
+                        updateWordVisuals(n.r, n.c);
+                    }
+                }
+            });
+        });
         
         gameState.comboMultiplier++;
         updateUI();
+
+        if (cnExploded) {
+            advanceWordPair();
+        }
 
         // Remove
         matches.forEach(m => {
@@ -669,6 +953,7 @@
                 el.style.opacity = "0";
             }
             gameState.grid[m.r][m.c] = null;
+            gameState.wordGrid[m.r][m.c] = null;
         });
 
         await new Promise(r => setTimeout(r, 300));
@@ -680,6 +965,7 @@
         });
 
         await applyGravity();
+        ensureWords();
 
         // Cascade
         const newMatches = findMatches();
@@ -707,6 +993,9 @@
                     gameState.grid[newR][c] = type;
                     gameState.grid[r][c] = null;
 
+                    gameState.wordGrid[newR][c] = gameState.wordGrid[r][c];
+                    gameState.wordGrid[r][c] = null;
+
                     const el = getGemDOM(r, c);
                     if(el) {
                         el.id = `gem-${newR}-${c}`;
@@ -719,6 +1008,7 @@
             for(let r = 0; r < emptySlots; r++) {
                 const type = Math.floor(Math.random() * GEM_TYPES);
                 gameState.grid[r][c] = type;
+                gameState.wordGrid[r][c] = null;
                 
                 const div = document.createElement('div');
                 div.classList.add('gem', `type-${type}`);
@@ -868,6 +1158,131 @@
             }, 500);
         } else {
             gameState.isLocked = false;
+        }
+    }
+
+    function ensureWords() {
+        // Count existing words
+        let cnCount = 0;
+        let enCount = 0;
+        let hasTargetCN = false;
+        let hasTargetEN = false;
+        
+        // Flatten grid to find empty spots
+        const emptySpots = [];
+        
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS; c++) {
+                const w = gameState.wordGrid[r][c];
+                if(w) {
+                    if(w.lang === 'CN') cnCount++;
+                    if(w.lang === 'EN') enCount++;
+                    if(gameState.currentPair) {
+                        if(w.word === gameState.currentPair.cn) hasTargetCN = true;
+                        if(w.word === gameState.currentPair.en) hasTargetEN = true;
+                    }
+                } else if (gameState.grid[r][c] !== null) {
+                    emptySpots.push({r, c});
+                }
+            }
+        }
+
+        // If current pair is missing, pick new one
+        if (!gameState.currentPair) {
+             if (cnCount > 0) {
+                 // Find the CN word on board
+                 let found = null;
+                 for(let r=0; r<ROWS; r++) {
+                     for(let c=0; c<COLS; c++) {
+                         if(gameState.wordGrid[r][c] && gameState.wordGrid[r][c].lang === 'CN') {
+                             found = gameState.wordGrid[r][c];
+                             break;
+                         }
+                     }
+                 }
+                 if(found) {
+                     const pair = WORD_PAIRS.find(p => p.cn === found.word);
+                     if(pair) gameState.currentPair = pair;
+                 } else {
+                     gameState.currentPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+                 }
+             } else {
+                 gameState.currentPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+             }
+        }
+
+        // Add CN if missing
+        if (cnCount < 1 && emptySpots.length > 0) {
+            const idx = Math.floor(Math.random() * emptySpots.length);
+            const spot = emptySpots.splice(idx, 1)[0];
+            gameState.wordGrid[spot.r][spot.c] = {
+                word: gameState.currentPair.cn,
+                lang: 'CN',
+                isEntangled: false
+            };
+            updateWordVisuals(spot.r, spot.c);
+            cnCount++;
+        }
+
+        // Add Target EN if missing
+        hasTargetEN = false;
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS; c++) {
+                const w = gameState.wordGrid[r][c];
+                if(w && w.word === gameState.currentPair.en) hasTargetEN = true;
+            }
+        }
+
+        if (!hasTargetEN && emptySpots.length > 0) {
+            const idx = Math.floor(Math.random() * emptySpots.length);
+            const spot = emptySpots.splice(idx, 1)[0];
+            gameState.wordGrid[spot.r][spot.c] = {
+                word: gameState.currentPair.en,
+                lang: 'EN',
+                isEntangled: false
+            };
+            updateWordVisuals(spot.r, spot.c);
+            enCount++;
+        }
+
+        // Fill remaining EN slots (up to 4)
+        while (enCount < 4 && emptySpots.length > 0) {
+            const idx = Math.floor(Math.random() * emptySpots.length);
+            const spot = emptySpots.splice(idx, 1)[0];
+            
+            let randomPair;
+            do {
+                randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+            } while (randomPair.en === gameState.currentPair.en);
+
+            gameState.wordGrid[spot.r][spot.c] = {
+                word: randomPair.en,
+                lang: 'EN',
+                isEntangled: false
+            };
+            updateWordVisuals(spot.r, spot.c);
+            enCount++;
+        }
+    }
+
+    function updateWordVisuals(r, c) {
+        const el = getGemDOM(r, c);
+        if (!el) return;
+        
+        const existing = el.querySelector('.gem-word');
+        if (existing) existing.remove();
+        el.classList.remove('entangled');
+
+        const data = gameState.wordGrid[r][c];
+        if (data) {
+            const wordEl = document.createElement('div');
+            wordEl.classList.add('gem-word');
+            wordEl.textContent = data.word;
+            el.appendChild(wordEl);
+            
+            if (data.isEntangled) {
+                el.classList.add('entangled');
+            }
         }
     }
 
