@@ -273,47 +273,8 @@
         updateStatus("Connecting Infrastructure...");
         await delay(100);
 
-        // Connect Roads
-        let roadsBuilt = 0;
-
-        for (let i = 0; i < nodes.length; i++) {
-            const u = nodes[i];
-            let candidates = [];
-            let radius = 20;
-            let found = false;
-            
-            // Keep expanding radius until we find at least one neighbor
-            while (!found && radius <= 5000) { 
-                const radiusSq = radius * radius;
-                for (let j = 0; j < nodes.length; j++) {
-                    if (i === j) continue;
-                    const v = nodes[j];
-                    const distSq = (u.x - v.x)**2 + (u.z - v.z)**2;
-                    if (distSq <= radiusSq) {
-                        candidates.push({ node: v, distSq: distSq });
-                    }
-                }
-                
-                if (candidates.length > 0) {
-                    found = true;
-                } else {
-                    radius += 10;
-                }
-            }
-            
-            // Connect to ALL found nodes in the radius
-            for (let c of candidates) {
-                const v = c.node;
-                // Check if road already exists
-                if (!u.neighbors.includes(v.id)) {
-                    createRoad(u, v);
-                    u.neighbors.push(v.id);
-                    v.neighbors.push(u.id);
-                    roadsBuilt++;
-                    if (roadsBuilt % 5 === 0) await delay(20);
-                }
-            }
-        }
+        // Use Kruskal's algorithm to build optimized road network
+        solveNetwork();
 
         updateStatus("Rendering Voxel World...");
         renderWorld();
@@ -343,120 +304,163 @@
         return h;
     }
 
+    // --- DATA STRUCTURES ---
+    class PriorityQueue {
+        constructor() { this.items = []; }
+        enqueue(element, priority) {
+            const qElement = { element, priority };
+            let contain = false;
+            for (let i = 0; i < this.items.length; i++) {
+                if (this.items[i].priority > qElement.priority) {
+                    this.items.splice(i, 0, qElement);
+                    contain = true;
+                    break;
+                }
+            }
+            if (!contain) this.items.push(qElement);
+        }
+        dequeue() { return this.items.shift(); }
+        isEmpty() { return this.items.length === 0; }
+    }
+
+    class UnionFind {
+        constructor(elements) {
+            this.parent = {};
+            elements.forEach(e => this.parent[e] = e);
+        }
+        find(id) {
+            if (this.parent[id] === id) return id;
+            this.parent[id] = this.find(this.parent[id]);
+            return this.parent[id];
+        }
+        union(id1, id2) {
+            const root1 = this.find(id1);
+            const root2 = this.find(id2);
+            if (root1 !== root2) {
+                this.parent[root1] = root2;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    // --- PATHFINDING ALGORITHM ---
+    function getCost(x, z) {
+        // Check if this coordinate matches ANY node (city or station)
+        const isNode = nodes.some(n => n.x === x && n.z === z);
+        return isNode ? 1 : 10;  // Cheap to pass through a node, expensive for empty land
+    }
+
+    function findPath(start, end) {
+        const openSet = new PriorityQueue();
+        openSet.enqueue(start, 0);
+        
+        const cameFrom = {};
+        const gScore = {};
+        const startKey = `${start.x},${start.z}`;
+        gScore[startKey] = 0;
+
+        const getKey = (pt) => `${pt.x},${pt.z}`;
+        
+        while (!openSet.isEmpty()) {
+            const current = openSet.dequeue().element;
+            const currentKey = getKey(current);
+
+            if (current.x === end.x && current.z === end.z) {
+                const path = [];
+                let curr = currentKey;
+                while (cameFrom[curr]) {
+                    const [x, z] = curr.split(',').map(Number);
+                    path.push({x, z});
+                    curr = cameFrom[curr];
+                }
+                return { path: path.reverse(), cost: gScore[currentKey] };
+            }
+
+            const neighbors = [
+                {x: current.x+1, z: current.z}, {x: current.x-1, z: current.z},
+                {x: current.x, z: current.z+1}, {x: current.x, z: current.z-1}
+            ];
+
+            for (let neighbor of neighbors) {
+                const neighborKey = getKey(neighbor);
+                
+                const moveCost = getCost(neighbor.x, neighbor.z);
+                const tentativeG = gScore[currentKey] + moveCost;
+
+                if (tentativeG < (gScore[neighborKey] ?? Infinity)) {
+                    cameFrom[neighborKey] = currentKey;
+                    gScore[neighborKey] = tentativeG;
+                    
+                    // Heuristic
+                    const h = (Math.abs(neighbor.x - end.x) + Math.abs(neighbor.z - end.z)) * 1.1; 
+                    openSet.enqueue(neighbor, tentativeG + h);
+                }
+            }
+        }
+        return { path: [], cost: Infinity };
+    }
+
+    function solveNetwork() {
+        if (nodes.length < 2) return;
+
+        let edges = [];
+        
+        // 1. Create graph edges between all pairs of nodes
+        for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+                const n1 = nodes[i];
+                const n2 = nodes[j];
+                const result = findPath(n1, n2);
+                edges.push({ u: n1.id, v: n2.id, cost: result.cost, path: result.path });
+            }
+        }
+
+        // 2. Sort edges by cost
+        edges.sort((a, b) => a.cost - b.cost);
+        
+        // 3. Kruskal's Algorithm - build MST
+        const uf = new UnionFind(nodes.map(n => n.id));
+        const finalRoads = new Set();
+        let totalCost = 0;
+        let connections = 0;
+
+        for (let edge of edges) {
+            if (uf.union(edge.u, edge.v)) {
+                edge.path.forEach(pt => finalRoads.add(`${pt.x},${pt.z}`));
+                totalCost += edge.cost;
+                connections++;
+            }
+        }
+
+        // Apply roads to world
+        finalRoads.forEach(k => {
+            const [x, z] = k.split(',').map(Number);
+            if(!nodes.some(n => n.x === x && n.z === z)) {
+                ensureRoad(x, z);
+            }
+        });
+    }
+
     function isRoad(x, z) {
         let cell = getCell(x, z);
         // Treat cities/stations as "road-like" for cluster checking to prevent roads hugging cities
         return cell && (cell.obj === 1 || cell.obj === 2 || cell.obj === 3);
     }
 
-    function checkCityAhead(x, z, dx, dz) {
-        for(let k=1; k<=10; k++) {
-            const cx = x + k*dx;
-            const cz = z + k*dz;
-            const cell = getCell(cx, cz);
-            if (!cell) return false;
-            if (cell.obj === 2 || cell.obj === 3) return true; // Found city/station
-            if (cell.obj !== 1) return false; // Not a road, stop looking
-        }
-        return false;
-    }
-
     function createRoad(n1, n2) {
         const start = { x: n1.x, z: n1.z };
         const end = { x: n2.x, z: n2.z };
+        const result = findPath(start, end);
         
-        // A* Pathfinding
-        const openList = [];
-        const closedSet = new Set();
-        const cameFrom = new Map();
-        const gScore = new Map();
-        
-        const startKey = `${start.x},${start.z}`;
-        gScore.set(startKey, 0);
-        
-        openList.push({ x: start.x, z: start.z, f: heuristic(start, end) });
-        
-        let bestPath = null;
-        let iterations = 0;
-        const MAX_ITER = 50000; 
-
-        while (openList.length > 0) {
-            iterations++;
-            if (iterations > MAX_ITER) break;
-            
-            // Pop lowest f
-            openList.sort((a, b) => b.f - a.f);
-            const current = openList.pop();
-            const currentKey = `${current.x},${current.z}`;
-            
-            if (current.x === end.x && current.z === end.z) {
-                bestPath = [];
-                let curr = currentKey;
-                while (cameFrom.has(curr)) {
-                    const [cx, cz] = curr.split(',').map(Number);
-                    bestPath.push({ x: cx, z: cz });
-                    curr = cameFrom.get(curr);
-                }
-                bestPath.push(start);
-                break;
-            }
-            
-            closedSet.add(currentKey);
-            
-            // STRICT MANHATTAN NEIGHBORS: Only allow moving towards the target
-            const neighbors = [];
-            if (end.x > current.x) neighbors.push({ x: current.x + 1, z: current.z });
-            if (end.x < current.x) neighbors.push({ x: current.x - 1, z: current.z });
-            if (end.z > current.z) neighbors.push({ x: current.x, z: current.z + 1 });
-            if (end.z < current.z) neighbors.push({ x: current.x, z: current.z - 1 });
-            
-            for (const neighbor of neighbors) {
-                const nKey = `${neighbor.x},${neighbor.z}`;
-                if (closedSet.has(nKey)) continue;
-                
-                const isExisting = isRoad(neighbor.x, neighbor.z);
-                
-                // Cost calculation
-                let stepCost = 1;
-                if (isExisting) {
-                    stepCost = 0.1; // Prefer existing roads
-                    
-                    // Check for city ahead within 10 blocks
-                    const dx = neighbor.x - current.x;
-                    const dz = neighbor.z - current.z;
-                    if (checkCityAhead(current.x, current.z, dx, dz)) {
-                        stepCost = -5; // Reward for moving towards a city on an existing road
-                    }
-                }
-                
-                const tentativeG = gScore.get(currentKey) + stepCost;
-                
-                if (!gScore.has(nKey) || tentativeG < gScore.get(nKey)) {
-                    cameFrom.set(nKey, currentKey);
-                    gScore.set(nKey, tentativeG);
-                    
-                    const existingIdx = openList.findIndex(item => item.x === neighbor.x && item.z === neighbor.z);
-                    if (existingIdx !== -1) {
-                        openList[existingIdx].f = tentativeG + heuristic(neighbor, end);
-                    } else {
-                        openList.push({ x: neighbor.x, z: neighbor.z, f: tentativeG + heuristic(neighbor, end) });
-                    }
-                }
-            }
-        }
-        
-        if (bestPath) {
-            for (const p of bestPath) {
+        if (result.path && result.path.length > 0) {
+            for (const p of result.path) {
                 // Don't overwrite cities/stations
                 let cell = getCell(p.x, p.z);
                 if (cell && (cell.obj === 2 || cell.obj === 3)) continue;
                 ensureRoad(p.x, p.z);
             }
         }
-    }
-    
-    function heuristic(a, b) {
-        return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
     }
 
     function ensureRoad(x, z) {
