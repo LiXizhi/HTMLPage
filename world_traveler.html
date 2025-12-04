@@ -7,6 +7,7 @@
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script src="https://cdn.keepwork.com/npm/three%400.128.0/build/three.min.js"></script>
     <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.keepwork.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
 
     <style>
       body {
@@ -546,41 +547,10 @@
       const TURNS_PER_YEAR = 12;
       const SETTLEMENT_MONTH = 3; // 3月决算
 
-      const STATION_NAMES = [
-        "罗湖口岸",
-        "国贸",
-        "老街",
-        "大剧院",
-        "科学馆",
-        "华强路",
-        "岗厦",
-        "会展中心",
-        "购物公园",
-        "香蜜湖",
-        "车公庙",
-        "竹子林",
-        "侨城东",
-        "华侨城",
-        "世界之窗",
-        "白石洲",
-        "高新园",
-        "深大",
-        "桃园",
-        "大新",
-        "前海湾",
-        "宝安中心",
-        "深圳北站",
-        "市民中心",
-        "少年宫",
-        "莲花北",
-        "上梅林",
-        "福民",
-        "福田口岸",
-        "后海",
-        "科苑",
-        "红树湾",
-        "飞机场",
-      ];
+      // Station data loaded from world_traveler_map_data (full city info with lat/lng/population)
+      let STATION_DATA = [];
+      // Station names (extracted from STATION_DATA for backward compatibility)
+      let STATION_NAMES = [];
 
       // --- Utilities ---
       const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -639,6 +609,57 @@
         } catch (error) {
           console.error("Error loading cities data:", error);
           CITIES = defaultCities;
+        }
+      }
+
+      // --- Load Station Data from External File ---
+      async function loadStationData() {
+        // Fallback default station data
+        const defaultStations = [
+          { name: "深圳 - 福田区", lat: 22.5431, lng: 114.0579, population: 1553200, level: 1 },
+          { name: "深圳 - 南山区", lat: 22.5229, lng: 113.9294, population: 1795800, level: 1 },
+          { name: "深圳 - 罗湖区", lat: 22.5478, lng: 114.1316, population: 1143800, level: 2 },
+          { name: "广州 - 天河区", lat: 23.1343, lng: 113.3603, population: 2241800, level: 1 },
+          { name: "广州 - 越秀区", lat: 23.1291, lng: 113.2644, population: 1038600, level: 1 }
+        ];
+
+        try {
+          const response = await fetch("world_traveler_map_data");
+          const text = await response.text();
+
+          // Extract JSON from file (can be array or object with cities property)
+          const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+          if (jsonMatch) {
+            // Clean up the JSON text: remove comments
+            const jsonText = jsonMatch[0].replace(/\/\/.*$/gm, "");
+            const parsed = JSON.parse(jsonText);
+            
+            let cities = [];
+            if (Array.isArray(parsed)) {
+              cities = parsed;
+            } else if (parsed.cities) {
+              cities = parsed.cities;
+            }
+
+            // Store full city data
+            if (cities.length > 0) {
+              STATION_DATA = cities;
+              STATION_NAMES = cities.map(city => city.name);
+              console.log(`Loaded ${STATION_DATA.length} stations from world_traveler_map_data`);
+            } else {
+              console.error("No cities found in world_traveler_map_data");
+              STATION_DATA = defaultStations;
+              STATION_NAMES = defaultStations.map(s => s.name);
+            }
+          } else {
+            console.error("Could not parse station data from world_traveler_map_data");
+            STATION_DATA = defaultStations;
+            STATION_NAMES = defaultStations.map(s => s.name);
+          }
+        } catch (error) {
+          console.error("Error loading station data:", error);
+          STATION_DATA = defaultStations;
+          STATION_NAMES = defaultStations.map(s => s.name);
         }
       }
 
@@ -1057,19 +1078,26 @@
                 const aheadPos = this.computeGreatCirclePoint(anim.start, anim.end, lookAheadT, anim.radius, anim.altitude);
                 mesh.lookAt(aheadPos);
                 if (t >= 1) {
-                  // Arrived at destination; start circling for a round
-                  anim.state = "circle";
-                  anim.circleAngle = 0;
-                  // Save circle orientation basis
-                  anim.center = anim.end.clone().setLength(anim.radius + anim.altitude);
-                  // Choose circle radius based on city size (small around 0.8)
-                  anim.circleRadius = Math.max(0.6, 0.6);
-                  // Orthonormal basis u, v perpendicular to center normal
-                  const normal = anim.center.clone().normalize();
-                  const arbitrary = new THREE.Vector3(0, 1, 0);
-                  if (Math.abs(normal.dot(arbitrary)) > 0.95) arbitrary.set(1, 0, 0);
-                  anim.u = new THREE.Vector3().crossVectors(normal, arbitrary).normalize();
-                  anim.v = new THREE.Vector3().crossVectors(normal, anim.u).normalize();
+                  // Arrived at destination; skip circling if loopRounds is 0
+                  if (anim.circleRoundsLeft <= 0) {
+                    // Skip directly to landing
+                    anim.state = "landing";
+                    anim.t = 0;
+                  } else {
+                    // Start circling for specified rounds
+                    anim.state = "circle";
+                    anim.circleAngle = 0;
+                    // Save circle orientation basis
+                    anim.center = anim.end.clone().setLength(anim.radius + anim.altitude);
+                    // Choose circle radius based on city size (small around 0.8)
+                    anim.circleRadius = Math.max(0.6, 0.6);
+                    // Orthonormal basis u, v perpendicular to center normal
+                    const normal = anim.center.clone().normalize();
+                    const arbitrary = new THREE.Vector3(0, 1, 0);
+                    if (Math.abs(normal.dot(arbitrary)) > 0.95) arbitrary.set(1, 0, 0);
+                    anim.u = new THREE.Vector3().crossVectors(normal, arbitrary).normalize();
+                    anim.v = new THREE.Vector3().crossVectors(normal, anim.u).normalize();
+                  }
                 }
               } else if (anim.state === "circle") {
                 // Rotate around destination center
@@ -1289,7 +1317,7 @@
           cityAName,
           cityBName,
           {
-            loopRounds = 1,
+            loopRounds = 0,
             altitude = 2.0,
             onComplete = null,
             followCamera = true,
@@ -1399,12 +1427,9 @@
           this.buildings = [];
           this.owner = null;
 
+          // Station name is set externally from node data after construction
+          // Do NOT use hash-based assignment here as it leads to incorrect names
           this.stationName = "";
-          if (type === "green") {
-            const rawIdx = (gridX * 13 + gridY * 7) % STATION_NAMES.length;
-            const idx = (rawIdx + STATION_NAMES.length) % STATION_NAMES.length;
-            this.stationName = STATION_NAMES[idx];
-          }
 
           this.neighbors = [];
           this.mesh = null; // Three.js Mesh
@@ -1504,14 +1529,14 @@
         initThree() {
           // 1. Scene
           this.scene = new THREE.Scene();
-          this.scene.background = new THREE.Color(0x202025);
-          this.scene.fog = new THREE.Fog(0x202025, 90, 180);
+          this.scene.background = new THREE.Color(0x87CEEB); // Sky blue
+          this.scene.fog = new THREE.Fog(0x87CEEB, 100, 300); // Matching fog
 
           // 2. Camera (Perspective)
           const fov = 45;
           const aspect = this.width / this.height;
           const near = 0.1;
-          const far = 1000;
+          const far = 2000;
           this.camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
           // Perspective View Setup: Position and LookAt
@@ -1532,12 +1557,21 @@
           this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
           this.controls.enableDamping = true;
           this.controls.dampingFactor = 0.05;
-          this.controls.minDistance = 50;
-          this.controls.maxDistance = 130;
+          this.controls.minDistance = 30;
+          this.controls.maxDistance = 500;
           this.controls.target.set(0, 0, 0);
 
-          // Lock rotation, enable pan
+          // Lock rotation, enable pan on ground plane
           this.controls.enableRotate = false;
+          // Pan on XZ plane (ground) instead of screen space
+          // This keeps the camera-to-ground distance constant when panning
+          this.controls.screenSpacePanning = false;
+          // Lock polar angle to maintain fixed camera height relative to ground
+          // Camera is at (0, 60, 60) looking at (0, 0, 0), so polar angle is ~45 degrees (π/4)
+          const fixedPolarAngle = Math.PI / 4; // 45 degrees from vertical
+          this.controls.minPolarAngle = fixedPolarAngle;
+          this.controls.maxPolarAngle = fixedPolarAngle;
+          
           this.controls.mouseButtons = {
             LEFT: THREE.MOUSE.PAN,
             MIDDLE: THREE.MOUSE.DOLLY,
@@ -1789,202 +1823,460 @@
           player.mesh = group;
         }
 
+        // --- Map Generation Algorithm (from world_traveler_map.html) ---
+        // Data Structures for A* Pathfinding and MST
+        
+        // Priority Queue for A* pathfinding
+        _createPriorityQueue() {
+          return {
+            items: [],
+            enqueue(element, priority) {
+              const qElement = { element, priority };
+              let contain = false;
+              for (let i = 0; i < this.items.length; i++) {
+                if (this.items[i].priority > qElement.priority) {
+                  this.items.splice(i, 0, qElement);
+                  contain = true;
+                  break;
+                }
+              }
+              if (!contain) this.items.push(qElement);
+            },
+            dequeue() { return this.items.shift(); },
+            isEmpty() { return this.items.length === 0; }
+          };
+        }
+
+        // Union-Find for Kruskal's MST
+        _createUnionFind(elements) {
+          const parent = {};
+          elements.forEach(e => parent[e] = e);
+          return {
+            find(id) {
+              if (parent[id] === id) return id;
+              parent[id] = this.find(parent[id]);
+              return parent[id];
+            },
+            union(id1, id2) {
+              const root1 = this.find(id1);
+              const root2 = this.find(id2);
+              if (root1 !== root2) {
+                parent[root1] = root2;
+                return true;
+              }
+              return false;
+            },
+            connected(id1, id2) { 
+              return this.find(id1) === this.find(id2); 
+            }
+          };
+        }
+
         generateMap() {
           this.map = [];
+          
+          // Initialize simplex noise for terrain
+          const simplex = new SimplexNoise();
+          
+          // World map for terrain data
+          const worldMap = new Map(); // Key: "x,z", Value: { h: height, obj: objectType }
+          const roadSet = new Set(); // Track built roads for dynamic costing
+          
+          // Cost constants for A* pathfinding
+          const COST_EMPTY = 10;     // Expensive to build new
+          const COST_EXISTING = 1;   // Cheap to use existing
+          
+          // Helper functions
+          const setCell = (x, z, data) => {
+            worldMap.set(`${x},${z}`, data);
+          };
+          
+          const getCell = (x, z) => {
+            return worldMap.get(`${x},${z}`);
+          };
+          
+          const getNoiseHeight = (x, z) => {
+            let n = simplex.noise2D(x*0.03, z*0.03); 
+            let n2 = simplex.noise2D(x*0.1, z*0.1);
+            let h = -1;
+            if (n > -0.2) h = 1; 
+            if (n > 0.5) h = 3; 
+            if (h === 1 && n2 > 0.4) h = 2;
+            return h;
+          };
+          
+          const getCost = (x, z) => {
+            return roadSet.has(`${x},${z}`) ? COST_EXISTING : COST_EMPTY;
+          };
+          
+          // A* Pathfinding
+          const findPath = (start, end) => {
+            const openSet = this._createPriorityQueue();
+            openSet.enqueue(start, 0);
+            
+            const cameFrom = {};
+            const gScore = {};
+            const startKey = `${start.x},${start.z}`;
+            gScore[startKey] = 0;
 
-          // 0. Prepare Station Names
-          const availableNames = [...STATION_NAMES];
-          // Shuffle
-          for (let i = availableNames.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [availableNames[i], availableNames[j]] = [availableNames[j], availableNames[i]];
+            const getKey = (pt) => `${pt.x},${pt.z}`;
+            
+            while (!openSet.isEmpty()) {
+              const current = openSet.dequeue().element;
+              const currentKey = getKey(current);
+
+              if (current.x === end.x && current.z === end.z) {
+                const path = [];
+                let curr = currentKey;
+                while (cameFrom[curr]) {
+                  const [x, z] = curr.split(',').map(Number);
+                  path.push({x, z});
+                  curr = cameFrom[curr];
+                }
+                return { path: path.reverse(), cost: gScore[currentKey] };
+              }
+
+              const neighbors = [
+                {x: current.x+1, z: current.z}, {x: current.x-1, z: current.z},
+                {x: current.x, z: current.z+1}, {x: current.x, z: current.z-1}
+              ];
+
+              for (let neighbor of neighbors) {
+                const neighborKey = getKey(neighbor);
+                const newCost = gScore[currentKey] + getCost(neighbor.x, neighbor.z);
+
+                if (newCost < (gScore[neighborKey] ?? Infinity)) {
+                  cameFrom[neighborKey] = currentKey;
+                  gScore[neighborKey] = newCost;
+                  const h = Math.abs(neighbor.x - end.x) + Math.abs(neighbor.z - end.z);
+                  openSet.enqueue(neighbor, newCost + h);
+                }
+              }
+            }
+            return { path: [], cost: Infinity };
+          };
+          
+          const addPathToRoadSet = (path) => {
+            path.forEach(p => roadSet.add(`${p.x},${p.z}`));
+          };
+          
+          // Builds a simple L-shaped road between two points
+          const buildDirectRoad = (start, end) => {
+            let x = start.x;
+            let z = start.z;
+            
+            while(x !== end.x) {
+              roadSet.add(`${x},${z}`);
+              x += (end.x > x ? 1 : -1);
+            }
+            while(z !== end.z) {
+              roadSet.add(`${x},${z}`);
+              z += (end.z > z ? 1 : -1);
+            }
+            roadSet.add(`${end.x},${end.z}`);
+          };
+          
+          // Ensure road exists at position
+          const ensureRoad = (x, z) => {
+            let cell = getCell(x, z);
+            if (!cell) {
+              setCell(x, z, { h: 1, obj: 1 });
+            } else {
+              if (cell.obj === 0) {
+                cell.obj = 1;
+                cell.h = Math.max(cell.h, 1);
+                setCell(x, z, cell);
+              }
+            }
+            
+            // Padding around roads
+            for(let dx=-1; dx<=1; dx++) {
+              for(let dz=-1; dz<=1; dz++) {
+                if(dx===0 && dz===0) continue;
+                let px = x+dx, pz = z+dz;
+                if(!worldMap.has(`${px},${pz}`)) {
+                  let h = getNoiseHeight(px, pz);
+                  if(h < 1) h = 1; 
+                  setCell(px, pz, { h: h, obj: 0 });
+                }
+              }
+            }
+          };
+
+          // --- Step 1: Load Station Data from Config ---
+          // Use actual lat/lng coordinates from STATION_DATA
+          // Scale factor: needs to be large enough that stations don't overlap on even grid
+          // With ~277 stations in ~2x3.3 degree area, scale of 200 gives ~400x660 units = 200x330 even grid positions
+          const CONFIG_SCALE = 100; // Scale factor for lat/lon to grid units
+          const RENDER_RADIUS = 6; // Radius to render terrain around stations
+          
+          let rawPoints = [];
+          
+          if (STATION_DATA.length > 0) {
+            // Calculate bounds of all cities
+            let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+            STATION_DATA.forEach(d => {
+              if (d.lat < minLat) minLat = d.lat;
+              if (d.lat > maxLat) maxLat = d.lat;
+              if (d.lng < minLng) minLng = d.lng;
+              if (d.lng > maxLng) maxLng = d.lng;
+            });
+            
+            const centerLat = (minLat + maxLat) / 2;
+            const centerLng = (minLng + maxLng) / 2;
+
+            // Convert lat/lng to grid coordinates
+            rawPoints = STATION_DATA.map(d => ({
+              x: (d.lng - centerLng) * CONFIG_SCALE,
+              z: -(d.lat - centerLat) * CONFIG_SCALE,
+              originalName: d.name,
+              population: d.population || 100000,
+              level: d.level || 3
+            }));
+          } else {
+            // Fallback: generate random positions
+            for (let i = 0; i < STATION_NAMES.length; i++) {
+              rawPoints.push({
+                x: (Math.random() - 0.5) * 100,
+                z: (Math.random() - 0.5) * 100,
+                originalName: STATION_NAMES[i],
+                population: 1000000 - i * 10000,
+                level: 3
+              });
+            }
           }
-
-          const totalStations = availableNames.length;
-
-          // 1. Calculate Grid Dimensions to fit all stations
-          const ratio = 4 / 3;
-          let cols = Math.ceil(Math.sqrt(totalStations * ratio));
-          let rows = Math.ceil(totalStations / cols);
-          while (cols * rows < totalStations) rows++;
-
-          // 2. Generate Coordinates (Centered around 0)
-          const xCoords = [];
-          let cx = -Math.floor(cols * 2.5);
-          for (let i = 0; i < cols; i++) {
-            xCoords.push(cx);
-            cx += rand(2, 5);
-          }
-
-          const zCoords = [];
-          let cz = -Math.floor(rows * 2.5);
-          for (let i = 0; i < rows; i++) {
-            zCoords.push(cz);
-            cz += rand(2, 5);
-          }
-
-          // 3. Build Graph Nodes (Intersections)
+          
+          // --- Step 2: Snap to Even Grid and Resolve Collisions ---
           const nodes = [];
-          for (let i = 0; i < xCoords.length; i++) {
-            const row = [];
-            for (let j = 0; j < zCoords.length; j++) {
-              row.push({ x: xCoords[i], z: zCoords[j], id: `${i},${j}` });
-            }
-            nodes.push(row);
-          }
-
-          // 4. Build All Potential Edges
-          const allEdges = [];
-          for (let i = 0; i < xCoords.length - 1; i++) {
-            for (let j = 0; j < zCoords.length; j++) {
-              allEdges.push({ u: nodes[i][j], v: nodes[i + 1][j], type: "h" });
-            }
-          }
-          for (let i = 0; i < xCoords.length; i++) {
-            for (let j = 0; j < zCoords.length - 1; j++) {
-              allEdges.push({ u: nodes[i][j], v: nodes[i][j + 1], type: "v" });
-            }
-          }
-
-          // MST Logic
-          for (let i = allEdges.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [allEdges[i], allEdges[j]] = [allEdges[j], allEdges[i]];
-          }
-
-          const parent = new Map();
-          const find = (id) => {
-            if (!parent.has(id)) parent.set(id, id);
-            if (parent.get(id) !== id) parent.set(id, find(parent.get(id)));
-            return parent.get(id);
-          };
-          const union = (id1, id2) => {
-            const root1 = find(id1);
-            const root2 = find(id2);
-            if (root1 !== root2) {
-              parent.set(root1, root2);
-              return true;
-            }
-            return false;
-          };
-
-          const activeEdges = new Set();
-          const rejectedEdges = [];
-
-          for (const edge of allEdges) {
-            if (union(edge.u.id, edge.v.id)) {
-              activeEdges.add(edge);
-            } else {
-              rejectedEdges.push(edge);
-            }
-          }
-
-          for (const edge of rejectedEdges) {
-            if (Math.random() < 0.4) {
-              activeEdges.add(edge);
-            }
-          }
-
-          const degrees = new Map();
-          const incDeg = (id) => degrees.set(id, (degrees.get(id) || 0) + 1);
-          activeEdges.forEach((e) => {
-            incDeg(e.u.id);
-            incDeg(e.v.id);
-          });
-
-          for (const edge of rejectedEdges) {
-            if (activeEdges.has(edge)) continue;
-            if ((degrees.get(edge.u.id) || 0) < 2 || (degrees.get(edge.v.id) || 0) < 2) {
-              activeEdges.add(edge);
-              incDeg(edge.u.id);
-              incDeg(edge.v.id);
-            }
-          }
-
-          // 5. Sparse Map Generation
-          const tileData = new Map(); // "x,z" -> { type, stationName? }
-          const setTile = (x, z, type, props = {}) => {
-            const key = `${x},${z}`;
-            // Don't overwrite road/station with env
-            if (!tileData.has(key) || (tileData.get(key).type === "env" && type !== "env")) {
-              tileData.set(key, { x, z, type, ...props });
-            }
-          };
-
-          // Place Stations
-          let nameIndex = 0;
-          nodes.forEach((row) =>
-            row.forEach((node) => {
-              let stationName = "";
-              if (nameIndex < availableNames.length) {
-                stationName = availableNames[nameIndex++];
-              } else {
-                stationName = `郊区 ${nameIndex++ - availableNames.length + 1}`;
-              }
-              setTile(node.x, node.z, "green", { stationName });
-            })
-          );
-
-          // Place Roads
-          activeEdges.forEach((edge) => {
-            const u = edge.u;
-            const v = edge.v;
-            if (edge.type === "h") {
-              // Varying X
-              const minX = Math.min(u.x, v.x);
-              const maxX = Math.max(u.x, v.x);
-              for (let x = minX + 1; x < maxX; x++) {
-                const type = Math.random() < 0.3 ? this.getRandomColoredType() : "road";
-                setTile(x, u.z, type);
-              }
-            } else {
-              // Varying Z
-              const minZ = Math.min(u.z, v.z);
-              const maxZ = Math.max(u.z, v.z);
-              for (let z = minZ + 1; z < maxZ; z++) {
-                const type = Math.random() < 0.3 ? this.getRandomColoredType() : "road";
-                setTile(u.x, z, type);
-              }
-            }
-          });
-
-          // Grow Environment around roads/stations
-          const roadTiles = Array.from(tileData.values());
-          roadTiles.forEach((t) => {
-            // Random range 3-8
-            const range = rand(3, 8);
-            for (let dx = -range; dx <= range; dx++) {
-              for (let dz = -range; dz <= range; dz++) {
-                // Organic shape (Diamond/Circle hybrid)
-                if (Math.abs(dx) + Math.abs(dz) <= range * 1.4) {
-                  const nx = t.x + dx;
-                  const nz = t.z + dz;
-                  const key = `${nx},${nz}`;
-                  if (!tileData.has(key)) {
-                    const envType = Math.random() > 0.7 ? "env_culture" : "env_nature";
-                    setTile(nx, nz, envType); // Default to env
+          const occupied = new Set();
+          
+          // Sort by population descending so higher population cities get priority
+          rawPoints.sort((a, b) => (b.population || 0) - (a.population || 0));
+          
+          const snapToEvenGrid = (val) => Math.round(val / 2) * 2;
+          
+          const findNearestFree = (startGx, startGz) => {
+            startGx = snapToEvenGrid(startGx);
+            startGz = snapToEvenGrid(startGz);
+            
+            if (!occupied.has(`${startGx},${startGz}`)) return { x: startGx, z: startGz };
+            
+            let radius = 2;
+            while (radius < 100) {
+              for (let x = -radius; x <= radius; x += 2) {
+                for (let z = -radius; z <= radius; z += 2) {
+                  if (Math.abs(x) !== radius && Math.abs(z) !== radius) continue;
+                  
+                  let checkX = startGx + x;
+                  let checkZ = startGz + z;
+                  if (!occupied.has(`${checkX},${checkZ}`)) {
+                    return { x: checkX, z: checkZ };
                   }
+                }
+              }
+              radius += 2;
+            }
+            return null;
+          };
+
+          rawPoints.forEach((p, index) => {
+            let desiredGx = snapToEvenGrid(Math.round(p.x));
+            let desiredGz = snapToEvenGrid(Math.round(p.z));
+            
+            let pos = findNearestFree(desiredGx, desiredGz);
+            
+            if (pos) {
+              let gx = pos.x;
+              let gz = pos.z;
+              let key = `${gx},${gz}`;
+              
+              occupied.add(key);
+              // Use level to determine type (level 1-2 are major stations)
+              let type = (p.level <= 2) ? 'station' : 'city';
+              let node = {
+                id: nodes.length,
+                x: gx, 
+                z: gz,
+                type: type,
+                name: p.originalName,
+                population: p.population,
+                level: p.level,
+                neighbors: []
+              };
+              nodes.push(node);
+              setCell(gx, gz, { h: 1, obj: type === 'station' ? 3 : 2 });
+            } else {
+              console.warn(`Could not place station: ${p.originalName} (desired: ${desiredGx}, ${desiredGz})`);
+            }
+          });
+
+          console.log(`Generated ${nodes.length} station nodes from ${STATION_DATA.length} station data entries`);
+
+          // --- Step 3: Generate Terrain Around Stations ---
+          nodes.forEach(node => {
+            for(let dx = -RENDER_RADIUS; dx <= RENDER_RADIUS; dx++) {
+              for(let dz = -RENDER_RADIUS; dz <= RENDER_RADIUS; dz++) {
+                let wx = node.x + dx;
+                let wz = node.z + dz;
+                if (!worldMap.has(`${wx},${wz}`)) {
+                  let h = getNoiseHeight(wx, wz);
+                  setCell(wx, wz, { h: h, obj: 0 });
                 }
               }
             }
           });
 
-          // 6. Instantiate Tiles
+          // --- Step 4: Build Road Network using Kruskal's MST with A* ---
+          const solveNetwork = () => {
+            if (nodes.length < 2) return;
+
+            roadSet.clear();
+            
+            const loopVal = 50; // Loop sensitivity (0-100)
+            const detourRatio = loopVal === 0 ? 1000 : 5.0 - (loopVal / 25);
+
+            // Prepare edges sorted by Manhattan distance
+            let edges = [];
+            for (let i = 0; i < nodes.length; i++) {
+              for (let j = i + 1; j < nodes.length; j++) {
+                const dist = Math.abs(nodes[i].x - nodes[j].x) + Math.abs(nodes[i].z - nodes[j].z);
+                edges.push({ u: nodes[i], v: nodes[j], dist: dist });
+              }
+            }
+            edges.sort((a, b) => a.dist - b.dist);
+
+            const uf = this._createUnionFind(nodes.map(n => n.id));
+            let rejectedEdges = [];
+
+            // Phase 1: MST Skeleton
+            for (let i = 0; i < edges.length; i++) {
+              const edge = edges[i];
+              
+              if (uf.connected(edge.u.id, edge.v.id)) {
+                rejectedEdges.push(edge);
+                continue;
+              }
+
+              const pathRes = findPath(edge.u, edge.v);
+              
+              if (!uf.connected(edge.u.id, edge.v.id)) {
+                uf.union(edge.u.id, edge.v.id);
+                addPathToRoadSet(pathRes.path);
+                
+                // Connect nodes as neighbors
+                edge.u.neighbors.push(edge.v);
+                edge.v.neighbors.push(edge.u);
+              }
+            }
+
+            // Phase 2: Loop Injection (Smart Shortcuts)
+            if (loopVal > 0) {
+              const localEdges = rejectedEdges.filter(e => e.dist < 15);
+
+              for (let edge of localEdges) {
+                const currentRailPath = findPath(edge.u, edge.v);
+                
+                if (currentRailPath.cost - edge.dist > 8) {
+                  buildDirectRoad(edge.u, edge.v);
+                  edge.u.neighbors.push(edge.v);
+                  edge.v.neighbors.push(edge.u);
+                }
+              }
+            }
+
+            // Apply roads to world
+            roadSet.forEach(k => {
+              const [x, z] = k.split(',').map(Number);
+              if(!nodes.some(n => n.x === x && n.z === z)) {
+                ensureRoad(x, z);
+              }
+            });
+          };
+          
+          solveNetwork();
+
+          // --- Step 5: Convert to Tile System ---
+          const tileData = new Map();
+          
+          worldMap.forEach((cell, key) => {
+            const [xStr, zStr] = key.split(',');
+            const x = parseInt(xStr);
+            const z = parseInt(zStr);
+            
+            let h = cell.h;
+            let obj = cell.obj;
+            
+            if (h === -1) return; // Skip water
+            
+            let type = 'road';
+            
+            // Determine tile type based on object
+            if (obj === 2 || obj === 3) {
+              // Station/City
+              type = 'green';
+            } else if (obj === 1) {
+              // Road - add colored tiles randomly
+              type = Math.random() < 0.3 ? this.getRandomColoredType() : 'road';
+            } else {
+              // Environment based on height
+              if (h === 0 || h === -1) type = 'env_nature';
+              else if (h === 1) type = Math.random() > 0.3 ? 'env_nature' : 'env_culture';
+              else if (h === 2) type = 'env_nature';
+              else if (h === 3) type = 'env_culture';
+            }
+            
+            // Find station name and population if this is a station
+            let stationName = '';
+            let population = 0;
+            if (type === 'green') {
+              const node = nodes.find(n => n.x === x && n.z === z);
+              if (node) {
+                stationName = node.name;
+                population = node.population || 0;
+              }
+            }
+            
+            tileData.set(key, { x, z, type, stationName, population, height: h, obj });
+          });
+
+          // --- Step 6: Instantiate Tiles ---
           const mapGroup = new THREE.Group();
           this.scene.add(mapGroup);
           this.tilesMap = new Map();
 
+          // Add infinite ocean plane
+          const waterGeo = new THREE.PlaneGeometry(10000, 10000);
+          const waterMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a }); // Deep blue ocean
+          const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+          waterMesh.rotation.x = -Math.PI / 2;
+          waterMesh.position.set(0, -0.5, 0);
+          waterMesh.receiveShadow = false;
+          mapGroup.add(waterMesh);
+
           let idCounter = 0;
           tileData.forEach((data) => {
-            const tile = new Tile(idCounter++, data.x, data.z, data.type);
-            if (data.stationName) tile.stationName = data.stationName;
+            // Skip pure environment tiles far from roads for performance
+            if (!data.type.includes('env') || data.obj === 1 || data.obj === 2 || data.obj === 3 || data.type === 'green' || data.type === 'road' || 
+                ['blue', 'red', 'yellow'].includes(data.type)) {
+              const tile = new Tile(idCounter++, data.x, data.z, data.type);
+              if (data.stationName) tile.stationName = data.stationName;
+              if (data.population) tile.population = data.population;
 
-            this.map.push(tile);
-            this.tilesMap.set(`${data.x},${data.z}`, tile);
-            this.createTileVisuals(tile, mapGroup);
+              this.map.push(tile);
+              this.tilesMap.set(`${data.x},${data.z}`, tile);
+              this.createTileVisuals(tile, mapGroup);
+            } else {
+              // Still add environment tiles but with simpler visuals
+              const tile = new Tile(idCounter++, data.x, data.z, data.type);
+              this.map.push(tile);
+              this.tilesMap.set(`${data.x},${data.z}`, tile);
+              this.createTileVisuals(tile, mapGroup);
+            }
           });
 
-          // 7. Link Neighbors
+          console.log(`Created ${this.map.length} tiles, ${this.map.filter(t => t.type === 'green').length} stations`);
+
+          // --- Step 7: Link Neighbors ---
           this.map.forEach((tile) => {
             if (!tile.isRoad) return;
 
@@ -2004,9 +2296,11 @@
             });
           });
 
-          // Set Start Position
+          // --- Step 8: Set Start Position (city with largest population) ---
           const stations = this.map.filter((t) => t.type === "green");
-          let startTile = stations.length > 0 ? stations[Math.floor(Math.random() * stations.length)] : this.map[0];
+          // Sort stations by population descending and pick the one with largest population
+          stations.sort((a, b) => (b.population || 0) - (a.population || 0));
+          let startTile = stations.length > 0 ? stations[0] : this.map[0];
 
           if (!startTile) startTile = this.map[0];
 
@@ -2100,10 +2394,12 @@
         }
 
         getRandomColoredType() {
+          // Note: Don't return "green" here - only actual station nodes (from nodes array)
+          // should be green. Road tiles converted to green would have no matching node,
+          // causing incorrect station names to be assigned.
           const r = Math.random();
-          if (r < 0.25) return "green";
-          if (r < 0.5) return "red";
-          if (r < 0.75) return "yellow";
+          if (r < 0.33) return "red";
+          if (r < 0.66) return "yellow";
           return "blue";
         }
 
@@ -3869,8 +4165,11 @@
         // Initialize game first (starts rendering loop and rotating earth)
         window.game = new Game();
 
-        // Load cities data
+        // Load cities data for world map
         await loadCitiesData();
+
+        // Load station data for game map (full city info with lat/lng/population)
+        await loadStationData();
 
         // Render map objects (cities, continents) after data is loaded
         if (window.game.worldMap) {

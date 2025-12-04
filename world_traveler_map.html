@@ -201,14 +201,23 @@
         // Sort by population descending so higher population cities get priority
         rawPoints.sort((a, b) => (b.population || 0) - (a.population || 0));
 
+        // Snap coordinate to even grid (0, 2, 4, 6, ...)
+        function snapToEvenGrid(val) {
+            return Math.round(val / 2) * 2;
+        }
+
         function findNearestFree(startGx, startGz) {
+            // Ensure start position is on even grid
+            startGx = snapToEvenGrid(startGx);
+            startGz = snapToEvenGrid(startGz);
+            
             if (!occupied.has(`${startGx},${startGz}`)) return { x: startGx, z: startGz };
             
-            let radius = 1;
-            // Search in expanding squares
-            while (radius < 50) { // Limit search radius
-                for (let x = -radius; x <= radius; x++) {
-                    for (let z = -radius; z <= radius; z++) {
+            let radius = 2; // Step by 2 for even grid
+            // Search in expanding squares on even grid
+            while (radius < 100) { // Limit search radius
+                for (let x = -radius; x <= radius; x += 2) {
+                    for (let z = -radius; z <= radius; z += 2) {
                         // Only check the perimeter of the current square
                         if (Math.abs(x) !== radius && Math.abs(z) !== radius) continue;
                         
@@ -219,14 +228,15 @@
                         }
                     }
                 }
-                radius++;
+                radius += 2; // Step by 2 for even grid
             }
             return null; // Could not find free spot within limit
         }
 
         rawPoints.forEach((p, index) => {
-            let desiredGx = Math.round(p.x);
-            let desiredGz = Math.round(p.z);
+            // Snap to even grid positions (0, 2, 4, 6, ...)
+            let desiredGx = snapToEvenGrid(Math.round(p.x));
+            let desiredGz = snapToEvenGrid(Math.round(p.z));
             
             let pos = findNearestFree(desiredGx, desiredGz);
             
@@ -342,13 +352,19 @@
             }
             return false;
         }
+        connected(id1, id2) { 
+            return this.find(id1) === this.find(id2); 
+        }
     }
 
-    // --- PATHFINDING ALGORITHM ---
+    // --- PATHFINDING ALGORITHM (from map_algo) ---
+    const COST_EMPTY = 10;     // Expensive to build new
+    const COST_EXISTING = 1;   // Cheap to use existing
+    const roadSet = new Set(); // Track built roads for dynamic costing
+
     function getCost(x, z) {
-        // Check if this coordinate matches ANY node (city or station)
-        const isNode = nodes.some(n => n.x === x && n.z === z);
-        return isNode ? 1 : 10;  // Cheap to pass through a node, expensive for empty land
+        // Dynamic weighting: if road exists, cost is 1, else 10
+        return roadSet.has(`${x},${z}`) ? COST_EXISTING : COST_EMPTY;
     }
 
     function findPath(start, end) {
@@ -384,57 +400,102 @@
 
             for (let neighbor of neighbors) {
                 const neighborKey = getKey(neighbor);
-                
-                const moveCost = getCost(neighbor.x, neighbor.z);
-                const tentativeG = gScore[currentKey] + moveCost;
+                const newCost = gScore[currentKey] + getCost(neighbor.x, neighbor.z);
 
-                if (tentativeG < (gScore[neighborKey] ?? Infinity)) {
+                if (newCost < (gScore[neighborKey] ?? Infinity)) {
                     cameFrom[neighborKey] = currentKey;
-                    gScore[neighborKey] = tentativeG;
-                    
-                    // Heuristic
-                    const h = (Math.abs(neighbor.x - end.x) + Math.abs(neighbor.z - end.z)) * 1.1; 
-                    openSet.enqueue(neighbor, tentativeG + h);
+                    gScore[neighborKey] = newCost;
+                    // Heuristic: Manhattan (Admissible because min cost is 1)
+                    const h = Math.abs(neighbor.x - end.x) + Math.abs(neighbor.z - end.z);
+                    openSet.enqueue(neighbor, newCost + h);
                 }
             }
         }
         return { path: [], cost: Infinity };
     }
 
+    function addPathToRoadSet(path) {
+        path.forEach(p => roadSet.add(`${p.x},${p.z}`));
+    }
+
+    // Builds a simple L-shaped road between two points (forcing a build)
+    function buildDirectRoad(start, end) {
+        let x = start.x;
+        let z = start.z;
+        
+        // Move X first
+        while(x !== end.x) {
+            roadSet.add(`${x},${z}`);
+            x += (end.x > x ? 1 : -1);
+        }
+        // Then move Z
+        while(z !== end.z) {
+            roadSet.add(`${x},${z}`);
+            z += (end.z > z ? 1 : -1);
+        }
+        roadSet.add(`${end.x},${end.z}`);
+    }
+
     function solveNetwork() {
         if (nodes.length < 2) return;
 
-        let edges = [];
+        roadSet.clear();
         
-        // 1. Create graph edges between all pairs of nodes
+        // Loop sensitivity - detour tolerance for shortcut injection
+        const loopVal = 50; // Medium sensitivity (0-100)
+        const detourRatio = loopVal === 0 ? 1000 : 5.0 - (loopVal / 25);
+
+        // Prepare edges sorted by Manhattan distance
+        let edges = [];
         for (let i = 0; i < nodes.length; i++) {
             for (let j = i + 1; j < nodes.length; j++) {
-                const n1 = nodes[i];
-                const n2 = nodes[j];
-                const result = findPath(n1, n2);
-                edges.push({ u: n1.id, v: n2.id, cost: result.cost, path: result.path });
+                const dist = Math.abs(nodes[i].x - nodes[j].x) + Math.abs(nodes[i].z - nodes[j].z);
+                edges.push({ u: nodes[i], v: nodes[j], dist: dist });
+            }
+        }
+        edges.sort((a, b) => a.dist - b.dist);
+
+        const uf = new UnionFind(nodes.map(n => n.id));
+        let rejectedEdges = [];
+
+        // --- PHASE 1: MST SKELETON (Efficiency-First Steiner Tree) ---
+        for (let i = 0; i < edges.length; i++) {
+            const edge = edges[i];
+            
+            // If already connected, save for Phase 2 check, skip build
+            if (uf.connected(edge.u.id, edge.v.id)) {
+                rejectedEdges.push(edge);
+                continue;
+            }
+
+            // Calculate optimal path on current grid (prefers existing roads)
+            const pathRes = findPath(edge.u, edge.v);
+            
+            if (!uf.connected(edge.u.id, edge.v.id)) {
+                uf.union(edge.u.id, edge.v.id);
+                addPathToRoadSet(pathRes.path);
             }
         }
 
-        // 2. Sort edges by cost
-        edges.sort((a, b) => a.cost - b.cost);
-        
-        // 3. Kruskal's Algorithm - build MST
-        const uf = new UnionFind(nodes.map(n => n.id));
-        const finalRoads = new Set();
-        let totalCost = 0;
-        let connections = 0;
+        // --- PHASE 2: LOOP INJECTION (Smart Shortcuts) ---
+        if (loopVal > 0) {
+            // Only check edges that are somewhat close
+            const localEdges = rejectedEdges.filter(e => e.dist < 15);
 
-        for (let edge of edges) {
-            if (uf.union(edge.u, edge.v)) {
-                edge.path.forEach(pt => finalRoads.add(`${pt.x},${pt.z}`));
-                totalCost += edge.cost;
-                connections++;
+            for (let edge of localEdges) {
+                // Calculate path on existing network
+                const currentRailPath = findPath(edge.u, edge.v);
+                
+                // Check if detour is significant (path cost much higher than direct distance)
+                if (currentRailPath.cost - edge.dist > 8) {
+                    // Build a shortcut
+                    buildDirectRoad(edge.u, edge.v);
+                }
             }
         }
 
         // Apply roads to world
-        finalRoads.forEach(k => {
+        roadSet.forEach(k => {
             const [x, z] = k.split(',').map(Number);
             if(!nodes.some(n => n.x === x && n.z === z)) {
                 ensureRoad(x, z);
@@ -662,23 +723,45 @@
     function createLabels() {
         const container = document.getElementById('labels-container');
         nodes.forEach(node => {
-            // Only show labels for populous cities (e.g. > 500k) or high level (level 1)
-            const isPopulous = (node.population && node.population > 500000) || (node.level && node.level <= 1);
-            
-            if (isPopulous) {
-                const div = document.createElement('div');
-                div.className = 'city-label';
-                div.innerText = node.name;
-                div.onclick = () => onCityClick(node);
-                container.appendChild(div);
-                cityLabels.push({ div, node });
-            }
+            // Create labels for all cities, visibility controlled by zoom level
+            const div = document.createElement('div');
+            div.className = 'city-label';
+            div.innerText = node.name;
+            div.onclick = () => onCityClick(node);
+            container.appendChild(div);
+            cityLabels.push({ div, node });
         });
     }
 
+    // Get minimum population threshold based on camera zoom level
+    function getPopulationThreshold() {
+        const distance = camera.position.distanceTo(controls.target);
+        // At distance 100+: show only > 500k population
+        // At distance 50: show > 100k
+        // At distance 20: show > 10k
+        // At distance 10 or less: show all
+        if (distance > 100) return 500000;
+        if (distance > 50) return 100000;
+        if (distance > 30) return 50000;
+        if (distance > 20) return 10000;
+        if (distance > 10) return 1000;
+        return 0; // Show all when very close
+    }
+
     function updateLabelPositions() {
+        const popThreshold = getPopulationThreshold();
+        
         cityLabels.forEach(item => {
             const { div, node } = item;
+            
+            // Check if this city should be visible based on zoom level
+            const isPopulous = (node.population && node.population >= popThreshold) || (node.level && node.level <= 1);
+            
+            if (!isPopulous) {
+                div.style.display = 'none';
+                return;
+            }
+            
             const pos = new THREE.Vector3(node.x, 1.0, node.z);
             pos.project(camera);
             

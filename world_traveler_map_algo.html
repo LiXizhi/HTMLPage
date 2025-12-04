@@ -373,25 +373,12 @@ async function solveNetwork() {
         const localEdges = rejectedEdges.filter(e => e.dist < 15);
 
         for (let edge of localEdges) {
-            // 1. Calculate Air Cost (Cost if we built a direct road on empty land)
-            // Approx: Distance * 10
-            const airCost = edge.dist * COST_EMPTY;
-
-            // 2. Calculate Rail Cost (Travel time on existing network)
-            // The pathfinder uses weight 1 for roads. So the Cost returned IS the distance in tiles along the track.
-            // (plus minimal empty traversal if stations are offset from track, which is usually 0)
+            // Calculate path on existing network
             const currentRailPath = findPath(edge.u, edge.v);
-            const railCost = currentRailPath.cost; 
-
-            // 3. The "U-Shape" Check
-            // If current rail travel is significantly longer than air travel, we have a detour.
-            // Comparison: Is RailCost > AirCost (normalized)?
-            // Actually, simpler: compare Distances.
-            // Rail Distance ~ railCost. Air Distance ~ edge.dist.
             
-            if (railCost > edge.dist * detourRatio) {
-                // We found a massive detour! Build a shortcut.
-                log(`Shortcut: Station ${edge.u.id} to ${edge.v.id} (Dist: ${edge.dist}, Detour: ${railCost})`, "phase2");
+            if (currentRailPath.cost - edge.dist > 8) {
+                // We found a detour with significant "away" movement! Build a shortcut.
+                log(`Shortcut: Station ${edge.u.id} to ${edge.v.id} (Away: ${(currentRailPath.cost - edge.dist).toFixed(0)}, Path: ${currentRailPath.cost}, Direct: ${edge.dist})`, "phase2");
                 
                 // Force build this path. 
                 // Note: The findPath above followed the track. We want a NEW path.
@@ -448,18 +435,114 @@ function initMap() {
     stations = [];
     roadSet.clear();
     
+    // Generate stations with even x AND y coordinates (0, 2, 4, 6, ...)
+    // Each station has a population that affects repulsion
     let attempts = 0;
     while(stations.length < count && attempts < 500) {
-        const x = Math.floor(Math.random() * GRID_SIZE);
-        const y = Math.floor(Math.random() * GRID_SIZE);
+        // Snap both x and y to even numbers: 0, 2, 4, 6, ...
+        const x = Math.floor(Math.random() * (GRID_SIZE / 2)) * 2;
+        const y = Math.floor(Math.random() * (GRID_SIZE / 2)) * 2;
+        // Random population from 1 to 5 (affects repulsion strength)
+        const population = Math.floor(Math.random() * 5) + 1;
         if(!stations.some(s => s.x === x && s.y === y)) {
-            stations.push({id: stations.length, x, y});
+            stations.push({id: stations.length, x, y, population});
         }
         attempts++;
     }
     
+    // Repel stations based on population
+    repelStationsByPopulation();
+    
     document.getElementById('log').innerHTML = '<div>> Map Reset.</div>';
     draw();
+}
+
+// Snap coordinate to even grid
+function snapToEvenGrid(val, maxVal) {
+    let snapped = Math.round(val / 2) * 2;
+    if (snapped < 0) snapped = 0;
+    if (snapped >= maxVal) snapped = Math.floor((maxVal - 1) / 2) * 2;
+    return snapped;
+}
+
+// Repel stations based on population - higher population pushes others away more
+function repelStationsByPopulation() {
+    const MIN_DISTANCE = 2; // Minimum grid distance between stations (in even grid units)
+    const MAX_ITERATIONS = 100;
+    const REPEL_RADIUS = 6; // Only repel stations within this distance
+    
+    for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+        let moved = false;
+        
+        // For each pair of stations, calculate repulsion
+        for (let i = 0; i < stations.length; i++) {
+            for (let j = i + 1; j < stations.length; j++) {
+                const s1 = stations[i];
+                const s2 = stations[j];
+                
+                const dx = s2.x - s1.x;
+                const dy = s2.y - s1.y;
+                const dist = Math.abs(dx) + Math.abs(dy); // Manhattan distance
+                
+                // Skip if too far apart
+                if (dist > REPEL_RADIUS) continue;
+                
+                // If same position or too close, repel
+                if (dist < MIN_DISTANCE * 2) {
+                    // Calculate repulsion based on population ratio
+                    // Higher population station stays more still, lower population moves more
+                    const totalPop = s1.population + s2.population;
+                    const ratio1 = s2.population / totalPop; // s1 moves by this ratio (opposite population)
+                    const ratio2 = s1.population / totalPop; // s2 moves by this ratio
+                    
+                    // Determine push direction (opposite directions)
+                    let pushX = 0, pushY = 0;
+                    
+                    if (dx === 0 && dy === 0) {
+                        // Same position - push in random direction on even grid
+                        pushX = (Math.random() > 0.5 ? 2 : -2);
+                        pushY = (Math.random() > 0.5 ? 2 : -2);
+                    } else if (Math.abs(dx) >= Math.abs(dy)) {
+                        // Primarily horizontal difference - push in x
+                        pushX = 2;
+                    } else {
+                        // Primarily vertical difference - push in y
+                        pushY = 2;
+                    }
+                    
+                    // Apply movement based on population ratio (move in even grid steps)
+                    // s1 moves in negative direction, s2 moves in positive direction
+                    if (ratio1 > 0.3) { // Only move if ratio is significant
+                        const newX1 = snapToEvenGrid(s1.x - pushX * Math.sign(dx || 1), GRID_SIZE);
+                        const newY1 = snapToEvenGrid(s1.y - pushY * Math.sign(dy || 1), GRID_SIZE);
+                        if (newX1 !== s1.x || newY1 !== s1.y) {
+                            // Check no collision at new position
+                            if (!stations.some((s, idx) => idx !== i && s.x === newX1 && s.y === newY1)) {
+                                s1.x = newX1;
+                                s1.y = newY1;
+                                moved = true;
+                            }
+                        }
+                    }
+                    
+                    if (ratio2 > 0.3) { // Only move if ratio is significant
+                        const newX2 = snapToEvenGrid(s2.x + pushX * Math.sign(dx || 1), GRID_SIZE);
+                        const newY2 = snapToEvenGrid(s2.y + pushY * Math.sign(dy || 1), GRID_SIZE);
+                        if (newX2 !== s2.x || newY2 !== s2.y) {
+                            // Check no collision at new position
+                            if (!stations.some((s, idx) => idx !== j && s.x === newX2 && s.y === newY2)) {
+                                s2.x = newX2;
+                                s2.y = newY2;
+                                moved = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!moved) break;
+    }
 }
 
 function draw() {
@@ -489,7 +572,7 @@ function draw() {
     });
     ctx.shadowBlur = 0;
 
-    // Stations (Red/Pink)
+    // Stations (Red/Pink) - size based on population
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 11px sans-serif';
@@ -498,8 +581,12 @@ function draw() {
         const cx = s.x * cs + cs/2;
         const cy = s.y * cs + cs/2;
         
+        // Size based on population (1-5) -> radius multiplier (0.3-0.6)
+        const radiusMultiplier = 0.25 + (s.population || 1) * 0.07;
+        const radius = cs * radiusMultiplier;
+        
         ctx.beginPath();
-        ctx.arc(cx, cy, cs/2.5, 0, Math.PI*2);
+        ctx.arc(cx, cy, radius, 0, Math.PI*2);
         ctx.fillStyle = '#ef4444';
         ctx.fill();
         
@@ -529,8 +616,12 @@ window.onload = () => {
         if (isComputing) return;
         const rect = canvas.getBoundingClientRect();
         const cs = canvas.width / GRID_SIZE;
-        const x = Math.floor((e.clientX - rect.left) / (rect.width/GRID_SIZE));
-        const y = Math.floor((e.clientY - rect.top) / (rect.height/GRID_SIZE));
+        let x = Math.floor((e.clientX - rect.left) / (rect.width/GRID_SIZE));
+        let y = Math.floor((e.clientY - rect.top) / (rect.height/GRID_SIZE));
+        
+        // Snap both x and y to even grid (0, 2, 4, 6, ...)
+        x = snapToEvenGrid(x, GRID_SIZE);
+        y = snapToEvenGrid(y, GRID_SIZE);
 
         if(x>=0 && x<GRID_SIZE && y>=0 && y<GRID_SIZE) {
             const idx = stations.findIndex(s => s.x === x && s.y === y);
@@ -538,7 +629,11 @@ window.onload = () => {
                 stations.splice(idx, 1);
                 stations.forEach((s,i) => s.id = i);
             } else {
-                stations.push({id: stations.length, x, y});
+                // Add new station with random population
+                const population = Math.floor(Math.random() * 5) + 1;
+                stations.push({id: stations.length, x, y, population});
+                // Repel stations after adding new one
+                repelStationsByPopulation();
             }
             roadSet.clear();
             draw();
