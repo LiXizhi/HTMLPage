@@ -1,0 +1,633 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>True Physics Liquid Sort</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f0f1a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 30px;
+            box-sizing: border-box;
+        }
+        .title {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 2rem;
+            font-weight: 300;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(74, 144, 226, 0.6);
+            text-align: center;
+        }
+        #win-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 30, 40, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 60px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            display: none;
+            pointer-events: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+            z-index: 100;
+        }
+        button {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border: none;
+            padding: 15px 50px;
+            color: #0f0f1a;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(79, 172, 254, 0.6);
+        }
+    </style>
+    <!-- Three.js, Tween.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div id="ui-layer">
+        <div class="title">Fluid Logic</div>
+    </div>
+
+    <div id="win-screen">
+        <h2 style="color:white; margin-bottom:30px; font-weight: 300;">Level Clear</h2>
+        <button id="restart-btn">Next Level</button>
+    </div>
+
+    <script>
+        /**
+         * CONFIGURATION
+         */
+        const CONFIG = {
+            TUBE_RADIUS: 1.2,
+            TUBE_HEIGHT: 8.0,
+            SEGMENTS: 32,
+            MAX_UNITS: 4,
+            POUR_SPEED_PER_UNIT: 400, // ms per unit
+            COLORS: {
+                RED: 0xff3b30,
+                BLUE: 0x007aff,
+                GREEN: 0x34c759,
+                YELLOW: 0xffcc00,
+                PURPLE: 0xaf52de,
+                ORANGE: 0xff9500
+            }
+        };
+
+        let state = {
+            tubes: [],
+            selectedTube: null,
+            isAnimating: false,
+            level: 1
+        };
+
+        let scene, camera, renderer, raycaster, mouse;
+        let activeStream = null;
+
+        /**
+         * CLASS: TUBE
+         */
+        class Tube {
+            constructor(id, x, y, z, initialColors) {
+                this.id = id;
+                this.colors = [...initialColors]; 
+                this.liquidMeshes = []; 
+                
+                this.meshGroup = new THREE.Group();
+                this.meshGroup.position.set(x, y, z);
+                this.startPos = new THREE.Vector3(x, y, z);
+
+                this.createGlass();
+                this.initLiquids();
+            }
+
+            createGlass() {
+                const glassMat = new THREE.MeshPhysicalMaterial({
+                    color: 0xffffff,
+                    metalness: 0.1,
+                    roughness: 0.05,
+                    transmission: 0.95, 
+                    thickness: 1.0,
+                    clearcoat: 1.0,
+                    transparent: true,
+                    opacity: 0.2,
+                    side: THREE.DoubleSide
+                });
+
+                // Cylinder Body
+                const geo = new THREE.CylinderGeometry(CONFIG.TUBE_RADIUS, CONFIG.TUBE_RADIUS, CONFIG.TUBE_HEIGHT, CONFIG.SEGMENTS, 1, true);
+                const mesh = new THREE.Mesh(geo, glassMat);
+                
+                // Bottom 
+                const bottomGeo = new THREE.SphereGeometry(CONFIG.TUBE_RADIUS, CONFIG.SEGMENTS, 16, 0, Math.PI*2, 0, Math.PI/2);
+                const bottomMesh = new THREE.Mesh(bottomGeo, glassMat);
+                bottomMesh.position.y = -CONFIG.TUBE_HEIGHT/2;
+                bottomMesh.rotation.x = Math.PI;
+                bottomMesh.scale.y = 0.3;
+
+                // Rim
+                const rimGeo = new THREE.TorusGeometry(CONFIG.TUBE_RADIUS, 0.08, 16, CONFIG.SEGMENTS);
+                const rimMesh = new THREE.Mesh(rimGeo, glassMat);
+                rimMesh.position.y = CONFIG.TUBE_HEIGHT/2;
+                rimMesh.rotation.x = Math.PI/2;
+
+                this.meshGroup.add(mesh, bottomMesh, rimMesh);
+
+                // Hitbox
+                const hitGeo = new THREE.CylinderGeometry(CONFIG.TUBE_RADIUS*1.5, CONFIG.TUBE_RADIUS*1.5, CONFIG.TUBE_HEIGHT, 8);
+                const hitMat = new THREE.MeshBasicMaterial({visible:false});
+                this.hitBox = new THREE.Mesh(hitGeo, hitMat);
+                this.hitBox.userData = { tube: this };
+                this.meshGroup.add(this.hitBox);
+            }
+
+            initLiquids() {
+                this.liquidMeshes.forEach(m => this.meshGroup.remove(m));
+                this.liquidMeshes = [];
+
+                let currentY = -CONFIG.TUBE_HEIGHT/2 + 0.5; 
+                const unitHeight = (CONFIG.TUBE_HEIGHT - 1) / CONFIG.MAX_UNITS;
+
+                this.colors.forEach((col) => {
+                    this.addLiquidMesh(col, currentY, unitHeight);
+                    currentY += unitHeight;
+                });
+            }
+
+            addLiquidMesh(color, startY, height) {
+                const radius = CONFIG.TUBE_RADIUS - 0.15;
+                const geo = new THREE.CylinderGeometry(radius, radius, height, CONFIG.SEGMENTS);
+                geo.translate(0, height/2, 0); // Pivot at bottom for scaling up/down
+
+                const mat = new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    emissive: color,
+                    emissiveIntensity: 0.2
+                });
+
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.y = startY;
+                
+                this.meshGroup.add(mesh);
+                this.liquidMeshes.push(mesh);
+                return mesh;
+            }
+
+            getTopColor() {
+                if(this.colors.length === 0) return null;
+                return this.colors[this.colors.length - 1];
+            }
+            
+            isEmpty() { return this.colors.length === 0; }
+            isFull() { return this.colors.length >= CONFIG.MAX_UNITS; }
+        }
+
+        /**
+         * CORE LOGIC
+         */
+        function init() {
+            scene = new THREE.Scene();
+            // scene.background = new THREE.Color(0x0f0f1a);
+            
+            // Gradient Background Mesh
+            const bgGeo = new THREE.SphereGeometry(100, 32, 32);
+            const bgMat = new THREE.ShaderMaterial({
+                side: THREE.BackSide,
+                uniforms: {
+                    topColor: { value: new THREE.Color(0x1a1a2e) },
+                    bottomColor: { value: new THREE.Color(0x000000) }
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+                        vWorldPosition = worldPosition.xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+                    }`,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 bottomColor;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize( vWorldPosition + vec3(0, 20, 0) ).y;
+                        gl_FragColor = vec4( mix( bottomColor, topColor, max( h, 0.0 ) ), 1.0 );
+                    }`
+            });
+            scene.add(new THREE.Mesh(bgGeo, bgMat));
+
+
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.1, 100);
+            camera.position.set(0, 6, 28);
+            camera.lookAt(0, 1, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Lights
+            const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambient);
+
+            const spot = new THREE.SpotLight(0xffffff, 1.2);
+            spot.position.set(15, 30, 15);
+            spot.castShadow = true;
+            scene.add(spot);
+
+            const rim1 = new THREE.PointLight(0x00c6ff, 0.8);
+            rim1.position.set(-15, 5, -5);
+            scene.add(rim1);
+
+            const rim2 = new THREE.PointLight(0xff4dff, 0.8);
+            rim2.position.set(15, 5, -5);
+            scene.add(rim2);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            window.addEventListener('click', onClick);
+            window.addEventListener('touchstart', onTouch, {passive: false});
+            window.addEventListener('resize', onResize);
+
+            loadLevel(1);
+            animate();
+        }
+
+        function loadLevel(lvl) {
+            state.tubes.forEach(t => scene.remove(t.meshGroup));
+            state.tubes = [];
+
+            const positions = [-5, -1.8, 1.8, 5];
+            const c = CONFIG.COLORS;
+            
+            let setup;
+            if(lvl % 2 !== 0) {
+                 setup = [
+                    [c.RED, c.BLUE, c.RED, c.BLUE],
+                    [c.BLUE, c.RED, c.BLUE, c.RED],
+                    [],
+                    []
+                ];
+            } else {
+                 setup = [
+                    [c.PURPLE, c.ORANGE, c.GREEN, c.ORANGE],
+                    [c.ORANGE, c.PURPLE, c.ORANGE, c.PURPLE],
+                    [c.GREEN, c.GREEN, c.GREEN, c.PURPLE],
+                    []
+                ];
+            }
+
+            for(let i=0; i<4; i++) {
+                let colors = setup[i] || [];
+                let t = new Tube(i, positions[i], 0, 0, colors);
+                state.tubes.push(t);
+                scene.add(t.meshGroup);
+            }
+        }
+
+        function updateMouse(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onClick(e) { updateMouse(e); processInput(); }
+        function onTouch(e) { 
+            e.preventDefault(); 
+            mouse.x = (e.changedTouches[0].clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.changedTouches[0].clientY / window.innerHeight) * 2 + 1;
+            processInput(); 
+        }
+
+        function processInput() {
+            if(state.isAnimating) return;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(state.tubes.map(t=>t.hitBox));
+
+            if(intersects.length > 0) {
+                const t = intersects[0].object.userData.tube;
+                if(!state.selectedTube) {
+                    if(!t.isEmpty()) selectTube(t);
+                } else {
+                    if(state.selectedTube === t) deselectTube();
+                    else handleMove(state.selectedTube, t);
+                }
+            } else {
+                if(state.selectedTube) deselectTube();
+            }
+        }
+
+        function selectTube(t) {
+            state.selectedTube = t;
+            new TWEEN.Tween(t.meshGroup.position).to({y: 1}, 200).easing(TWEEN.Easing.Back.Out).start();
+        }
+
+        function deselectTube() {
+            if(!state.selectedTube) return;
+            const t = state.selectedTube;
+            new TWEEN.Tween(t.meshGroup.position).to({y: 0}, 200).easing(TWEEN.Easing.Quadratic.Out).start();
+            state.selectedTube = null;
+        }
+
+        function handleMove(source, target) {
+            const color = source.getTopColor();
+            const valid = (target.isEmpty() || target.getTopColor() === color) && !target.isFull();
+
+            if(valid) {
+                let amount = 0;
+                for(let i=source.colors.length-1; i>=0; i--) {
+                    if(source.colors[i] === color) amount++;
+                    else break;
+                }
+                const space = CONFIG.MAX_UNITS - target.colors.length;
+                const finalAmount = Math.min(amount, space);
+                
+                performPrecisePour(source, target, color, finalAmount);
+            } else {
+                // Shake Error
+                const x = source.startPos.x;
+                new TWEEN.Tween(source.meshGroup.position)
+                    .to({x: x+0.2}, 50).yoyo(true).repeat(3)
+                    .onComplete(()=> {
+                        source.meshGroup.position.x = x;
+                        deselectTube();
+                    })
+                    .start();
+            }
+        }
+
+        /**
+         * IMPROVED PHYSICS ANIMATION
+         */
+        function performPrecisePour(source, target, colorHex, amount) {
+            state.isAnimating = true;
+            state.selectedTube = null;
+
+            const pourSide = (source.meshGroup.position.x < target.meshGroup.position.x) ? 1 : -1;
+            const targetPos = target.meshGroup.position.clone();
+            
+            // CRITICAL FIX: Position alignment
+            // We want the lip of the source to be exactly above the center of target.
+            // Based on geometry, when rotated ~90 deg, the lip x-offset is roughly Tube Height/2
+            const rotateAngle = -pourSide * (Math.PI / 1.9); // Slightly more than 90 to help "flow"
+            
+            // Calculate where the source needs to be so its lip is over target
+            // Lip position relative to center is roughly (0, height/2)
+            // When rotated 90 deg: (+- height/2, 0)
+            const offsetDistance = (CONFIG.TUBE_HEIGHT / 2) - 0.5; 
+            
+            const pourPos = new THREE.Vector3(
+                targetPos.x - (pourSide * offsetDistance), 
+                targetPos.y + (CONFIG.TUBE_HEIGHT/2) + 2.5, // Height clearance
+                targetPos.z
+            );
+
+            const moveT = new TWEEN.Tween(source.meshGroup.position)
+                .to({x: pourPos.x, y: pourPos.y, z: pourPos.z}, 600)
+                .easing(TWEEN.Easing.Cubic.Out);
+
+            const rotateT = new TWEEN.Tween(source.meshGroup.rotation)
+                .to({z: rotateAngle}, 500)
+                .easing(TWEEN.Easing.Quadratic.InOut)
+                .delay(400);
+
+            // Stream Generation
+            const createStream = () => {
+                // 1. Start Point: The Lip of the Source Tube
+                // We calculate world position of the lip vertex
+                const lipLocal = new THREE.Vector3(0, CONFIG.TUBE_HEIGHT/2, 0);
+                const lipWorld = lipLocal.applyMatrix4(source.meshGroup.matrixWorld);
+                
+                // 2. End Point: Center of Target Tube
+                const dropWorld = new THREE.Vector3(targetPos.x, targetPos.y + 1, targetPos.z);
+                
+                // 3. Control Points for Cubic Bezier (Vertical Drop)
+                // CP1: Slightly out from the lip in the direction of the pour
+                const cp1 = new THREE.Vector3(lipWorld.x + (pourSide * 0.2), lipWorld.y, lipWorld.z);
+                // CP2: Directly above the target (forcing vertical entry)
+                const cp2 = new THREE.Vector3(dropWorld.x, lipWorld.y - 1, dropWorld.z);
+
+                const curve = new THREE.CubicBezierCurve3(lipWorld, cp1, cp2, dropWorld);
+                
+                const streamTube = new THREE.TubeGeometry(curve, 20, 0.12, 8, false);
+                const mat = new THREE.MeshPhysicalMaterial({
+                    color: colorHex, roughness: 0.2, transmission: 0.1, transparent: true, opacity: 0.8, emissive: colorHex, emissiveIntensity: 0.3
+                });
+                activeStream = new THREE.Mesh(streamTube, mat);
+                scene.add(activeStream);
+            };
+
+            const animateLevels = () => {
+                const unitTime = CONFIG.POUR_SPEED_PER_UNIT;
+                const unitH = (CONFIG.TUBE_HEIGHT - 1) / CONFIG.MAX_UNITS;
+
+                // We need to sequence the removal. 
+                // Remove top-most mesh first, then the next.
+                
+                // Get the specific meshes to remove (top of the stack down)
+                let meshesToRemove = [];
+                for(let i=0; i<amount; i++) {
+                    const m = source.liquidMeshes.pop(); // Removes from array end
+                    if(m) meshesToRemove.push(m);
+                }
+                // source.liquidMeshes.pop() gets the TOP one. So our array `meshesToRemove` has [Top, Top-1, etc.]
+                // We want to animate them in that order.
+
+                // SEQUENTIAL DRAINING
+                let chainDelay = 0;
+
+                meshesToRemove.forEach((m, index) => {
+                    // Drain animation
+                    new TWEEN.Tween(m.scale)
+                        .to({y: 0}, unitTime)
+                        .easing(TWEEN.Easing.Linear.None)
+                        .delay(chainDelay)
+                        .onComplete(() => source.meshGroup.remove(m))
+                        .start();
+                    
+                    chainDelay += unitTime;
+                });
+
+                // SEQUENTIAL FILLING
+                // Target filling starts immediately but ramps up
+                let currentGrowY = (-CONFIG.TUBE_HEIGHT/2 + 0.5) + (target.liquidMeshes.length * unitH);
+                
+                for(let i=0; i<amount; i++) {
+                    const newLiquid = target.addLiquidMesh(colorHex, currentGrowY, unitH);
+                    newLiquid.scale.y = 0;
+                    currentGrowY += unitH;
+
+                    new TWEEN.Tween(newLiquid.scale)
+                        .to({y: 1}, unitTime)
+                        .delay(i * unitTime) // Start next unit only after previous finishes (roughly)
+                        .easing(TWEEN.Easing.Linear.None)
+                        .start();
+                }
+                
+                // Update logic instantly (visuals will catch up)
+                for(let i=0; i<amount; i++) {
+                    source.colors.pop();
+                    target.colors.push(colorHex);
+                }
+
+                // Cleanup
+                setTimeout(() => {
+                    if(activeStream) {
+                        scene.remove(activeStream);
+                        activeStream.geometry.dispose(); 
+                        activeStream = null;
+                    }
+                    returnSource();
+                }, (amount * unitTime) + 100);
+            };
+
+            const returnSource = () => {
+                new TWEEN.Tween(source.meshGroup.rotation)
+                    .to({z: 0}, 400)
+                    .easing(TWEEN.Easing.Quadratic.Out)
+                    .start();
+
+                new TWEEN.Tween(source.meshGroup.position)
+                    .to({x: source.startPos.x, y: source.startPos.y, z: source.startPos.z}, 500)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .delay(100)
+                    .onComplete(() => {
+                        state.isAnimating = false;
+                        checkWin();
+                    })
+                    .start();
+            };
+
+            moveT.chain(rotateT);
+            rotateT.onComplete(() => {
+                createStream();
+                animateLevels();
+            });
+            moveT.start();
+        }
+
+        function checkWin() {
+            const finished = state.tubes.every(t => {
+                return t.isEmpty() || (t.isFull() && t.colors.every(c => c === t.colors[0]));
+            });
+
+            if(finished) {
+                document.getElementById('win-screen').style.display = 'block';
+                spawnConfetti();
+            }
+        }
+
+        function spawnConfetti() {
+            const geo = new THREE.BufferGeometry();
+            const count = 400;
+            const pos = new Float32Array(count*3);
+            const vel = [];
+            const colors = [];
+            const colorObj = new THREE.Color();
+            
+            for(let i=0; i<count; i++) {
+                pos[i*3] = 0; pos[i*3+1] = 2; pos[i*3+2] = 0;
+                
+                // Random spherical explosion
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random() * 2 - 1);
+                const speed = Math.random() * 0.8 + 0.2;
+                
+                vel.push({
+                    x: speed * Math.sin(phi) * Math.cos(theta),
+                    y: speed * Math.sin(phi) * Math.sin(theta),
+                    z: speed * Math.cos(phi)
+                });
+
+                colorObj.setHSL(Math.random(), 1, 0.5);
+                colors.push(colorObj.r, colorObj.g, colorObj.b);
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+            
+            const mat = new THREE.PointsMaterial({size: 0.4, vertexColors: true});
+            const points = new THREE.Points(geo, mat);
+            scene.add(points);
+
+            const anim = () => {
+                if(!points.parent) return; 
+                const p = points.geometry.attributes.position.array;
+                for(let i=0; i<count; i++) {
+                    p[i*3] += vel[i].x;
+                    p[i*3+1] += vel[i].y;
+                    p[i*3+2] += vel[i].z;
+                    vel[i].y -= 0.015; // Gravity
+                    
+                    // Floor bounce
+                    if(p[i*3+1] < -10) vel[i].y *= -0.5;
+                }
+                points.geometry.attributes.position.needsUpdate = true;
+                if(points.position.y > -20) requestAnimationFrame(anim);
+                else scene.remove(points);
+            };
+            anim();
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            TWEEN.update(time);
+            renderer.render(scene, camera);
+        }
+
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            document.getElementById('win-screen').style.display = 'none';
+            state.level++;
+            loadLevel(state.level);
+        });
+
+        init();
+
+    </script>
+</body>
+</html>

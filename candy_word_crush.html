@@ -193,9 +193,9 @@
             pointer-events: none;
             z-index: 100;
             text-align: center;
-            width: 100%;
-            line-height: 1.1;
+            width: max-content;
             white-space: nowrap;
+            transform-origin: center center;
         }
         
         .entangled .gem-inner {
@@ -284,6 +284,18 @@
     <!-- Settings Footer -->
     <div class="w-full mt-2 flex justify-center gap-3 items-center z-20">
         <div class="flex flex-col items-start">
+            <label class="text-xs text-gray-400 ml-1">词汇等级</label>
+            <select id="word-level-select" class="bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-1 focus:outline-none focus:border-blue-500 text-sm">
+                <option value="1" selected>Level 1</option>
+                <option value="2">Level 2</option>
+                <option value="3">Level 3</option>
+                <option value="4">Level 4</option>
+                <option value="5">Level 5</option>
+                <option value="6">Level 6</option>
+            </select>
+        </div>
+
+        <div class="flex flex-col items-start">
             <label class="text-xs text-gray-400 ml-1">难度</label>
             <select id="difficulty-select" class="bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-1 focus:outline-none focus:border-blue-500 text-sm">
                 <option value="easy">简单</option>
@@ -345,63 +357,48 @@
     let GRID_SIZE = 0; // Calculated dynamically
     let CELL_SIZE = 0;
 
-    const WORD_PAIRS = [
-        {cn: "苹果", en: "Apple"}, {cn: "香蕉", en: "Banana"}, {cn: "橙子", en: "Orange"},
-        {cn: "葡萄", en: "Grape"}, {cn: "西瓜", en: "Watermelon"}, {cn: "草莓", en: "Strawberry"},
-        {cn: "樱桃", en: "Cherry"}, {cn: "柠檬", en: "Lemon"}, {cn: "桃子", en: "Peach"},
-        {cn: "梨", en: "Pear"}, {cn: "猫", en: "Cat"}, {cn: "狗", en: "Dog"},
-        {cn: "鸟", en: "Bird"}, {cn: "鱼", en: "Fish"}, {cn: "大象", en: "Elephant"},
-        {cn: "狮子", en: "Lion"}, {cn: "老虎", en: "Tiger"}, {cn: "猴子", en: "Monkey"},
-        {cn: "熊猫", en: "Panda"}, {cn: "兔子", en: "Rabbit"}, {cn: "书", en: "Book"},
-        {cn: "笔", en: "Pen"}, {cn: "学校", en: "School"}, {cn: "老师", en: "Teacher"},
-        {cn: "学生", en: "Student"}, {cn: "红", en: "Red"}, {cn: "蓝", en: "Blue"},
-        {cn: "绿", en: "Green"}, {cn: "黄", en: "Yellow"}, {cn: "白", en: "White"},
-        {cn: "黑", en: "Black"}, {cn: "灰", en: "Gray"}, {cn: "粉红", en: "Pink"},
-        {cn: "紫", en: "Purple"}, {cn: "棕", en: "Brown"}, {cn: "太阳", en: "Sun"},
-        {cn: "月亮", en: "Moon"}, {cn: "星星", en: "Star"}, {cn: "云", en: "Cloud"},
-        {cn: "雨", en: "Rain"}, {cn: "雪", en: "Snow"}, {cn: "风", en: "Wind"},
-        {cn: "树", en: "Tree"}, {cn: "花", en: "Flower"}, {cn: "草", en: "Grass"},
-        {cn: "山", en: "Mountain"}, {cn: "河", en: "River"}, {cn: "海", en: "Sea"},
-        {cn: "汽车", en: "Car"}, {cn: "飞机", en: "Plane"}, {cn: "火车", en: "Train"},
-        {cn: "船", en: "Boat"}, {cn: "自行车", en: "Bike"}, {cn: "房子", en: "House"},
-        {cn: "门", en: "Door"}, {cn: "窗户", en: "Window"}, {cn: "桌子", en: "Table"},
-        {cn: "椅子", en: "Chair"}, {cn: "床", en: "Bed"}, {cn: "杯子", en: "Cup"},
-        {cn: "盘子", en: "Plate"}, {cn: "碗", en: "Bowl"}, {cn: "筷子", en: "Chopsticks"},
-        {cn: "勺子", en: "Spoon"}, {cn: "叉子", en: "Fork"}, {cn: "刀", en: "Knife"},
-        {cn: "米饭", en: "Rice"}, {cn: "面条", en: "Noodles"}, {cn: "面包", en: "Bread"},
-        {cn: "牛奶", en: "Milk"}, {cn: "水", en: "Water"}, {cn: "茶", en: "Tea"},
-        {cn: "咖啡", en: "Coffee"}, {cn: "果汁", en: "Juice"}, {cn: "爸爸", en: "Dad"},
-        {cn: "妈妈", en: "Mom"}, {cn: "哥哥", en: "Brother"}, {cn: "姐姐", en: "Sister"},
-        {cn: "朋友", en: "Friend"}, {cn: "医生", en: "Doctor"}, {cn: "护士", en: "Nurse"},
-        {cn: "警察", en: "Police"}, {cn: "消防员", en: "Firefighter"}, {cn: "医生", en: "Doctor"},
-        {cn: "护士", en: "Nurse"}, {cn: "农民", en: "Farmer"}, {cn: "工人", en: "Worker"},
-        {cn: "司机", en: "Driver"}, {cn: "厨师", en: "Chef"}, {cn: "画家", en: "Painter"},
-        {cn: "歌手", en: "Singer"}, {cn: "舞者", en: "Dancer"}, {cn: "运动员", en: "Athlete"},
-        {cn: "春天", en: "Spring"}, {cn: "夏天", en: "Summer"}, {cn: "秋天", en: "Autumn"},
-        {cn: "冬天", en: "Winter"}, {cn: "早晨", en: "Morning"}, {cn: "中午", en: "Noon"},
-        {cn: "晚上", en: "Evening"}, {cn: "夜晚", en: "Night"}, {cn: "今天", en: "Today"},
-        {cn: "明天", en: "Tomorrow"}, {cn: "昨天", en: "Yesterday"}, {cn: "星期一", en: "Monday"},
-        {cn: "星期二", en: "Tuesday"}, {cn: "星期三", en: "Wednesday"}, {cn: "星期四", en: "Thursday"},
-        {cn: "星期五", en: "Friday"}, {cn: "星期六", en: "Saturday"}, {cn: "星期日", en: "Sunday"},
-        {cn: "一月", en: "January"}, {cn: "二月", en: "February"}, {cn: "三月", en: "March"},
-        {cn: "四月", en: "April"}, {cn: "五月", en: "May"}, {cn: "六月", en: "June"},
-        {cn: "七月", en: "July"}, {cn: "八月", en: "August"}, {cn: "九月", en: "September"},
-        {cn: "十月", en: "October"}, {cn: "十一月", en: "November"}, {cn: "十二月", en: "December"},
-        {cn: "零", en: "Zero"}, {cn: "一", en: "One"}, {cn: "二", en: "Two"},
-        {cn: "三", en: "Three"}, {cn: "四", en: "Four"}, {cn: "五", en: "Five"},
-        {cn: "六", en: "Six"}, {cn: "七", en: "Seven"}, {cn: "八", en: "Eight"},
-        {cn: "九", en: "Nine"}, {cn: "十", en: "Ten"}, {cn: "百", en: "Hundred"},
-        {cn: "千", en: "Thousand"}, {cn: "万", en: "Ten Thousand"}, {cn: "快乐", en: "Happy"},
-        {cn: "悲伤", en: "Sad"}, {cn: "生气", en: "Angry"}, {cn: "害怕", en: "Scared"},
-        {cn: "惊讶", en: "Surprised"}, {cn: "累", en: "Tired"}, {cn: "饿", en: "Hungry"},
-        {cn: "渴", en: "Thirsty"}, {cn: "热", en: "Hot"}, {cn: "冷", en: "Cold"},
-        {cn: "大", en: "Big"}, {cn: "小", en: "Small"}, {cn: "长", en: "Long"},
-        {cn: "短", en: "Short"}, {cn: "高", en: "Tall"}, {cn: "矮", en: "Short"},
-        {cn: "胖", en: "Fat"}, {cn: "瘦", en: "Thin"}, {cn: "新", en: "New"},
-        {cn: "旧", en: "Old"}, {cn: "好", en: "Good"}, {cn: "坏", en: "Bad"},
-        {cn: "快", en: "Fast"}, {cn: "慢", en: "Slow"}, {cn: "多", en: "Many"},
-        {cn: "少", en: "Few"}, {cn: "远", en: "Far"}, {cn: "近", en: "Near"}
-    ];
+    let RAW_WORD_DATA = `
+## level 1
+苹果: Apple
+香蕉: Banana
+橙子: Orange
+葡萄: Grape
+西瓜: Watermelon
+草莓: Strawberry
+樱桃: Cherry
+梨: Pear
+桃子: Peach
+柠檬: Lemon
+
+## level 2
+红色: Red
+蓝色: Blue
+`;
+
+    let WORD_PAIRS = [];
+    const ALL_WORD_LEVELS = {};
+
+    function parseWordData(text) {
+        const lines = text.split('\n');
+        let currentLevel = 0;
+        
+        lines.forEach(line => {
+            line = line.trim();
+            if (!line) return;
+            if (line.toLowerCase().startsWith('## level')) {
+                currentLevel = parseInt(line.toLowerCase().replace('## level', '').trim());
+                if (!ALL_WORD_LEVELS[currentLevel]) ALL_WORD_LEVELS[currentLevel] = [];
+            } else if (line.includes(':')) {
+                const [cn, en] = line.split(':').map(s => s.trim());
+                if (currentLevel > 0 && cn && en) {
+                    ALL_WORD_LEVELS[currentLevel].push({cn, en});
+                }
+            }
+        });
+    }
+
+    // Initial parse
+    parseWordData(RAW_WORD_DATA);
 
     const gameState = {
         grid: [], // 2D array storing gem types (0-5) or null
@@ -411,13 +408,16 @@
         score: 0,
         moves: 0,
         level: 1,
+        wordLevel: 1, // New config
         targetScore: 1000,
         isLocked: false, // Locks input during animations
         comboMultiplier: 1,
         difficulty: 'normal', // easy, normal, hard
         mode: 'moves', // moves, time
         timeLeft: 0,
-        timerInterval: null
+        timerInterval: null,
+        crushedPairs: new Set(), // Track crushed word pairs by index
+        availablePairs: [] // Pairs not yet crushed
     };
 
     const dom = {
@@ -436,6 +436,7 @@
         finalScore: document.getElementById('final-score'),
         diffSelect: document.getElementById('difficulty-select'),
         modeSelect: document.getElementById('mode-select'),
+        wordLevelSelect: document.getElementById('word-level-select'),
         footerRestartBtn: document.getElementById('footer-restart-btn')
     };
 
@@ -562,6 +563,27 @@
     }
 
     function init() {
+        updateLevelDropdown();
+
+        // Fetch Data
+        fetch('candy_word_crush_data_cn_en')
+            .then(res => {
+                if(res.ok) return res.text();
+                throw new Error('Network response was not ok');
+            })
+            .then(text => {
+                // Reset levels before parsing new data
+                for (let key in ALL_WORD_LEVELS) delete ALL_WORD_LEVELS[key];
+
+                parseWordData(text);
+                updateLevelDropdown();
+                // Update word list with new data
+                updateWordList();
+                // Recreate grid to regenerate words from new data
+                createInitialGrid();
+            })
+            .catch(e => console.error("Failed to load word data", e));
+
         // Calculate sizes first so we have valid CELL_SIZE
         resizeGrid();
         
@@ -574,6 +596,12 @@
         dom.modeSelect.addEventListener('change', (e) => {
             gameState.mode = e.target.value;
             startLevel(gameState.level);
+        });
+
+        dom.wordLevelSelect.addEventListener('change', (e) => {
+            gameState.wordLevel = parseInt(e.target.value);
+            updateWordList();
+            startLevel(1);
         });
 
         dom.footerRestartBtn.addEventListener('click', () => {
@@ -590,8 +618,78 @@
         // Notify parent
         window.parent.postMessage({ type: 'gameLoaded' }, '*');
         
+        // Initial Word List
+        updateWordList();
+
         // Auto start
         startLevel(1);
+    }
+
+    function updateWordList() {
+        // Get words for current level
+        // If level 1, get level 1. If level 2, get level 2 (or 1+2?)
+        // Usually "Level 2" means words from level 2.
+        // But if level 2 has few words, maybe we want cumulative?
+        // The user said "fetch word from candy_word_crush_data_cn_en, with levels. the UI should add one more config for english word level, 词汇等级: 1-6. based on the candy_word_crush_data_cn_en, default to level 1."
+        // I will assume it means "use words from the selected level".
+        
+        const levelWords = ALL_WORD_LEVELS[gameState.wordLevel];
+        if (levelWords && levelWords.length > 0) {
+            WORD_PAIRS = [...levelWords];
+        } else {
+            // Fallback if empty or invalid level, use all or level 1
+            WORD_PAIRS = ALL_WORD_LEVELS[1] || [];
+        }
+        
+        // If still empty (should not happen with embedded data), add dummy
+        if (WORD_PAIRS.length === 0) {
+            WORD_PAIRS = [{cn: "空", en: "Empty"}];
+        }
+        
+        // Reset current pair to force pick new one
+        gameState.currentPair = null;
+        gameState.nextSequentialPair = null;
+        
+        // Reset crushed pairs tracking when word list changes
+        resetCrushedPairs();
+    }
+    
+    function resetCrushedPairs() {
+        gameState.crushedPairs = new Set();
+        gameState.availablePairs = [...WORD_PAIRS];
+    }
+    
+    function markPairAsCrushed(pair) {
+        if (!pair) return;
+        
+        // Find the index of this pair in WORD_PAIRS
+        const pairKey = `${pair.cn}:${pair.en}`;
+        gameState.crushedPairs.add(pairKey);
+        
+        // Remove from available pairs
+        gameState.availablePairs = gameState.availablePairs.filter(
+            p => `${p.cn}:${p.en}` !== pairKey
+        );
+        
+        // If all pairs are crushed, reset for next cycle
+        if (gameState.availablePairs.length === 0) {
+            console.log('All word pairs crushed! Resetting for next cycle.');
+            resetCrushedPairs();
+        }
+    }
+    
+    function getAvailablePair() {
+        // Return a random pair from available (non-crushed) pairs
+        if (gameState.availablePairs.length === 0) {
+            resetCrushedPairs();
+        }
+        return gameState.availablePairs[Math.floor(Math.random() * gameState.availablePairs.length)];
+    }
+    
+    function isPairCrushed(pair) {
+        if (!pair) return false;
+        const pairKey = `${pair.cn}:${pair.en}`;
+        return gameState.crushedPairs.has(pairKey);
     }
 
     function resizeGrid() {
@@ -730,6 +828,7 @@
             wordEl.classList.add('gem-word');
             wordEl.textContent = wordData.word;
             div.appendChild(wordEl);
+            fitText(wordEl);
             if (wordData.isEntangled) {
                 div.classList.add('entangled');
             }
@@ -761,6 +860,9 @@
                         gem.style.width = `${CELL_SIZE}px`;
                         gem.style.height = `${CELL_SIZE}px`;
                         gem.style.transform = `translate(${c * CELL_SIZE}px, ${r * CELL_SIZE}px)`;
+                        
+                        const wordEl = gem.querySelector('.gem-word');
+                        if (wordEl) fitText(wordEl);
                     }
                 }
             }
@@ -814,6 +916,17 @@
             if (isSelected) el.classList.add('selected');
             else el.classList.remove('selected');
         }
+    }
+
+    function isWordOnBoard(word, excludePos) {
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS; c++) {
+                if (excludePos && r === excludePos.r && c === excludePos.c) continue;
+                const w = gameState.wordGrid[r][c];
+                if(w && w.word === word) return true;
+            }
+        }
+        return false;
     }
 
     async function attemptSwap(p1, p2) {
@@ -945,23 +1058,27 @@
                          // Or do nothing.
                          // Let's treat as entangle if we can't find the pair to explode.
                          w1.isEntangled = true;
-                         let randomPair;
-                         do {
-                             randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
-                         } while (randomPair.en === w1.word);
-                         
-                         w1.word = randomPair.en;
+                         // Pick from available pairs only
+                         const availableForEntangle = gameState.availablePairs.filter(
+                             p => p.en !== w1.word && !isWordOnBoard(p.en, {r: p1.r, c: p1.c})
+                         );
+                         if (availableForEntangle.length > 0) {
+                             const randomPair = availableForEntangle[Math.floor(Math.random() * availableForEntangle.length)];
+                             w1.word = randomPair.en;
+                         }
                          updateWordVisuals(p1.r, p1.c);
                     }
                 } else {
                     // Entangle
                     w1.isEntangled = true;
-                    let randomPair;
-                    do {
-                        randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
-                    } while (randomPair.en === w1.word);
-                    
-                    w1.word = randomPair.en;
+                    // Pick from available pairs only
+                    const availableForEntangle = gameState.availablePairs.filter(
+                        p => p.en !== w1.word && !isWordOnBoard(p.en, {r: p1.r, c: p1.c})
+                    );
+                    if (availableForEntangle.length > 0) {
+                        const randomPair = availableForEntangle[Math.floor(Math.random() * availableForEntangle.length)];
+                        w1.word = randomPair.en;
+                    }
                     updateWordVisuals(p1.r, p1.c);
                 }
             }
@@ -969,12 +1086,14 @@
     }
 
     function advanceWordPair() {
-        if (!gameState.currentPair) return;
-        const currentIndex = WORD_PAIRS.findIndex(p => p.cn === gameState.currentPair.cn);
-        if (currentIndex !== -1) {
-            const nextIndex = (currentIndex + 1) % WORD_PAIRS.length;
-            gameState.currentPair = WORD_PAIRS[nextIndex];
+        if (gameState.currentPair) {
+            // Mark the current pair as crushed
+            markPairAsCrushed(gameState.currentPair);
+            
+            // Pick next pair from available (non-crushed) pairs
+            gameState.nextSequentialPair = getAvailablePair();
         }
+        gameState.currentPair = null;
     }
 
     function removeGem(r, c, skipParticles = false) {
@@ -1034,13 +1153,19 @@
             const w2 = gameState.wordGrid[p2.r][p2.c];
             let enPos = w1.lang === 'EN' ? p1 : p2;
             
-            let randomPair;
-            do {
-                randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
-            } while (gameState.currentPair && randomPair.en === gameState.currentPair.en);
+            // Pick from available pairs only for entangle
+            const availableForEntangle = gameState.availablePairs.filter(
+                p => (!gameState.currentPair || p.en !== gameState.currentPair.en) && !isWordOnBoard(p.en, enPos)
+            );
+            
+            let newWord = null;
+            if (availableForEntangle.length > 0) {
+                const randomPair = availableForEntangle[Math.floor(Math.random() * availableForEntangle.length)];
+                newWord = randomPair.en;
+            }
             
             gameState.wordGrid[enPos.r][enPos.c] = {
-                word: randomPair.en,
+                word: newWord || gameState.wordGrid[enPos.r][enPos.c].word,
                 lang: 'EN',
                 isEntangled: true
             };
@@ -1593,6 +1718,20 @@
         }
     }
 
+    function fitText(el) {
+        requestAnimationFrame(() => {
+            if (!el || !el.parentElement) return;
+            const w = el.offsetWidth;
+            const max = CELL_SIZE * 2.8; 
+            if (w > max) {
+                const s = max / w;
+                el.style.transform = `translate(-50%, -50%) scale(${s})`;
+            } else {
+                el.style.transform = `translate(-50%, -50%)`;
+            }
+        });
+    }
+
     function ensureWords() {
         // Count existing words
         let cnCount = 0;
@@ -1600,21 +1739,21 @@
         let hasTargetCN = false;
         let hasTargetEN = false;
         
-        // Flatten grid to find empty spots
-        const emptySpots = [];
-        
+        const existingWordCols = [];
+        const existingWords = new Set();
+
         for(let r=0; r<ROWS; r++) {
             for(let c=0; c<COLS; c++) {
                 const w = gameState.wordGrid[r][c];
                 if(w) {
+                    existingWordCols.push({r, c});
+                    existingWords.add(w.word);
                     if(w.lang === 'CN') cnCount++;
                     if(w.lang === 'EN') enCount++;
                     if(gameState.currentPair) {
                         if(w.word === gameState.currentPair.cn) hasTargetCN = true;
                         if(w.word === gameState.currentPair.en) hasTargetEN = true;
                     }
-                } else if (gameState.grid[r][c] !== null) {
-                    emptySpots.push({r, c});
                 }
             }
         }
@@ -1634,26 +1773,103 @@
                  }
                  if(found) {
                      const pair = WORD_PAIRS.find(p => p.cn === found.word);
-                     if(pair) gameState.currentPair = pair;
+                     if(pair && !isPairCrushed(pair)) gameState.currentPair = pair;
+                     else gameState.currentPair = gameState.nextSequentialPair || getAvailablePair();
                  } else {
-                     gameState.currentPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+                     gameState.currentPair = gameState.nextSequentialPair || getAvailablePair();
+                 }
+             } else if (enCount > 0) {
+                 // 70% chance to use existing English words in the scene first
+                 if (Math.random() < 0.7) {
+                     // Find an EN word on board to match (only non-crushed)
+                     const enWords = [];
+                     for(let r=0; r<ROWS; r++) {
+                         for(let c=0; c<COLS; c++) {
+                             if(gameState.wordGrid[r][c] && gameState.wordGrid[r][c].lang === 'EN') {
+                                 enWords.push(gameState.wordGrid[r][c]);
+                             }
+                         }
+                     }
+                     
+                     if (enWords.length > 0) {
+                         const randomEn = enWords[Math.floor(Math.random() * enWords.length)];
+                         const pair = WORD_PAIRS.find(p => p.en === randomEn.word);
+                         if(pair && !isPairCrushed(pair)) gameState.currentPair = pair;
+                         else gameState.currentPair = gameState.nextSequentialPair || getAvailablePair();
+                     } else {
+                         gameState.currentPair = gameState.nextSequentialPair || getAvailablePair();
+                     }
+                 } else {
+                     // 30% chance to pick a new pair from available
+                     gameState.currentPair = gameState.nextSequentialPair || getAvailablePair();
                  }
              } else {
-                 gameState.currentPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
+                 gameState.currentPair = gameState.nextSequentialPair || getAvailablePair();
              }
         }
 
+        if (!gameState.currentPair) {
+            gameState.currentPair = {cn: "空", en: "Empty"};
+        }
+
+        function getValidSpot() {
+            let candidates = [];
+            
+            // Pass 1: Strict constraints
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if (!gameState.wordGrid[r][c] && gameState.grid[r][c] !== null) {
+                        // Constraint 1: Not left/right most
+                        if (c === 0 || c === COLS - 1) continue;
+                        
+                        // Constraint 2: At least 1 cell away (gap) in either row or col
+                        let valid = true;
+                        for (const w of existingWordCols) {
+                            if (Math.abs(w.r - r) < 2 && Math.abs(w.c - c) < 2) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        
+                        if (valid) {
+                            candidates.push({r, c});
+                        }
+                    }
+                }
+            }
+            
+            if (candidates.length > 0) {
+                return candidates[Math.floor(Math.random() * candidates.length)];
+            }
+
+            // Pass 2: Fallback - any empty spot
+            candidates = [];
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if (!gameState.wordGrid[r][c] && gameState.grid[r][c] !== null) {
+                        candidates.push({r, c});
+                    }
+                }
+            }
+            
+            if (candidates.length === 0) return null;
+            return candidates[Math.floor(Math.random() * candidates.length)];
+        }
+
         // Add CN if missing
-        if (cnCount < 1 && emptySpots.length > 0) {
-            const idx = Math.floor(Math.random() * emptySpots.length);
-            const spot = emptySpots.splice(idx, 1)[0];
-            gameState.wordGrid[spot.r][spot.c] = {
-                word: gameState.currentPair.cn,
-                lang: 'CN',
-                isEntangled: false
-            };
-            updateWordVisuals(spot.r, spot.c);
-            cnCount++;
+        if (cnCount < 1) {
+            const spot = getValidSpot();
+            if (spot) {
+                gameState.wordGrid[spot.r][spot.c] = {
+                    word: gameState.currentPair.cn,
+                    lang: 'CN',
+                    isEntangled: false
+                };
+                updateWordVisuals(spot.r, spot.c);
+                existingWordCols.push(spot);
+                existingWords.add(gameState.currentPair.cn);
+                cnCount++;
+            }
         }
 
         // Add Target EN if missing
@@ -1665,27 +1881,35 @@
             }
         }
 
-        if (!hasTargetEN && emptySpots.length > 0) {
-            const idx = Math.floor(Math.random() * emptySpots.length);
-            const spot = emptySpots.splice(idx, 1)[0];
-            gameState.wordGrid[spot.r][spot.c] = {
-                word: gameState.currentPair.en,
-                lang: 'EN',
-                isEntangled: false
-            };
-            updateWordVisuals(spot.r, spot.c);
-            enCount++;
+        if (!hasTargetEN) {
+            const spot = getValidSpot();
+            if (spot) {
+                gameState.wordGrid[spot.r][spot.c] = {
+                    word: gameState.currentPair.en,
+                    lang: 'EN',
+                    isEntangled: false
+                };
+                updateWordVisuals(spot.r, spot.c);
+                existingWordCols.push(spot);
+                existingWords.add(gameState.currentPair.en);
+                enCount++;
+            }
         }
 
-        // Fill remaining EN slots (up to 4)
-        while (enCount < 4 && emptySpots.length > 0) {
-            const idx = Math.floor(Math.random() * emptySpots.length);
-            const spot = emptySpots.splice(idx, 1)[0];
+        // Fill remaining EN slots (up to 4) - only use non-crushed pairs
+        let attempts = 0;
+        while (enCount < 4 && attempts < 20) {
+            const spot = getValidSpot();
+            if (!spot) break;
             
-            let randomPair;
-            do {
-                randomPair = WORD_PAIRS[Math.floor(Math.random() * WORD_PAIRS.length)];
-            } while (randomPair.en === gameState.currentPair.en);
+            // Get available pairs that are not already on the board
+            const availableForFill = gameState.availablePairs.filter(
+                p => p.en !== gameState.currentPair.en && !existingWords.has(p.en)
+            );
+            
+            if (availableForFill.length === 0) break; // No more available pairs
+            
+            const randomPair = availableForFill[Math.floor(Math.random() * availableForFill.length)];
 
             gameState.wordGrid[spot.r][spot.c] = {
                 word: randomPair.en,
@@ -1693,7 +1917,10 @@
                 isEntangled: false
             };
             updateWordVisuals(spot.r, spot.c);
+            existingWordCols.push(spot);
+            existingWords.add(randomPair.en);
             enCount++;
+            attempts++;
         }
     }
 
@@ -1716,10 +1943,43 @@
             wordEl.classList.add('gem-word');
             wordEl.textContent = data.word;
             el.appendChild(wordEl);
+            fitText(wordEl);
             
             if (data.isEntangled) {
                 el.classList.add('entangled');
             }
+        }
+ }
+
+    function updateLevelDropdown() {
+        const select = dom.wordLevelSelect;
+        const currentVal = parseInt(select.value) || 1;
+        select.innerHTML = '';
+        
+        const levels = Object.keys(ALL_WORD_LEVELS).map(Number).sort((a, b) => a - b);
+        
+        if (levels.length === 0) {
+             const option = document.createElement('option');
+             option.value = 1;
+             option.textContent = 'Level 1';
+             select.appendChild(option);
+             return;
+        }
+
+        levels.forEach(lvl => {
+            const option = document.createElement('option');
+            option.value = lvl;
+            option.textContent = `Level ${lvl}`;
+            if (lvl === currentVal) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        // If current selection is no longer valid, select the first one
+        if (!levels.includes(currentVal)) {
+             select.value = levels[0];
+             gameState.wordLevel = levels[0];
         }
     }
 
