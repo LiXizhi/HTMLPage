@@ -8,6 +8,7 @@
     <script src="https://cdn.keepwork.com/npm/three%400.128.0/build/three.min.js"></script>
     <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.keepwork.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.16"></script>
 
     <style>
       body {
@@ -452,6 +453,62 @@
         </div>
         <div class="flex gap-3">
           <button onclick="game.closeUseCardModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 城市信息面板 -->
+    <div id="city-info-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50 bg-black/70 p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full h-5/6 max-w-2xl md:max-w-4xl lg:max-w-6xl flex flex-col relative">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 md:p-6 rounded-t-2xl flex justify-between items-center gap-4">
+          <div class="min-w-0">
+            <h2 class="text-2xl md:text-4xl font-bold truncate" id="city-info-title">城市信息</h2>
+            <p class="text-blue-100 text-xs md:text-sm mt-1 truncate" id="city-info-subtitle"></p>
+          </div>
+          <button onclick="game.closeCityInfoModal()" class="text-white hover:bg-white/20 rounded-full p-2 text-xl md:text-2xl flex-shrink-0">✕</button>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex border-b border-gray-200 bg-gray-50 overflow-x-auto">
+          <button class="city-info-tab flex-1 min-w-max py-3 md:py-4 px-4 md:px-6 text-sm md:text-lg font-bold text-center cursor-pointer border-b-4 border-blue-600 text-blue-600 transition whitespace-nowrap" data-tab="properties">
+            🏠 玩家地产
+          </button>
+          <button class="city-info-tab flex-1 min-w-max py-3 md:py-4 px-4 md:px-6 text-sm md:text-lg font-bold text-center cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-gray-800 transition whitespace-nowrap" data-tab="info">
+            📖 城市信息
+          </button>
+        </div>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-y-auto">
+          <!-- Properties Tab -->
+          <div id="city-info-properties-tab" class="city-info-tab-content p-4 md:p-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              <!-- Property cards injected here -->
+            </div>
+            <div id="city-info-empty-properties" class="text-center text-gray-500 py-12">
+              <p class="text-xl md:text-2xl">暂无玩家地产 🏜️</p>
+            </div>
+          </div>
+
+          <!-- Info Tab -->
+          <div id="city-info-info-tab" class="city-info-tab-content hidden p-4 md:p-8 overflow-x-hidden">
+            <div id="city-llm-content" class="prose prose-sm md:prose-lg max-w-none">
+              <div class="flex items-center justify-center py-12">
+                <div class="text-center">
+                  <div class="animate-spin text-4xl mb-4">⏳</div>
+                  <p class="text-gray-500 text-lg md:text-xl">正在加载城市信息...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="border-t border-gray-200 bg-gray-50 p-4 md:p-6 rounded-b-2xl flex justify-end gap-2 md:gap-4">
+          <button onclick="game.closeCityInfoModal()" class="px-4 md:px-8 py-2 md:py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold rounded-lg transition text-sm md:text-base">
+            关闭
+          </button>
         </div>
       </div>
     </div>
@@ -1512,6 +1569,15 @@
           this.worldMap = null;
           this.currentCity = null;
 
+          // 城市信息缓存
+          this.cityInfoCache = {};
+          this.currentCityInfoTile = null;
+          this.cityInfoPanelMode = "purchase"; // "purchase" for buying, "view-only" for clicking on map
+          
+          // Game mode raycaster for tile clicking
+          this.gameRaycaster = null;
+          this.gameMouse = new THREE.Vector2();
+
           this.initThree();
           // this.initGame(); // Delayed until city selection
 
@@ -1590,6 +1656,25 @@
             this.isUserInteracting = false;
             if (this.state === "MOVING") {
               this.cameraLocked = true;
+            }
+          });
+
+          // Setup click detection for tiles (raycaster for game mode clicks)
+          this.gameRaycaster = new THREE.Raycaster();
+          this.gameMouse = new THREE.Vector2();
+          let downX = 0, downY = 0;
+          
+          const canvas = this.renderer.domElement;
+          canvas.addEventListener("pointerdown", (e) => {
+            downX = e.clientX;
+            downY = e.clientY;
+          });
+
+          canvas.addEventListener("pointerup", (e) => {
+            const moveDist = Math.sqrt(Math.pow(e.clientX - downX, 2) + Math.pow(e.clientY - downY, 2));
+            // Allow small movement (jitter) but filter out drags
+            if (moveDist < 10 && this.mode === "GAME") {
+              this.onGameClick(e);
             }
           });
 
@@ -3798,7 +3883,7 @@
             this.nextTurn();
           } else {
             this.state = "BUYING";
-            this.showBuyModal(tile);
+            this.showCityInfoModal(tile);
           }
         }
 
@@ -3932,9 +4017,368 @@
           }
         }
 
+        onGameClick(event) {
+          // Perform raycasting to detect clicked tiles
+          const rect = this.renderer.domElement.getBoundingClientRect();
+          this.gameMouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          this.gameMouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+          this.gameRaycaster.setFromCamera(this.gameMouse, this.camera);
+          
+          // Get all tile meshes
+          const tileMeshes = this.map.map((tile) => tile.mesh);
+          const intersects = this.gameRaycaster.intersectObjects(tileMeshes);
+
+          if (intersects.length > 0) {
+            // Find which tile was clicked
+            const clickedMesh = intersects[0].object;
+            const clickedTile = this.map.find((tile) => tile.mesh === clickedMesh);
+            
+            if (clickedTile && clickedTile.type === "green") {
+              // Open city info panel in "view-only" mode (no purchase)
+              this.showCityInfoModalViewOnly(clickedTile);
+            }
+          }
+        }
+
+        showCityInfoModalViewOnly(tile) {
+          // Open city info panel in view-only mode (when clicking from map, not stopped)
+          const modal = document.getElementById("city-info-modal");
+          this.currentCityInfoTile = tile;
+          this.cityInfoPanelMode = "view-only"; // Mark as view-only mode
+          
+          // Update header
+          document.getElementById("city-info-title").innerText = tile.stationName;
+          document.getElementById("city-info-subtitle").innerText = `人口: ${tile.population?.toLocaleString() || '未知'} | 级别: ${tile.level || 'N/A'}`;
+          
+          // Show modal
+          modal.classList.remove("hidden");
+          
+          // Reset to properties tab
+          this.switchCityInfoTab("properties");
+          
+          // Populate properties tab
+          this.populatePropertiesTab(tile);
+          
+          // Load city info from LLM (async, no await needed for UI responsiveness)
+          this.populateCityInfoTab(tile);
+          
+          // Setup tab switching
+          this.setupCityInfoTabs();
+        }
+
         closeBuyModal() {
           document.getElementById("buy-modal").classList.add("hidden");
           this.nextTurn();
+        }
+
+        showCityInfoModal(tile) {
+          const modal = document.getElementById("city-info-modal");
+          this.currentCityInfoTile = tile;
+          this.cityInfoPanelMode = "purchase"; // Mark as purchase mode (when stopped at city)
+          
+          // Update header
+          document.getElementById("city-info-title").innerText = tile.stationName;
+          document.getElementById("city-info-subtitle").innerText = `人口: ${tile.population?.toLocaleString() || '未知'} | 级别: ${tile.level || 'N/A'}`;
+          
+          // Show modal
+          modal.classList.remove("hidden");
+          
+          // Reset to properties tab
+          this.switchCityInfoTab("properties");
+          
+          // Populate properties tab
+          this.populatePropertiesTab(tile);
+          
+          // Load city info from LLM (async, no await needed for UI responsiveness)
+          this.populateCityInfoTab(tile);
+          
+          // Setup tab switching
+          this.setupCityInfoTabs();
+        }
+
+        closeCityInfoModal() {
+          document.getElementById("city-info-modal").classList.add("hidden");
+          
+          // Only proceed to next turn if in purchase mode (stopped at city)
+          // In view-only mode (clicked from map), just close the panel
+          if (this.cityInfoPanelMode === "purchase") {
+            this.nextTurn();
+          }
+        }
+
+        switchCityInfoTab(tabName) {
+          // Hide all tabs
+          document.querySelectorAll(".city-info-tab-content").forEach(el => {
+            el.classList.add("hidden");
+          });
+          
+          // Remove active border from all buttons
+          document.querySelectorAll(".city-info-tab").forEach(btn => {
+            btn.classList.remove("border-blue-600", "text-blue-600");
+            btn.classList.add("border-transparent", "text-gray-600");
+          });
+          
+          // Show selected tab
+          const tabEl = document.getElementById(`city-info-${tabName}-tab`);
+          if (tabEl) {
+            tabEl.classList.remove("hidden");
+          }
+          
+          // Highlight selected button
+          const btnEl = document.querySelector(`.city-info-tab[data-tab="${tabName}"]`);
+          if (btnEl) {
+            btnEl.classList.remove("border-transparent", "text-gray-600");
+            btnEl.classList.add("border-blue-600", "text-blue-600");
+          }
+        }
+
+        setupCityInfoTabs() {
+          document.querySelectorAll(".city-info-tab").forEach(btn => {
+            btn.onclick = () => {
+              const tabName = btn.dataset.tab;
+              this.switchCityInfoTab(tabName);
+            };
+          });
+        }
+
+        populatePropertiesTab(tile) {
+          const container = document.getElementById("city-info-properties-tab").querySelector(".grid");
+          const emptyDiv = document.getElementById("city-info-empty-properties");
+          
+          container.innerHTML = "";
+          
+          // Generate fake player property data
+          const playerProperties = this.generatePlayerProperties(tile);
+          
+          if (playerProperties.length === 0) {
+            container.style.display = "none";
+            emptyDiv.style.display = "block";
+            return;
+          }
+          
+          emptyDiv.style.display = "none";
+          container.style.display = "grid";
+          
+          playerProperties.forEach(property => {
+            const card = document.createElement("div");
+            card.className = "bg-white rounded-lg border-2 border-gray-200 overflow-hidden shadow-md hover:shadow-lg transition";
+            card.innerHTML = `
+              <div class="bg-gradient-to-br from-blue-100 to-purple-100 p-4 flex justify-between items-start">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <img src="${property.avatar}" alt="头像" class="w-12 h-12 rounded-full border-2 border-blue-400 flex-shrink-0">
+                  <div class="min-w-0">
+                    <p class="font-bold text-gray-800 truncate">${property.playerName}</p>
+                    <p class="text-xs text-gray-500 truncate">ID: ${property.playerId}</p>
+                  </div>
+                </div>
+                <div class="flex-shrink-0 ml-2">
+                  <div class="${property.isOnline ? 'bg-green-500' : 'bg-gray-400'} text-white px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+                    ${property.isOnline ? '🟢 在线' : '⚫ 离线'}
+                  </div>
+                </div>
+              </div>
+              <div class="p-4">
+                <p class="text-sm font-bold text-gray-700 mb-2">📍 ${property.homeName}</p>
+                <p class="text-sm text-gray-600 mb-3">等级: ${property.level} ⭐ ${Array(property.level).fill('★').join('')}</p>
+                <div class="flex justify-between items-center pt-3 border-t border-gray-200">
+                  <span class="text-lg font-bold text-green-600">¥${property.price.toLocaleString()}</span>
+                  <span class="text-sm text-purple-600 font-semibold">等级${property.level}</span>
+                </div>
+              </div>
+            `;
+            container.appendChild(card);
+          });
+        }
+
+        generatePlayerProperties(tile) {
+          // Generate fake player property data
+          // In a real app, this would come from the server
+          const playerNames = ["小明", "小红", "老王", "张三", "李四"];
+          const homeNames = ["梦幻庄园", "绿洲家园", "天空之城", "森林小屋", "云端别墅"];
+          const count = Math.floor(Math.random() * 4) + 1; // 1-4 properties
+          
+          const properties = [];
+          for (let i = 0; i < count; i++) {
+            properties.push({
+              playerId: `P${Math.floor(Math.random() * 10000)}`,
+              playerName: playerNames[Math.floor(Math.random() * playerNames.length)],
+              avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+              homeName: homeNames[Math.floor(Math.random() * homeNames.length)],
+              level: Math.floor(Math.random() * 5) + 1,
+              price: Math.floor(Math.random() * 50000) + 10000,
+              thumbnail: `https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=${homeNames[i % homeNames.length]}`,
+              isOnline: Math.random() > 0.3
+            });
+          }
+          return properties;
+        }
+
+        async populateCityInfoTab(tile) {
+          const container = document.getElementById("city-llm-content");
+          
+          // Check cache first
+          if (this.cityInfoCache && this.cityInfoCache[tile.stationName]) {
+            container.innerHTML = this.cityInfoCache[tile.stationName];
+            return;
+          }
+          
+          try {
+            // Show loading state
+            container.innerHTML = `
+              <div class="text-center py-8">
+                <div class="inline-block animate-spin">⏳</div>
+                <p class="text-gray-600 mt-2">加载城市信息中...</p>
+              </div>
+            `;
+            
+            // Generate city info using LLM with streaming
+            await this.generateCityInfoFromLLM(tile.stationName, tile.population, tile.level, container);
+          } catch (error) {
+            console.error("Error loading city info:", error);
+            container.innerHTML = `
+              <div class="text-center py-12">
+                <p class="text-red-500 text-xl">加载城市信息失败</p>
+                <p class="text-gray-500 mt-2">${error.message}</p>
+              </div>
+            `;
+          }
+        }
+
+        async generateCityInfoFromLLM(cityName, population, level, container) {
+          // Initialize Keepwork SDK if not already done
+          if (!window.sdk) {
+            window.sdk = new KeepworkSDK({
+              timeout: 30000
+            });
+            console.log(`Keepwork SDK initialized token: ${window.sdk.token}`);
+          }
+
+          const prompt = `请用中文为我生成关于城市"${cityName}"的有趣信息。内容应该包括：
+1. 城市的地理位置和特点（2-3句）
+2. 历史背景或文化特色（2-3句）
+3. 主要景点或特色（3-4个点）
+4. 美食文化（2-3句）
+5. 旅游建议（2-3句）
+
+请使用markdown格式，包含标题、列表等。内容应该通俗易懂，有趣且准确。`;
+
+          try {
+            // Create or get AI chat session
+            if (!window.aiChatSession && window.sdk && window.sdk.aiChat) {
+              window.aiChatSession = window.sdk.aiChat.createSession({
+                stream: true,
+              });
+            }
+
+            if (!window.aiChatSession) {
+              throw new Error("AI chat session not available");
+            }
+
+            // Use SDK aiChat session to send message and stream response
+            let fullResponse = "";
+            let lastRenderedLength = 0;
+            const renderStreamingContent = (text) => {
+              const htmlContent = this.markdownToHtml(text);
+              container.innerHTML = htmlContent;
+            };
+
+            await window.aiChatSession.send(prompt, {
+              onMessage: (partialText, fullResponse) => {
+                if (partialText !== undefined && partialText !== null) {
+                  fullResponse = partialText;
+                  // Render as we stream in chunks
+                  renderStreamingContent(fullResponse);
+                }
+              },
+              onComplete: (finalText, fullResponse) => {
+                // Final render
+                fullResponse = finalText || "";
+                if (fullResponse) {
+                  renderStreamingContent(fullResponse);
+                  
+                  // Cache the final result
+                  if (!this.cityInfoCache) this.cityInfoCache = {};
+                  this.cityInfoCache[cityName] = this.markdownToHtml(fullResponse);
+                }
+              },
+              onError: (error) => {
+                throw error;
+              },
+            });
+          } catch (error) {
+            console.error("LLM Error:", error);
+            // Fallback: render formatted HTML with generic info
+            const fallbackContent = this.generateFallbackCityInfo(cityName);
+            container.innerHTML = fallbackContent;
+            
+            // Cache the fallback result
+            if (!this.cityInfoCache) this.cityInfoCache = {};
+            this.cityInfoCache[cityName] = fallbackContent;
+          }
+        }
+
+        markdownToHtml(markdown) {
+          // Simple markdown to HTML converter
+          let html = markdown;
+          
+          // Headers
+          html = html.replace(/^### (.*?)$/gm, '<h3 class="text-2xl font-bold mt-4 mb-2 text-gray-800">$1</h3>');
+          html = html.replace(/^## (.*?)$/gm, '<h2 class="text-3xl font-bold mt-6 mb-3 text-gray-900">$1</h2>');
+          html = html.replace(/^# (.*?)$/gm, '<h1 class="text-4xl font-bold mt-8 mb-4 text-gray-900">$1</h1>');
+          
+          // Bold
+          html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>');
+          html = html.replace(/__(.*?)__/g, '<strong class="font-bold text-gray-900">$1</strong>');
+          
+          // Italic
+          html = html.replace(/\*(.*?)\*/g, '<em class="italic text-gray-700">$1</em>');
+          html = html.replace(/_(.*?)_/g, '<em class="italic text-gray-700">$1</em>');
+          
+          // Lists
+          html = html.replace(/^\* (.*?)$/gm, '<li class="ml-6 text-gray-700 mb-2">$1</li>');
+          html = html.replace(/^- (.*?)$/gm, '<li class="ml-6 text-gray-700 mb-2">$1</li>');
+          html = html.replace(/^\d+\. (.*?)$/gm, '<li class="ml-6 text-gray-700 mb-2">$1</li>');
+          
+          // Wrap consecutive lists
+          html = html.replace(/(<li[^>]*>.*?<\/li>)/gs, (match) => {
+            if (!match.includes('<ul') && !match.includes('<ol')) {
+              return '<ul class="list-disc">' + match + '</ul>';
+            }
+            return match;
+          });
+          
+          // Line breaks
+          html = html.replace(/\n\n/g, '</p><p class="mb-4 text-gray-700">');
+          html = html.replace(/\n/g, '<br>');
+          
+          // Wrap in paragraph tags if not already wrapped
+          if (!html.includes('<p') && !html.includes('<h') && !html.includes('<ul')) {
+            html = '<p class="mb-4 text-gray-700">' + html + '</p>';
+          }
+          
+          return `<div class="prose prose-lg max-w-none">${html}</div>`;
+        }
+
+        generateFallbackCityInfo(cityName) {
+          return `
+            <div class="bg-blue-50 rounded-lg p-6">
+              <h2 class="text-3xl font-bold mb-4 text-gray-900">🌍 ${cityName}</h2>
+              <div class="space-y-4 text-gray-700">
+                <p class="text-lg"><strong>📍 地理位置：</strong>这是一个充满活力的城市，拥有悠久的历史和现代的魅力。</p>
+                <p class="text-lg"><strong>🏛️ 历史文化：</strong>城市融合了传统与现代，展现了独特的文化特色。</p>
+                <p class="text-lg"><strong>🎯 主要景点：</strong></p>
+                <ul class="list-disc ml-8 space-y-2">
+                  <li>历史遗迹和古建筑</li>
+                  <li>现代艺术和文化中心</li>
+                  <li>自然风景和公园</li>
+                  <li>繁华的商业街区</li>
+                </ul>
+                <p class="text-lg"><strong>🍜 美食文化：</strong>城市拥有丰富的美食文化，融合了传统和国际风味。</p>
+                <p class="text-lg"><strong>✈️ 旅游建议：</strong>最佳访问季节是春季和秋季，建议停留3-5天以充分体验城市的魅力。</p>
+              </div>
+            </div>
+          `;
         }
 
         async nextTurn() {
