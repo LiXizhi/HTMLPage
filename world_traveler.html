@@ -393,23 +393,6 @@
     </div>
 
     <!-- Property Buy Modal -->
-    <div id="buy-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
-      <div class="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full border-4 border-green-600 relative">
-        <div class="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-1 rounded-full font-bold shadow-lg">到达车站</div>
-        <h3 class="text-2xl font-bold text-center mt-4 mb-2 text-gray-800" id="station-name">东京站</h3>
-        <div class="text-center text-yellow-600 font-bold text-xl mb-2">持有资金: ¥<span id="buy-modal-money">0</span></div>
-        <p class="text-center text-gray-500 mb-4">这块地皮看起来很有潜力！要投资吗？</p>
-
-        <div id="building-list" class="space-y-3 mb-6">
-          <!-- Buildings injected here -->
-        </div>
-
-        <div class="flex gap-3">
-          <button onclick="game.closeBuyModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">离开</button>
-        </div>
-      </div>
-    </div>
-
     <!-- 穷神效果弹窗 -->
     <div id="binbougami-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
       <div class="bg-gradient-to-b from-gray-900 to-purple-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-purple-500 relative text-center">
@@ -472,7 +455,7 @@
         <!-- Tab Navigation -->
         <div class="flex border-b border-gray-200 bg-gray-50 overflow-x-auto">
           <button class="city-info-tab flex-1 min-w-max py-3 md:py-4 px-4 md:px-6 text-sm md:text-lg font-bold text-center cursor-pointer border-b-4 border-blue-600 text-blue-600 transition whitespace-nowrap" data-tab="properties">
-            🏠 玩家地产
+            🏠 地产与建筑
           </button>
           <button class="city-info-tab flex-1 min-w-max py-3 md:py-4 px-4 md:px-6 text-sm md:text-lg font-bold text-center cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-gray-800 transition whitespace-nowrap" data-tab="info">
             📖 城市信息
@@ -481,13 +464,33 @@
 
         <!-- Content Area -->
         <div class="flex-1 overflow-y-auto">
-          <!-- Properties Tab -->
+          <!-- Properties Tab (merged with buildings) -->
           <div id="city-info-properties-tab" class="city-info-tab-content p-4 md:p-8">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              <!-- Property cards injected here -->
+            <!-- Player Money Display -->
+            <div class="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border-2 border-yellow-200">
+              <p class="text-center text-lg md:text-xl font-bold text-gray-800">
+                💰 持有资金: <span class="text-yellow-600" id="city-info-player-money">0</span> 元
+              </p>
             </div>
-            <div id="city-info-empty-properties" class="text-center text-gray-500 py-12">
-              <p class="text-xl md:text-2xl">暂无玩家地产 🏜️</p>
+            
+            <!-- Destination indicator -->
+            <div id="city-info-dest-indicator" class="mb-4 bg-yellow-100 text-center py-2 px-4 rounded-full text-sm font-bold text-yellow-700 border-2 border-yellow-400 hidden">
+              🎯 当前目的地！
+            </div>
+            
+            <!-- Combined Properties & Buildings List -->
+            <div id="city-info-properties-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              <!-- Combined property and building cards injected here -->
+            </div>
+            <div id="city-info-empty-properties" class="text-center text-gray-500 py-12 col-span-full">
+              <p class="text-xl md:text-2xl">暂无地产与建筑 🏜️</p>
+            </div>
+            
+            <!-- Monopoly hint -->
+            <div class="mt-6 bg-purple-50 p-4 rounded-lg border-2 border-purple-200 text-center">
+              <p class="text-sm md:text-base text-purple-700 font-bold">
+                <span id="city-info-monopoly-hint">💡 买齐3种物件可获得独占加成(收益x2)</span>
+              </p>
             </div>
           </div>
 
@@ -547,6 +550,10 @@
       // 目的地奖励金额
       const DESTINATION_REWARD = 5000;
 
+      // 房产相关常量
+      const PROPERTY_PRICE_RANGE = [3000, 8000]; // 房产价格范围
+      const INITIAL_PLAYER_MONEY = 30000; // 玩家初始资金
+
       // --- 穷神系统 ---
       const BINBOUGAMI_EFFECTS = {
         // 普通穷神效果
@@ -601,6 +608,28 @@
       // 一年的回合数（每月一回合，12回合=1年，3月决算）
       const TURNS_PER_YEAR = 12;
       const SETTLEMENT_MONTH = 3; // 3月决算
+
+      // 房产缓存系统 - 追踪房产的购买状态
+      const PROPERTIES_CACHE = {};
+      function initializePropertiesCache() {
+        PROPERTIES_CACHE.homes = {}; // 按城市存储房产: { cityName: [homes...] }
+      }
+      function getOrCreatePropertyId(cityName, propertyIndex) {
+        if (!PROPERTIES_CACHE.homes[cityName]) {
+          PROPERTIES_CACHE.homes[cityName] = [];
+        }
+        const key = `${cityName}_${propertyIndex}`;
+        if (!PROPERTIES_CACHE.homes[cityName][propertyIndex]) {
+          PROPERTIES_CACHE.homes[cityName][propertyIndex] = {
+            id: key,
+            cityName: cityName,
+            index: propertyIndex,
+            purchasedBy: null, // 购买者的玩家ID，null表示未购买
+            purchasePrice: null
+          };
+        }
+        return PROPERTIES_CACHE.homes[cityName][propertyIndex];
+      }
 
       // Station data loaded from world_traveler_map_data (full city info with lat/lng/population)
       let STATION_DATA = [];
@@ -1511,7 +1540,7 @@
           this.name = name;
           this.color = color;
           this.isAI = isAI;
-          this.money = 10000;
+          this.money = INITIAL_PLAYER_MONEY;
           this.assets = 0;
 
           this.currentTile = null;
@@ -1573,6 +1602,12 @@
           this.cityInfoCache = {};
           this.currentCityInfoTile = null;
           this.cityInfoPanelMode = "purchase"; // "purchase" for buying, "view-only" for clicking on map
+          
+          // Session级别的地产显示缓存 - 保存一局游戏中的地产显示顺序
+          // 结构: { cityName: { seed: randomSeed, properties: [list of property indices in order] } }
+          this.sessionPropertyCache = {};
+          // 已购买的地产缓存 - 在session中保持固定显示在最前
+          this.purchasedPropertiesInSession = {}; // { cityName: [list of purchased property indices] }
           
           // Game mode raycaster for tile clicking
           this.gameRaycaster = null;
@@ -1816,6 +1851,13 @@
         }
 
         async initGame() {
+          // Initialize properties cache
+          initializePropertiesCache();
+          
+          // 初始化session级别的地产显示缓存
+          this.sessionPropertyCache = {};
+          this.purchasedPropertiesInSession = {};
+          
           // Materials Cache
           this.materials = {
             road: new THREE.MeshLambertMaterial({ color: COLORS.road }),
@@ -2090,7 +2132,7 @@
           // Use actual lat/lng coordinates from STATION_DATA
           // Scale factor: needs to be large enough that stations don't overlap on even grid
           // With ~277 stations in ~2x3.3 degree area, scale of 200 gives ~400x660 units = 200x330 even grid positions
-          const CONFIG_SCALE = 100; // Scale factor for lat/lon to grid units
+          const CONFIG_SCALE = 70; // Scale factor for lat/lon to grid units
           const RENDER_RADIUS = 6; // Radius to render terrain around stations
           
           let rawPoints = [];
@@ -3867,19 +3909,33 @@
 
         async handleStation(player, tile) {
           if (player.isAI) {
-            // AI策略：优先考虑是否要购买
-            let bought = false;
-            for (let i = 2; i >= 0; i--) {
-              // 从高级物件开始考虑
-              if (!tile.buildings.includes(i) && player.money >= BUILDING_COSTS[i] * 1.2) {
-                this.doBuy(player, tile, i);
-                bought = true;
-                await wait(800);
-                // AI不贪婪，一次只买一个
-                break;
-              }
+            // AI策略：尝试购买房产
+            const playerProperties = this.generatePlayerProperties(tile);
+            
+            // 筛选可购买的房产（未购买 + 能支付）
+            const affordableProperties = playerProperties.filter(
+              p => !p.isPurchased && player.money >= p.price * 1.2
+            );
+            
+            if (affordableProperties.length > 0) {
+              // 选择最便宜的房产
+              const property = affordableProperties.sort((a, b) => a.price - b.price)[0];
+              const propertyIndex = playerProperties.indexOf(property);
+              
+              // 更新缓存
+              const propertyRecord = getOrCreatePropertyId(tile.stationName, propertyIndex);
+              propertyRecord.purchasedBy = player.id;
+              propertyRecord.purchasePrice = property.price;
+              
+              // 执行购买
+              player.money -= property.price;
+              player.assets += property.price;
+              
+              this.log(`🏠 电脑 ${player.name} 购买了 ${property.homeName}！`, "#fca5a5");
+              await wait(800);
+            } else {
+              this.log("电脑没有购买意向", "#9ca3af");
             }
-            if (!bought) this.log("电脑没有购买意向", "#fca5a5");
             this.nextTurn();
           } else {
             this.state = "BUYING";
@@ -3887,73 +3943,15 @@
           }
         }
 
-        showBuyModal(tile) {
-          const modal = document.getElementById("buy-modal");
-          const list = document.getElementById("building-list");
-          document.getElementById("station-name").innerText = tile.stationName;
-          document.getElementById("buy-modal-money").innerText = this.players[0].money;
-          list.innerHTML = "";
-
-          // 显示是否为目的地
-          const isDestination = tile === this.destinationTile;
-          if (isDestination) {
-            const destBadge = document.createElement("div");
-            destBadge.className = "bg-yellow-500 text-black text-center py-1 px-3 rounded-full text-sm font-bold mb-3";
-            destBadge.innerText = "🎯 当前目的地！";
-            list.appendChild(destBadge);
-          }
-
-          BUILDING_NAMES.forEach((name, index) => {
-            const cost = BUILDING_COSTS[index];
-            const income = BUILDING_INCOME[index];
-            const isOwned = tile.buildings.includes(index);
-            const canAfford = this.players[0].money >= cost;
-
-            const div = document.createElement("div");
-            div.className = `flex justify-between items-center p-3 rounded border ${isOwned ? "bg-blue-100 border-blue-500" : "bg-gray-50 border-gray-200"}`;
-
-            let btnHtml = "";
-            if (isOwned) {
-              let ownerName = "未知";
-              if (tile.owner) {
-                const owner = this.players.find((p) => p.id === tile.owner);
-                if (owner) {
-                  ownerName = owner.id === this.players[0].id ? "我" : owner.name;
-                }
-              }
-              btnHtml = `<span class="text-blue-600 font-bold text-sm">已拥有 (${ownerName})</span>`;
-            } else {
-              btnHtml = canAfford
-                ? `<button onclick="game.playerBuy(${index})" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm shadow">购买</button>`
-                : `<span class="text-red-400 text-sm">缺钱</span>`;
-            }
-
-            div.innerHTML = `
-                <div>
-                    <div class="font-bold text-gray-800">${name}</div>
-                    <div class="text-xs text-gray-500">¥${cost} · <span class="text-green-600">年收益 ¥${income}</span></div>
-                </div>
-                <div>${btnHtml}</div>
-            `;
-            list.appendChild(div);
-          });
-
-          // 显示独占奖励提示
-          const monopolyHint = document.createElement("div");
-          monopolyHint.className = "text-xs text-center text-purple-600 mt-2";
-          monopolyHint.innerText = tile.buildings.length === 3 ? "🏆 已独占！收益翻倍！" : "💡 买齐3种物件可获得独占加成(收益x2)";
-          list.appendChild(monopolyHint);
-
-          modal.classList.remove("hidden");
-        }
-
         playerBuy(tierIndex) {
+          // This method is deprecated - use purchaseProperty instead
+          // Kept for backward compatibility
           const player = this.players[0];
           const tile = player.currentTile;
           if (tile.buildings.includes(tierIndex) || player.money < BUILDING_COSTS[tierIndex]) return;
 
           this.doBuy(player, tile, tierIndex);
-          this.showBuyModal(tile);
+          this.populatePropertiesAndBuildingsTab(tile);
           this.updateUI();
         }
 
@@ -4041,6 +4039,31 @@
           }
         }
 
+        showCityInfoModal(tile) {
+          const modal = document.getElementById("city-info-modal");
+          this.currentCityInfoTile = tile;
+          this.cityInfoPanelMode = "purchase"; // Mark as purchase mode (when stopped at city)
+          
+          // Update header
+          document.getElementById("city-info-title").innerText = tile.stationName;
+          document.getElementById("city-info-subtitle").innerText = `人口: ${tile.population?.toLocaleString() || '未知'} | 级别: ${tile.level || 'N/A'}`;
+          
+          // Show modal
+          modal.classList.remove("hidden");
+          
+          // In purchase mode, show properties tab (merged with buildings)
+          this.switchCityInfoTab("properties");
+          
+          // Populate merged properties & buildings tab
+          this.populatePropertiesAndBuildingsTab(tile);
+          
+          // Also populate info tab for reference
+          this.populateCityInfoTab(tile);
+          
+          // Setup tab switching
+          this.setupCityInfoTabs();
+        }
+
         showCityInfoModalViewOnly(tile) {
           // Open city info panel in view-only mode (when clicking from map, not stopped)
           const modal = document.getElementById("city-info-modal");
@@ -4054,41 +4077,11 @@
           // Show modal
           modal.classList.remove("hidden");
           
-          // Reset to properties tab
+          // Reset to properties tab (merged)
           this.switchCityInfoTab("properties");
           
-          // Populate properties tab
-          this.populatePropertiesTab(tile);
-          
-          // Load city info from LLM (async, no await needed for UI responsiveness)
-          this.populateCityInfoTab(tile);
-          
-          // Setup tab switching
-          this.setupCityInfoTabs();
-        }
-
-        closeBuyModal() {
-          document.getElementById("buy-modal").classList.add("hidden");
-          this.nextTurn();
-        }
-
-        showCityInfoModal(tile) {
-          const modal = document.getElementById("city-info-modal");
-          this.currentCityInfoTile = tile;
-          this.cityInfoPanelMode = "purchase"; // Mark as purchase mode (when stopped at city)
-          
-          // Update header
-          document.getElementById("city-info-title").innerText = tile.stationName;
-          document.getElementById("city-info-subtitle").innerText = `人口: ${tile.population?.toLocaleString() || '未知'} | 级别: ${tile.level || 'N/A'}`;
-          
-          // Show modal
-          modal.classList.remove("hidden");
-          
-          // Reset to properties tab
-          this.switchCityInfoTab("properties");
-          
-          // Populate properties tab
-          this.populatePropertiesTab(tile);
+          // Populate merged properties & buildings tab
+          this.populatePropertiesAndBuildingsTab(tile);
           
           // Load city info from LLM (async, no await needed for UI responsiveness)
           this.populateCityInfoTab(tile);
@@ -4142,13 +4135,27 @@
           });
         }
 
-        populatePropertiesTab(tile) {
-          const container = document.getElementById("city-info-properties-tab").querySelector(".grid");
+        populatePropertiesAndBuildingsTab(tile) {
+          // Update player money display
+          const player = this.players[0];
+          document.getElementById("city-info-player-money").innerText = player.money.toLocaleString();
+          
+          // Show/hide destination indicator
+          const destIndicator = document.getElementById("city-info-dest-indicator");
+          const isDestination = tile === this.destinationTile;
+          if (isDestination) {
+            destIndicator.classList.remove("hidden");
+          } else {
+            destIndicator.classList.add("hidden");
+          }
+          
+          // Get player properties (these are homes available for purchase)
+          const container = document.getElementById("city-info-properties-list");
           const emptyDiv = document.getElementById("city-info-empty-properties");
           
           container.innerHTML = "";
           
-          // Generate fake player property data
+          // Get player properties (homes from other players)
           const playerProperties = this.generatePlayerProperties(tile);
           
           if (playerProperties.length === 0) {
@@ -4160,58 +4167,204 @@
           emptyDiv.style.display = "none";
           container.style.display = "grid";
           
-          playerProperties.forEach(property => {
+          // Render all property cards
+          playerProperties.forEach((property, index) => {
             const card = document.createElement("div");
-            card.className = "bg-white rounded-lg border-2 border-gray-200 overflow-hidden shadow-md hover:shadow-lg transition";
+            card.className = "bg-white rounded-lg border-2 border-blue-300 overflow-hidden shadow-md hover:shadow-lg transition flex flex-col";
+            
+            // Check if already purchased
+            const isPurchased = property.isPurchased;
+            
+            // Top section: Home name, price, income, and action button
+            const headerBg = isPurchased ? "from-purple-100 to-pink-100" : "from-blue-100 to-cyan-100";
+            const borderColor = isPurchased ? "border-purple-400" : "border-blue-400";
+            
+            let actionBtn = "";
+            if (isPurchased) {
+              actionBtn = `<span class="text-purple-600 font-bold text-xs whitespace-nowrap">✓ 被 ${property.purchasedByName} 购买</span>`;
+            } else {
+              // 检查玩家是否在当前城市（只有在购买模式下且玩家在正确位置才能购买）
+              const isPlayerHere = tile.stationName === player.currentTile.stationName && this.cityInfoPanelMode === "purchase";
+              const canAfford = player.money >= property.price;
+              
+              if (isPlayerHere && canAfford) {
+                actionBtn = `<button class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-bold shadow transition" onclick="game.purchaseProperty(${index})">购买</button>`;
+              } else if (!isPlayerHere) {
+                actionBtn = `<span class="text-gray-400 text-xs font-bold"></span>`;
+              } else {
+                actionBtn = `<span class="text-red-400 text-xs font-bold">💸 缺钱</span>`;
+              }
+            }
+            
+            card.className = `bg-white rounded-lg border-2 ${borderColor} overflow-hidden shadow-md hover:shadow-lg transition flex flex-col`;
             card.innerHTML = `
-              <div class="bg-gradient-to-br from-blue-100 to-purple-100 p-4 flex justify-between items-start">
-                <div class="flex items-center gap-3 flex-1 min-w-0">
-                  <img src="${property.avatar}" alt="头像" class="w-12 h-12 rounded-full border-2 border-blue-400 flex-shrink-0">
-                  <div class="min-w-0">
-                    <p class="font-bold text-gray-800 truncate">${property.playerName}</p>
-                    <p class="text-xs text-gray-500 truncate">ID: ${property.playerId}</p>
+              <!-- Header: Home name, price, income, action button -->
+              <div class="bg-gradient-to-br ${headerBg} p-3 flex justify-between items-start gap-2">
+                <div class="flex-1 min-w-0">
+                  <p class="font-bold text-gray-800 text-base truncate">${property.homeName}</p>
+                  <div class="text-xs text-gray-700 mt-1 space-y-0.5">
+                    <p>💰 价格: <span class="font-bold">¥${property.price.toLocaleString()}</span></p>
+                    <p>📈 年收益: <span class="font-bold text-green-600">¥${property.income || 0}</span></p>
                   </div>
                 </div>
-                <div class="flex-shrink-0 ml-2">
-                  <div class="${property.isOnline ? 'bg-green-500' : 'bg-gray-400'} text-white px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap">
-                    ${property.isOnline ? '🟢 在线' : '⚫ 离线'}
-                  </div>
+                <div class="flex-shrink-0 text-center">
+                  ${actionBtn}
                 </div>
               </div>
-              <div class="p-4">
-                <p class="text-sm font-bold text-gray-700 mb-2">📍 ${property.homeName}</p>
-                <p class="text-sm text-gray-600 mb-3">等级: ${property.level} ⭐ ${Array(property.level).fill('★').join('')}</p>
-                <div class="flex justify-between items-center pt-3 border-t border-gray-200">
-                  <span class="text-lg font-bold text-green-600">¥${property.price.toLocaleString()}</span>
-                  <span class="text-sm text-purple-600 font-semibold">等级${property.level}</span>
+              
+              <!-- Footer: Player info (avatar, name, level) -->
+              <div class="p-3 flex items-center justify-between bg-gray-50 border-t border-gray-200">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                  <img src="${property.avatar}" alt="头像" class="w-10 h-10 rounded-full border-2 border-blue-400 flex-shrink-0">
+                  <div class="min-w-0">
+                    <p class="font-bold text-gray-800 text-sm truncate">${property.playerName}</p>
+                    <p class="text-xs text-gray-600">等级: ${property.level} ⭐</p>
+                  </div>
+                </div>
+                <div class="flex-shrink-0">
+                  <div class="${property.isOnline ? 'bg-green-500' : 'bg-gray-400'} text-white px-2 py-0.5 rounded-full text-xs font-bold">
+                    ${property.isOnline ? '🟢' : '⚫'}
+                  </div>
                 </div>
               </div>
             `;
+            
             container.appendChild(card);
           });
+          
+          // Hide monopoly hint (not applicable for home purchases)
+          const monopolyContainer = document.getElementById("city-info-properties-tab").querySelector(".bg-purple-50");
+          if (monopolyContainer) {
+            monopolyContainer.style.display = "none";
+          }
         }
 
         generatePlayerProperties(tile) {
-          // Generate fake player property data
-          // In a real app, this would come from the server
-          const playerNames = ["小明", "小红", "老王", "张三", "李四"];
-          const homeNames = ["梦幻庄园", "绿洲家园", "天空之城", "森林小屋", "云端别墅"];
-          const count = Math.floor(Math.random() * 4) + 1; // 1-4 properties
+          // Generate player property data for display with session-persistent ordering
+          // 需求: 
+          // 1. 已购买的地产始终置顶显示
+          // 2. 其他地产在一局游戏中保持固定顺序（通过session缓存）
+          // 3. 每局新游戏时随机生成
           
-          const properties = [];
-          for (let i = 0; i < count; i++) {
-            properties.push({
+          const playerNames = ["小明", "小红", "老王", "张三", "李四", "王五", "赵六", "孙七", "周八", "吴九"];
+          const homeNames = ["梦幻庄园", "绿洲家园", "天空之城", "森林小屋", "云端别墅", "海滨度假", "山顶别墅", "古镇民宿", "湖边小屋", "花园洋房"];
+          
+          const cityName = tile.stationName;
+          
+          // 确保city的缓存存在
+          if (!this.sessionPropertyCache[cityName]) {
+            // 首次访问此城市 - 生成随机属性数量和顺序
+            const minProperties = 5;
+            const maxProperties = 8;
+            const count = Math.floor(Math.random() * (maxProperties - minProperties + 1)) + minProperties;
+            
+            // 创建属性索引数组 [0, 1, 2, ..., count-1]
+            const indices = Array.from({length: count}, (_, i) => i);
+            
+            // 生成随机种子用于洗牌
+            const seed = Math.random();
+            
+            // 保存到缓存 - 这样后续访问同一城市时会保持相同顺序
+            this.sessionPropertyCache[cityName] = {
+              seed: seed,
+              totalCount: count,
+              displayOrder: indices  // 将在下方使用
+            };
+          }
+          
+          const cachedData = this.sessionPropertyCache[cityName];
+          const totalCount = cachedData.totalCount;
+          
+          // 为所有属性生成数据
+          const allProperties = [];
+          for (let i = 0; i < totalCount; i++) {
+            const level = Math.floor(Math.random() * 5) + 1;
+            const propertyData = getOrCreatePropertyId(cityName, i);
+            
+            // Determine if purchased and by whom
+            const isPurchased = propertyData.purchasedBy !== null;
+            let ownerName = "";
+            
+            if (isPurchased) {
+              const purchaser = this.players.find((p) => p.id === propertyData.purchasedBy);
+              ownerName = purchaser ? purchaser.name : "未知玩家";
+            }
+            
+            const price = PROPERTY_PRICE_RANGE[0] + Math.floor(Math.random() * (PROPERTY_PRICE_RANGE[1] - PROPERTY_PRICE_RANGE[0]));
+            const income = Math.floor((Math.random() * 2000) + 500 * level);
+            
+            allProperties.push({
+              type: "property",
+              id: propertyData.id,
+              index: i,
               playerId: `P${Math.floor(Math.random() * 10000)}`,
-              playerName: playerNames[Math.floor(Math.random() * playerNames.length)],
+              playerName: playerNames[i % playerNames.length],
               avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
-              homeName: homeNames[Math.floor(Math.random() * homeNames.length)],
-              level: Math.floor(Math.random() * 5) + 1,
-              price: Math.floor(Math.random() * 50000) + 10000,
-              thumbnail: `https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=${homeNames[i % homeNames.length]}`,
-              isOnline: Math.random() > 0.3
+              homeName: homeNames[i % homeNames.length],
+              level: level,
+              price: price,
+              income: income,
+              isOnline: Math.random() > 0.3,
+              isPurchased: isPurchased,
+              purchasedBy: propertyData.purchasedBy,
+              purchasedByName: ownerName
             });
           }
-          return properties;
+          
+          // 分离已购买和未购买的属性
+          const purchasedProps = allProperties.filter(p => p.isPurchased);
+          const unpurchasedProps = allProperties.filter(p => !p.isPurchased);
+          
+          // 已购买的始终在前，未购买的按照session中保存的顺序显示
+          const result = [...purchasedProps, ...unpurchasedProps];
+          
+          return result;
+        }
+
+        purchaseProperty(propertyIndex) {
+          const player = this.players[0];
+          const tile = player.currentTile;
+          
+          // 验证玩家是否在正确的城市
+          // 确保玩家只能购买当前所在城市的地产
+          if (!this.currentCityInfoTile || tile.stationName !== this.currentCityInfoTile.stationName) {
+            this.log("只能购买当前所在城市的地产！", "#ef4444");
+            return;
+          }
+          
+          // Get the properties list
+          const playerProperties = this.generatePlayerProperties(tile);
+          if (propertyIndex >= playerProperties.length) return;
+          
+          const property = playerProperties[propertyIndex];
+          
+          // Check if already purchased
+          if (property.isPurchased) {
+            this.log("该家园已被购买", "#9ca3af");
+            return;
+          }
+          
+          // Check if player has enough money
+          if (player.money < property.price) {
+            this.log("资金不足，无法购买", "#ef4444");
+            return;
+          }
+          
+          // Update cache to mark as purchased
+          const propertyRecord = getOrCreatePropertyId(tile.stationName, propertyIndex);
+          propertyRecord.purchasedBy = player.id;
+          propertyRecord.purchasePrice = property.price;
+          
+          // Purchase the property
+          player.money -= property.price;
+          player.assets += property.price;
+          
+          this.log(`${player.name} 购买了 ${property.homeName}！`, player.color === 0x3b82f6 ? "#60a5fa" : "#f87171");
+          showToast(`🏠 ${player.name} 购买了 ${property.homeName}！`, "#22c55e");
+          
+          // Refresh the UI
+          this.populatePropertiesAndBuildingsTab(tile);
+          this.updateUI();
         }
 
         async populateCityInfoTab(tile) {
@@ -4220,6 +4373,21 @@
           // Check cache first
           if (this.cityInfoCache && this.cityInfoCache[tile.stationName]) {
             container.innerHTML = this.cityInfoCache[tile.stationName];
+            return;
+          }
+          
+          // Check if already loading this city to prevent duplicate requests
+          if (!this.cityInfoLoadingPromises) {
+            this.cityInfoLoadingPromises = {};
+          }
+          
+          if (this.cityInfoLoadingPromises[tile.stationName]) {
+            // Already loading, wait for it to complete
+            await this.cityInfoLoadingPromises[tile.stationName];
+            // After loading completes, render from cache
+            if (this.cityInfoCache && this.cityInfoCache[tile.stationName]) {
+              container.innerHTML = this.cityInfoCache[tile.stationName];
+            }
             return;
           }
           
@@ -4232,8 +4400,15 @@
               </div>
             `;
             
+            // Create a promise for this request and track it
+            const loadPromise = this.generateCityInfoFromLLM(tile.stationName, tile.population, tile.level, container);
+            this.cityInfoLoadingPromises[tile.stationName] = loadPromise;
+            
             // Generate city info using LLM with streaming
-            await this.generateCityInfoFromLLM(tile.stationName, tile.population, tile.level, container);
+            await loadPromise;
+            
+            // Clean up the loading promise
+            delete this.cityInfoLoadingPromises[tile.stationName];
           } catch (error) {
             console.error("Error loading city info:", error);
             container.innerHTML = `
@@ -4242,6 +4417,8 @@
                 <p class="text-gray-500 mt-2">${error.message}</p>
               </div>
             `;
+            // Clean up the loading promise
+            delete this.cityInfoLoadingPromises[tile.stationName];
           }
         }
 
@@ -4264,35 +4441,65 @@
 请使用markdown格式，包含标题、列表等。内容应该通俗易懂，有趣且准确。`;
 
           try {
-            // Create or get AI chat session
-            if (!window.aiChatSession && window.sdk && window.sdk.aiChat) {
-              window.aiChatSession = window.sdk.aiChat.createSession({
+            // Reuse a single session for all city info requests
+            if (!window.sdk || !window.sdk.aiChat) {
+              throw new Error("AI chat not available");
+            }
+            
+            // Create session only once and reuse it
+            if (!window.cityInfoChatSession) {
+              window.cityInfoChatSession = window.sdk.aiChat.createSession({
                 stream: true,
               });
             }
-
-            if (!window.aiChatSession) {
-              throw new Error("AI chat session not available");
-            }
+            
+            const aiChatSession = window.cityInfoChatSession;
 
             // Use SDK aiChat session to send message and stream response
             let fullResponse = "";
-            let lastRenderedLength = 0;
+            let lastRenderedResponse = "";
+            
+            const shouldRenderUpdate = (text) => {
+              // Only render if we have at least one complete paragraph or line
+              // Look for complete sentences ending with Chinese punctuation or newline
+              const lastNewlineIdx = text.lastIndexOf('\n');
+              const lastSentenceEnd = Math.max(
+                text.lastIndexOf('。'),
+                text.lastIndexOf('！'),
+                text.lastIndexOf('？'),
+                text.lastIndexOf('\n')
+              );
+              
+              // Render if we have meaningful content since last render
+              // and either have a complete sentence or significant new content
+              const newContent = text.substring(lastRenderedResponse.length);
+              const hasCompleteSentence = newContent.includes('。') || 
+                                         newContent.includes('！') || 
+                                         newContent.includes('？') ||
+                                         newContent.includes('\n');
+              const significantContent = newContent.length > 50;
+              
+              return hasCompleteSentence || significantContent;
+            };
+            
             const renderStreamingContent = (text) => {
               const htmlContent = this.markdownToHtml(text);
               container.innerHTML = htmlContent;
+              lastRenderedResponse = text;
             };
 
-            await window.aiChatSession.send(prompt, {
+            await aiChatSession.send(prompt, {
               onMessage: (partialText, fullResponse) => {
                 if (partialText !== undefined && partialText !== null) {
                   fullResponse = partialText;
-                  // Render as we stream in chunks
-                  renderStreamingContent(fullResponse);
+                  // Only render when we have complete sentences to avoid flickering
+                  if (shouldRenderUpdate(fullResponse)) {
+                    renderStreamingContent(fullResponse);
+                  }
                 }
               },
               onComplete: (finalText, fullResponse) => {
-                // Final render
+                // Final render - always render complete content
                 fullResponse = finalText || "";
                 if (fullResponse) {
                   renderStreamingContent(fullResponse);
