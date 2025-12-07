@@ -392,6 +392,99 @@
       .dice-result-value {
         color: #fbbf24;
       }
+
+      /* 礼花动画样式 */
+      .fireworks-container {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 60;
+      }
+
+      .firework {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        animation: firework-explode 1.5s ease-out forwards;
+      }
+
+      @keyframes firework-explode {
+        0% {
+          transform: scale(0);
+          opacity: 1;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1) translate(var(--tx), var(--ty));
+          opacity: 0;
+        }
+      }
+
+      .firework-trail {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        animation: firework-trail 0.8s ease-out forwards;
+      }
+
+      @keyframes firework-trail {
+        0% {
+          transform: translateY(100vh) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translateY(var(--end-y)) scale(0.5);
+          opacity: 0;
+        }
+      }
+
+      .sparkle {
+        position: absolute;
+        font-size: 24px;
+        animation: sparkle-float 2s ease-out forwards;
+        pointer-events: none;
+      }
+
+      @keyframes sparkle-float {
+        0% {
+          transform: scale(0) rotate(0deg);
+          opacity: 1;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1.5) rotate(180deg) translateY(-100px);
+          opacity: 0;
+        }
+      }
+
+      .arrival-btn {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        color: #000;
+        font-weight: bold;
+        padding: 12px 48px;
+        border-radius: 12px;
+        border: 3px solid #fff;
+        cursor: pointer;
+        font-size: 20px;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 15px rgba(251, 191, 36, 0.5);
+      }
+
+      .arrival-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(251, 191, 36, 0.7);
+      }
+
+      .arrival-btn:active {
+        transform: scale(0.98);
+      }
     </style>
   </head>
   <body>
@@ -562,6 +655,18 @@
         <p class="text-xl text-gray-300 mb-4" id="binbougami-modal-desc">穷神正在捣乱...</p>
         <div class="text-4xl font-mono font-bold text-red-400 mb-4" id="binbougami-modal-effect"></div>
         <div class="text-sm text-gray-400" id="binbougami-modal-hint"></div>
+      </div>
+    </div>
+
+    <!-- AI购买房产弹窗 -->
+    <div id="ai-purchase-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div class="bg-gradient-to-b from-red-900 to-orange-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-red-500 relative text-center">
+        <div class="text-8xl mb-4">🏠</div>
+        <h3 class="text-3xl font-black text-red-300 mb-2" id="ai-purchase-title">电脑购买房产</h3>
+        <p class="text-2xl text-yellow-300 font-bold mb-2" id="ai-purchase-property-name">房产名称</p>
+        <p class="text-xl text-gray-300 mb-4" id="ai-purchase-location">位置：XXX</p>
+        <div class="text-4xl font-mono font-bold text-red-400 mb-4" id="ai-purchase-price">-¥0</div>
+        <div class="text-sm text-gray-400">点击任意处继续...</div>
       </div>
     </div>
 
@@ -945,21 +1050,22 @@
       const INITIAL_PLAYER_MONEY = 30000; // 玩家初始资金
 
       // --- 穷神系统 ---
+      // 消息中的 {playerName} 会在显示时根据玩家类型替换：用户显示"你"，AI显示玩家名字
       const BINBOUGAMI_EFFECTS = {
         // 普通穷神效果
         normal: [
-          { type: "loseMoney", min: 300, max: 1500, msg: "穷神偷走了你的钱！" },
-          { type: "loseMoney", min: 500, max: 2000, msg: "穷神请客吃饭，用的是你的钱！" },
-          { type: "sellProperty", msg: "穷神强行半价卖掉了你的物件！" },
-          { type: "nothing", msg: "穷神今天心情好，放过你了~" },
-          { type: "loseMoney", min: 200, max: 800, msg: "穷神打碎了你的存钱罐！" },
+          { type: "loseMoney", min: 300, max: 1500, msg: "穷神偷走了{playerName}的钱！" },
+          { type: "loseMoney", min: 500, max: 2000, msg: "穷神请客吃饭，用的是{playerName}的钱！" },
+          { type: "sellProperty", msg: "穷神强行半价卖掉了{playerName}的物件！" },
+          { type: "nothing", msg: "穷神今天心情好，放过{playerName}了~" },
+          { type: "loseMoney", min: 200, max: 800, msg: "穷神打碎了{playerName}的存钱罐！" },
         ],
         // 大魔王穷神效果（升级后）
         king: [
-          { type: "loseMoney", min: 2000, max: 5000, msg: "大魔王穷神疯狂吞噬你的财产！" },
-          { type: "sellAllProperty", msg: "大魔王穷神吞噬了你所有的物件！" },
-          { type: "debt", min: 3000, max: 8000, msg: "大魔王穷神让你背上巨额债务！" },
-          { type: "loseMoney", min: 1500, max: 4000, msg: "大魔王穷神召开豪华宴会，账单给你！" },
+          { type: "loseMoney", min: 2000, max: 5000, msg: "大魔王穷神疯狂吞噬{playerName}的财产！" },
+          { type: "sellAllProperty", msg: "大魔王穷神吞噬了{playerName}所有的物件！" },
+          { type: "debt", min: 3000, max: 8000, msg: "大魔王穷神让{playerName}背上巨额债务！" },
+          { type: "loseMoney", min: 1500, max: 4000, msg: "大魔王穷神召开豪华宴会，账单给{playerName}！" },
         ],
       };
       // 穷神升级所需的回合数
@@ -1960,6 +2066,7 @@
           this.binbougamiTurns = 0; // 穷神附身回合数
           this.binbougamiLevel = 0; // 0=普通, 1=大魔王
           this.binbougamiMesh = null; // 穷神3D模型
+          this.binbougamiJustAttached = false; // 刚刚被附身，本回合不触发效果
 
           // --- 卡牌系统 ---
           this.cards = []; // 手牌
@@ -2975,35 +3082,224 @@
           this.updateDistanceDisplay();
         }
 
-        // 使用BFS计算从一个格子到目的地的最短距离（站数）
+        // 使用0-1 BFS计算从一个格子到目的地的最短距离（站数）
+        // 非彩色格子不消耗步数(权重0)，彩色格子消耗1步(权重1)
         calculateDistanceToDestination(fromTile) {
           if (!this.destinationTile || !fromTile) return -1;
           if (fromTile === this.destinationTile) return 0;
 
-          // BFS搜索最短路径
-          const visited = new Set();
-          const queue = [{ tile: fromTile, distance: 0 }];
-          visited.add(fromTile);
+          // 0-1 BFS: 使用双端队列，权重0的边加到队首，权重1的边加到队尾
+          const dist = new Map();
+          const deque = []; // 双端队列
+          
+          dist.set(fromTile, 0);
+          deque.push({ tile: fromTile, distance: 0 });
 
-          while (queue.length > 0) {
-            const { tile, distance } = queue.shift();
+          while (deque.length > 0) {
+            const { tile, distance } = deque.shift();
+            
+            // 如果当前距离大于已记录的最短距离，跳过
+            if (distance > (dist.get(tile) ?? Infinity)) continue;
 
             for (const neighbor of tile.neighbors) {
-              if (neighbor === this.destinationTile) {
-                // 只计算彩色格子（有效步数）
-                return distance + (neighbor.isColored ? 1 : 0);
-              }
-
-              if (!visited.has(neighbor)) {
-                visited.add(neighbor);
-                // 只有彩色格子才算一步
-                const newDist = distance + (neighbor.isColored ? 1 : 0);
-                queue.push({ tile: neighbor, distance: newDist });
+              // 计算到邻居的新距离：彩色格子+1，非彩色格子+0
+              const weight = neighbor.isColored ? 1 : 0;
+              const newDist = distance + weight;
+              
+              // 如果找到更短的路径
+              if (newDist < (dist.get(neighbor) ?? Infinity)) {
+                dist.set(neighbor, newDist);
+                
+                // 到达目的地
+                if (neighbor === this.destinationTile) {
+                  return newDist;
+                }
+                
+                // 0-1 BFS: 权重0加到队首，权重1加到队尾
+                if (weight === 0) {
+                  deque.unshift({ tile: neighbor, distance: newDist });
+                } else {
+                  deque.push({ tile: neighbor, distance: newDist });
+                }
               }
             }
           }
 
           return -1; // 无法到达
+        }
+
+        // AI使用A*算法计算到达目的地的最优路径
+        // 考虑新的移动规则：行动点数基于距离起点的步数，可以往返
+        // 返回: { path: Tile[], totalSteps: number } 或 null
+        calculateOptimalPathToDestination(fromTile, maxSteps = 100) {
+          if (!this.destinationTile || !fromTile) return null;
+          if (fromTile === this.destinationTile) return { path: [fromTile], totalSteps: 0 };
+
+          // A* with state = (tile, distanceFromStart)
+          // 因为可以往返，我们需要追踪 (tile, distance) 对
+          // 目标是找到一条路径使得最终距离刚好等于某个值时到达目的地
+          
+          // 使用BFS找到所有可能的到达方式
+          // state: { tile, distance, path, visited }
+          const queue = [];
+          const visited = new Map(); // key: `${tile.id}_${distance}`, value: true
+          
+          queue.push({
+            tile: fromTile,
+            distance: 0,
+            path: [fromTile],
+            visitedTiles: new Map([[fromTile, 0]]) // tile -> min distance when first visited
+          });
+          
+          let bestResult = null;
+          let bestTotalSteps = Infinity;
+          
+          while (queue.length > 0) {
+            const state = queue.shift();
+            const { tile, distance, path, visitedTiles } = state;
+            
+            // 如果距离已经超过最大步数，跳过
+            if (distance > maxSteps) continue;
+            
+            // 检查是否到达目的地（距离刚好用完时在目的地）
+            if (tile === this.destinationTile && distance > 0) {
+              // 找到一条可行路径，记录需要的步数
+              if (distance < bestTotalSteps) {
+                bestTotalSteps = distance;
+                bestResult = { path: [...path], totalSteps: distance };
+              }
+              continue; // 继续搜索可能更短的路径
+            }
+            
+            // 防止状态爆炸：限制搜索深度
+            if (path.length > maxSteps * 2) continue;
+            
+            // 避免重复探索相同状态
+            const stateKey = `${tile.gridX}_${tile.gridY}_${distance}`;
+            if (visited.has(stateKey)) continue;
+            visited.set(stateKey, true);
+            
+            // 探索所有邻居
+            for (const neighbor of tile.neighbors) {
+              // 计算移动到邻居后的新距离
+              let newDistance;
+              const newVisitedTiles = new Map(visitedTiles);
+              
+              if (neighbor.isColored) {
+                if (newVisitedTiles.has(neighbor)) {
+                  // 回到之前访问过的格子，使用之前的距离
+                  newDistance = newVisitedTiles.get(neighbor);
+                } else {
+                  // 新格子，距离+1
+                  newDistance = distance + 1;
+                  newVisitedTiles.set(neighbor, newDistance);
+                }
+              } else {
+                newDistance = distance;
+                if (!newVisitedTiles.has(neighbor)) {
+                  newVisitedTiles.set(neighbor, distance);
+                }
+              }
+              
+              // 如果新距离已经超过最佳结果，剪枝
+              if (bestResult && newDistance >= bestTotalSteps) continue;
+              
+              queue.push({
+                tile: neighbor,
+                distance: newDistance,
+                path: [...path, neighbor],
+                visitedTiles: newVisitedTiles
+              });
+            }
+          }
+          
+          return bestResult;
+        }
+
+        // AI预计算：给定当前位置和骰子点数，计算应该走的路径
+        // 返回最终能到达的最佳位置的路径
+        calculateAIPath(fromTile, steps) {
+          if (!this.destinationTile || !fromTile) return null;
+          
+          // 首先尝试找到能刚好到达目的地的路径
+          const optimalPath = this.calculateOptimalPathToDestination(fromTile, steps);
+          
+          if (optimalPath && optimalPath.totalSteps === steps) {
+            // 完美！刚好能到达目的地
+            return optimalPath.path;
+          }
+          
+          // 如果不能刚好到达目的地，找一条路径让我们尽可能接近目的地
+          // 使用BFS枚举所有可能的终点位置，选择距离目的地最近的
+          const visited = new Map();
+          const queue = [{
+            tile: fromTile,
+            distance: 0,
+            path: [fromTile],
+            visitedTiles: new Map([[fromTile, 0]])
+          }];
+          
+          let bestEndTile = fromTile;
+          let bestEndPath = [fromTile];
+          let bestDistToDest = this.calculateDistanceToDestination(fromTile);
+          
+          while (queue.length > 0) {
+            const state = queue.shift();
+            const { tile, distance, path, visitedTiles } = state;
+            
+            // 如果距离刚好等于步数，这是一个可能的终点
+            if (distance === steps) {
+              const distToDest = this.calculateDistanceToDestination(tile);
+              if (distToDest >= 0 && (bestDistToDest < 0 || distToDest < bestDistToDest)) {
+                bestDistToDest = distToDest;
+                bestEndTile = tile;
+                bestEndPath = [...path];
+              }
+              continue; // 不能再走了
+            }
+            
+            // 如果距离已经超过步数，跳过
+            if (distance > steps) continue;
+            
+            // 避免重复探索
+            const stateKey = `${tile.gridX}_${tile.gridY}_${distance}`;
+            if (visited.has(stateKey)) continue;
+            visited.set(stateKey, true);
+            
+            // 限制搜索深度
+            if (path.length > steps * 3) continue;
+            
+            // 探索所有邻居
+            for (const neighbor of tile.neighbors) {
+              let newDistance;
+              const newVisitedTiles = new Map(visitedTiles);
+              
+              if (neighbor.isColored) {
+                if (newVisitedTiles.has(neighbor)) {
+                  newDistance = newVisitedTiles.get(neighbor);
+                } else {
+                  newDistance = distance + 1;
+                  newVisitedTiles.set(neighbor, newDistance);
+                }
+              } else {
+                newDistance = distance;
+                if (!newVisitedTiles.has(neighbor)) {
+                  newVisitedTiles.set(neighbor, distance);
+                }
+              }
+              
+              if (newDistance <= steps) {
+                queue.push({
+                  tile: neighbor,
+                  distance: newDistance,
+                  path: [...path, neighbor],
+                  visitedTiles: newVisitedTiles
+                });
+              }
+            }
+          }
+          
+          return bestEndPath;
         }
 
         // AI选择最优方向：选择距离目的地最近的路径
@@ -3414,6 +3710,15 @@
 
           const destName = this.destinationTile.stationName;
 
+          // 创建礼花效果容器
+          const fireworksContainer = document.createElement("div");
+          fireworksContainer.className = "fireworks-container";
+          fireworksContainer.id = "fireworks-container";
+          document.body.appendChild(fireworksContainer);
+
+          // 启动礼花动画
+          this.startFireworks(fireworksContainer);
+
           // 创建结算动画弹窗
           const overlay = document.createElement("div");
           overlay.id = "arrival-overlay";
@@ -3424,15 +3729,19 @@
           overlay.innerHTML = `
             <div class="text-center transform scale-0 transition-transform duration-500" id="arrival-content">
                 <div class="text-8xl mb-6 animate-bounce">🏆</div>
-                <div class="text-4xl font-black text-white mb-4">到达目的地!</div>
-                <div class="text-3xl font-bold text-yellow-400 mb-6">${destName}</div>
-                <div class="text-6xl font-mono font-black text-green-400 mb-4">+¥${DESTINATION_REWARD}</div>
-                <div class="text-xl text-gray-300">${player.name} 获得援助金!</div>
-                <div class="mt-6 flex justify-center gap-2">
+                <div class="text-4xl font-black text-yellow-300 mb-4">${player.name} 最先到达目的地!</div>
+                <div class="text-3xl font-bold text-white mb-6">📍 ${destName}</div>
+                <div class="text-2xl text-gray-300 mb-4">获得了</div>
+                <div class="text-6xl font-mono font-black text-green-400 mb-6">¥${DESTINATION_REWARD}</div>
+                <div class="text-xl text-gray-300 mb-2">的援助金!</div>
+                <div class="mt-4 flex justify-center gap-2 mb-8">
                     <span class="text-4xl">🎉</span>
                     <span class="text-4xl">🎊</span>
                     <span class="text-4xl">✨</span>
+                    <span class="text-4xl">🎆</span>
+                    <span class="text-4xl">🎇</span>
                 </div>
+                <button id="arrival-confirm-btn" class="arrival-btn">确 定</button>
             </div>
         `;
 
@@ -3482,17 +3791,114 @@
 
           this.updateUI();
 
-          // 等待动画展示
-          await wait(2500);
+          // 等待用户点击确定按钮
+          await new Promise((resolve) => {
+            const confirmBtn = document.getElementById("arrival-confirm-btn");
+            confirmBtn.addEventListener("click", () => {
+              resolve();
+            }, { once: true });
+          });
+
+          // 停止礼花动画
+          this.stopFireworks();
 
           // 淡出动画
           overlay.style.opacity = "0";
           overlay.style.transition = "opacity 0.5s";
           await wait(500);
           overlay.remove();
+          
+          // 移除礼花容器
+          const fwContainer = document.getElementById("fireworks-container");
+          if (fwContainer) fwContainer.remove();
 
           // 设置新的目的地
           await this.setNewDestination();
+        }
+
+        // 启动礼花动画
+        startFireworks(container) {
+          this.fireworksActive = true;
+          this.fireworksInterval = setInterval(() => {
+            if (!this.fireworksActive) return;
+            this.createFirework(container);
+          }, 300);
+          
+          // 立即创建几个礼花
+          for (let i = 0; i < 5; i++) {
+            setTimeout(() => this.createFirework(container), i * 100);
+          }
+        }
+
+        // 停止礼花动画
+        stopFireworks() {
+          this.fireworksActive = false;
+          if (this.fireworksInterval) {
+            clearInterval(this.fireworksInterval);
+            this.fireworksInterval = null;
+          }
+        }
+
+        // 创建单个礼花效果
+        createFirework(container) {
+          if (!this.fireworksActive || !container) return;
+
+          const colors = ['#ff0000', '#ff6600', '#ffff00', '#00ff00', '#00ffff', '#0066ff', '#ff00ff', '#ff69b4', '#ffd700'];
+          const x = Math.random() * window.innerWidth;
+          const y = Math.random() * (window.innerHeight * 0.6) + window.innerHeight * 0.1;
+          
+          // 创建发射轨迹
+          const trail = document.createElement("div");
+          trail.className = "firework-trail";
+          trail.style.left = x + "px";
+          trail.style.bottom = "0";
+          trail.style.background = colors[Math.floor(Math.random() * colors.length)];
+          trail.style.setProperty("--end-y", -y + "px");
+          container.appendChild(trail);
+          
+          // 轨迹消失后创建爆炸效果
+          setTimeout(() => {
+            trail.remove();
+            
+            // 创建爆炸粒子
+            const particleCount = 20 + Math.floor(Math.random() * 15);
+            const baseColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            for (let i = 0; i < particleCount; i++) {
+              const particle = document.createElement("div");
+              particle.className = "firework";
+              particle.style.left = x + "px";
+              particle.style.top = y + "px";
+              particle.style.background = baseColor;
+              particle.style.boxShadow = `0 0 6px ${baseColor}, 0 0 10px ${baseColor}`;
+              
+              const angle = (Math.PI * 2 * i) / particleCount + Math.random() * 0.3;
+              const distance = 50 + Math.random() * 100;
+              const tx = Math.cos(angle) * distance;
+              const ty = Math.sin(angle) * distance;
+              
+              particle.style.setProperty("--tx", tx + "px");
+              particle.style.setProperty("--ty", ty + "px");
+              
+              container.appendChild(particle);
+              
+              // 自动移除粒子
+              setTimeout(() => particle.remove(), 1500);
+            }
+            
+            // 添加一些闪烁的emoji
+            const sparkles = ['✨', '⭐', '🌟', '💫'];
+            for (let i = 0; i < 3; i++) {
+              const sparkle = document.createElement("div");
+              sparkle.className = "sparkle";
+              sparkle.textContent = sparkles[Math.floor(Math.random() * sparkles.length)];
+              sparkle.style.left = (x + (Math.random() - 0.5) * 100) + "px";
+              sparkle.style.top = (y + (Math.random() - 0.5) * 100) + "px";
+              container.appendChild(sparkle);
+              
+              setTimeout(() => sparkle.remove(), 2000);
+            }
+          }, 800);
         }
 
         // --- 年度决算系统 ---
@@ -3651,10 +4057,27 @@
           // Allow changing direction at the start of the turn
           player.previousTile = null;
 
-          let remainingSteps = steps;
+          // 记录起点位置，用于计算距离
+          const startTile = player.currentTile;
+          // 记录访问过的格子及其从起点的最短距离
+          const visitedDistances = new Map();
+          visitedDistances.set(startTile, 0);
+          
+          let currentDistance = 0; // 当前距离起点的步数
           let reachedDestination = false;
 
-          while (remainingSteps > 0) {
+          // AI预计算路径
+          let aiPath = null;
+          let aiPathIndex = 0;
+          if (player.isAI && this.destinationTile) {
+            aiPath = this.calculateAIPath(startTile, steps);
+            if (aiPath && aiPath.length > 1) {
+              aiPathIndex = 1; // 从第二个格子开始（第一个是起点）
+              this.log(`🤖 AI规划了${aiPath.length - 1}步路径`, "#60a5fa");
+            }
+          }
+
+          while (currentDistance < steps) {
             const current = player.currentTile;
             const neighbors = current.neighbors;
 
@@ -3665,10 +4088,15 @@
 
             let nextTile = null;
 
-            if (validNext.length === 1) {
+            // AI使用预计算的路径
+            if (player.isAI && aiPath && aiPathIndex < aiPath.length) {
+              nextTile = aiPath[aiPathIndex];
+              aiPathIndex++;
+            } else if (validNext.length === 1) {
               nextTile = validNext[0];
             } else if (validNext.length > 1) {
               if (player.isAI) {
+                // AI回退：如果预计算路径用完或无效，使用简单策略
                 nextTile = this.chooseBestDirection(validNext);
               } else {
                 nextTile = await this.askDirection(player, validNext);
@@ -3703,15 +4131,26 @@
             // 更新距离显示
             this.updateDistanceDisplay();
 
-            // 检查是否路过目的地（即使还有步数也算到达）
-            if (!reachedDestination && this.destinationTile && nextTile === this.destinationTile) {
-              reachedDestination = true;
-              await this.showDestinationArrival(player);
-            }
-
+            // 计算新的距离：基于距离起点的步数
             if (nextTile.isColored) {
-              remainingSteps--;
+              // 计算到达这个格子时距离起点的步数
+              let newDistance;
+              if (visitedDistances.has(nextTile)) {
+                // 如果回到之前访问过的格子，使用之前记录的距离
+                newDistance = visitedDistances.get(nextTile);
+              } else {
+                // 新格子：距离加1
+                newDistance = currentDistance + 1;
+                visitedDistances.set(nextTile, newDistance);
+              }
+              currentDistance = newDistance;
             }
+          }
+
+          // 只有刚好落在目的地才算到达（步数用完时正好在目的地）
+          if (this.destinationTile && player.currentTile === this.destinationTile) {
+            reachedDestination = true;
+            await this.showDestinationArrival(player);
           }
 
           await wait(300);
@@ -3902,6 +4341,7 @@
           player.hasBinbougami = true;
           player.binbougamiTurns = 0;
           player.binbougamiLevel = 0; // Reset to normal
+          player.binbougamiJustAttached = true; // 标记刚刚附身，本回合不触发效果
 
           this.log(`👻 穷神附身在了 ${player.name} 身上！`, "#a855f7");
 
@@ -4169,7 +4609,9 @@
             modal.classList.remove("hidden");
 
             title.innerText = player.binbougamiLevel === 1 ? "大魔王降临！" : "穷神来袭！";
-            desc.innerText = effect.msg;
+            // 替换占位符：用户显示"你"，AI显示玩家名字
+            const displayName = player.isAI ? player.name : "你";
+            desc.innerText = effect.msg.replace(/{playerName}/g, displayName);
             effectEl.innerText = "";
             hint.innerText = "点击任意处继续...";
 
@@ -4178,6 +4620,30 @@
               modal.classList.add("hidden");
               resolve();
             }, 2500);
+          });
+        }
+
+        // 显示AI购买房产弹窗
+        async showAIPurchaseDialog(player, property, location) {
+          return new Promise((resolve) => {
+            const modal = document.getElementById("ai-purchase-modal");
+            const title = document.getElementById("ai-purchase-title");
+            const propertyName = document.getElementById("ai-purchase-property-name");
+            const locationEl = document.getElementById("ai-purchase-location");
+            const priceEl = document.getElementById("ai-purchase-price");
+
+            modal.classList.remove("hidden");
+
+            title.innerText = `${player.name} 购买房产`;
+            propertyName.innerText = property.homeName;
+            locationEl.innerText = `📍 ${location}`;
+            priceEl.innerText = `-¥${property.price.toLocaleString()}`;
+
+            // Auto close after delay
+            setTimeout(() => {
+              modal.classList.add("hidden");
+              resolve();
+            }, 2000);
           });
         }
 
@@ -4303,11 +4769,13 @@
             this.log(`💤 ${target.name} 下回合将无法行动！`, "#3b82f6");
             showToast(`${target.name} 进入冬眠！`, "#3b82f6");
           } else if (card.effect === "blowAway") {
-            const randomTile = this.map[Math.floor(Math.random() * this.map.length)];
-            target.currentTile = randomTile;
-            target.mesh.position.copy(randomTile.worldPos);
+            // 只选择station格子(type === "green")
+            const stations = this.map.filter((t) => t.type === "green");
+            const randomStation = stations[Math.floor(Math.random() * stations.length)];
+            target.currentTile = randomStation;
+            target.mesh.position.copy(randomStation.worldPos);
             target.mesh.position.y = 1.5;
-            this.log(`💨 ${target.name} 被吹飞到了不知名的地方！`, "#3b82f6");
+            this.log(`💨 ${target.name} 被吹飞到了 ${randomStation.stationName}！`, "#3b82f6");
             this.updateDistanceDisplay();
           } else if (card.effect === "trap") {
             this.log("陷阱卡尚未实装", "gray");
@@ -4375,8 +4843,13 @@
 
           // Handle Binbougami at end of turn
           if (player.hasBinbougami) {
-            await wait(500);
-            await this.handleBinbougamiAction(player);
+            // 如果是刚刚附身的，本回合不触发效果（下回合开始才触发）
+            if (player.binbougamiJustAttached) {
+              player.binbougamiJustAttached = false;
+            } else {
+              await wait(500);
+              await this.handleBinbougamiAction(player);
+            }
           }
 
           this.updateUI();
@@ -4438,10 +4911,12 @@
               player.money -= property.price;
               player.assets += property.price;
               
-              this.log(`🏠 电脑 ${player.name} 购买了 ${property.homeName}！`, "#fca5a5");
-              await wait(800);
+              // 全屏弹窗展示AI购买信息
+              await this.showAIPurchaseDialog(player, property, tile.stationName);
+              
+              this.log(`🏠 ${player.name} 购买了 ${property.homeName}！`, "#fca5a5");
             } else {
-              this.log("电脑没有购买意向", "#9ca3af");
+              this.log(`${player.name} 没有购买意向`, "#9ca3af");
             }
             this.nextTurn();
           } else {
@@ -4703,16 +5178,14 @@
               }
             }
             
+            const incomeRate = property.price > 0 ? Math.round((property.income || 0) / property.price * 100) : 0;
             card.className = `bg-white rounded-lg border-2 ${borderColor} overflow-hidden shadow-md hover:shadow-lg transition flex flex-col`;
             card.innerHTML = `
               <!-- Header: Home name, price, income, action button -->
               <div class="bg-gradient-to-br ${headerBg} p-3 flex justify-between items-start gap-2">
                 <div class="flex-1 min-w-0">
                   <p class="font-bold text-gray-800 text-base truncate">${property.homeName}</p>
-                  <div class="text-xs text-gray-700 mt-1 space-y-0.5">
-                    <p>💰 价格: <span class="font-bold">¥${property.price.toLocaleString()}</span></p>
-                    <p>📈 年收益: <span class="font-bold text-green-600">¥${property.income || 0}</span></p>
-                  </div>
+                  <p class="text-sm text-gray-700 mt-1">💰:<span class="font-bold">¥${property.price.toLocaleString()}</span>  📈 年收益:<span class="font-bold text-green-600">¥${property.income || 0}</span> <span class="font-bold ${incomeRate >= 50 ? 'text-red-500' : incomeRate >= 30 ? 'text-orange-500' : 'text-gray-500'}">(${incomeRate}%)</span></p>
                 </div>
                 <div class="flex-shrink-0 text-center">
                   ${actionBtn}
@@ -5145,11 +5618,11 @@
           if (this.players[1].hasBinbougami) comBinbougami.classList.remove("hidden");
           else comBinbougami.classList.add("hidden");
 
-          // Update Hand Panel (for P1)
+          // Update Hand Panel (for P1) - 只在玩家回合且状态为IDLE时显示（投掷骰子前）
           const handPanel = document.getElementById("card-hand-panel");
           const handContainer = document.getElementById("card-hand");
 
-          if (this.turn === 0 && !this.players[0].isAI && this.players[0].cards.length > 0) {
+          if (this.turn === 0 && !this.players[0].isAI && this.players[0].cards.length > 0 && this.state === "IDLE") {
             handPanel.classList.remove("hidden");
             handContainer.innerHTML = "";
             this.players[0].cards.forEach((cardKey, index) => {
