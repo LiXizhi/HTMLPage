@@ -373,7 +373,7 @@
 
       .dice-result {
         position: absolute;
-        bottom: 20px;
+        top: -60px;
         left: 50%;
         transform: translateX(-50%);
         font-size: 32px;
@@ -382,6 +382,7 @@
         text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
         opacity: 0;
         transition: opacity 0.3s;
+        white-space: nowrap;
       }
 
       .dice-result.show {
@@ -577,15 +578,15 @@
     <div id="dice-modal" class="dice-modal">
       <div class="flex flex-col items-center">
         <div class="dice-scene">
+          <div id="dice-result" class="dice-result">
+            掷出了 <span id="dice-result-value" class="dice-result-value">0</span> 点!
+          </div>
           <div class="dice-floor"></div>
           <div id="dice-stage" class="dice-stage">
             <div id="dice-camera" class="dice-camera">
               <!-- Dice will be dynamically injected here -->
             </div>
           </div>
-        </div>
-        <div id="dice-result" class="dice-result">
-          掷出了 <span id="dice-result-value" class="dice-result-value">0</span> 点!
         </div>
       </div>
     </div>
@@ -744,12 +745,12 @@
           
           // Target rotations for each dice face (which face lands up)
           this.targetRotations = {
-            1: { x: -90, y: 0, z: 0 },
-            2: { x: 0, y: 0, z: 0 },
-            3: { x: 0, y: 0, z: -90 },
-            4: { x: 0, y: 0, z: 90 },
-            5: { x: 180, y: 0, z: 0 },
-            6: { x: 90, y: 0, z: 0 },
+            1: { x: 90, y: 0, z: 0 },   
+            2: { x: 0, y: 0, z: 0 },    
+            3: { x: 0, y: 0, z: 90 },   
+            4: { x: 0, y: 0, z: -90 },  
+            5: { x: 180, y: 0, z: 0 },  
+            6: { x: -90, y: 0, z: 0 },  
           };
           
           // Dot positions for each face value (0-8 grid positions)
@@ -998,7 +999,7 @@
       const TURNS_PER_YEAR = 12;
       const SETTLEMENT_MONTH = 3; // 3月决算
 
-      // 房产缓存系统 - 追踪房产的购买状态
+      // 房产缓存系统 - 追踪房产的购买状态和已购买房产的固定数据
       const PROPERTIES_CACHE = {};
       function initializePropertiesCache() {
         PROPERTIES_CACHE.homes = {}; // 按城市存储房产: { cityName: [homes...] }
@@ -1014,7 +1015,9 @@
             cityName: cityName,
             index: propertyIndex,
             purchasedBy: null, // 购买者的玩家ID，null表示未购买
-            purchasePrice: null
+            purchasePrice: null,
+            // 以下字段在购买时会被填充，用于保持已购买房产的数据不变
+            cachedData: null  // { level, price, income, playerId, playerName, avatar, homeName, isOnline }
           };
         }
         return PROPERTIES_CACHE.homes[cityName][propertyIndex];
@@ -4414,12 +4417,22 @@
             if (affordableProperties.length > 0) {
               // 选择最便宜的房产
               const property = affordableProperties.sort((a, b) => a.price - b.price)[0];
-              const propertyIndex = playerProperties.indexOf(property);
               
-              // 更新缓存
-              const propertyRecord = getOrCreatePropertyId(tile.stationName, propertyIndex);
+              // 更新缓存 - 使用property.index（原始索引）而不是排序后的索引
+              const propertyRecord = getOrCreatePropertyId(tile.stationName, property.index);
               propertyRecord.purchasedBy = player.id;
               propertyRecord.purchasePrice = property.price;
+              // 缓存已购买房产的完整数据，确保数据不再变动
+              propertyRecord.cachedData = {
+                level: property.level,
+                price: property.price,
+                income: property.income,
+                playerId: property.playerId,
+                playerName: property.playerName,
+                avatar: property.avatar,
+                homeName: property.homeName,
+                isOnline: property.isOnline
+              };
               
               // 执行购买
               player.money -= property.price;
@@ -4734,45 +4747,35 @@
         }
 
         generatePlayerProperties(tile) {
-          // Generate player property data for display with session-persistent ordering
+          // Generate player property data for display
           // 需求: 
-          // 1. 已购买的地产始终置顶显示
-          // 2. 其他地产在一局游戏中保持固定顺序（通过session缓存）
-          // 3. 每局新游戏时随机生成
+          // 1. 已购买的地产始终置顶显示，且数据保持不变（从缓存读取）
+          // 2. 未购买的地产每次可以有随机性
+          // 3. 城市的房产数量在session中保持一致
           
           const playerNames = ["小明", "小红", "老王", "张三", "李四", "王五", "赵六", "孙七", "周八", "吴九"];
           const homeNames = ["梦幻庄园", "绿洲家园", "天空之城", "森林小屋", "云端别墅", "海滨度假", "山顶别墅", "古镇民宿", "湖边小屋", "花园洋房"];
           
           const cityName = tile.stationName;
           
-          // 确保city的缓存存在
+          // 确保city的session缓存存在（只保存房产数量，不保存具体数据）
           if (!this.sessionPropertyCache[cityName]) {
-            // 首次访问此城市 - 生成随机属性数量和顺序
+            // 首次访问此城市 - 生成随机属性数量
             const minProperties = 5;
             const maxProperties = 8;
             const count = Math.floor(Math.random() * (maxProperties - minProperties + 1)) + minProperties;
             
-            // 创建属性索引数组 [0, 1, 2, ..., count-1]
-            const indices = Array.from({length: count}, (_, i) => i);
-            
-            // 生成随机种子用于洗牌
-            const seed = Math.random();
-            
-            // 保存到缓存 - 这样后续访问同一城市时会保持相同顺序
+            // 保存到session缓存 - 只保存数量
             this.sessionPropertyCache[cityName] = {
-              seed: seed,
-              totalCount: count,
-              displayOrder: indices  // 将在下方使用
+              totalCount: count
             };
           }
           
-          const cachedData = this.sessionPropertyCache[cityName];
-          const totalCount = cachedData.totalCount;
+          const totalCount = this.sessionPropertyCache[cityName].totalCount;
           
           // 为所有属性生成数据
           const allProperties = [];
           for (let i = 0; i < totalCount; i++) {
-            const level = Math.floor(Math.random() * 5) + 1;
             const propertyData = getOrCreatePropertyId(cityName, i);
             
             // Determine if purchased and by whom
@@ -4784,21 +4787,39 @@
               ownerName = purchaser ? purchaser.name : "未知玩家";
             }
             
-            const price = PROPERTY_PRICE_RANGE[0] + Math.floor(Math.random() * (PROPERTY_PRICE_RANGE[1] - PROPERTY_PRICE_RANGE[0]));
-            const income = Math.floor((Math.random() * 2000) + 500 * level);
+            let propInfo;
+            if (isPurchased && propertyData.cachedData) {
+              // 已购买的房产：使用缓存的固定数据
+              propInfo = propertyData.cachedData;
+            } else {
+              // 未购买的房产：每次随机生成
+              const level = Math.floor(Math.random() * 5) + 1;
+              const price = PROPERTY_PRICE_RANGE[0] + Math.floor(Math.random() * (PROPERTY_PRICE_RANGE[1] - PROPERTY_PRICE_RANGE[0]));
+              const income = Math.floor((Math.random() * 2000) + 500 * level);
+              propInfo = {
+                level: level,
+                price: price,
+                income: income,
+                playerId: `P${Math.floor(Math.random() * 10000)}`,
+                playerName: playerNames[i % playerNames.length],
+                avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+                homeName: homeNames[i % homeNames.length],
+                isOnline: Math.random() > 0.3
+              };
+            }
             
             allProperties.push({
               type: "property",
               id: propertyData.id,
               index: i,
-              playerId: `P${Math.floor(Math.random() * 10000)}`,
-              playerName: playerNames[i % playerNames.length],
-              avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
-              homeName: homeNames[i % homeNames.length],
-              level: level,
-              price: price,
-              income: income,
-              isOnline: Math.random() > 0.3,
+              playerId: propInfo.playerId,
+              playerName: propInfo.playerName,
+              avatar: propInfo.avatar,
+              homeName: propInfo.homeName,
+              level: propInfo.level,
+              price: propInfo.price,
+              income: propInfo.income,
+              isOnline: propInfo.isOnline,
               isPurchased: isPurchased,
               purchasedBy: propertyData.purchasedBy,
               purchasedByName: ownerName
@@ -4844,10 +4865,21 @@
             return;
           }
           
-          // Update cache to mark as purchased
-          const propertyRecord = getOrCreatePropertyId(tile.stationName, propertyIndex);
+          // Update cache to mark as purchased - 使用property.index（原始索引）而不是排序后的propertyIndex
+          const propertyRecord = getOrCreatePropertyId(tile.stationName, property.index);
           propertyRecord.purchasedBy = player.id;
           propertyRecord.purchasePrice = property.price;
+          // 缓存已购买房产的完整数据，确保数据不再变动
+          propertyRecord.cachedData = {
+            level: property.level,
+            price: property.price,
+            income: property.income,
+            playerId: property.playerId,
+            playerName: property.playerName,
+            avatar: property.avatar,
+            homeName: property.homeName,
+            isOnline: property.isOnline
+          };
           
           // Purchase the property
           player.money -= property.price;

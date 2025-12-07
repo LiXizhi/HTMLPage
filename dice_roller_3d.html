@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hidden Until Roll Dice</title>
+    <title>Accurate Dice Roller</title>
     <style>
         :root {
             --bg-color: #f1f5f9;
@@ -67,11 +67,7 @@
             pointer-events: none;
         }
 
-        /* 
-           KEY CHANGE: 
-           This container is now invisible (opacity: 0) by default.
-           The dice are inside here, so they are hidden on load.
-        */
+        /* Stage starts invisible */
         #dice-stage {
             width: 100%;
             height: 100%;
@@ -79,11 +75,10 @@
             align-items: center;
             justify-content: center;
             transform-style: preserve-3d;
-            
             opacity: 0; /* HIDDEN INITIALLY */
         }
 
-        /* The Animation definition */
+        /* Animation */
         @keyframes stageEnter {
             0% {
                 opacity: 0;
@@ -94,17 +89,16 @@
                 transform: translate(-20px, -20px) scale(1.05);
             }
             100% {
-                opacity: 1; /* Ends visible */
+                opacity: 1; 
                 transform: translate(0, 0) scale(1);
             }
         }
 
-        /* Only when this class is added (on click), do we see the dice */
         #dice-stage.entering {
             animation: stageEnter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
 
-        /* Camera keeps the isometric angle */
+        /* Camera */
         .camera {
             position: relative;
             transform-style: preserve-3d;
@@ -127,6 +121,7 @@
             height: 100%;
             position: relative;
             transform-style: preserve-3d;
+            /* Default initial rotation */
             transform: rotateX(-90deg); 
         }
 
@@ -167,12 +162,13 @@
             box-shadow: 0 1px 1px rgba(0,0,0,0.2);
         }
 
-        .face-1 { transform: translateZ(var(--die-half)); }
-        .face-2 { transform: rotateX(90deg) translateZ(var(--die-half)); }
-        .face-3 { transform: rotateY(-90deg) translateZ(var(--die-half)); }
-        .face-4 { transform: rotateY(90deg) translateZ(var(--die-half)); }
-        .face-5 { transform: rotateX(-90deg) translateZ(var(--die-half)); }
-        .face-6 { transform: rotateY(180deg) translateZ(var(--die-half)); }
+        /* Standard CSS Cube Mapping */
+        .face-1 { transform: translateZ(var(--die-half)); }                /* Front */
+        .face-2 { transform: rotateX(90deg) translateZ(var(--die-half)); } /* Top */
+        .face-3 { transform: rotateY(-90deg) translateZ(var(--die-half)); }/* Left */
+        .face-4 { transform: rotateY(90deg) translateZ(var(--die-half)); } /* Right */
+        .face-5 { transform: rotateX(-90deg) translateZ(var(--die-half)); }/* Bottom */
+        .face-6 { transform: rotateY(180deg) translateZ(var(--die-half)); }/* Back */
 
         /* --- Controls --- */
         .control-panel {
@@ -258,10 +254,9 @@
         <div class="scene">
             <div class="floor"></div>
             
-            <!-- Stage starts invisible (opacity: 0) -->
             <div id="dice-stage">
                 <div class="camera" id="dice-container">
-                    <!-- Dice will be injected here on init, but invisible -->
+                    <!-- Dice will be injected here -->
                 </div>
             </div>
         </div>
@@ -282,21 +277,29 @@
 <script>
 class DiceAnimator {
   constructor() {
+    // 修复后的映射表：
+    // 根据用户反馈，之前的逻辑 1和6反了，3和4反了。
+    // 这里互换了对应的旋转值。
     this.targetRotations = {
-      1: { x: -90, y: 0, z: 0 },
-      2: { x: 0, y: 0, z: 0 }, 
-      3: { x: 0, y: 0, z: -90 },
-      4: { x: 0, y: 0, z: 90 },
-      5: { x: 180, y: 0, z: 0 },
-      6: { x: 90, y: 0, z: 0 },
+      1: { x: 90, y: 0, z: 0 },   // 原来是 -90 (现在修复为显示面1)
+      2: { x: 0, y: 0, z: 0 },    // 上面
+      3: { x: 0, y: 0, z: 90 },   // 原来是 -90 (现在修复为显示面3)
+      4: { x: 0, y: 0, z: -90 },  // 原来是 90 (现在修复为显示面4)
+      5: { x: 180, y: 0, z: 0 },  // 下面
+      6: { x: -90, y: 0, z: 0 },  // 原来是 90 (现在修复为显示面6)
     };
   }
+
   generateResult() {
     const val = Math.ceil(Math.random() * 6);
     const base = this.targetRotations[val];
+    
+    // 随机旋转圈数 (保证动画幅度)
     const spins = 2 + Math.floor(Math.random() * 3);
+    
     return {
         value: val,
+        // 在目标角度基础上增加 360 * N 的旋转
         x: base.x + (spins * 360),
         y: base.y + (Math.floor(Math.random() * 2) * 360),
         z: base.z + (spins * 360)
@@ -309,9 +312,14 @@ const app = {
     count: 1,
     duration: 1500, 
     isRolling: false,
+    // 3x3点阵映射
     dotMap: {
-        1: [4], 2: [0, 8], 3: [0, 4, 8],
-        4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8]
+        1: [4], 
+        2: [0, 8], 
+        3: [0, 4, 8],
+        4: [0, 2, 6, 8], 
+        5: [0, 2, 4, 6, 8], 
+        6: [0, 2, 3, 5, 6, 8]
     },
     elements: {
         stage: document.getElementById('dice-stage'),
@@ -323,8 +331,6 @@ const app = {
         speedBtn: document.getElementById('speed-btn')
     },
     init() {
-        // Render dice immediately so logic works, 
-        // but user won't see them because #dice-stage has opacity: 0
         this.renderDice(); 
         this.bindEvents();
     },
@@ -336,8 +342,6 @@ const app = {
                 this.elements.countBtns.forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 
-                // Re-render immediately (still invisible if not rolled yet, 
-                // or visible if already rolled, matching current state)
                 this.renderDice();
                 this.hideResult();
             });
@@ -366,16 +370,22 @@ const app = {
             const dieWrapper = document.createElement('div');
             dieWrapper.className = 'die-wrapper';
             dieWrapper.style.transform = `translate3d(${i * spacing}px, 0, ${i * -spacing}px)`;
+            
             const die = document.createElement('div');
             die.className = 'die';
             die.id = `die-${i}`;
+            
             let facesHTML = '';
+            // 按照标准顺序构建面
             [1,6,2,5,3,4].forEach(n => facesHTML += this.createFaceHTML(n));
+            
             die.innerHTML = facesHTML;
             dieWrapper.appendChild(die);
+            
             const shadow = document.createElement('div');
             shadow.className = 'die-shadow';
             dieWrapper.appendChild(shadow);
+            
             this.elements.container.appendChild(dieWrapper);
         }
     },
@@ -389,16 +399,10 @@ const app = {
         this.elements.rollBtn.innerHTML = 'Rolling...';
         this.hideResult();
 
-        // --- ANIMATION TRIGGER ---
-        // 1. Removing the class reverts opacity to 0 (default CSS)
+        // 触发飞入动画
         this.elements.stage.classList.remove('entering');
-        
-        // 2. Force reflow to allow animation restart
-        void this.elements.stage.offsetWidth; 
-        
-        // 3. Add class to start animation (Opacity 0 -> 1)
+        void this.elements.stage.offsetWidth; // 强制重绘
         this.elements.stage.classList.add('entering');
-        // -------------------------
 
         const results = [];
         let total = 0;
