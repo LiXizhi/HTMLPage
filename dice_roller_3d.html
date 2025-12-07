@@ -1,0 +1,431 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hidden Until Roll Dice</title>
+    <style>
+        :root {
+            --bg-color: #f1f5f9;
+            --panel-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-sub: #94a3b8;
+            --accent: #0f172a;
+            --accent-hover: #1e293b;
+            --blue: #2563eb;
+            --blue-bg: #dbeafe;
+            
+            --die-size: 96px;
+            --die-half: 48px;
+            --dot-size: 12px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* --- 3D Scene Area --- */
+        .scene {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            perspective: 2000px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible; 
+        }
+
+        .floor {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.5;
+            transform: rotateX(60deg) scale(1.5);
+            pointer-events: none;
+        }
+
+        /* 
+           KEY CHANGE: 
+           This container is now invisible (opacity: 0) by default.
+           The dice are inside here, so they are hidden on load.
+        */
+        #dice-stage {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform-style: preserve-3d;
+            
+            opacity: 0; /* HIDDEN INITIALLY */
+        }
+
+        /* The Animation definition */
+        @keyframes stageEnter {
+            0% {
+                opacity: 0;
+                transform: translate(300px, 200px) scale(0.2); 
+            }
+            60% {
+                opacity: 1;
+                transform: translate(-20px, -20px) scale(1.05);
+            }
+            100% {
+                opacity: 1; /* Ends visible */
+                transform: translate(0, 0) scale(1);
+            }
+        }
+
+        /* Only when this class is added (on click), do we see the dice */
+        #dice-stage.entering {
+            animation: stageEnter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        /* Camera keeps the isometric angle */
+        .camera {
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-35deg) rotateY(45deg); 
+            display: flex;
+            gap: 40px; 
+            transition: transform 0.5s;
+        }
+
+        /* --- Dice Styling --- */
+        .die-wrapper {
+            position: relative;
+            width: var(--die-size);
+            height: var(--die-size);
+            transform-style: preserve-3d;
+        }
+
+        .die {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-90deg); 
+        }
+
+        .die-shadow {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.15);
+            filter: blur(20px);
+            transform: translateY(60px) rotateX(90deg) scale(1.2);
+            border-radius: 50%;
+            z-index: -1;
+        }
+
+        .face {
+            position: absolute;
+            width: var(--die-size);
+            height: var(--die-size);
+            background: white;
+            border: 2px solid #cbd5e1;
+            border-radius: 12px;
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            padding: 12px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+            backface-visibility: visible;
+        }
+
+        .dot {
+            width: var(--dot-size);
+            height: var(--dot-size);
+            background: #1e293b;
+            border-radius: 50%;
+            align-self: center;
+            justify-self: center;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.2);
+        }
+
+        .face-1 { transform: translateZ(var(--die-half)); }
+        .face-2 { transform: rotateX(90deg) translateZ(var(--die-half)); }
+        .face-3 { transform: rotateY(-90deg) translateZ(var(--die-half)); }
+        .face-4 { transform: rotateY(90deg) translateZ(var(--die-half)); }
+        .face-5 { transform: rotateX(-90deg) translateZ(var(--die-half)); }
+        .face-6 { transform: rotateY(180deg) translateZ(var(--die-half)); }
+
+        /* --- Controls --- */
+        .control-panel {
+            background: var(--panel-bg);
+            padding: 16px;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 40px;
+            z-index: 10;
+        }
+
+        .control-group { display: flex; align-items: center; gap: 12px; }
+        .label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-sub); }
+        .btn-group { display: flex; gap: 4px; }
+        
+        .btn-mini {
+            width: 32px; height: 32px; border: none; border-radius: 8px;
+            background: #f1f5f9; color: var(--text-sub); font-weight: bold; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-mini:hover { background: #e2e8f0; }
+        .btn-mini.active { background: var(--accent); color: white; transform: scale(1.1); }
+        .divider { width: 1px; height: 32px; background: #e2e8f0; margin: 0 8px; }
+        
+        .btn-icon {
+            padding: 8px; border-radius: 50%; border: none; background: transparent;
+            cursor: pointer; color: var(--text-sub); display: flex; align-items: center; justify-content: center;
+        }
+        .btn-icon.active { background: var(--blue-bg); color: var(--blue); }
+
+        .action-area {
+            margin-top: 40px; display: flex; flex-direction: column; align-items: center; height: 120px;
+        }
+
+        .btn-roll {
+            background: var(--accent); color: white; border: none; padding: 16px 40px;
+            border-radius: 12px; font-size: 18px; font-weight: 700; cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px;
+            transition: all 0.2s;
+        }
+        .btn-roll:hover { background: var(--accent-hover); transform: translateY(-2px); }
+        .btn-roll:active { transform: scale(0.95); }
+        .btn-roll:disabled { background: #cbd5e1; color: #94a3b8; cursor: not-allowed; transform: none; }
+
+        .result-display {
+            margin-top: 20px; font-family: monospace; font-size: 32px; font-weight: 900;
+            color: var(--text-main); opacity: 0; transition: opacity 0.3s;
+        }
+        .result-display.show { opacity: 1; }
+        .result-val { color: var(--blue); }
+        svg { pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Controls -->
+        <div class="control-panel">
+            <div class="control-group">
+                <span class="label">Dice</span>
+                <div class="btn-group" id="count-buttons">
+                    <button class="btn-mini active" data-val="1">1</button>
+                    <button class="btn-mini" data-val="2">2</button>
+                    <button class="btn-mini" data-val="3">3</button>
+                </div>
+            </div>
+            <div class="divider"></div>
+            <div class="control-group">
+                <span class="label">Speed</span>
+                <button class="btn-icon" id="speed-btn" title="Toggle Speed">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"></polygon><polygon points="2 19 11 12 2 5 2 19"></polygon></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 3D Scene -->
+        <div class="scene">
+            <div class="floor"></div>
+            
+            <!-- Stage starts invisible (opacity: 0) -->
+            <div id="dice-stage">
+                <div class="camera" id="dice-container">
+                    <!-- Dice will be injected here on init, but invisible -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="action-area">
+            <button class="btn-roll" id="roll-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                ROLL
+            </button>
+            <div class="result-display" id="result-text">
+                Result: <span class="result-val">0</span>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+class DiceAnimator {
+  constructor() {
+    this.targetRotations = {
+      1: { x: -90, y: 0, z: 0 },
+      2: { x: 0, y: 0, z: 0 }, 
+      3: { x: 0, y: 0, z: -90 },
+      4: { x: 0, y: 0, z: 90 },
+      5: { x: 180, y: 0, z: 0 },
+      6: { x: 90, y: 0, z: 0 },
+    };
+  }
+  generateResult() {
+    const val = Math.ceil(Math.random() * 6);
+    const base = this.targetRotations[val];
+    const spins = 2 + Math.floor(Math.random() * 3);
+    return {
+        value: val,
+        x: base.x + (spins * 360),
+        y: base.y + (Math.floor(Math.random() * 2) * 360),
+        z: base.z + (spins * 360)
+    };
+  }
+}
+
+const app = {
+    animator: new DiceAnimator(),
+    count: 1,
+    duration: 1500, 
+    isRolling: false,
+    dotMap: {
+        1: [4], 2: [0, 8], 3: [0, 4, 8],
+        4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8]
+    },
+    elements: {
+        stage: document.getElementById('dice-stage'),
+        container: document.getElementById('dice-container'),
+        rollBtn: document.getElementById('roll-btn'),
+        resultDisplay: document.getElementById('result-text'),
+        resultVal: document.querySelector('.result-val'),
+        countBtns: document.querySelectorAll('#count-buttons button'),
+        speedBtn: document.getElementById('speed-btn')
+    },
+    init() {
+        // Render dice immediately so logic works, 
+        // but user won't see them because #dice-stage has opacity: 0
+        this.renderDice(); 
+        this.bindEvents();
+    },
+    bindEvents() {
+        this.elements.countBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if(this.isRolling) return;
+                this.count = parseInt(e.target.dataset.val);
+                this.elements.countBtns.forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                // Re-render immediately (still invisible if not rolled yet, 
+                // or visible if already rolled, matching current state)
+                this.renderDice();
+                this.hideResult();
+            });
+        });
+        this.elements.speedBtn.addEventListener('click', () => {
+            if(this.isRolling) return;
+            const isFast = this.elements.speedBtn.classList.toggle('active');
+            this.duration = isFast ? 1000 : 1500;
+        });
+        this.elements.rollBtn.addEventListener('click', () => this.roll());
+    },
+    createFaceHTML(number) {
+        const activeDots = this.dotMap[number] || [];
+        let dotsHTML = '';
+        for(let i=0; i<9; i++) {
+            if(activeDots.includes(i)) {
+                dotsHTML += `<div class="dot" style="grid-area: ${Math.floor(i/3)+1} / ${(i%3)+1}"></div>`;
+            }
+        }
+        return `<div class="face face-${number}">${dotsHTML}</div>`;
+    },
+    renderDice() {
+        this.elements.container.innerHTML = '';
+        const spacing = 20; 
+        for (let i = 0; i < this.count; i++) {
+            const dieWrapper = document.createElement('div');
+            dieWrapper.className = 'die-wrapper';
+            dieWrapper.style.transform = `translate3d(${i * spacing}px, 0, ${i * -spacing}px)`;
+            const die = document.createElement('div');
+            die.className = 'die';
+            die.id = `die-${i}`;
+            let facesHTML = '';
+            [1,6,2,5,3,4].forEach(n => facesHTML += this.createFaceHTML(n));
+            die.innerHTML = facesHTML;
+            dieWrapper.appendChild(die);
+            const shadow = document.createElement('div');
+            shadow.className = 'die-shadow';
+            dieWrapper.appendChild(shadow);
+            this.elements.container.appendChild(dieWrapper);
+        }
+    },
+    hideResult() {
+        this.elements.resultDisplay.classList.remove('show');
+    },
+    roll() {
+        if (this.isRolling) return;
+        this.isRolling = true;
+        this.elements.rollBtn.disabled = true;
+        this.elements.rollBtn.innerHTML = 'Rolling...';
+        this.hideResult();
+
+        // --- ANIMATION TRIGGER ---
+        // 1. Removing the class reverts opacity to 0 (default CSS)
+        this.elements.stage.classList.remove('entering');
+        
+        // 2. Force reflow to allow animation restart
+        void this.elements.stage.offsetWidth; 
+        
+        // 3. Add class to start animation (Opacity 0 -> 1)
+        this.elements.stage.classList.add('entering');
+        // -------------------------
+
+        const results = [];
+        let total = 0;
+        for(let i=0; i<this.count; i++) {
+            const res = this.animator.generateResult();
+            results.push(res);
+            total += res.value;
+        }
+
+        const diceEls = document.querySelectorAll('.die');
+        diceEls.forEach((die, idx) => {
+            const target = results[idx];
+            const easing = "cubic-bezier(0.1, 0.9, 0.2, 1)";
+            die.style.transition = `transform ${this.duration}ms ${easing}`;
+            die.style.transform = `rotateX(${target.x}deg) rotateY(${target.y}deg) rotateZ(${target.z}deg)`;
+        });
+
+        setTimeout(() => {
+            this.isRolling = false;
+            this.elements.rollBtn.disabled = false;
+            this.elements.rollBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> ROLL`;
+            this.elements.resultVal.textContent = total;
+            this.elements.resultDisplay.classList.add('show');
+        }, this.duration);
+    }
+};
+app.init();
+</script>
+</body>
+</html>

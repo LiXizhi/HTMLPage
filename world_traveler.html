@@ -71,6 +71,8 @@
         white-space: nowrap;
         text-shadow: 0 1px 2px black;
         z-index: 10;
+        user-select: none;
+        -webkit-user-select: none;
       }
 
       /* Destination label highlight */
@@ -221,6 +223,174 @@
         background: rgba(255, 255, 255, 0.3);
         border-radius: 2px;
       }
+
+      /* --- 3D Dice Animation Styles --- */
+      :root {
+        --die-size: 80px;
+        --die-half: 40px;
+        --dot-size: 10px;
+      }
+
+      .dice-modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+      }
+
+      .dice-modal.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .dice-scene {
+        position: relative;
+        width: 400px;
+        height: 300px;
+        perspective: 2000px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible;
+      }
+
+      .dice-floor {
+        position: absolute;
+        width: 500px;
+        height: 500px;
+        background-image: radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px);
+        background-size: 20px 20px;
+        opacity: 0.5;
+        transform: rotateX(60deg) scale(1.5);
+        pointer-events: none;
+      }
+
+      .dice-stage {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform-style: preserve-3d;
+        opacity: 0;
+      }
+
+      @keyframes diceStageEnter {
+        0% {
+          opacity: 0;
+          transform: translate(300px, 200px) scale(0.2);
+        }
+        60% {
+          opacity: 1;
+          transform: translate(-20px, -20px) scale(1.05);
+        }
+        100% {
+          opacity: 1;
+          transform: translate(0, 0) scale(1);
+        }
+      }
+
+      .dice-stage.entering {
+        animation: diceStageEnter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+
+      .dice-camera {
+        position: relative;
+        transform-style: preserve-3d;
+        transform: rotateX(-35deg) rotateY(45deg);
+        display: flex;
+        gap: 30px;
+        transition: transform 0.5s;
+      }
+
+      .die-wrapper {
+        position: relative;
+        width: var(--die-size);
+        height: var(--die-size);
+        transform-style: preserve-3d;
+      }
+
+      .die {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        transform-style: preserve-3d;
+        transform: rotateX(-90deg);
+      }
+
+      .die-shadow {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.2);
+        filter: blur(15px);
+        transform: translateY(50px) rotateX(90deg) scale(1.2);
+        border-radius: 50%;
+        z-index: -1;
+      }
+
+      .die-face {
+        position: absolute;
+        width: var(--die-size);
+        height: var(--die-size);
+        background: white;
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        padding: 10px;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.1);
+        backface-visibility: visible;
+      }
+
+      .die-dot {
+        width: var(--dot-size);
+        height: var(--dot-size);
+        background: #1e293b;
+        border-radius: 50%;
+        align-self: center;
+        justify-self: center;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+      }
+
+      .die-face-1 { transform: translateZ(var(--die-half)); }
+      .die-face-2 { transform: rotateX(90deg) translateZ(var(--die-half)); }
+      .die-face-3 { transform: rotateY(-90deg) translateZ(var(--die-half)); }
+      .die-face-4 { transform: rotateY(90deg) translateZ(var(--die-half)); }
+      .die-face-5 { transform: rotateX(-90deg) translateZ(var(--die-half)); }
+      .die-face-6 { transform: rotateY(180deg) translateZ(var(--die-half)); }
+
+      .dice-result {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 32px;
+        font-weight: 900;
+        color: white;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+
+      .dice-result.show {
+        opacity: 1;
+      }
+
+      .dice-result-value {
+        color: #fbbf24;
+      }
     </style>
   </head>
   <body>
@@ -292,48 +462,38 @@
           </div>
         </div>
 
-        <!-- Row 2: Players & Turn -->
-        <div class="flex justify-between w-full max-w-4xl mx-auto items-start relative">
-          <!-- P1 Info (Compact) -->
-          <div
-            class="hud-panel bg-blue-900/90 text-white p-2 md:p-4 rounded-xl border-2 border-blue-400 shadow-lg w-32 md:w-48 transition-all pointer-events-auto cursor-pointer hover:border-yellow-400 flex flex-col"
-            id="p1-panel"
-            onclick="game.focusOnPlayer(0)"
-          >
-            <h2 class="text-sm md:text-xl font-bold flex items-center gap-1 md:gap-2">
-              <div class="w-3 h-3 md:w-4 md:h-4 rounded-full bg-blue-400"></div>
-              <span>P1</span>
-              <span id="p1-binbougami" class="hidden text-lg md:text-2xl binbougami-indicator" title="穷神附身中">👻</span>
-            </h2>
-            <p class="text-yellow-300 text-lg md:text-2xl font-mono mt-0 md:mt-1">¥<span id="p1-money">0</span></p>
-            <p class="text-[10px] text-gray-300 hidden md:block">资产: ¥<span id="p1-assets">0</span></p>
-            <div class="text-[10px] md:text-xs text-cyan-300 mt-0 md:mt-1 flex items-center gap-1"><span>📍</span><span id="p1-distance">--</span></div>
-            <div class="text-[10px] md:text-xs text-amber-300 mt-0 md:mt-1 flex items-center gap-1"><span>🃏</span><span id="p1-cards">0</span></div>
-          </div>
+        <!-- Turn Indicator - Centered -->
+        <div
+          class="hud-panel bg-gray-800/80 text-white px-3 py-1 md:px-6 md:py-2 rounded-full border border-gray-600 pointer-events-auto"
+        >
+          <span id="turn-indicator" class="font-bold text-xs md:text-lg tracking-widest whitespace-nowrap">等待...</span>
+        </div>
+      </div>
 
-          <!-- Turn Indicator -->
-          <div
-            class="hud-panel bg-gray-800/80 text-white px-3 py-1 md:px-6 md:py-2 rounded-full border border-gray-600 h-fit mt-1 pointer-events-auto absolute left-1/2 transform -translate-x-1/2 top-0 z-10"
-          >
-            <span id="turn-indicator" class="font-bold text-xs md:text-lg tracking-widest whitespace-nowrap">等待...</span>
-          </div>
+      <!-- Left Side: Players List -->
+      <div class="absolute top-32 md:top-40 left-2 md:left-4 flex flex-col gap-2 pointer-events-none z-20">
+        <!-- P1 Info (Minimal) -->
+        <div
+          class="hud-panel bg-blue-900/90 text-white px-3 py-2 rounded-lg border-2 border-blue-400 shadow-lg transition-all pointer-events-auto cursor-pointer hover:border-yellow-400 flex items-center gap-2"
+          id="p1-panel"
+          onclick="game.showPlayerDetail(0)"
+        >
+          <div class="w-4 h-4 rounded-full bg-blue-400 flex-shrink-0"></div>
+          <span class="font-bold text-sm">P1</span>
+          <span id="p1-binbougami" class="hidden text-lg binbougami-indicator" title="穷神附身中">👻</span>
+          <span class="text-yellow-300 text-sm font-mono ml-1">¥<span id="p1-money">0</span></span>
+        </div>
 
-          <!-- COM Info (Compact) -->
-          <div
-            class="hud-panel bg-red-900/90 text-white p-2 md:p-4 rounded-xl border-2 border-red-400 shadow-lg w-32 md:w-48 transition-all opacity-70 pointer-events-auto cursor-pointer hover:border-yellow-400 flex flex-col items-end md:items-start"
-            id="com-panel"
-            onclick="game.focusOnPlayer(1)"
-          >
-            <h2 class="text-sm md:text-xl font-bold flex items-center gap-1 md:gap-2 flex-row-reverse md:flex-row">
-              <div class="w-3 h-3 md:w-4 md:h-4 rounded-full bg-red-500"></div>
-              <span>COM</span>
-              <span id="com-binbougami" class="hidden text-lg md:text-2xl binbougami-indicator" title="穷神附身中">👻</span>
-            </h2>
-            <p class="text-yellow-300 text-lg md:text-2xl font-mono mt-0 md:mt-1">¥<span id="com-money">0</span></p>
-            <p class="text-[10px] text-gray-300 hidden md:block">资产: ¥<span id="com-assets">0</span></p>
-            <div class="text-[10px] md:text-xs text-cyan-300 mt-0 md:mt-1 flex items-center gap-1 flex-row-reverse md:flex-row"><span>📍</span><span id="com-distance">--</span></div>
-            <div class="text-[10px] md:text-xs text-amber-300 mt-0 md:mt-1 flex items-center gap-1 flex-row-reverse md:flex-row"><span>🃏</span><span id="com-cards">0</span></div>
-          </div>
+        <!-- COM Info (Minimal) -->
+        <div
+          class="hud-panel bg-red-900/90 text-white px-3 py-2 rounded-lg border-2 border-red-400 shadow-lg transition-all opacity-70 pointer-events-auto cursor-pointer hover:border-yellow-400 flex items-center gap-2"
+          id="com-panel"
+          onclick="game.showPlayerDetail(1)"
+        >
+          <div class="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
+          <span class="font-bold text-sm">COM</span>
+          <span id="com-binbougami" class="hidden text-lg binbougami-indicator" title="穷神附身中">👻</span>
+          <span class="text-yellow-300 text-sm font-mono ml-1">¥<span id="com-money">0</span></span>
         </div>
       </div>
 
@@ -413,6 +573,23 @@
       </div>
     </div>
 
+    <!-- 3D 骰子动画弹窗 -->
+    <div id="dice-modal" class="dice-modal">
+      <div class="flex flex-col items-center">
+        <div class="dice-scene">
+          <div class="dice-floor"></div>
+          <div id="dice-stage" class="dice-stage">
+            <div id="dice-camera" class="dice-camera">
+              <!-- Dice will be dynamically injected here -->
+            </div>
+          </div>
+        </div>
+        <div id="dice-result" class="dice-result">
+          掷出了 <span id="dice-result-value" class="dice-result-value">0</span> 点!
+        </div>
+      </div>
+    </div>
+
     <!-- 卡牌获取弹窗 -->
     <div id="card-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
       <div class="bg-gradient-to-b from-amber-900 to-yellow-900 p-6 rounded-2xl shadow-2xl max-w-lg w-full border-4 border-yellow-500 relative">
@@ -437,6 +614,39 @@
         <div class="flex gap-3">
           <button onclick="game.closeUseCardModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition">取消</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 玩家详情弹窗 -->
+    <div id="player-detail-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div id="player-detail-content" class="bg-gradient-to-b from-gray-900 to-gray-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full border-4 relative">
+        <button onclick="game.closePlayerDetailModal()" class="absolute top-3 right-3 text-white/70 hover:text-white text-xl">✕</button>
+        <div class="flex items-center gap-3 mb-4">
+          <div id="player-detail-color" class="w-8 h-8 rounded-full"></div>
+          <h3 id="player-detail-name" class="text-2xl font-bold text-white"></h3>
+          <span id="player-detail-binbougami" class="hidden text-2xl binbougami-indicator">👻</span>
+        </div>
+        <div class="space-y-3">
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">💰 现金</span>
+            <span id="player-detail-money" class="text-xl font-bold text-yellow-300">¥0</span>
+          </div>
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">🏠 资产</span>
+            <span id="player-detail-assets" class="text-lg text-green-300">¥0</span>
+          </div>
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">📍 距目的地</span>
+            <span id="player-detail-distance" class="text-lg text-cyan-300">--</span>
+          </div>
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">🃏 卡牌</span>
+            <span id="player-detail-cards" class="text-lg text-amber-300">0</span>
+          </div>
+        </div>
+        <button onclick="game.closePlayerDetailModal(); game.focusOnPlayer(game.currentDetailPlayer)" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition">
+          📍 定位到玩家
+        </button>
       </div>
     </div>
 
@@ -517,6 +727,185 @@
     </div>
 
     <script>
+      /**
+       * DiceAnimation - 3D骰子动画类
+       * 从 dice_roller_3d.html 移植的完整骰子动画
+       */
+      class DiceAnimation {
+        constructor() {
+          this.modal = document.getElementById('dice-modal');
+          this.stage = document.getElementById('dice-stage');
+          this.camera = document.getElementById('dice-camera');
+          this.resultEl = document.getElementById('dice-result');
+          this.resultValueEl = document.getElementById('dice-result-value');
+          
+          this.isRolling = false;
+          this.duration = 1200; // Animation duration in ms
+          
+          // Target rotations for each dice face (which face lands up)
+          this.targetRotations = {
+            1: { x: -90, y: 0, z: 0 },
+            2: { x: 0, y: 0, z: 0 },
+            3: { x: 0, y: 0, z: -90 },
+            4: { x: 0, y: 0, z: 90 },
+            5: { x: 180, y: 0, z: 0 },
+            6: { x: 90, y: 0, z: 0 },
+          };
+          
+          // Dot positions for each face value (0-8 grid positions)
+          this.dotMap = {
+            1: [4],
+            2: [0, 8],
+            3: [0, 4, 8],
+            4: [0, 2, 6, 8],
+            5: [0, 2, 4, 6, 8],
+            6: [0, 2, 3, 5, 6, 8]
+          };
+        }
+        
+        /**
+         * Create HTML for a single dice face
+         * @param {number} number - Face value (1-6)
+         * @returns {string} HTML string
+         */
+        _createFaceHTML(number) {
+          const activeDots = this.dotMap[number] || [];
+          let dotsHTML = '';
+          for (let i = 0; i < 9; i++) {
+            if (activeDots.includes(i)) {
+              dotsHTML += `<div class="die-dot" style="grid-area: ${Math.floor(i / 3) + 1} / ${(i % 3) + 1}"></div>`;
+            }
+          }
+          return `<div class="die-face die-face-${number}">${dotsHTML}</div>`;
+        }
+        
+        /**
+         * Render dice elements
+         * @param {number} count - Number of dice
+         */
+        _renderDice(count) {
+          this.camera.innerHTML = '';
+          const spacing = 20;
+          
+          for (let i = 0; i < count; i++) {
+            const dieWrapper = document.createElement('div');
+            dieWrapper.className = 'die-wrapper';
+            dieWrapper.style.transform = `translate3d(${i * spacing}px, 0, ${i * -spacing}px)`;
+            
+            const die = document.createElement('div');
+            die.className = 'die';
+            die.dataset.index = i;
+            
+            // Create all 6 faces
+            let facesHTML = '';
+            [1, 6, 2, 5, 3, 4].forEach(n => facesHTML += this._createFaceHTML(n));
+            die.innerHTML = facesHTML;
+            
+            dieWrapper.appendChild(die);
+            
+            // Add shadow
+            const shadow = document.createElement('div');
+            shadow.className = 'die-shadow';
+            dieWrapper.appendChild(shadow);
+            
+            this.camera.appendChild(dieWrapper);
+          }
+        }
+        
+        /**
+         * Generate random result for a single die
+         * @returns {Object} Result with value and rotation angles
+         */
+        _generateResult() {
+          const val = Math.ceil(Math.random() * 6);
+          const base = this.targetRotations[val];
+          const spins = 2 + Math.floor(Math.random() * 3);
+          
+          return {
+            value: val,
+            x: base.x + (spins * 360),
+            y: base.y + (Math.floor(Math.random() * 2) * 360),
+            z: base.z + (spins * 360)
+          };
+        }
+        
+        /**
+         * Roll dice with animation
+         * @param {number} diceCount - Number of dice to roll
+         * @returns {Promise<{results: number[], total: number}>}
+         */
+        roll(diceCount = 1) {
+          return new Promise((resolve) => {
+            if (this.isRolling) {
+              resolve({ results: [], total: 0 });
+              return;
+            }
+            
+            this.isRolling = true;
+            
+            // Render dice
+            this._renderDice(diceCount);
+            
+            // Show modal
+            this.modal.classList.add('show');
+            this.resultEl.classList.remove('show');
+            
+            // Reset and trigger fly-in animation
+            this.stage.classList.remove('entering');
+            void this.stage.offsetWidth; // Force reflow
+            this.stage.classList.add('entering');
+            
+            // Generate results
+            const results = [];
+            let total = 0;
+            for (let i = 0; i < diceCount; i++) {
+              const res = this._generateResult();
+              results.push(res);
+              total += res.value;
+            }
+            
+            // Apply rotation animations
+            const diceEls = this.camera.querySelectorAll('.die');
+            const easing = "cubic-bezier(0.1, 0.9, 0.2, 1)";
+            
+            diceEls.forEach((die, idx) => {
+              const target = results[idx];
+              die.style.transition = `transform ${this.duration}ms ${easing}`;
+              die.style.transform = `rotateX(${target.x}deg) rotateY(${target.y}deg) rotateZ(${target.z}deg)`;
+            });
+            
+            // Show result after animation
+            setTimeout(() => {
+              this.resultValueEl.textContent = total;
+              this.resultEl.classList.add('show');
+            }, this.duration);
+            
+            // Hide modal and resolve after showing result
+            setTimeout(() => {
+              this.isRolling = false;
+              this.modal.classList.remove('show');
+              this.stage.classList.remove('entering');
+              
+              resolve({ 
+                results: results.map(r => r.value), 
+                total: total 
+              });
+            }, this.duration + 800);
+          });
+        }
+        
+        /**
+         * Set animation duration
+         * @param {number} ms - Duration in milliseconds
+         */
+        setDuration(ms) {
+          this.duration = Math.max(500, ms);
+        }
+      }
+
+      // Create global dice animation instance
+      const diceAnimation = new DiceAnimation();
+
       /**
        * 3D Metro Tycoon Game Engine (Three.js Edition)
        */
@@ -1035,12 +1424,23 @@
           this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
           this.raycaster.setFromCamera(this.mouse, this.camera);
-          const markers = this.cities.map((c) => c.marker);
-          const intersects = this.raycaster.intersectObjects(markers);
+          // Filter out undefined/null markers and only include visible ones
+          const markers = this.cities
+            .map((c) => c.marker)
+            .filter((marker) => marker && marker.visible);
+          
+          // Add safety check to prevent hanging on empty or invalid marker list
+          if (!markers || markers.length === 0) return;
 
-          if (intersects.length > 0) {
-            const city = intersects[0].object.userData.city;
-            this.game.travelToCity(city);
+          try {
+            const intersects = this.raycaster.intersectObjects(markers);
+
+            if (intersects.length > 0) {
+              const city = intersects[0].object.userData.city;
+              this.game.travelToCity(city);
+            }
+          } catch (e) {
+            console.error("Error during raycasting:", e);
           }
         }
 
@@ -2542,10 +2942,10 @@
           }
 
           // 随机选择一个车站作为目的地
-          const newDest = stations[Math.floor(Math.random() * stations.length)];
+          let newDest = stations[Math.floor(Math.random() * stations.length)];
 
           // 显示抽奖动画
-          await this.showDestinationLottery(stations, newDest);
+          newDest = await this.showDestinationLottery(stations, newDest);
 
           this.destinationTile = newDest;
 
@@ -2624,19 +3024,10 @@
           return bestTile;
         }
 
-        // 更新所有玩家的距离显示
+        // 更新所有玩家的距离显示（现在只在详情面板中显示）
         updateDistanceDisplay() {
-          if (!this.destinationTile || this.players.length === 0) return;
-
-          // 玩家1距离
-          const p1Dist = this.calculateDistanceToDestination(this.players[0].currentTile);
-          document.getElementById("p1-distance").innerText = p1Dist >= 0 ? p1Dist : "--";
-
-          // 电脑距离
-          if (this.players.length > 1) {
-            const comDist = this.calculateDistanceToDestination(this.players[1].currentTile);
-            document.getElementById("com-distance").innerText = comDist >= 0 ? comDist : "--";
-          }
+          // 距离信息现在只在玩家详情弹窗中显示
+          // 此函数保留以供其他地方调用兼容
         }
 
         // 更新屏幕外目的地指示器
@@ -2650,12 +3041,23 @@
             return;
           }
 
+          // Use relative world position between camera look at and the dest station
+          this.camera.updateMatrixWorld();
+          const destPosCamera = this.destinationTile.mesh.position.clone().applyMatrix4(this.camera.matrixWorldInverse);
+          
+          // Check if in front of camera (negative z in camera space)
+          const isInFront = destPosCamera.z < 0;
+
           // 获取目的地在屏幕上的位置
           const destPos = this.getScreenPosition(this.destinationTile.mesh.position);
           const margin = 80; // 边缘margin
 
           // 检查目的地是否在屏幕可见范围内
-          const isOnScreen = destPos.x >= margin && destPos.x <= this.width - margin && destPos.y >= margin && destPos.y <= this.height - margin;
+          // Must be in front AND within screen bounds
+          let isOnScreen = false;
+          if (isInFront) {
+             isOnScreen = destPos.x >= margin && destPos.x <= this.width - margin && destPos.y >= margin && destPos.y <= this.height - margin;
+          }
 
           if (isOnScreen) {
             // 目的地在屏幕内，隐藏指示器
@@ -2670,15 +3072,17 @@
           document.getElementById("indicator-name").innerText = this.destinationTile.stationName;
 
           // 计算屏幕中心到目的地位置的方向
-          const centerX = this.width / 2;
-          const centerY = this.height / 2;
-          const dx = destPos.x - centerX;
-          const dy = destPos.y - centerY;
-          const angle = Math.atan2(dy, dx);
+          // Use camera space coordinates to determine angle
+          // Camera x is right, y is up. Screen x is right, y is down.
+          // So angle = atan2(-y, x)
+          const angle = Math.atan2(-destPosCamera.y, destPosCamera.x);
 
           // 计算指示器在屏幕边缘的位置
           const edgeMargin = 60;
           let indicatorX, indicatorY;
+
+          const centerX = this.width / 2;
+          const centerY = this.height / 2;
 
           // 根据角度确定指示器位置（在屏幕边缘）
           const maxX = this.width - edgeMargin;
@@ -2686,47 +3090,38 @@
           const minX = edgeMargin;
           const minY = edgeMargin;
 
-          // 计算与屏幕边缘的交点
-          const tanAngle = Math.tan(angle);
-
-          // 检查右边缘
-          if (dx > 0) {
-            const y = centerY + (maxX - centerX) * tanAngle;
-            if (y >= minY && y <= maxY) {
-              indicatorX = maxX;
-              indicatorY = y;
-            }
+          // Use cos/sin to find intersection with box
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+          
+          // Ray from center: x = centerX + t * cos, y = centerY + t * sin
+          // Find t for each edge
+          
+          let t = Infinity;
+          
+          // Right edge: x = maxX
+          if (cos > 0) {
+             const tRight = (maxX - centerX) / cos;
+             if (tRight < t) t = tRight;
           }
-          // 检查左边缘
-          if (dx < 0) {
-            const y = centerY + (minX - centerX) * tanAngle;
-            if (y >= minY && y <= maxY) {
-              indicatorX = minX;
-              indicatorY = y;
-            }
+          // Left edge: x = minX
+          if (cos < 0) {
+             const tLeft = (minX - centerX) / cos;
+             if (tLeft < t) t = tLeft;
           }
-          // 检查下边缘
-          if (dy > 0 && indicatorX === undefined) {
-            const x = centerX + (maxY - centerY) / tanAngle;
-            if (x >= minX && x <= maxX) {
-              indicatorX = x;
-              indicatorY = maxY;
-            }
+          // Bottom edge: y = maxY
+          if (sin > 0) {
+             const tBottom = (maxY - centerY) / sin;
+             if (tBottom < t) t = tBottom;
           }
-          // 检查上边缘
-          if (dy < 0 && indicatorX === undefined) {
-            const x = centerX + (minY - centerY) / tanAngle;
-            if (x >= minX && x <= maxX) {
-              indicatorX = x;
-              indicatorY = minY;
-            }
+          // Top edge: y = minY
+          if (sin < 0) {
+             const tTop = (minY - centerY) / sin;
+             if (tTop < t) t = tTop;
           }
-
-          // 如果还没有确定位置，使用简单的clamping
-          if (indicatorX === undefined) {
-            indicatorX = Math.max(minX, Math.min(maxX, destPos.x));
-            indicatorY = Math.max(minY, Math.min(maxY, destPos.y));
-          }
+          
+          indicatorX = centerX + t * cos;
+          indicatorY = centerY + t * sin;
 
           // 设置指示器位置，根据边缘位置调整transform避免超出屏幕
           let finalX = indicatorX;
@@ -2793,17 +3188,25 @@
           overlay.style.backdropFilter = "blur(8px)";
 
           overlay.innerHTML = `
-            <div class="text-center">
+            <div class="text-center relative">
                 <div class="text-2xl text-gray-400 mb-4">🎲 正在选择目的地...</div>
-                <div class="relative overflow-hidden h-32 w-80 mx-auto mb-6 rounded-xl" style="background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(30,30,50,0.9) 50%, rgba(0,0,0,0.8) 100%);">
+                <div class="relative overflow-hidden h-32 w-80 mx-auto mb-6 rounded-xl border-4 border-yellow-600 bg-gray-900 shadow-2xl">
                     <div class="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-black to-transparent z-10"></div>
                     <div class="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black to-transparent z-10"></div>
-                    <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y-2 border-yellow-400 bg-yellow-400/10 z-10"></div>
+                    <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-12 border-y-2 border-yellow-400 bg-yellow-400/10 z-10 box-border"></div>
                     <div id="lottery-scroll" class="absolute inset-x-0 transition-transform" style="top: 50%; transform: translateY(-50%);">
                         <!-- 地名会在这里滚动 -->
                     </div>
                 </div>
-                <div id="lottery-result" class="text-5xl font-black text-yellow-400 mb-4 opacity-0 transition-opacity duration-500"></div>
+                
+                <!-- 拉杆/确定按钮 -->
+                <div class="mb-6">
+                   <button id="lottery-stop-btn" class="group relative inline-flex items-center justify-center px-8 py-3 text-lg font-black text-white transition-all duration-200 bg-red-600 font-pj rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600 active:scale-95 shadow-[0_6px_0_rgb(153,27,27)] hover:shadow-[0_4px_0_rgb(153,27,27)] hover:translate-y-1 active:shadow-none active:translate-y-2">
+                      <span class="mr-2 text-2xl">🎰</span> 立即确定
+                   </button>
+                </div>
+
+                <div id="lottery-result" class="text-5xl font-black text-yellow-400 mb-4 opacity-0 transition-opacity duration-500 transform scale-90"></div>
                 <div id="lottery-subtitle" class="text-xl text-gray-300 opacity-0 transition-opacity duration-500">出发吧!</div>
             </div>
         `;
@@ -2811,6 +3214,7 @@
           document.body.appendChild(overlay);
 
           const scrollContainer = document.getElementById("lottery-scroll");
+          const stopBtn = document.getElementById("lottery-stop-btn");
 
           // 创建滚动内容（所有车站名随机排列，重复多次）
           const allNames = stations.map((s) => s.stationName);
@@ -2845,7 +3249,7 @@
             )
             .join("");
 
-          // 设置初始位置（从第一个开始）
+          // 设置初始位置（第一个项目在中心）
           scrollContainer.style.transform = `translateY(-${itemHeight / 2}px)`;
           scrollContainer.style.transition = "none";
 
@@ -2856,25 +3260,95 @@
           const finalOffset = (totalItems - 1) * itemHeight + itemHeight / 2;
 
           // 先快后慢的滚动效果
-          scrollContainer.style.transition = "transform 3s cubic-bezier(0.15, 0.85, 0.35, 1)";
+          const duration = 3000;
+          scrollContainer.style.transition = `transform ${duration}ms cubic-bezier(0.15, 0.85, 0.35, 1)`;
           scrollContainer.style.transform = `translateY(-${finalOffset}px)`;
 
-          // 等待滚动完成
-          await wait(3200);
+          // Promise that resolves when animation should end (either timeout or click)
+          let resolveAnimation;
+          const animationPromise = new Promise(r => resolveAnimation = r);
+          
+          let isStopped = false;
+          let selectedCity = finalDest; // Default to finalDest
 
-          // 显示结果
-          document.getElementById("lottery-result").innerText = `🎯 ${finalDest.stationName}`;
-          document.getElementById("lottery-result").style.opacity = "1";
-          document.getElementById("lottery-subtitle").style.opacity = "1";
+          // Auto stop after duration + buffer
+          const autoTimer = setTimeout(() => {
+             if(!isStopped) {
+                 isStopped = true;
+                 resolveAnimation();
+             }
+          }, duration + 200);
 
-          // 等待展示
-          await wait(1500);
+      // Manual stop: pause immediately and wait for second click
+      stopBtn.onclick = () => {
+        if (!isStopped) {
+          isStopped = true;
+          clearTimeout(autoTimer);
 
-          // 淡出
+          // Immediately freeze at the current transform value
+          const computed = window.getComputedStyle(scrollContainer).transform;
+          let currentY = 0;
+          if (computed && computed !== "none") {
+            // Handle matrix and matrix3d formats
+            const matMatch = computed.match(/matrix.*\((.+)\)/);
+            if (matMatch) {
+              const values = matMatch[1].split(',');
+              if (values.length === 6) {
+              // matrix(a, b, c, d, tx, ty)
+              currentY = parseFloat(values[5]);
+            } else if (values.length === 16) {
+              // matrix3d(..., ty at index 13)
+              currentY = parseFloat(values[13]);
+            }
+            }
+          } else {
+            // Fallback: try to get transform from inline style
+            const inlineTransform = scrollContainer.style.transform.match(/translateY\((-?\d+\.?\d*)px\)/);
+            if (inlineTransform) currentY = parseFloat(inlineTransform[1]);
+          }
+
+          // Snap to nearest item (align to center)
+          // currentY is negative. Center of item i is at -(i*h + h/2)
+          // i = (-currentY - h/2) / h
+          let itemIndex = Math.round((-currentY - itemHeight / 2) / itemHeight);
+          // Clamp index
+          itemIndex = Math.max(0, Math.min(itemIndex, scrollItems.length - 1));
+          
+          const snappedY = -(itemIndex * itemHeight + itemHeight / 2);
+
+          // Get the city name at this position
+          const cityName = scrollItems[itemIndex];
+          selectedCity = stations.find(s => s.stationName === cityName) || finalDest;
+
+          // Freeze at snapped position with smooth transition
+          scrollContainer.style.transition = "transform 0.2s ease-out";
+          scrollContainer.style.transform = `translateY(${snappedY}px)`;
+
+          // After snap animation, change button text to "现在出发"
+          setTimeout(() => {
+            stopBtn.innerHTML = '<span class="mr-2 text-2xl">🚀</span> 现在出发';
+            
+            // Wait for second click to continue
+            stopBtn.onclick = () => {
+              resolveAnimation();
+            };
+          }, 200);
+        }
+      };
+
+          // Wait for animation to finish (or be skipped)
+          await animationPromise;
+          
+          // Update finalDest to the selected city
+          finalDest = selectedCity;
+
+          // 直接淡出并返回游戏
           overlay.style.opacity = "0";
           overlay.style.transition = "opacity 0.5s";
           await wait(500);
           overlay.remove();
+          
+          return finalDest;
         }
 
         createDestinationMarker(tile) {
@@ -3163,17 +3637,16 @@
 
         async processMove(diceCount = 1) {
           this.state = "MOVING";
-          // Calculate steps based on dice count
-          let steps = 0;
-          const rolls = [];
-          for (let i = 0; i < diceCount; i++) {
-            const r = rand(1, 6);
-            rolls.push(r);
-            steps += r;
-          }
-
+          
           const player = this.players[this.turn];
+          
+          // Use dice animation to roll
+          const { results: rolls, total: steps } = await diceAnimation.roll(diceCount);
+          
           this.log(`${player.name} 掷出了 ${rolls.join("+")} = ${steps} 点!`, "#fbbf24");
+
+          // Allow changing direction at the start of the turn
+          player.previousTile = null;
 
           let remainingSteps = steps;
           let reachedDestination = false;
@@ -3281,6 +3754,12 @@
           // Center camera on the player before showing direction options
           await this.centerCameraOnPlayer(player, 300);
 
+          // Determine best direction
+          let bestTile = null;
+          if (this.destinationTile) {
+             bestTile = this.chooseBestDirection(options);
+          }
+
           return new Promise((resolve) => {
             const overlay = document.createElement("div");
             overlay.className = "absolute inset-0 pointer-events-auto z-50";
@@ -3296,10 +3775,10 @@
               const dx = tile.gridX - player.currentTile.gridX;
               const dy = tile.gridY - player.currentTile.gridY; // using gridY as Z
 
-              if (dx > 0) label = "➡️";
-              else if (dx < 0) label = "⬅️";
-              else if (dy > 0) label = "⬇️"; // Z+ is down on screen roughly
-              else if (dy < 0) label = "⬆️";
+                if (dx > 0) label = "▶";
+                else if (dx < 0) label = "◀";
+                else if (dy > 0) label = "▼";
+                else if (dy < 0) label = "▲";
 
               // Container for positioning (handles centering)
               const container = document.createElement("div");
@@ -3311,7 +3790,22 @@
               // Button for appearance and interaction (handles animation)
               const btn = document.createElement("button");
               btn.innerText = label;
-              btn.className = "w-12 h-12 bg-yellow-400 hover:bg-white rounded-full text-2xl shadow-xl border-4 border-yellow-600 animate-bounce-custom cursor-pointer";
+              
+              const isBest = tile === bestTile;
+              const baseClass = "w-12 h-12 rounded-full text-2xl shadow-xl border-4 animate-bounce-custom cursor-pointer transition-transform hover:scale-110";
+              const colorClass = isBest 
+                ? "bg-yellow-400 hover:bg-yellow-300 border-white text-black ring-4 ring-yellow-300 ring-opacity-50" 
+                : "bg-blue-300 hover:bg-blue-200 border-white text-black";
+              
+              btn.className = `${baseClass} ${colorClass}`;
+              
+              if (isBest) {
+                  btn.style.zIndex = "10";
+                  // Add a small indicator for "Best"
+                  const badge = document.createElement("div");
+                  badge.className = "absolute -top-2 -right-2 bg-yellow-300 text-yellow-800 text-xs font-bold px-1 rounded border border-yellow-500";
+                  container.appendChild(badge);
+              }
 
               btn.onclick = () => {
                 document.getElementById("direction-overlay").remove();
@@ -4607,9 +5101,7 @@
           const p1 = this.players[0];
           const com = this.players[1];
           document.getElementById("p1-money").innerText = p1.money.toLocaleString();
-          document.getElementById("p1-assets").innerText = p1.assets.toLocaleString();
           document.getElementById("com-money").innerText = com.money.toLocaleString();
-          document.getElementById("com-assets").innerText = com.assets.toLocaleString();
 
           // Update Binbougami Indicators
           const p1Binbougami = document.getElementById("p1-binbougami");
@@ -4620,12 +5112,6 @@
 
           if (this.players[1].hasBinbougami) comBinbougami.classList.remove("hidden");
           else comBinbougami.classList.add("hidden");
-
-          // Update Cards Display
-          const p1Cards = document.getElementById("p1-cards");
-          const comCards = document.getElementById("com-cards");
-          p1Cards.innerText = this.players[0].cards.length;
-          comCards.innerText = this.players[1].cards.length;
 
           // Update Hand Panel (for P1)
           const handPanel = document.getElementById("card-hand-panel");
@@ -4712,6 +5198,61 @@
 
           // Center camera on the selected player
           this.centerCameraOnPlayer(player, 400);
+        }
+
+        // 显示玩家详情弹窗
+        showPlayerDetail(playerIndex) {
+          if (playerIndex < 0 || playerIndex >= this.players.length) return;
+          
+          const player = this.players[playerIndex];
+          this.currentDetailPlayer = playerIndex;
+          
+          const modal = document.getElementById("player-detail-modal");
+          const content = document.getElementById("player-detail-content");
+          const colorDiv = document.getElementById("player-detail-color");
+          const nameEl = document.getElementById("player-detail-name");
+          const binbougamiEl = document.getElementById("player-detail-binbougami");
+          const moneyEl = document.getElementById("player-detail-money");
+          const assetsEl = document.getElementById("player-detail-assets");
+          const distanceEl = document.getElementById("player-detail-distance");
+          const cardsEl = document.getElementById("player-detail-cards");
+          
+          // 设置边框颜色
+          const borderColor = playerIndex === 0 ? "border-blue-400" : "border-red-400";
+          content.className = `bg-gradient-to-b from-gray-900 to-gray-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full border-4 ${borderColor} relative`;
+          
+          // 设置颜色圆点
+          colorDiv.style.backgroundColor = playerIndex === 0 ? "#60a5fa" : "#ef4444";
+          
+          // 设置名字
+          nameEl.textContent = player.name;
+          
+          // 穷神状态
+          if (player.hasBinbougami) {
+            binbougamiEl.classList.remove("hidden");
+          } else {
+            binbougamiEl.classList.add("hidden");
+          }
+          
+          // 设置数据
+          moneyEl.textContent = "¥" + player.money.toLocaleString();
+          assetsEl.textContent = "¥" + player.assets.toLocaleString();
+          cardsEl.textContent = player.cards.length;
+          
+          // 距离
+          if (this.destinationTile && player.currentTile) {
+            const distance = this.calculateDistanceToDestination(player.currentTile);
+            distanceEl.textContent = distance >= 0 ? distance + " 格" : "--";
+          } else {
+            distanceEl.textContent = "--";
+          }
+          
+          modal.classList.remove("hidden");
+        }
+        
+        // 关闭玩家详情弹窗
+        closePlayerDetailModal() {
+          document.getElementById("player-detail-modal").classList.add("hidden");
         }
 
         onResize() {
