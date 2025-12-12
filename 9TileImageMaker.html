@@ -1,0 +1,707 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>九宫格图片缩放生成器 (Fixed)</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        /* 强制像素化渲染，防止模糊 */
+        canvas { 
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .checkerboard {
+            background-color: #f0f0f0;
+            background-image:
+                linear-gradient(45deg, #ccc 25%, transparent 25%),
+                linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ccc 75%),
+                linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center shrink-0">
+        <h1 class="text-xl font-bold text-green-400 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+            九宫格生成器 (9-Slice Fixed)
+        </h1>
+        <div class="text-sm text-slate-400">角落固定不缩放 • 边缘单向拉伸</div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Sidebar Controls -->
+        <aside class="w-80 bg-slate-800 border-r border-slate-700 p-4 flex flex-col gap-6 overflow-y-auto shrink-0 z-10 shadow-lg">
+            
+            <!-- Upload -->
+            <div class="p-4 border-2 border-dashed border-slate-600 rounded-lg text-center hover:border-green-500 transition-colors cursor-pointer bg-slate-700/50" id="dropZone">
+                <input type="file" id="fileInput" accept="image/png,image/jpeg" class="hidden">
+                <div class="text-slate-300 mb-1">点击或拖拽上传 PNG</div>
+                <div class="text-xs text-slate-500">建议使用像素图/UI边框</div>
+            </div>
+
+            <!-- Target Settings -->
+            <div class="space-y-3">
+                <h3 class="font-semibold text-slate-300 border-b border-slate-600 pb-1">目标尺寸 (导出大小)</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">宽度 (px)</label>
+                        <input type="number" id="targetW" value="128" class="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white focus:outline-none focus:border-green-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">高度 (px)</label>
+                        <input type="number" id="targetH" value="64" class="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white focus:outline-none focus:border-green-500">
+                    </div>
+                </div>
+                <div class="flex gap-2 text-xs flex-wrap">
+                    <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(32,32)">32x</button>
+                    <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(64,64)">64x</button>
+                    <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(128,128)">128x</button>
+                    <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(200,100)">200x100</button>
+                </div>
+            </div>
+
+            <!-- Preview Panel -->
+            <div class="flex-1 flex flex-col min-h-[250px]">
+                <div class="flex justify-between items-end mb-1 border-b border-slate-600 pb-1">
+                    <h3 class="font-semibold text-slate-300">实时预览</h3>
+                    <label class="text-xs text-slate-400 flex items-center gap-1">
+                        <input type="checkbox" id="showGrid" onchange="updatePreview()"> 显示网格
+                    </label>
+                </div>
+                
+                <div class="flex-1 bg-slate-900 rounded-lg flex items-center justify-center border border-slate-600 overflow-hidden checkerboard relative p-4 overflow-auto">
+                    <!-- Preview Canvas -->
+                    <canvas id="previewCanvas"></canvas>
+                </div>
+                
+                <button id="downloadBtn" class="mt-4 w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    下载生成图片
+                </button>
+            </div>
+        </aside>
+
+        <!-- Editor Area -->
+        <main class="flex-1 relative bg-slate-900 overflow-hidden cursor-crosshair group" id="mainArea">
+            <div class="absolute top-4 left-4 z-10 pointer-events-none space-y-1">
+                <div class="bg-slate-800/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-300 border border-slate-600">
+                    滚轮: 缩放 | 右键: 平移 | 红/蓝线: 分割区域 | 绿框: 目标大小
+                </div>
+                <div id="guideInfo" class="bg-slate-800/80 backdrop-blur px-3 py-1 rounded text-xs text-green-400 border border-slate-600 hidden">
+                    <!-- Dynamic Info -->
+                </div>
+            </div>
+            <div class="w-full h-full flex items-center justify-center checkerboard">
+                <canvas id="editorCanvas"></canvas>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- State ---
+        const state = {
+            img: null,
+            imgSrc: '',
+            target: { w: 128, h: 64 },
+            guides: { x1: 0, x2: 0, y1: 0, y2: 0 },
+            // 裁剪矩形区域 (在图片坐标系中)
+            cropRect: { x: 0, y: 0, w: 0, h: 0 },
+            view: { scale: 1, offsetX: 0, offsetY: 0 },
+            isDragging: false,
+            dragTarget: null,
+            lastMouse: { x: 0, y: 0 }
+        };
+
+        // --- Elements ---
+        const editorCanvas = document.getElementById('editorCanvas');
+        const ctxEditor = editorCanvas.getContext('2d');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const ctxPreview = previewCanvas.getContext('2d');
+        const guideInfo = document.getElementById('guideInfo');
+        
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const targetWInput = document.getElementById('targetW');
+        const targetHInput = document.getElementById('targetH');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const mainArea = document.getElementById('mainArea');
+        const showGridCheck = document.getElementById('showGrid');
+
+        // --- Initialization ---
+        function init() {
+            downloadBtn.disabled = true;
+            resizeEditorCanvas();
+            window.addEventListener('resize', resizeEditorCanvas);
+            
+            const handleTargetChange = () => {
+                state.target.w = parseInt(targetWInput.value) || 1;
+                state.target.h = parseInt(targetHInput.value) || 1;
+                updatePreview();
+            };
+            targetWInput.addEventListener('input', handleTargetChange);
+            targetWInput.addEventListener('change', handleTargetChange);
+            targetHInput.addEventListener('input', handleTargetChange);
+            targetHInput.addEventListener('change', handleTargetChange);
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFile);
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-green-500'); });
+            dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('border-green-500'); });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-green-500');
+                if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+            });
+
+            editorCanvas.addEventListener('mousedown', handleMouseDown);
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            editorCanvas.addEventListener('wheel', handleWheel, { passive: false });
+            editorCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+            drawEditor();
+        }
+
+        // --- Logic ---
+
+        function setTarget(w, h) {
+            state.target.w = w;
+            state.target.h = h;
+            targetWInput.value = w;
+            targetHInput.value = h;
+            updatePreview();
+        }
+
+        function resizeEditorCanvas() {
+            const rect = mainArea.getBoundingClientRect();
+            editorCanvas.width = rect.width;
+            editorCanvas.height = rect.height;
+            drawEditor();
+        }
+
+        function handleFile(e) {
+            if (e.target.files.length) loadFile(e.target.files[0]);
+        }
+
+        function loadFile(file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    state.img = img;
+                    state.imgSrc = event.target.result;
+                    
+                    // Default Guides: 1/3 splits
+                    state.guides.x1 = Math.floor(img.width / 3);
+                    state.guides.x2 = Math.floor(img.width * 2 / 3);
+                    state.guides.y1 = Math.floor(img.height / 3);
+                    state.guides.y2 = Math.floor(img.height * 2 / 3);
+
+                    // 默认裁剪矩形：与图片同大小
+                    state.cropRect = { x: 0, y: 0, w: img.width, h: img.height };
+
+                    // 更新输入框和 state.target 为图片真实尺寸
+                    state.target.w = img.width;
+                    state.target.h = img.height;
+                    targetWInput.value = img.width;
+                    targetHInput.value = img.height;
+
+                    // Fit view
+                    const fitScale = Math.min(
+                        (editorCanvas.width - 60) / img.width,
+                        (editorCanvas.height - 60) / img.height
+                    );
+                    // 优化缩放计算，保留更多精度，避免大图缩放为0后回退到1
+                    state.view.scale = fitScale < 1 ? Number(fitScale.toFixed(4)) : (Math.floor(fitScale * 10) / 10 || 1);
+                    // Center
+                    state.view.offsetX = (editorCanvas.width - img.width * state.view.scale) / 2;
+                    state.view.offsetY = (editorCanvas.height - img.height * state.view.scale) / 2;
+
+                    downloadBtn.disabled = false;
+                    drawEditor();
+                    updatePreview();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function drawEditor() {
+            ctxEditor.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+
+            if (!state.img) {
+                ctxEditor.fillStyle = '#64748b';
+                ctxEditor.font = '16px sans-serif';
+                ctxEditor.textAlign = 'center';
+                ctxEditor.fillText('请先拖入图片', editorCanvas.width / 2, editorCanvas.height / 2);
+                return;
+            }
+
+            // Nearest Neighbor for sharp pixels
+            ctxEditor.imageSmoothingEnabled = false;
+
+            const { scale, offsetX, offsetY } = state.view;
+            const w = state.img.width * scale;
+            const h = state.img.height * scale;
+
+            // Draw Image
+            ctxEditor.drawImage(state.img, offsetX, offsetY, w, h);
+
+            // Draw Overlay Dimming (optional, helps see guides)
+            ctxEditor.fillStyle = 'rgba(0,0,0,0.3)';
+            // Do not dim center parts? No, simple lines are better.
+
+            // Draw Guides
+            const gx1 = Math.floor(offsetX + state.guides.x1 * scale) + 0.5;
+            const gx2 = Math.floor(offsetX + state.guides.x2 * scale) + 0.5;
+            const gy1 = Math.floor(offsetY + state.guides.y1 * scale) + 0.5;
+            const gy2 = Math.floor(offsetY + state.guides.y2 * scale) + 0.5;
+
+            ctxEditor.lineWidth = 1;
+            
+            // Draw regions text
+            const fontSize = Math.max(10, 10 * (scale > 2 ? 1.5 : 1));
+            ctxEditor.font = `${fontSize}px monospace`;
+            ctxEditor.textAlign = "center";
+            ctxEditor.textBaseline = "middle";
+
+            // X lines (Vertical) - Red
+            ctxEditor.strokeStyle = '#f87171'; 
+            ctxEditor.beginPath();
+            ctxEditor.moveTo(gx1, 0); ctxEditor.lineTo(gx1, editorCanvas.height);
+            ctxEditor.moveTo(gx2, 0); ctxEditor.lineTo(gx2, editorCanvas.height);
+            ctxEditor.stroke();
+
+            // Y lines (Horizontal) - Blue
+            ctxEditor.strokeStyle = '#60a5fa'; 
+            ctxEditor.beginPath();
+            ctxEditor.moveTo(0, gy1); ctxEditor.lineTo(editorCanvas.width, gy1);
+            ctxEditor.moveTo(0, gy2); ctxEditor.lineTo(editorCanvas.width, gy2);
+            ctxEditor.stroke();
+
+            // Coordinate labels
+            ctxEditor.fillStyle = '#fff';
+            ctxEditor.shadowColor="black";
+            ctxEditor.shadowBlur=2;
+            
+            ctxEditor.fillText(`x1: ${Math.round(state.guides.x1)}`, gx1, 20);
+            ctxEditor.fillText(`x2: ${Math.round(state.guides.x2)}`, gx2, 35);
+            ctxEditor.fillText(`y1: ${Math.round(state.guides.y1)}`, 30, gy1);
+            ctxEditor.fillText(`y2: ${Math.round(state.guides.y2)}`, 30, gy2);
+            ctxEditor.shadowBlur=0;
+
+            // --- 绘制裁剪矩形区域 (绿色虚线框) ---
+            const { cropRect } = state;
+            const rx = Math.floor(offsetX + cropRect.x * scale) + 0.5;
+            const ry = Math.floor(offsetY + cropRect.y * scale) + 0.5;
+            const rw = cropRect.w * scale;
+            const rh = cropRect.h * scale;
+
+            ctxEditor.strokeStyle = '#22c55e';
+            ctxEditor.lineWidth = 2;
+            ctxEditor.setLineDash([6, 4]);
+            ctxEditor.strokeRect(rx, ry, rw, rh);
+            ctxEditor.setLineDash([]);
+
+            // 绘制四个角落的拖动手柄
+            const handleSize = 8;
+            ctxEditor.fillStyle = '#22c55e';
+            // 左上
+            ctxEditor.fillRect(rx - handleSize/2, ry - handleSize/2, handleSize, handleSize);
+            // 右上
+            ctxEditor.fillRect(rx + rw - handleSize/2, ry - handleSize/2, handleSize, handleSize);
+            // 左下
+            ctxEditor.fillRect(rx - handleSize/2, ry + rh - handleSize/2, handleSize, handleSize);
+            // 右下
+            ctxEditor.fillRect(rx + rw - handleSize/2, ry + rh - handleSize/2, handleSize, handleSize);
+
+            // 绘制边缘中点的拖动手柄
+            ctxEditor.fillStyle = '#4ade80';
+            // 上中
+            ctxEditor.fillRect(rx + rw/2 - handleSize/2, ry - handleSize/2, handleSize, handleSize);
+            // 下中
+            ctxEditor.fillRect(rx + rw/2 - handleSize/2, ry + rh - handleSize/2, handleSize, handleSize);
+            // 左中
+            ctxEditor.fillRect(rx - handleSize/2, ry + rh/2 - handleSize/2, handleSize, handleSize);
+            // 右中
+            ctxEditor.fillRect(rx + rw - handleSize/2, ry + rh/2 - handleSize/2, handleSize, handleSize);
+
+            // 绘制裁剪尺寸标签
+            ctxEditor.fillStyle = '#22c55e';
+            ctxEditor.font = `${fontSize}px monospace`;
+            ctxEditor.shadowColor="black";
+            ctxEditor.shadowBlur=2;
+            ctxEditor.fillText(`裁剪: ${Math.round(cropRect.w)} x ${Math.round(cropRect.h)}`, rx + rw/2, ry - 15);
+            ctxEditor.shadowBlur=0;
+
+            // --- 绘制9宫格区域说明 ---
+            drawRegionLabels(offsetX, offsetY, scale);
+        }
+
+        function drawRegionLabels(offsetX, offsetY, scale) {
+            const { guides, cropRect } = state;
+            const fontSize = Math.max(9, 9 * (scale > 2 ? 1.2 : 1));
+            ctxEditor.font = `${fontSize}px sans-serif`;
+            ctxEditor.textAlign = "center";
+            ctxEditor.textBaseline = "middle";
+            
+            // 计算9个区域的中心点位置并标注
+            const regions = [
+                { label: '固定', col: 0, row: 0 },
+                { label: '水平拉伸', col: 1, row: 0 },
+                { label: '固定', col: 2, row: 0 },
+                { label: '垂直拉伸', col: 0, row: 1 },
+                { label: '双向拉伸', col: 1, row: 1 },
+                { label: '垂直拉伸', col: 2, row: 1 },
+                { label: '固定', col: 0, row: 2 },
+                { label: '水平拉伸', col: 1, row: 2 },
+                { label: '固定', col: 2, row: 2 },
+            ];
+
+            const sx = [cropRect.x, guides.x1, guides.x2, cropRect.x + cropRect.w];
+            const sy = [cropRect.y, guides.y1, guides.y2, cropRect.y + cropRect.h];
+
+            regions.forEach(r => {
+                const cx = (sx[r.col] + sx[r.col + 1]) / 2;
+                const cy = (sy[r.row] + sy[r.row + 1]) / 2;
+                const screenX = offsetX + cx * scale;
+                const screenY = offsetY + cy * scale;
+                
+                const regionW = sx[r.col + 1] - sx[r.col];
+                const regionH = sy[r.row + 1] - sy[r.row];
+                
+                // 只在区域足够大时显示标签
+                if (regionW * scale > 40 && regionH * scale > 20) {
+                    ctxEditor.fillStyle = 'rgba(0,0,0,0.5)';
+                    const textWidth = ctxEditor.measureText(r.label).width;
+                    ctxEditor.fillRect(screenX - textWidth/2 - 4, screenY - fontSize/2 - 2, textWidth + 8, fontSize + 4);
+                    
+                    ctxEditor.fillStyle = r.label === '固定' ? '#fbbf24' : (r.label === '双向拉伸' ? '#f472b6' : '#a5f3fc');
+                    ctxEditor.fillText(r.label, screenX, screenY);
+                }
+            });
+        }
+
+        // --- THE FIX: Correct 9-Slice Logic ---
+        function updatePreview() {
+            if (!state.img) return;
+
+            const targetW = state.target.w;
+            const targetH = state.target.h;
+            const img = state.img;
+            const { cropRect } = state;
+            
+            // Source Cuts
+            const x1 = Math.round(state.guides.x1);
+            const x2 = Math.round(state.guides.x2);
+            const y1 = Math.round(state.guides.y1);
+            const y2 = Math.round(state.guides.y2);
+
+            previewCanvas.width = targetW;
+            previewCanvas.height = targetH;
+            ctxPreview.imageSmoothingEnabled = false;
+            ctxPreview.clearRect(0, 0, targetW, targetH);
+
+            // --- Calculation Logic ---
+            
+            // Source Segments (Widths/Heights)
+            const sw = [ x1 - cropRect.x, x2 - x1, (cropRect.x + cropRect.w) - x2 ];
+            const sh = [ y1 - cropRect.y, y2 - y1, (cropRect.y + cropRect.h) - y2 ];
+
+            // Destination Segments (Widths/Heights)
+            // Left/Right corners match source size exactly
+            // Center fills the remaining space
+            const dw = [ sw[0], targetW - sw[0] - sw[2], sw[2] ];
+            const dh = [ sh[0], targetH - sh[0] - sh[2], sh[2] ];
+
+            // Destination Positions (X/Y)
+            const dx = [ 0, dw[0], targetW - dw[2] ];
+            const dy = [ 0, dh[0], targetH - dh[2] ];
+
+            // Source Positions (X/Y)
+            const sx = [ cropRect.x, x1, x2 ];
+            const sy = [ cropRect.y, y1, y2 ];
+
+            // Draw 9 regions
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const sWidth = sw[col];
+                    const sHeight = sh[row];
+                    const dWidth = dw[col];
+                    const dHeight = dh[row];
+
+                    // Skip invalid draws (if target is smaller than corners)
+                    if (dWidth <= 0 || dHeight <= 0 || sWidth <= 0 || sHeight <= 0) continue;
+
+                    ctxPreview.drawImage(
+                        img,
+                        sx[col], sy[row], sWidth, sHeight,  // Source
+                        dx[col], dy[row], dWidth, dHeight   // Dest
+                    );
+                    
+                    // Debug Grid
+                    if (showGridCheck.checked) {
+                        ctxPreview.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                        ctxPreview.lineWidth = 1;
+                        ctxPreview.strokeRect(dx[col], dy[row], dWidth, dHeight);
+                    }
+                }
+            }
+        }
+
+        // --- Interaction Handlers ---
+
+        function screenToImage(x, y) {
+            return {
+                x: (x - state.view.offsetX) / state.view.scale,
+                y: (y - state.view.offsetY) / state.view.scale
+            };
+        }
+
+        function handleMouseDown(e) {
+            if (!state.img) return;
+            const rect = editorCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Pan
+            if (e.button === 2 || e.button === 1) {
+                state.isDragging = true;
+                state.dragTarget = 'pan';
+                state.lastMouse = { x: mouseX, y: mouseY };
+                return;
+            }
+
+            // Hit Test for lines and crop rect handles
+            const tol = 10; // tolerance pixels
+            const { scale, offsetX, offsetY } = state.view;
+            const { cropRect } = state;
+            
+            const gx1 = offsetX + state.guides.x1 * scale;
+            const gx2 = offsetX + state.guides.x2 * scale;
+            const gy1 = offsetY + state.guides.y1 * scale;
+            const gy2 = offsetY + state.guides.y2 * scale;
+
+            // 裁剪矩形的屏幕坐标
+            const rx = offsetX + cropRect.x * scale;
+            const ry = offsetY + cropRect.y * scale;
+            const rw = cropRect.w * scale;
+            const rh = cropRect.h * scale;
+
+            // 检测裁剪矩形的拖动手柄
+            const handles = [
+                { id: 'rect-tl', x: rx, y: ry, cursor: 'nwse-resize' },
+                { id: 'rect-tr', x: rx + rw, y: ry, cursor: 'nesw-resize' },
+                { id: 'rect-bl', x: rx, y: ry + rh, cursor: 'nesw-resize' },
+                { id: 'rect-br', x: rx + rw, y: ry + rh, cursor: 'nwse-resize' },
+                { id: 'rect-t', x: rx + rw/2, y: ry, cursor: 'ns-resize' },
+                { id: 'rect-b', x: rx + rw/2, y: ry + rh, cursor: 'ns-resize' },
+                { id: 'rect-l', x: rx, y: ry + rh/2, cursor: 'ew-resize' },
+                { id: 'rect-r', x: rx + rw, y: ry + rh/2, cursor: 'ew-resize' },
+            ];
+
+            for (const h of handles) {
+                if (Math.abs(mouseX - h.x) <= tol && Math.abs(mouseY - h.y) <= tol) {
+                    state.isDragging = true;
+                    state.dragTarget = h.id;
+                    state.lastMouse = { x: mouseX, y: mouseY };
+                    editorCanvas.style.cursor = h.cursor;
+                    return;
+                }
+            }
+
+            // 检测是否在矩形内部 (移动整个矩形)
+            if (mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh) {
+                state.isDragging = true;
+                state.dragTarget = 'rect-move';
+                state.lastMouse = { x: mouseX, y: mouseY };
+                editorCanvas.style.cursor = 'move';
+                return;
+            }
+
+            // 检测分割线
+            const dists = [
+                { id: 'x1', val: Math.abs(mouseX - gx1) },
+                { id: 'x2', val: Math.abs(mouseX - gx2) },
+                { id: 'y1', val: Math.abs(mouseY - gy1) },
+                { id: 'y2', val: Math.abs(mouseY - gy2) }
+            ];
+            dists.sort((a,b) => a.val - b.val);
+
+            if (dists[0].val <= tol) {
+                state.isDragging = true;
+                state.dragTarget = dists[0].id;
+                editorCanvas.style.cursor = dists[0].id.startsWith('x') ? 'ew-resize' : 'ns-resize';
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (!state.isDragging) return;
+            const rect = editorCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (state.dragTarget === 'pan') {
+                const dx = mouseX - state.lastMouse.x;
+                const dy = mouseY - state.lastMouse.y;
+                state.view.offsetX += dx;
+                state.view.offsetY += dy;
+                state.lastMouse = { x: mouseX, y: mouseY };
+                drawEditor();
+                return;
+            }
+
+            const imgPos = screenToImage(mouseX, mouseY);
+            const { width, height } = state.img;
+            const { cropRect } = state;
+
+            // 处理裁剪矩形的拖动
+            if (state.dragTarget.startsWith('rect-')) {
+                const dx = (mouseX - state.lastMouse.x) / state.view.scale;
+                const dy = (mouseY - state.lastMouse.y) / state.view.scale;
+                const minSize = 10; // 最小尺寸
+
+                // Store old position to calculate delta for guides
+                const oldX = cropRect.x;
+                const oldY = cropRect.y;
+
+                switch (state.dragTarget) {
+                    case 'rect-move':
+                        cropRect.x = Math.max(0, Math.min(cropRect.x + dx, width - cropRect.w));
+                        cropRect.y = Math.max(0, Math.min(cropRect.y + dy, height - cropRect.h));
+                        
+                        // Move guides with the rect
+                        const moveDx = cropRect.x - oldX;
+                        const moveDy = cropRect.y - oldY;
+                        state.guides.x1 += moveDx;
+                        state.guides.x2 += moveDx;
+                        state.guides.y1 += moveDy;
+                        state.guides.y2 += moveDy;
+                        break;
+                    case 'rect-tl':
+                        const newX1 = Math.max(0, Math.min(cropRect.x + dx, cropRect.x + cropRect.w - minSize));
+                        const newY1 = Math.max(0, Math.min(cropRect.y + dy, cropRect.y + cropRect.h - minSize));
+                        cropRect.w += cropRect.x - newX1;
+                        cropRect.h += cropRect.y - newY1;
+                        cropRect.x = newX1;
+                        cropRect.y = newY1;
+                        break;
+                    case 'rect-tr':
+                        cropRect.w = Math.max(minSize, Math.min(imgPos.x - cropRect.x, width - cropRect.x));
+                        const newY2 = Math.max(0, Math.min(cropRect.y + dy, cropRect.y + cropRect.h - minSize));
+                        cropRect.h += cropRect.y - newY2;
+                        cropRect.y = newY2;
+                        break;
+                    case 'rect-bl':
+                        const newX3 = Math.max(0, Math.min(cropRect.x + dx, cropRect.x + cropRect.w - minSize));
+                        cropRect.w += cropRect.x - newX3;
+                        cropRect.x = newX3;
+                        cropRect.h = Math.max(minSize, Math.min(imgPos.y - cropRect.y, height - cropRect.y));
+                        break;
+                    case 'rect-br':
+                        cropRect.w = Math.max(minSize, Math.min(imgPos.x - cropRect.x, width - cropRect.x));
+                        cropRect.h = Math.max(minSize, Math.min(imgPos.y - cropRect.y, height - cropRect.y));
+                        break;
+                    case 'rect-t':
+                        const newY4 = Math.max(0, Math.min(cropRect.y + dy, cropRect.y + cropRect.h - minSize));
+                        cropRect.h += cropRect.y - newY4;
+                        cropRect.y = newY4;
+                        break;
+                    case 'rect-b':
+                        cropRect.h = Math.max(minSize, Math.min(imgPos.y - cropRect.y, height - cropRect.y));
+                        break;
+                    case 'rect-l':
+                        const newX5 = Math.max(0, Math.min(cropRect.x + dx, cropRect.x + cropRect.w - minSize));
+                        cropRect.w += cropRect.x - newX5;
+                        cropRect.x = newX5;
+                        break;
+                    case 'rect-r':
+                        cropRect.w = Math.max(minSize, Math.min(imgPos.x - cropRect.x, width - cropRect.x));
+                        break;
+                }
+
+                // Clamp guides to be inside cropRect
+                state.guides.x1 = Math.max(cropRect.x, Math.min(state.guides.x1, cropRect.x + cropRect.w));
+                state.guides.x2 = Math.max(cropRect.x, Math.min(state.guides.x2, cropRect.x + cropRect.w));
+                state.guides.y1 = Math.max(cropRect.y, Math.min(state.guides.y1, cropRect.y + cropRect.h));
+                state.guides.y2 = Math.max(cropRect.y, Math.min(state.guides.y2, cropRect.y + cropRect.h));
+                
+                // Ensure order
+                if (state.guides.x1 > state.guides.x2) { const t = state.guides.x1; state.guides.x1 = state.guides.x2; state.guides.x2 = t; }
+                if (state.guides.y1 > state.guides.y2) { const t = state.guides.y1; state.guides.y1 = state.guides.y2; state.guides.y2 = t; }
+
+                state.lastMouse = { x: mouseX, y: mouseY };
+                
+                guideInfo.classList.remove('hidden');
+                guideInfo.innerText = `裁剪区域: ${Math.round(cropRect.w)} x ${Math.round(cropRect.h)} @ (${Math.round(cropRect.x)}, ${Math.round(cropRect.y)})`;
+
+                drawEditor();
+                updatePreview();
+                return;
+            }
+
+            // Update guides
+            if (state.dragTarget === 'x1') state.guides.x1 = Math.max(cropRect.x, Math.min(imgPos.x, state.guides.x2 - 1));
+            if (state.dragTarget === 'x2') state.guides.x2 = Math.max(state.guides.x1 + 1, Math.min(imgPos.x, cropRect.x + cropRect.w));
+            if (state.dragTarget === 'y1') state.guides.y1 = Math.max(cropRect.y, Math.min(imgPos.y, state.guides.y2 - 1));
+            if (state.dragTarget === 'y2') state.guides.y2 = Math.max(state.guides.y1 + 1, Math.min(imgPos.y, cropRect.y + cropRect.h));
+            
+            // Update info display
+            guideInfo.classList.remove('hidden');
+            guideInfo.innerText = `X: ${Math.round(state.guides.x1)}, ${Math.round(state.guides.x2)} | Y: ${Math.round(state.guides.y1)}, ${Math.round(state.guides.y2)}`;
+
+            drawEditor();
+            updatePreview();
+        }
+
+        function handleMouseUp() {
+            state.isDragging = false;
+            state.dragTarget = null;
+            editorCanvas.style.cursor = 'crosshair';
+            guideInfo.classList.add('hidden');
+        }
+
+        function handleWheel(e) {
+            e.preventDefault();
+            if (!state.img) return;
+            const rect = editorCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const zoomSpeed = 0.1;
+            const delta = e.deltaY < 0 ? 1 : -1;
+            const newScale = Math.max(0.1, Math.min(50, state.view.scale * (1 + delta * zoomSpeed)));
+            
+            const imgX = (mouseX - state.view.offsetX) / state.view.scale;
+            const imgY = (mouseY - state.view.offsetY) / state.view.scale;
+
+            state.view.offsetX = mouseX - imgX * newScale;
+            state.view.offsetY = mouseY - imgY * newScale;
+            state.view.scale = newScale;
+
+            drawEditor();
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            if(!state.img) return;
+            const link = document.createElement('a');
+            link.download = `9slice_${state.target.w}x${state.target.h}.png`;
+            link.href = previewCanvas.toDataURL('image/png');
+            link.click();
+        });
+
+        init();
+    </script>
+</body>
+</html>
