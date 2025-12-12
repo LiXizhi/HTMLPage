@@ -65,10 +65,10 @@
                     </div>
                 </div>
                 <div class="flex gap-2 text-xs flex-wrap">
+                    <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(16,16)">16x</button>
                     <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(32,32)">32x</button>
                     <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(64,64)">64x</button>
                     <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(128,128)">128x</button>
-                    <button class="flex-1 bg-slate-700 hover:bg-slate-600 py-1 px-2 rounded min-w-[60px]" onclick="setTarget(200,100)">200x100</button>
                 </div>
             </div>
 
@@ -121,7 +121,11 @@
             view: { scale: 1, offsetX: 0, offsetY: 0 },
             isDragging: false,
             dragTarget: null,
-            lastMouse: { x: 0, y: 0 }
+            lastMouse: { x: 0, y: 0 },
+            // Undo/Redo 历史记录
+            history: [],
+            historyIndex: -1,
+            maxHistory: 50
         };
 
         // --- Elements ---
@@ -172,6 +176,9 @@
             editorCanvas.addEventListener('wheel', handleWheel, { passive: false });
             editorCanvas.addEventListener('contextmenu', e => e.preventDefault());
 
+            // Undo/Redo 键盘事件
+            window.addEventListener('keydown', handleKeyDown);
+
             // Preview Zoom
             previewContainer.addEventListener('wheel', (e) => {
                 e.preventDefault();
@@ -189,6 +196,63 @@
             if (!state.img) return;
             previewCanvas.style.width = `${state.target.w * state.previewScale}px`;
             previewCanvas.style.height = `${state.target.h * state.previewScale}px`;
+        }
+
+        // --- History (Undo/Redo) ---
+        function saveHistoryState() {
+            // 保存当前 guides 和 cropRect 状态
+            const snapshot = {
+                guides: { ...state.guides },
+                cropRect: { ...state.cropRect }
+            };
+            
+            // 如果在历史中间位置进行了新操作，删除后面的记录
+            if (state.historyIndex < state.history.length - 1) {
+                state.history = state.history.slice(0, state.historyIndex + 1);
+            }
+            
+            state.history.push(snapshot);
+            
+            // 限制历史记录数量
+            if (state.history.length > state.maxHistory) {
+                state.history.shift();
+            } else {
+                state.historyIndex++;
+            }
+        }
+
+        function undo() {
+            if (state.historyIndex > 0) {
+                state.historyIndex--;
+                restoreHistoryState(state.history[state.historyIndex]);
+            }
+        }
+
+        function redo() {
+            if (state.historyIndex < state.history.length - 1) {
+                state.historyIndex++;
+                restoreHistoryState(state.history[state.historyIndex]);
+            }
+        }
+
+        function restoreHistoryState(snapshot) {
+            state.guides = { ...snapshot.guides };
+            state.cropRect = { ...snapshot.cropRect };
+            drawEditor();
+            updatePreview();
+        }
+
+        function handleKeyDown(e) {
+            // Ctrl+Z: Undo, Ctrl+Y 或 Ctrl+Shift+Z: Redo
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    undo();
+                } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+                    e.preventDefault();
+                    redo();
+                }
+            }
         }
 
         // --- Logic ---
@@ -247,6 +311,12 @@
                     state.view.offsetY = (editorCanvas.height - img.height * state.view.scale) / 2;
 
                     downloadBtn.disabled = false;
+                    
+                    // 清空历史记录并保存初始状态
+                    state.history = [];
+                    state.historyIndex = -1;
+                    saveHistoryState();
+                    
                     drawEditor();
                     updatePreview();
                 };
@@ -542,20 +612,12 @@
                     state.dragTarget = h.id;
                     state.lastMouse = { x: mouseX, y: mouseY };
                     editorCanvas.style.cursor = h.cursor;
+                    saveHistoryState(); // 保存历史记录
                     return;
                 }
             }
 
-            // 检测是否在矩形内部 (移动整个矩形)
-            if (mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh) {
-                state.isDragging = true;
-                state.dragTarget = 'rect-move';
-                state.lastMouse = { x: mouseX, y: mouseY };
-                editorCanvas.style.cursor = 'move';
-                return;
-            }
-
-            // 检测分割线
+            // 检测分割线 (优先于矩形移动，这样在矩形内也能拖动线)
             const dists = [
                 { id: 'x1', val: Math.abs(mouseX - gx1) },
                 { id: 'x2', val: Math.abs(mouseX - gx2) },
@@ -567,15 +629,95 @@
             if (dists[0].val <= tol) {
                 state.isDragging = true;
                 state.dragTarget = dists[0].id;
+                state.lastMouse = { x: mouseX, y: mouseY };
                 editorCanvas.style.cursor = dists[0].id.startsWith('x') ? 'ew-resize' : 'ns-resize';
+                saveHistoryState(); // 保存历史记录
+                return;
+            }
+
+            // 检测是否在矩形内部 (移动整个矩形)
+            if (mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh) {
+                state.isDragging = true;
+                state.dragTarget = 'rect-move';
+                state.lastMouse = { x: mouseX, y: mouseY };
+                editorCanvas.style.cursor = 'move';
+                saveHistoryState(); // 保存历史记录
+                return;
             }
         }
 
+        function updateCursorStyle(mouseX, mouseY) {
+            if (!state.img) {
+                editorCanvas.style.cursor = 'default';
+                return;
+            }
+
+            const tol = 10;
+            const { scale, offsetX, offsetY } = state.view;
+            const { cropRect } = state;
+
+            const gx1 = offsetX + state.guides.x1 * scale;
+            const gx2 = offsetX + state.guides.x2 * scale;
+            const gy1 = offsetY + state.guides.y1 * scale;
+            const gy2 = offsetY + state.guides.y2 * scale;
+
+            const rx = offsetX + cropRect.x * scale;
+            const ry = offsetY + cropRect.y * scale;
+            const rw = cropRect.w * scale;
+            const rh = cropRect.h * scale;
+
+            // 检测裁剪矩形的拖动手柄
+            const handles = [
+                { x: rx, y: ry, cursor: 'nwse-resize' },
+                { x: rx + rw, y: ry, cursor: 'nesw-resize' },
+                { x: rx, y: ry + rh, cursor: 'nesw-resize' },
+                { x: rx + rw, y: ry + rh, cursor: 'nwse-resize' },
+                { x: rx + rw/2, y: ry, cursor: 'ns-resize' },
+                { x: rx + rw/2, y: ry + rh, cursor: 'ns-resize' },
+                { x: rx, y: ry + rh/2, cursor: 'ew-resize' },
+                { x: rx + rw, y: ry + rh/2, cursor: 'ew-resize' },
+            ];
+
+            for (const h of handles) {
+                if (Math.abs(mouseX - h.x) <= tol && Math.abs(mouseY - h.y) <= tol) {
+                    editorCanvas.style.cursor = h.cursor;
+                    return;
+                }
+            }
+
+            // 检测分割线
+            const dists = [
+                { id: 'x1', val: Math.abs(mouseX - gx1), cursor: 'ew-resize' },
+                { id: 'x2', val: Math.abs(mouseX - gx2), cursor: 'ew-resize' },
+                { id: 'y1', val: Math.abs(mouseY - gy1), cursor: 'ns-resize' },
+                { id: 'y2', val: Math.abs(mouseY - gy2), cursor: 'ns-resize' }
+            ];
+            dists.sort((a, b) => a.val - b.val);
+
+            if (dists[0].val <= tol) {
+                editorCanvas.style.cursor = dists[0].cursor;
+                return;
+            }
+
+            // 检测是否在矩形内部
+            if (mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh) {
+                editorCanvas.style.cursor = 'move';
+                return;
+            }
+
+            editorCanvas.style.cursor = 'crosshair';
+        }
+
         function handleMouseMove(e) {
-            if (!state.isDragging) return;
             const rect = editorCanvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
+
+            // 非拖动状态下更新光标样式
+            if (!state.isDragging) {
+                updateCursorStyle(mouseX, mouseY);
+                return;
+            }
 
             if (state.dragTarget === 'pan') {
                 const dx = mouseX - state.lastMouse.x;
