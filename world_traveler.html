@@ -1132,6 +1132,716 @@
         return PROPERTIES_CACHE.homes[cityName][propertyIndex];
       }
 
+      // --- Terrain Color Legend (from terrain PNG files) ---
+      // Height categories:
+      // - flat: same height as road tiles (1 unit) - urban, crops, scrub, wetland
+      // - varied: random height variation - forest, snow, barren
+      // - grass: slight variation with optional decorations
+      const TERRAIN_COLORS = {
+        '#000000': { type: 'ocean', height: -1, color: 0x000000, label: '海洋', heightType: 'water' },
+        '#1A5BAB': { type: 'water', height: -1, color: 0x1A5BAB, label: '水域', heightType: 'water' },
+        '#358221': { type: 'forest', height: 2, color: 0x358221, label: '森林', heightType: 'varied', minHeight: 2, maxHeight: 5, treeChance: 0.8 },
+        '#A7D282': { type: 'grass', height: 1, color: 0xA7D282, label: '草地', heightType: 'varied', minHeight: 1, maxHeight: 1.8, treeChance: 0.15 },
+        '#90C090': { type: 'urban', height: 1, color: 0x90C090, label: '城市', heightType: 'flat', treeChance: 0.15 },
+        '#FFDB5C': { type: 'crops', height: 1, color: 0xFFDB5C, label: '耕地', heightType: 'varied', minHeight: 1, maxHeight: 1.6, treeChance: 0.08 },
+        '#EECFA8': { type: 'scrub', height: 1, color: 0xEECFA8, label: '灌木', heightType: 'varied', minHeight: 1, maxHeight: 1.8, treeChance: 0.12 },
+        '#EDE9E4': { type: 'barren', height: 1, color: 0xEDE9E4, label: '荒漠', heightType: 'varied', minHeight: 1, maxHeight: 3 },
+        '#F2F2F2': { type: 'snow', height: 3, color: 0xF2F2F2, label: '雪山', heightType: 'varied', minHeight: 3, maxHeight: 6 },
+        '#419BDF': { type: 'wetland', height: 0, color: 0x419BDF, label: '湿地', heightType: 'flat', treeChance: 0.15 }
+      };
+
+      // Terrain tile constants
+      // Each terrain tile is a 2x2 degree PNG file
+      // The actual image resolution (e.g., 512x512) doesn't matter for terrain type determination
+      // We ray trace into the image at specific lon/lat coordinates to sample terrain colors
+      const TERRAIN_TILE_DEGREES = 2; // Each terrain tile covers 2x2 degrees of lon/lat
+      const MAX_CACHED_TERRAIN_TILES = 32; // Maximum number of cached terrain tile image data
+      const TERRAIN_LOAD_RADIUS = 1; // Load 3x3 = 9 terrain tiles around camera (radius 1 means current + neighbors)
+      const TERRAIN_CDN_BASE = 'https://cdn.keepwork.com/worldmap/';
+
+      /**
+       * TerrainTileManager - Manages loading, caching, and rendering of terrain tiles
+       * 
+       * Each terrain tile:
+       * - Covers a fixed 2x2 degree area of the Earth (aligned to even degree boundaries)
+       * - Is stored as a PNG image on CDN (e.g., terrain_72_74_18_20.png)
+       * - Contains 200x200 pixels, each pixel = one terrain block
+       * - Is loaded on-demand based on camera position
+       * 
+       * Typically 9 tiles (3x3 grid) are loaded around the camera view.
+       * Up to 32 tiles can be cached in memory using LRU eviction.
+       */
+      class TerrainTileManager {
+        constructor(scene, game) {
+          this.scene = scene;
+          this.game = game;
+          
+          // Cache for terrain tiles: key = "lonFrom_lonTo_latFrom_latTo"
+          // Each tile contains imageData (pixel colors) and rendered meshGroup
+          this.terrainTiles = new Map();
+          // LRU order tracking for cache eviction
+          this.tileAccessOrder = [];
+          
+          // Currently visible terrain tile keys (typically 9 tiles)
+          this.visibleTiles = new Set();
+          
+          // Loading promises to prevent duplicate loads
+          this.loadingPromises = new Map();
+          
+          // THREE.js group for terrain meshes
+          this.terrainGroup = new THREE.Group();
+          this.terrainGroup.name = 'terrainGroup';
+          this.scene.add(this.terrainGroup);
+          
+          // Materials cache for terrain types
+          this.terrainMaterials = {};
+          this.initTerrainMaterials();
+          
+          // Block geometry (reused for all terrain blocks)
+          this.blockGeometry = new THREE.BoxGeometry(TILE_SIZE, 1, TILE_SIZE);
+          
+          // Current center position (in lon/lat)
+          this.centerLon = 0;
+          this.centerLat = 0;
+        }
+
+        initTerrainMaterials() {
+          for (const [hexColor, data] of Object.entries(TERRAIN_COLORS)) {
+            this.terrainMaterials[data.type] = new THREE.MeshLambertMaterial({ 
+              color: data.color 
+            });
+          }
+          // Default material for unknown terrain
+          this.terrainMaterials['default'] = new THREE.MeshLambertMaterial({ color: 0x808080 });
+        }
+
+        /**
+         * Get terrain tile key from longitude and latitude
+         * Tiles are aligned to 2-degree boundaries
+         */
+        getTileKey(lon, lat) {
+          const lonFrom = Math.floor(lon / TERRAIN_TILE_DEGREES) * TERRAIN_TILE_DEGREES;
+          const latFrom = Math.floor(lat / TERRAIN_TILE_DEGREES) * TERRAIN_TILE_DEGREES;
+          const lonTo = lonFrom + TERRAIN_TILE_DEGREES;
+          const latTo = latFrom + TERRAIN_TILE_DEGREES;
+          return `${lonFrom}_${lonTo}_${latFrom}_${latTo}`;
+        }
+
+        /**
+         * Parse tile key back to bounds
+         */
+        parseTileKey(key) {
+          const [lonFrom, lonTo, latFrom, latTo] = key.split('_').map(Number);
+          return { lonFrom, lonTo, latFrom, latTo };
+        }
+
+        /**
+         * Get the terrain image URL for a tile
+         */
+        getTileImageUrl(lonFrom, lonTo, latFrom, latTo) {
+          return `${TERRAIN_CDN_BASE}terrain_${lonFrom}_${lonTo}_${latFrom}_${latTo}.png`;
+        }
+
+        /**
+         * Load a terrain tile image and cache its pixel data
+         */
+        async loadTerrainTile(key) {
+          // Check if already loading
+          if (this.loadingPromises.has(key)) {
+            return this.loadingPromises.get(key);
+          }
+
+          // Check if already cached
+          if (this.terrainTiles.has(key)) {
+            this.updateLRU(key);
+            return this.terrainTiles.get(key);
+          }
+
+          const { lonFrom, lonTo, latFrom, latTo } = this.parseTileKey(key);
+          const imageUrl = this.getTileImageUrl(lonFrom, lonTo, latFrom, latTo);
+
+          const loadPromise = new Promise(async (resolve) => {
+            try {
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              
+              await new Promise((imgResolve, imgReject) => {
+                img.onload = imgResolve;
+                img.onerror = imgReject;
+                img.src = imageUrl;
+              });
+
+              // Create canvas to read pixel data
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              
+              const imageData = ctx.getImageData(0, 0, img.width, img.height);
+              
+              // Debug: Log sample pixel colors from the loaded image
+              console.log(`Loaded terrain image ${key}: ${img.width}x${img.height}`);
+              const samplePixels = [];
+              for (let i = 0; i < 5; i++) {
+                const px = Math.floor(Math.random() * img.width);
+                const py = Math.floor(Math.random() * img.height);
+                const idx = (py * img.width + px) * 4;
+                const r = imageData.data[idx];
+                const g = imageData.data[idx + 1];
+                const b = imageData.data[idx + 2];
+                const a = imageData.data[idx + 3];
+                const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0').toUpperCase()).join('');
+                samplePixels.push({ px, py, r, g, b, a, hex });
+              }
+              // console.log('Sample pixel colors:', samplePixels);
+              
+              const tileData = {
+                key,
+                lonFrom, lonTo, latFrom, latTo,
+                imageData,
+                width: img.width,
+                height: img.height,
+                meshGroup: null, // Will be created when rendering
+                visible: false,
+                loaded: true
+              };
+
+              // Evict oldest tiles if cache is full
+              this.evictOldTiles();
+              
+              this.terrainTiles.set(key, tileData);
+              this.updateLRU(key);
+              
+              // console.log(`Loaded terrain tile: ${key}`);
+              resolve(tileData);
+            } catch (error) {
+              console.warn(`Failed to load terrain tile ${key}:`, error);
+              // Create empty tile data for failed loads
+              const emptyTileData = {
+                key,
+                lonFrom, lonTo, latFrom, latTo,
+                imageData: null,
+                width: TERRAIN_IMAGE_SIZE,
+                height: TERRAIN_IMAGE_SIZE,
+                meshGroup: null,
+                visible: false,
+                loaded: false
+              };
+              this.terrainTiles.set(key, emptyTileData);
+              this.updateLRU(key);
+              resolve(emptyTileData);
+            } finally {
+              this.loadingPromises.delete(key);
+            }
+          });
+
+          this.loadingPromises.set(key, loadPromise);
+          return loadPromise;
+        }
+
+        /**
+         * Update LRU order
+         */
+        updateLRU(key) {
+          const index = this.tileAccessOrder.indexOf(key);
+          if (index > -1) {
+            this.tileAccessOrder.splice(index, 1);
+          }
+          this.tileAccessOrder.push(key);
+        }
+
+        /**
+         * Evict oldest tiles when cache is full
+         */
+        evictOldTiles() {
+          while (this.terrainTiles.size >= MAX_CACHED_TERRAIN_TILES && this.tileAccessOrder.length > 0) {
+            const oldestKey = this.tileAccessOrder.shift();
+            const tile = this.terrainTiles.get(oldestKey);
+            if (tile) {
+              // Remove mesh from scene
+              if (tile.meshGroup) {
+                this.terrainGroup.remove(tile.meshGroup);
+                // Dispose geometries and materials
+                tile.meshGroup.traverse((child) => {
+                  if (child.geometry) child.geometry.dispose();
+                });
+                tile.meshGroup = null;
+              }
+              this.terrainTiles.delete(oldestKey);
+              this.visibleTiles.delete(oldestKey);
+              console.log(`Evicted terrain tile: ${oldestKey}`);
+            }
+          }
+        }
+
+        /**
+         * Get pixel color at specific position in the terrain image
+         */
+        getPixelColor(tileData, localX, localY) {
+          if (!tileData || !tileData.imageData) return null;
+          
+          const x = Math.floor(localX);
+          const y = Math.floor(localY);
+          
+          if (x < 0 || x >= tileData.width || y < 0 || y >= tileData.height) return null;
+          
+          const index = (y * tileData.width + x) * 4;
+          const r = tileData.imageData.data[index];
+          const g = tileData.imageData.data[index + 1];
+          const b = tileData.imageData.data[index + 2];
+          
+          return { r, g, b };
+        }
+
+        /**
+         * Convert RGB to hex string for lookup
+         */
+        rgbToHex(r, g, b) {
+          return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0').toUpperCase()).join('');
+        }
+
+        /**
+         * Find closest terrain color from the legend
+         */
+        findClosestTerrainType(r, g, b) {
+          const hexColor = this.rgbToHex(r, g, b);
+          
+          // Direct match
+          if (TERRAIN_COLORS[hexColor]) {
+            return TERRAIN_COLORS[hexColor];
+          }
+          
+          // Find closest color by distance
+          let closestType = null;
+          let minDistance = Infinity;
+          
+          for (const [hex, data] of Object.entries(TERRAIN_COLORS)) {
+            const tr = parseInt(hex.slice(1, 3), 16);
+            const tg = parseInt(hex.slice(3, 5), 16);
+            const tb = parseInt(hex.slice(5, 7), 16);
+            
+            const distance = Math.sqrt(
+              Math.pow(r - tr, 2) + 
+              Math.pow(g - tg, 2) + 
+              Math.pow(b - tb, 2)
+            );
+            
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestType = data;
+            }
+          }
+          
+          return closestType || { type: 'default', height: 1, color: 0x808080 };
+        }
+
+        /**
+         * Get terrain data at a specific world coordinate
+         * @param worldX - World X coordinate (corresponds to longitude)
+         * @param worldZ - World Z coordinate (corresponds to latitude, inverted)
+         * @param centerLon - Center longitude of the map
+         * @param centerLat - Center latitude of the map
+         */
+        getTerrainAt(worldX, worldZ, centerLon, centerLat) {
+          // Convert world coordinates to lon/lat
+          // worldX/Z are grid coordinates * TILE_SIZE, and grid coords = (lon/lat - center) * CONFIG_SCALE
+          const configScale = this.game?.configScale || 70;
+          const lon = centerLon + (worldX / TILE_SIZE) / configScale;
+          const lat = centerLat - (worldZ / TILE_SIZE) / configScale;
+          
+          const key = this.getTileKey(lon, lat);
+          const tileData = this.terrainTiles.get(key);
+          
+          if (!tileData || !tileData.imageData) return null;
+          
+          // Calculate local position within the tile (0 to TERRAIN_TILE_DEGREES)
+          const localLon = lon - tileData.lonFrom;
+          const localLat = tileData.latTo - lat; // Y is inverted in image
+          
+          // Convert to pixel coordinates using actual image dimensions
+          const pixelsPerDegree = tileData.width / TERRAIN_TILE_DEGREES;
+          const pixelX = localLon * pixelsPerDegree;
+          const pixelY = localLat * pixelsPerDegree;
+          
+          const color = this.getPixelColor(tileData, pixelX, pixelY);
+          if (!color) return null;
+          
+          return this.findClosestTerrainType(color.r, color.g, color.b);
+        }
+
+        /**
+         * Create mesh for a terrain tile (called after loading)
+         * Ray traces into the image at world grid positions to determine terrain type
+         */
+        createTerrainMesh(tileData, centerLon, centerLat, CONFIG_SCALE) {
+          if (tileData.meshGroup) return; // Already created
+          if (!tileData.imageData) return; // No data to render
+          
+          const meshGroup = new THREE.Group();
+          meshGroup.name = `terrain_${tileData.key}`;
+          
+          // Create a water plane for this terrain tile
+          // Calculate tile bounds in world coordinates
+          const minGridX = Math.floor((tileData.lonFrom - centerLon) * CONFIG_SCALE);
+          const maxGridX = Math.ceil((tileData.lonTo - centerLon) * CONFIG_SCALE);
+          const minGridZ = Math.floor(-(tileData.latTo - centerLat) * CONFIG_SCALE);
+          const maxGridZ = Math.ceil(-(tileData.latFrom - centerLat) * CONFIG_SCALE);
+          
+          // Calculate water plane size and position
+          const tileSizeX = (maxGridX - minGridX) * TILE_SIZE;
+          const tileSizeZ = (maxGridZ - minGridZ) * TILE_SIZE;
+          const tileCenterX = (minGridX + maxGridX) / 2 * TILE_SIZE;
+          const tileCenterZ = (minGridZ + maxGridZ) / 2 * TILE_SIZE;
+          
+          // Add water plane for this tile
+          const waterGeo = new THREE.PlaneGeometry(tileSizeX, tileSizeZ);
+          const waterMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a }); // Deep blue ocean
+          const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+          waterMesh.rotation.x = -Math.PI / 2;
+          waterMesh.position.set(tileCenterX, -0.5, tileCenterZ);
+          waterMesh.receiveShadow = false;
+          meshGroup.add(waterMesh);
+          
+          // Calculate pixels per degree from actual image size
+          const pixelsPerDegree = tileData.width / TERRAIN_TILE_DEGREES;
+          
+          // Group blocks by terrain type for instancing
+          const blocksByType = {};
+          
+          // Debug: count terrain types found
+          const terrainTypeCounts = {};
+          
+          // Iterate over game world grid positions that fall within this tile
+          // (reusing minGridX, maxGridX, minGridZ, maxGridZ calculated above for water plane)
+          
+          for (let gridX = minGridX; gridX <= maxGridX; gridX++) {
+            for (let gridZ = minGridZ; gridZ <= maxGridZ; gridZ++) {
+              const key = `${gridX},${gridZ}`;
+              
+              // Skip positions that already have road/station tiles
+              if (this.tilesMap && this.tilesMap.has(key)) {
+                continue;
+              }
+              
+              // Convert grid position to lon/lat
+              const lon = centerLon + gridX / CONFIG_SCALE;
+              const lat = centerLat - gridZ / CONFIG_SCALE;
+              
+              // Check if this position is within this tile's bounds
+              if (lon < tileData.lonFrom || lon >= tileData.lonTo ||
+                  lat < tileData.latFrom || lat >= tileData.latTo) {
+                continue;
+              }
+              
+              // Calculate pixel position in image
+              const localLon = lon - tileData.lonFrom;
+              const localLat = tileData.latTo - lat; // Y is inverted in image
+              const px = Math.floor(localLon * pixelsPerDegree);
+              const py = Math.floor(localLat * pixelsPerDegree);
+              
+              const color = this.getPixelColor(tileData, px, py);
+              if (!color) continue;
+              
+              const terrain = this.findClosestTerrainType(color.r, color.g, color.b);
+              
+              // Count terrain types for debugging
+              terrainTypeCounts[terrain.type] = (terrainTypeCounts[terrain.type] || 0) + 1;
+              
+              // Skip water types (ocean plane handles them)
+              if (terrain.type === 'water' || terrain.type === 'ocean') continue;
+              
+              if (!blocksByType[terrain.type]) {
+                blocksByType[terrain.type] = new Map();
+              }
+              
+              // Generate random height based on terrain type using position-based seed for consistency
+              const seed = (gridX * 73856093) ^ (gridZ * 19349663);
+              const pseudoRandom = ((seed % 1000) / 1000);
+              
+              let blockHeight = 1; // Default flat height (same as road tiles)
+              const terrainConfig = Object.values(TERRAIN_COLORS).find(t => t.type === terrain.type);
+              
+              if (terrainConfig && terrainConfig.heightType === 'varied') {
+                const minH = terrainConfig.minHeight || 1;
+                const maxH = terrainConfig.maxHeight || 3;
+                blockHeight = minH + pseudoRandom * (maxH - minH);
+              } else {
+                blockHeight = 1;
+              }
+              
+              // Only add if not already occupied
+              const posKey = `${gridX},${gridZ}`;
+              if (!blocksByType[terrain.type].has(posKey)) {
+                blocksByType[terrain.type].set(posKey, {
+                  x: gridX * TILE_SIZE,
+                  z: gridZ * TILE_SIZE,
+                  height: blockHeight,
+                  seed: seed // Store seed for consistent decoration generation
+                });
+              }
+            }
+          }
+          
+          // Create terrain meshes with optimized rendering
+          // Terrain types that should have tree decorations
+          const treeTerrains = ['forest', 'grass', 'crops', 'scrub'];
+          // Terrain types that use flat height (same as road)
+          const flatTerrains = ['wetland', 'urban'];
+          
+          // Shared tree geometry for performance
+          const treeGeo = new THREE.ConeGeometry(0.8, 2.5, 6);
+          const treeMat = new THREE.MeshLambertMaterial({ color: 0x14532d });
+          const tallTreeGeo = new THREE.ConeGeometry(1.2, 4, 6);
+          const tallTreeMat = new THREE.MeshLambertMaterial({ color: 0x0d3d1a });
+          
+          // Create meshes by terrain type
+          for (const [type, positions] of Object.entries(blocksByType)) {
+            if (positions.size === 0) continue;
+            
+            const material = this.terrainMaterials[type] || this.terrainMaterials['default'];
+            const isFlat = flatTerrains.includes(type);
+            const hasTreeDecoration = treeTerrains.includes(type);
+            
+            // For forest with manageable count, create individual meshes with trees
+            if (type === 'forest' && positions.size < 3000) {
+              // Create individual forest blocks with varied heights and trees
+              for (const [, pos] of positions) {
+                const blockHeight = pos.height;
+                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
+                mesh.receiveShadow = true;
+                
+                // Add tree decoration based on seed (70% chance for forest)
+                const treeRandom = ((pos.seed * 7) % 100) / 100;
+                if (treeRandom < 0.7) {
+                  const tree = new THREE.Mesh(tallTreeGeo, tallTreeMat);
+                  tree.position.y = blockHeight * 0.5 + 2;
+                  tree.castShadow = true;
+                  // Slight random offset for natural look
+                  const offsetX = ((pos.seed * 13) % 100) / 100 - 0.5;
+                  const offsetZ = ((pos.seed * 17) % 100) / 100 - 0.5;
+                  tree.position.x = offsetX;
+                  tree.position.z = offsetZ;
+                  mesh.add(tree);
+                }
+                
+                meshGroup.add(mesh);
+              }
+            } else if (type === 'grass' && positions.size < 5000) {
+              // Grass blocks: slight height variation with occasional small trees
+              for (const [, pos] of positions) {
+                const blockHeight = pos.height; // Use varied height from config
+                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
+                mesh.receiveShadow = true;
+                
+                // Sparse tree decoration (15% chance for grass)
+                const treeRandom = ((pos.seed * 11) % 100) / 100;
+                if (treeRandom < 0.15) {
+                  const tree = new THREE.Mesh(treeGeo, treeMat);
+                  tree.position.y = blockHeight * 0.5 + 1.25;
+                  tree.castShadow = true;
+                  mesh.add(tree);
+                }
+                
+                meshGroup.add(mesh);
+              }
+            } else if (type === 'crops' && positions.size < 5000) {
+              // Crops blocks: slight height variation with sparse trees (fruit trees)
+              for (const [, pos] of positions) {
+                const blockHeight = pos.height; // Use varied height from config
+                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
+                mesh.receiveShadow = true;
+                
+                // Sparse tree decoration (8% chance for crops - fruit trees)
+                const treeRandom = ((pos.seed * 11) % 100) / 100;
+                if (treeRandom < 0.08) {
+                  const tree = new THREE.Mesh(treeGeo, treeMat);
+                  tree.position.y = blockHeight * 0.5 + 1.25;
+                  tree.castShadow = true;
+                  mesh.add(tree);
+                }
+                
+                meshGroup.add(mesh);
+              }
+            } else if (type === 'scrub' && positions.size < 5000) {
+              // Scrub blocks: slight height variation with sparse short trees/bushes
+              const bushGeo = new THREE.ConeGeometry(0.6, 1.8, 6);
+              const bushMat = new THREE.MeshLambertMaterial({ color: 0x5d6d3a }); // Olive/brown-green for scrub
+              for (const [, pos] of positions) {
+                const blockHeight = pos.height; // Use varied height from config
+                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
+                mesh.receiveShadow = true;
+                
+                // Sparse bush/tree decoration (12% chance for scrub)
+                const treeRandom = ((pos.seed * 11) % 100) / 100;
+                if (treeRandom < 0.12) {
+                  const bush = new THREE.Mesh(bushGeo, bushMat);
+                  bush.position.y = blockHeight * 0.5 + 0.9;
+                  bush.castShadow = true;
+                  // Slight random offset for natural look
+                  const offsetX = ((pos.seed * 13) % 100) / 100 - 0.5;
+                  const offsetZ = ((pos.seed * 17) % 100) / 100 - 0.5;
+                  bush.position.x = offsetX * 0.5;
+                  bush.position.z = offsetZ * 0.5;
+                  mesh.add(bush);
+                }
+                
+                meshGroup.add(mesh);
+              }
+            } else if (type === 'snow' && positions.size < 3000) {
+              // Snow/mountain blocks: varied height for mountain effect
+              for (const [, pos] of positions) {
+                const blockHeight = pos.height;
+                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
+                mesh.receiveShadow = true;
+                meshGroup.add(mesh);
+              }
+            } else if (type === 'barren' && positions.size < 3000) {
+              // Barren blocks: slight height variation for desert/rocky terrain
+              for (const [, pos] of positions) {
+                const blockHeight = pos.height;
+                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
+                mesh.receiveShadow = true;
+                meshGroup.add(mesh);
+              }
+            } else {
+              // Use instanced mesh for better performance on flat terrain types or large counts
+              const count = positions.size;
+              const blockHeight = 1;
+              const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
+              const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
+              instancedMesh.receiveShadow = true;
+              
+              const matrix = new THREE.Matrix4();
+              let index = 0;
+              
+              for (const [, pos] of positions) {
+                const yOffset = blockHeight * 0.5 - 0.5;
+                matrix.setPosition(pos.x, yOffset, pos.z);
+                instancedMesh.setMatrixAt(index++, matrix);
+              }
+              
+              instancedMesh.instanceMatrix.needsUpdate = true;
+              meshGroup.add(instancedMesh);
+            }
+          }
+          
+          tileData.meshGroup = meshGroup;
+          this.terrainGroup.add(meshGroup);
+          
+          console.log(`Created terrain mesh for ${tileData.key} with ${Object.values(blocksByType).reduce((sum, m) => sum + m.size, 0)} blocks`);
+        }
+
+        /**
+         * Update which terrain tiles should be loaded and visible
+         * Loads a 3x3 grid of tiles (9 total) centered on the camera position
+         * Each tile is a 2x2 degree area containing many terrain blocks
+         */
+        async updateVisibleTiles(centerLon, centerLat, CONFIG_SCALE) {
+          this.centerLon = centerLon;
+          this.centerLat = centerLat;
+          
+          // Calculate which tiles should be visible (3x3 grid = 9 tiles around camera)
+          const newVisibleTiles = new Set();
+          
+          // TERRAIN_LOAD_RADIUS = 1 means: current tile + 1 tile in each direction = 3x3 grid
+          for (let dx = -TERRAIN_LOAD_RADIUS; dx <= TERRAIN_LOAD_RADIUS; dx++) {
+            for (let dy = -TERRAIN_LOAD_RADIUS; dy <= TERRAIN_LOAD_RADIUS; dy++) {
+              const lon = centerLon + dx * TERRAIN_TILE_DEGREES;
+              const lat = centerLat + dy * TERRAIN_TILE_DEGREES;
+              const key = this.getTileKey(lon, lat);
+              newVisibleTiles.add(key);
+            }
+          }
+          
+          // Hide tiles that are no longer visible
+          for (const key of this.visibleTiles) {
+            if (!newVisibleTiles.has(key)) {
+              const tile = this.terrainTiles.get(key);
+              if (tile && tile.meshGroup) {
+                tile.meshGroup.visible = false;
+                tile.visible = false;
+              }
+            }
+          }
+          
+          // Load and show new visible tiles
+          for (const key of newVisibleTiles) {
+            if (!this.terrainTiles.has(key)) {
+              // Load new tile
+              const tileData = await this.loadTerrainTile(key);
+              if (tileData && tileData.loaded) {
+                this.createTerrainMesh(tileData, centerLon, centerLat, CONFIG_SCALE);
+              }
+            }
+            
+            const tile = this.terrainTiles.get(key);
+            if (tile) {
+              if (!tile.meshGroup && tile.loaded) {
+                this.createTerrainMesh(tile, centerLon, centerLat, CONFIG_SCALE);
+              }
+              if (tile.meshGroup) {
+                tile.meshGroup.visible = true;
+                tile.visible = true;
+              }
+            }
+          }
+          
+          this.visibleTiles = newVisibleTiles;
+        }
+
+        /**
+         * Check if a world position is on a road-buildable terrain
+         */
+        isRoadBuildable(worldX, worldZ, centerLon, centerLat) {
+          const terrain = this.getTerrainAt(worldX, worldZ, centerLon, centerLat);
+          if (!terrain) return true; // Default to buildable if no terrain data
+          return terrain.type !== 'water';
+        }
+
+        /**
+         * Get terrain type at world position
+         */
+        getTerrainTypeAt(worldX, worldZ, centerLon, centerLat) {
+          const terrain = this.getTerrainAt(worldX, worldZ, centerLon, centerLat);
+          return terrain ? terrain.type : 'default';
+        }
+
+        /**
+         * Cleanup all terrain tiles
+         */
+        dispose() {
+          for (const [key, tile] of this.terrainTiles) {
+            if (tile.meshGroup) {
+              this.terrainGroup.remove(tile.meshGroup);
+              tile.meshGroup.traverse((child) => {
+                if (child.geometry) child.geometry.dispose();
+              });
+            }
+          }
+          this.terrainTiles.clear();
+          this.tileAccessOrder = [];
+          this.visibleTiles.clear();
+          this.loadingPromises.clear();
+          
+          if (this.terrainGroup.parent) {
+            this.terrainGroup.parent.remove(this.terrainGroup);
+          }
+        }
+      }
+
       // Station data loaded from world_traveler_map_data (full city info with lat/lng/population)
       let STATION_DATA = [];
       // Station names (extracted from STATION_DATA for backward compatibility)
@@ -1324,6 +2034,13 @@
           this.gameRaycaster = null;
           this.gameMouse = new THREE.Vector2();
 
+          // Terrain tile manager for large-scale terrain
+          this.terrainManager = null;
+          // Map center coordinates (lon/lat)
+          this.mapCenterLon = 0;
+          this.mapCenterLat = 0;
+          this.configScale = 70; // Scale factor for lat/lon to grid units
+
           this.initThree();
           // this.initGame(); // Delayed until city selection
 
@@ -1346,7 +2063,7 @@
           const fov = 45;
           const aspect = this.width / this.height;
           const near = 0.1;
-          const far = 2000;
+          const far = 300;
           this.camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
           // Perspective View Setup: Position and LookAt
@@ -1368,7 +2085,7 @@
           this.controls.enableDamping = true;
           this.controls.dampingFactor = 0.05;
           this.controls.minDistance = 30;
-          this.controls.maxDistance = 500;
+          this.controls.maxDistance = 200;
           this.controls.target.set(0, 0, 0);
 
           // Lock rotation, enable pan on ground plane
@@ -1563,6 +2280,12 @@
 
           // Hide the world map iframe
           this.hideWorldMap();
+
+          // Dispose terrain manager before clearing scene
+          if (this.terrainManager) {
+            this.terrainManager.dispose();
+            this.terrainManager = null;
+          }
 
           // Reset Game Scene if needed or just init
           // Clear existing map if any?
@@ -1779,7 +2502,7 @@
         generateMap() {
           this.map = [];
           
-          // Initialize simplex noise for terrain
+          // Initialize simplex noise for terrain (fallback when terrain tiles not loaded)
           const simplex = new SimplexNoise();
           
           // World map for terrain data
@@ -1911,10 +2634,12 @@
           // Use actual lat/lng coordinates from STATION_DATA
           // Scale factor: needs to be large enough that stations don't overlap on even grid
           // With ~277 stations in ~2x3.3 degree area, scale of 200 gives ~400x660 units = 200x330 even grid positions
-          const CONFIG_SCALE = 70; // Scale factor for lat/lon to grid units
+          const CONFIG_SCALE = this.configScale; // Scale factor for lat/lon to grid units
           const RENDER_RADIUS = 6; // Radius to render terrain around stations
           
           let rawPoints = [];
+          let centerLat = 0;
+          let centerLng = 0;
           
           if (STATION_DATA.length > 0) {
             // Calculate bounds of all cities
@@ -1926,8 +2651,12 @@
               if (d.lng > maxLng) maxLng = d.lng;
             });
             
-            const centerLat = (minLat + maxLat) / 2;
-            const centerLng = (minLng + maxLng) / 2;
+            centerLat = (minLat + maxLat) / 2;
+            centerLng = (minLng + maxLng) / 2;
+            
+            // Store map center for terrain tile loading
+            this.mapCenterLon = centerLng;
+            this.mapCenterLat = centerLat;
 
             // Convert lat/lng to grid coordinates
             rawPoints = STATION_DATA.map(d => ({
@@ -1935,7 +2664,10 @@
               z: -(d.lat - centerLat) * CONFIG_SCALE,
               originalName: d.name,
               population: d.population || 100000,
-              level: d.level || 3
+              level: d.level || 3,
+              // Store original coordinates for terrain lookup
+              lon: d.lng,
+              lat: d.lat
             }));
           } else {
             // Fallback: generate random positions
@@ -2005,7 +2737,10 @@
                 name: p.originalName,
                 population: p.population,
                 level: p.level,
-                neighbors: []
+                neighbors: [],
+                // Store original lon/lat for terrain lookup
+                lon: p.lon,
+                lat: p.lat
               };
               nodes.push(node);
               setCell(gx, gz, { h: 1, obj: type === 'station' ? 3 : 2 });
@@ -2017,12 +2752,16 @@
           console.log(`Generated ${nodes.length} station nodes from ${STATION_DATA.length} station data entries`);
 
           // --- Step 3: Generate Terrain Around Stations ---
+          // Note: Terrain tiles are loaded asynchronously by TerrainTileManager
+          // For road generation, we still use noise-based terrain to determine passability
+          // The actual visual terrain will come from PNG tiles
           nodes.forEach(node => {
             for(let dx = -RENDER_RADIUS; dx <= RENDER_RADIUS; dx++) {
               for(let dz = -RENDER_RADIUS; dz <= RENDER_RADIUS; dz++) {
                 let wx = node.x + dx;
                 let wz = node.z + dz;
                 if (!worldMap.has(`${wx},${wz}`)) {
+                  // Use noise for now (terrain tiles load async)
                   let h = getNoiseHeight(wx, wz);
                   setCell(wx, wz, { h: h, obj: 0 });
                 }
@@ -2145,22 +2884,20 @@
 
           // --- Step 6: Instantiate Tiles ---
           const mapGroup = new THREE.Group();
+          mapGroup.name = 'gameMapGroup';
           this.scene.add(mapGroup);
           this.tilesMap = new Map();
+          this.mapGroup = mapGroup; // Store reference for later
 
-          // Add infinite ocean plane
-          const waterGeo = new THREE.PlaneGeometry(10000, 10000);
-          const waterMat = new THREE.MeshLambertMaterial({ color: 0x1e3a8a }); // Deep blue ocean
-          const waterMesh = new THREE.Mesh(waterGeo, waterMat);
-          waterMesh.rotation.x = -Math.PI / 2;
-          waterMesh.position.set(0, -0.5, 0);
-          waterMesh.receiveShadow = false;
-          mapGroup.add(waterMesh);
+          // Note: Ocean planes are now rendered per-terrain-tile in TerrainTileManager.createTerrainMesh()
+          // This allows for proper loading/unloading with terrain tiles
 
           let idCounter = 0;
           tileData.forEach((data) => {
-            // Skip pure environment tiles far from roads for performance
-            if (!data.type.includes('env') || data.obj === 1 || data.obj === 2 || data.obj === 3 || data.type === 'green' || data.type === 'road' || 
+            // Skip pure environment tiles - terrain manager handles environment rendering
+            // Only create tiles for roads, stations, and game-relevant tiles
+            if (data.obj === 1 || data.obj === 2 || data.obj === 3 || 
+                data.type === 'green' || data.type === 'road' || 
                 ['blue', 'red', 'yellow'].includes(data.type)) {
               const tile = new Tile(idCounter++, data.x, data.z, data.type);
               if (data.stationName) tile.stationName = data.stationName;
@@ -2169,16 +2906,25 @@
               this.map.push(tile);
               this.tilesMap.set(`${data.x},${data.z}`, tile);
               this.createTileVisuals(tile, mapGroup);
-            } else {
-              // Still add environment tiles but with simpler visuals
-              const tile = new Tile(idCounter++, data.x, data.z, data.type);
-              this.map.push(tile);
-              this.tilesMap.set(`${data.x},${data.z}`, tile);
-              this.createTileVisuals(tile, mapGroup);
             }
+            // Note: Environment tiles are now rendered by TerrainTileManager from PNG data
           });
 
           console.log(`Created ${this.map.length} tiles, ${this.map.filter(t => t.type === 'green').length} stations`);
+
+          // --- Step 6.5: Initialize Terrain Manager (async loading after stations/roads are rendered) ---
+          // Initialize or reset terrain manager
+          if (this.terrainManager) {
+            this.terrainManager.dispose();
+          }
+          this.terrainManager = new TerrainTileManager(this.scene, this);
+          
+          // Store reference to tilesMap for terrain manager to check road/station positions
+          this.terrainManager.tilesMap = this.tilesMap;
+          
+          // Start loading terrain tiles for the current area (async - doesn't block map rendering)
+          // Terrain loads around camera view and streams in as PNG tiles are fetched from CDN
+          this.terrainManager.updateVisibleTiles(centerLng, centerLat, CONFIG_SCALE);
 
           // --- Step 7: Link Neighbors ---
           this.map.forEach((tile) => {
@@ -5113,7 +5859,33 @@
             });
           }
 
+          // Update terrain tiles based on camera position (throttled)
+          this.updateTerrainTiles();
+
           this.renderer.render(this.scene, this.camera);
+        }
+
+        // Throttled terrain tile update
+        updateTerrainTiles() {
+          if (!this.terrainManager || this.mode !== "GAME") return;
+          
+          // Throttle updates to avoid excessive loading
+          const now = Date.now();
+          if (this._lastTerrainUpdate && now - this._lastTerrainUpdate < 1000) return;
+          this._lastTerrainUpdate = now;
+          
+          // Calculate camera center in lon/lat
+          const target = this.controls.target;
+          
+          // Convert world position back to lon/lat
+         const gridX = target.x / TILE_SIZE;
+          const gridZ = target.z / TILE_SIZE;
+          
+          const centerLon = this.mapCenterLon + gridX / this.configScale;
+          const centerLat = this.mapCenterLat - gridZ / this.configScale;
+          
+          // Update visible terrain tiles
+          this.terrainManager.updateVisibleTiles(centerLon, centerLat, this.configScale);
         }
       }
 
