@@ -1,0 +1,766 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>世界地貌生成器 (H5纯净版)</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <style>
+        #canvasWrapper {
+            transition: transform 0.1s ease-out;
+        }
+        
+        #canvasWrapper.dragging {
+            transition: none;
+        }
+        
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        'primary-hover': '#1d4ed8',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-700 p-5 flex flex-col items-center min-h-screen font-sans">
+
+    <div class="text-center mb-5">
+        <h1 class="m-0 mb-2.5 text-2xl text-slate-800 text-center w-full">纯净自然地貌生成器</h1>
+        <p class="text-slate-500 text-sm">基于卫星数据渲染 · 自动移除城市建筑 · 像素级地貌标注</p>
+    </div>
+
+    <div class="w-full max-w-[1200px] grid grid-cols-1 md:grid-cols-[350px_1fr] gap-5">
+        <!-- 控制面板 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4">
+            <h2 class="m-0 text-base font-semibold text-slate-600 border-b border-slate-200 pb-2">设置区域</h2>
+            
+            <div class="flex flex-col gap-1.5">
+                <label class="text-[13px] font-medium text-slate-500">选择预设</label>
+                <select id="presetSelect" onchange="applyPreset()" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+                    <option value="CHINA">中国 (China)</option>
+                    <option value="CHINA_GBA">中国大湾区 (Greater Bay Area)</option>
+                    <option value="CHINA_NORTH">华北地区 (North China)</option>
+                    <option value="CHINA_NORTHEAST">东北地区 (Northeast China)</option>
+                    <option value="CHINA_EAST">华东地区 (East China)</option>
+                    <option value="CHINA_SOUTH">华南地区 (South China)</option>
+                    <option value="CHINA_CENTRAL">华中地区 (Central China)</option>
+                    <option value="CHINA_SOUTHWEST">西南地区 (Southwest China)</option>
+                    <option value="CHINA_NORTHWEST">西北地区 (Northwest China)</option>
+                    <option value="JAPAN">日本 (Japan)</option>
+                    <option value="WORLD">世界 (World)</option>
+                    <option value="USA">美国 (USA)</option>
+                    <option value="EUROPE">欧洲 (Europe)</option>
+                    <option value="AUSTRALIA">澳大利亚 (Australia)</option>
+                    <option value="AFRICA">非洲 (Africa)</option>
+                    <option value="CUSTOM">自定义 (Custom)</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[13px] font-medium text-slate-500">最小经度 (West)</label>
+                    <input type="number" id="minLon" step="0.1" oninput="setCustom()" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[13px] font-medium text-slate-500">最大经度 (East)</label>
+                    <input type="number" id="maxLon" step="0.1" oninput="setCustom()" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[13px] font-medium text-slate-500">最小纬度 (South)</label>
+                    <input type="number" id="minLat" step="0.1" oninput="setCustom()" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[13px] font-medium text-slate-500">最大纬度 (North)</label>
+                    <input type="number" id="maxLat" step="0.1" oninput="setCustom()" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-1.5 pt-4 border-t border-slate-200">
+                <label class="text-[13px] font-medium text-slate-500">图片宽度 (px)</label>
+                <input type="number" id="imgWidth" value="1024" min="100" max="4000" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+                <label class="text-[13px] font-medium text-slate-500">文件名前缀</label>
+                <input type="text" id="filePrefix" value="terrain" placeholder="terrain" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+                <label class="text-[13px] font-medium text-slate-500">分块导出 (度数)</label>
+                <select id="degreeStep" class="px-3 py-2 border border-slate-200 rounded-md text-sm outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10">
+                    <option value="">单张完整图片</option>
+                    <option value="1">1° × 1° 网格</option>
+                    <option value="2">2° × 2° 网格</option>
+                    <option value="3">3° × 3° 网格</option>
+                    <option value="4">4° × 4° 网格</option>
+                    <option value="5">5° × 5° 网格</option>
+                </select>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="showRivers" class="w-4 h-4 cursor-pointer">
+                <label for="showRivers" class="text-[13px] font-medium text-slate-500 cursor-pointer">显示主要河流</label>
+            </div>
+
+            <button onclick="generateMap()" id="btnGenerate" class="bg-blue-600 text-white border-none px-4 py-2.5 rounded-md font-semibold cursor-pointer transition-colors flex items-center justify-center gap-2 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                开始生成地图
+            </button>
+
+            <div class="flex flex-col gap-1.5 mt-2.5">
+                <h2 class="m-0 text-base font-semibold text-slate-600 border-b border-slate-200 pb-2">地貌图例</h2>
+                <div id="legendContainer" class="flex flex-col gap-2">
+                    <!-- Legend items injected by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 地图展示 -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4 h-fit">
+            <div id="mapContainer" class="bg-slate-100 rounded-lg min-h-[500px] flex items-center justify-center overflow-hidden relative bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px] cursor-grab">
+                <div id="status" class="absolute bg-white/90 px-6 py-4 rounded-full font-medium shadow-sm flex items-center gap-2.5 z-20" style="display: none;">
+                    <div class="spinner w-4 h-4 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+                    <span id="statusText">准备就绪</span>
+                </div>
+                
+                <!-- Canvas wrapper for transform -->
+                <div id="canvasWrapper" style="transform-origin: center center; display: inline-block;">
+                    <canvas id="mapCanvas" class="shadow-lg" style="display: none;"></canvas>
+                </div>
+                
+                <!-- 缩放控制按钮 -->
+                <div id="zoomControls" class="absolute bottom-4 right-4 flex flex-col gap-2 z-10 hidden">
+                    <button onclick="zoomIn()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 w-10 h-10 rounded-md font-bold cursor-pointer transition-colors shadow-sm flex items-center justify-center text-xl">+</button>
+                    <button onclick="zoomOut()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 w-10 h-10 rounded-md font-bold cursor-pointer transition-colors shadow-sm flex items-center justify-center text-xl">−</button>
+                    <button onclick="resetZoom()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 w-10 h-10 rounded-md text-xs cursor-pointer transition-colors shadow-sm flex items-center justify-center" title="重置视图">⟲</button>
+                </div>
+                
+                <!-- 缩放提示 -->
+                <div id="zoomHint" class="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/80 text-white text-xs px-3 py-1.5 rounded-full z-10 hidden">
+                    <span id="zoomLevel">100%</span> · 滚轮缩放 · 拖拽移动 · 双击重置
+                </div>
+            </div>
+            
+            <div class="flex justify-between items-center">
+                <span class="text-xs text-slate-400">数据源: Esri Sentinel-2 Land Cover</span>
+                <button onclick="downloadImage()" id="btnDownload" class="bg-slate-700 text-white border-none px-4 py-2.5 rounded-md font-semibold cursor-pointer transition-colors flex items-center justify-center gap-2 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed" disabled>
+                    下载 PNG
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 配置数据 ---
+        const PRESETS = {
+            CHINA: { minLon: 73.5, maxLon: 135.0, minLat: 18.0, maxLat: 53.5 },
+            CHINA_GBA: { minLon: 112.0, maxLon: 115.0, minLat: 21.5, maxLat: 24.0 }, // 粤港澳大湾区
+            CHINA_NORTH: { minLon: 113.5, maxLon: 119.5, minLat: 36.0, maxLat: 42.5 }, // 华北:京津冀晋内蒙古
+            CHINA_NORTHEAST: { minLon: 121.0, maxLon: 135.0, minLat: 39.0, maxLat: 53.5 }, // 东北:黑吉辽
+            CHINA_EAST: { minLon: 117.0, maxLon: 122.5, minLat: 25.0, maxLat: 35.0 }, // 华东:苏浙沪皖闽
+            CHINA_SOUTH: { minLon: 105.0, maxLon: 117.5, minLat: 18.0, maxLat: 26.0 }, // 华南:粤桂琼
+            CHINA_CENTRAL: { minLon: 110.0, maxLon: 116.5, minLat: 27.0, maxLat: 34.0 }, // 华中:豫鄂湘
+            CHINA_SOUTHWEST: { minLon: 97.0, maxLon: 110.0, minLat: 21.0, maxLat: 33.0 }, // 西南:川渝云贵藏
+            CHINA_NORTHWEST: { minLon: 73.5, maxLon: 111.0, minLat: 31.5, maxLat: 49.0 }, // 西北:陕甘宁青新
+            JAPAN: { minLon: 129.0, maxLon: 146.0, minLat: 30.0, maxLat: 46.0 },
+            WORLD: { minLon: -180.0, maxLon: 180.0, minLat: -60.0, maxLat: 85.0 },
+            USA: { minLon: -125.0, maxLon: -66.9, minLat: 24.4, maxLat: 49.4 },
+            EUROPE: { minLon: -10.0, maxLon: 40.0, minLat: 35.0, maxLat: 70.0 },
+            AUSTRALIA: { minLon: 112.0, maxLon: 154.0, minLat: -44.0, maxLat: -10.0 },
+            AFRICA: { minLon: -18.0, maxLon: 52.0, minLat: -35.0, maxLat: 38.0 }
+        };
+
+        const LEGEND = [
+            { color: '#1A5BAB', label: '水域 (Water)' },
+            { color: '#358221', label: '森林 (Forest)' },
+            { color: '#A7D282', label: '草地 (Grass)' },
+            { color: '#90C090', label: '城市 (Urban)' },
+            { color: '#FFDB5C', label: '耕地 (Crops)' },
+            { color: '#EECFA8', label: '灌木 (Scrub)' },
+            { color: '#EDE9E4', label: '荒漠/黄土/裸地 (Barren)' },
+            { color: '#F2F2F2', label: '雪山/冰川 (Snow/Ice)' },
+            { color: '#419BDF', label: '湿地 (Flooded)' }
+        ];
+
+        // --- 缩放和平移状态 ---
+        let scale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let lastTranslateX = 0;
+        let lastTranslateY = 0;
+
+        // --- 初始化 ---
+        window.onload = function() {
+            renderLegend();
+            applyPreset('CHINA'); // 默认选中中国
+            generateMap(); // 自动生成第一次
+            initZoomAndPan(); // 初始化缩放和平移
+        };
+
+        function renderLegend() {
+            const container = document.getElementById('legendContainer');
+            container.innerHTML = LEGEND.map(item => `
+                <div class="flex items-center gap-2.5 text-[13px]">
+                    <div class="w-5 h-5 rounded border border-black/10" style="background-color: ${item.color}"></div>
+                    <span>${item.label}</span>
+                </div>
+            `).join('');
+        }
+
+        // --- 缩放和平移功能 ---
+        function initZoomAndPan() {
+            const container = document.getElementById('mapContainer');
+            const wrapper = document.getElementById('canvasWrapper');
+            const canvas = document.getElementById('mapCanvas');
+
+            // 鼠标滚轮缩放
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                
+                if (canvas.style.display === 'none') return;
+                
+                const rect = container.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                const newScale = Math.min(Math.max(0.5, scale * delta), 5);
+                
+                // 以鼠标位置为中心缩放
+                const scaleDiff = newScale - scale;
+                translateX -= (mouseX - translateX) * (scaleDiff / scale);
+                translateY -= (mouseY - translateY) * (scaleDiff / scale);
+                
+                scale = newScale;
+                applyTransform();
+                updateZoomLevel();
+            });
+
+            // 鼠标拖拽 - 在容器上开始
+            container.addEventListener('mousedown', (e) => {
+                if (canvas.style.display === 'none') return;
+                
+                // 防止拖拽选中文本
+                e.preventDefault();
+                
+                isDragging = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                lastTranslateX = translateX;
+                lastTranslateY = translateY;
+                container.style.cursor = 'grabbing';
+                wrapper.classList.add('dragging');
+            });
+
+            // 在 document 上监听移动和释放，避免鼠标移出容器时失去拖拽
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                e.preventDefault();
+                
+                const dx = e.clientX - dragStartX;
+                const dy = e.clientY - dragStartY;
+                
+                translateX = lastTranslateX + dx;
+                translateY = lastTranslateY + dy;
+                
+                applyTransform();
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    container.style.cursor = 'grab';
+                    wrapper.classList.remove('dragging');
+                }
+            });
+
+            // 双击重置
+            container.addEventListener('dblclick', () => {
+                if (canvas.style.display === 'none') return;
+                resetZoom();
+            });
+        }
+
+        function applyTransform() {
+            const wrapper = document.getElementById('canvasWrapper');
+            wrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+        }
+
+        function updateZoomLevel() {
+            const zoomLevel = document.getElementById('zoomLevel');
+            zoomLevel.textContent = Math.round(scale * 100) + '%';
+        }
+
+        function zoomIn() {
+            scale = Math.min(5, scale * 1.2);
+            applyTransform();
+            updateZoomLevel();
+        }
+
+        function zoomOut() {
+            scale = Math.max(0.5, scale / 1.2);
+            applyTransform();
+            updateZoomLevel();
+        }
+
+        function resetZoom() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            applyTransform();
+            updateZoomLevel();
+        }
+
+        // --- 交互逻辑 ---
+        function applyPreset(presetKey) {
+            const key = presetKey || document.getElementById('presetSelect').value;
+            if (key !== 'CUSTOM' && PRESETS[key]) {
+                const p = PRESETS[key];
+                document.getElementById('minLon').value = p.minLon;
+                document.getElementById('maxLon').value = p.maxLon;
+                document.getElementById('minLat').value = p.minLat;
+                document.getElementById('maxLat').value = p.maxLat;
+                if(presetKey) document.getElementById('presetSelect').value = presetKey;
+            }
+        }
+
+        function setCustom() {
+            document.getElementById('presetSelect').value = 'CUSTOM';
+        }
+
+        function showStatus(msg, isLoading = true) {
+            const el = document.getElementById('status');
+            const textEl = document.getElementById('statusText');
+            const spinner = el.querySelector('.spinner');
+            
+            el.style.display = 'flex';
+            textEl.textContent = msg;
+            spinner.style.display = isLoading ? 'block' : 'none';
+        }
+
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+
+        // --- 核心生成逻辑 ---
+        function generateMap() {
+            const minLon = parseFloat(document.getElementById('minLon').value);
+            const maxLon = parseFloat(document.getElementById('maxLon').value);
+            const minLat = parseFloat(document.getElementById('minLat').value);
+            const maxLat = parseFloat(document.getElementById('maxLat').value);
+            const width = parseInt(document.getElementById('imgWidth').value);
+            const degreeStep = document.getElementById('degreeStep').value;
+
+            // 1. 验证
+            if (minLon >= maxLon || minLat >= maxLat) {
+                alert("经纬度范围无效：最小值必须小于最大值");
+                return;
+            }
+
+            const btn = document.getElementById('btnGenerate');
+            const dlBtn = document.getElementById('btnDownload');
+            btn.disabled = true;
+            dlBtn.disabled = true;
+
+            // 如果选择了分块导出
+            if (degreeStep) {
+                const step = parseFloat(degreeStep);
+                generateGridImages(minLon, maxLon, minLat, maxLat, width, step, btn, dlBtn);
+            } else {
+                // 单张完整图片
+                generateSingleImage(minLon, maxLon, minLat, maxLat, width, btn, dlBtn);
+            }
+        }
+
+        function generateSingleImage(minLon, maxLon, minLat, maxLat, width, btn, dlBtn) {
+            showStatus("正在请求卫星数据...");
+
+            // 2. 计算高度 (保持比例)
+            const lonDiff = Math.abs(maxLon - minLon);
+            const latDiff = Math.abs(maxLat - minLat);
+            const centerLatRad = ((minLat + maxLat) / 2) * (Math.PI / 180);
+            const aspectRatio = latDiff / (lonDiff * Math.cos(centerLatRad));
+            const height = Math.round(width * aspectRatio);
+
+            // 3. 构建 ArcGIS URL
+            const baseUrl = "https://ic.imagery1.arcgis.com/arcgis/rest/services/Sentinel2_10m_LandCover/ImageServer/exportImage";
+            const params = new URLSearchParams({
+                f: 'image',
+                bbox: `${minLon},${minLat},${maxLon},${maxLat}`,
+                bboxSR: '4326',
+                imageSR: '4326', // 输出WGS84投影
+                size: `${width},${height}`,
+                format: 'png',
+                pixelType: 'U8'
+            });
+
+            const img = new Image();
+            img.crossOrigin = "Anonymous"; // 必须允许跨域以进行像素操作
+            img.src = `${baseUrl}?${params.toString()}`;
+
+            img.onload = () => {
+                const canvas = document.getElementById('mapCanvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+
+                // 绘制原始图
+                ctx.drawImage(img, 0, 0);
+
+                // 4. 像素处理：替换城市颜色
+                showStatus("正在处理地貌数据...");
+                
+                // 使用 setTimeout 让 UI 有机会渲染文字
+                setTimeout(() => {
+                    processTerrainColors(ctx, width, height);
+                    
+                    // 5. 绘制河流（如果启用）
+                    if (document.getElementById('showRivers').checked) {
+                        showStatus("正在加载河流数据...");
+                        setTimeout(() => {
+                            drawRivers(ctx, minLon, minLat, maxLon, maxLat, width, height);
+                            canvas.style.display = 'block';
+                            document.getElementById('zoomControls').classList.remove('hidden');
+                            document.getElementById('zoomHint').classList.remove('hidden');
+                            hideStatus();
+                            btn.disabled = false;
+                            dlBtn.disabled = false;
+                            resetZoom(); // 重置缩放
+                        }, 50);
+                    } else {
+                        canvas.style.display = 'block';
+                        document.getElementById('zoomControls').classList.remove('hidden');
+                        document.getElementById('zoomHint').classList.remove('hidden');
+                        hideStatus();
+                        btn.disabled = false;
+                        dlBtn.disabled = false;
+                        resetZoom(); // 重置缩放
+                    }
+                }, 50);
+            };
+
+            img.onerror = () => {
+                showStatus("获取数据失败，请缩小范围重试", false);
+                btn.disabled = false;
+            };
+        }
+
+        function generateGridImages(minLon, maxLon, minLat, maxLat, width, step, btn, dlBtn) {
+            // 对齐到整数坐标
+            const snapMinLon = Math.floor(minLon);
+            const snapMaxLon = Math.ceil(maxLon);
+            const snapMinLat = Math.floor(minLat);
+            const snapMaxLat = Math.ceil(maxLat);
+            
+            const tiles = [];
+            const tilesPerRow = Math.ceil((snapMaxLon - snapMinLon) / step);
+            const tilesPerCol = Math.ceil((snapMaxLat - snapMinLat) / step);
+            
+            // 计算网格，每个tile都是完整的step大小
+            for (let lat = snapMinLat; lat < snapMaxLat; lat += step) {
+                for (let lon = snapMinLon; lon < snapMaxLon; lon += step) {
+                    const tileMinLon = lon;
+                    const tileMaxLon = lon + step;  // 固定为step大小
+                    const tileMinLat = lat;
+                    const tileMaxLat = lat + step;  // 固定为step大小
+                    
+                    tiles.push({
+                        minLon: tileMinLon,
+                        maxLon: tileMaxLon,
+                        minLat: tileMinLat,
+                        maxLat: tileMaxLat
+                    });
+                }
+            }
+            
+            showStatus(`准备生成 ${tiles.length} 张分块图片 (每张 ${width}×${width} 像素)...`);
+            
+            // 创建大画布 - 每个tile使用用户指定的width作为正方形尺寸
+            // 实际总尺寸会比用户输入的大，因为每个step都是完整的width×width
+            const canvas = document.getElementById('mapCanvas');
+            const tileSize = width; // 每个tile都是正方形
+            const totalWidth = tilesPerRow * tileSize;
+            const totalHeight = tilesPerCol * tileSize;
+            
+            canvas.width = totalWidth;
+            canvas.height = totalHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // 清空画布并显示
+            ctx.fillStyle = '#f1f5f9';
+            ctx.fillRect(0, 0, totalWidth, totalHeight);
+            canvas.style.display = 'block';
+            document.getElementById('zoomControls').classList.remove('hidden');
+            document.getElementById('zoomHint').classList.remove('hidden');
+            resetZoom();
+            
+            let currentIndex = 0;
+            
+            function processNextTile() {
+                if (currentIndex >= tiles.length) {
+                    hideStatus();
+                    btn.disabled = false;
+                    dlBtn.disabled = false;
+                    alert(`成功生成并下载 ${tiles.length} 张图片！\n每张: ${tileSize}×${tileSize} px\n总尺寸: ${totalWidth}×${totalHeight} px`);
+                    return;
+                }
+                
+                const tile = tiles[currentIndex];
+                const tileIndex = currentIndex;
+                showStatus(`正在处理 ${currentIndex + 1}/${tiles.length}...`);
+                
+                generateTileCanvasAndDownload(tile, tileSize, (tileCanvas) => {
+                    if (tileCanvas) {
+                        // 立即渲染到大画布上
+                        const col = tileIndex % tilesPerRow;
+                        const row = Math.floor(tileIndex / tilesPerRow);
+                        const x = col * tileSize;
+                        // 注意：纬度从上到下是从大到小，所以需要反转行
+                        const y = (tilesPerCol - 1 - row) * tileSize;
+                        ctx.drawImage(tileCanvas, x, y);
+                    }
+                    currentIndex++;
+                    setTimeout(processNextTile, 200); // 延迟避免请求过快
+                });
+            }
+            
+            processNextTile();
+        }
+
+        function generateAndDownloadTile(tile, width, callback) {
+            const { minLon, maxLon, minLat, maxLat } = tile;
+            
+            // 计算高度 - 每个tile都是正方形的step×step度
+            const lonDiff = maxLon - minLon;
+            const latDiff = maxLat - minLat;
+            const centerLatRad = ((minLat + maxLat) / 2) * (Math.PI / 180);
+            const aspectRatio = latDiff / (lonDiff * Math.cos(centerLatRad));
+            const height = Math.round(width * aspectRatio);
+            
+            // 构建 ArcGIS URL
+            const baseUrl = "https://ic.imagery1.arcgis.com/arcgis/rest/services/Sentinel2_10m_LandCover/ImageServer/exportImage";
+            const params = new URLSearchParams({
+                f: 'image',
+                bbox: `${minLon},${minLat},${maxLon},${maxLat}`,
+                bboxSR: '4326',
+                imageSR: '4326',
+                size: `${width},${height}`,
+                format: 'png',
+                pixelType: 'U8'
+            });
+            
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.src = `${baseUrl}?${params.toString()}`;
+            
+            img.onload = () => {
+                // 创建临时 canvas
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = width;
+                tempCanvas.height = height;
+                const ctx = tempCanvas.getContext('2d');
+                
+                ctx.drawImage(img, 0, 0);
+                processTerrainColors(ctx, width, height);
+                
+                // 下载，使用tile的实际坐标（整数）
+                const link = document.createElement('a');
+                link.download = `terrain_${minLon}_${maxLon}_${minLat}_${maxLat}.png`;
+                link.href = tempCanvas.toDataURL('image/png');
+                link.click();
+                
+                callback();
+            };
+            
+            img.onerror = () => {
+                console.error(`Failed to load tile: ${minLon},${minLat} to ${maxLon},${maxLat}`);
+                callback();
+            };
+        }
+
+        function generateTileCanvasAndDownload(tile, tileSize, callback) {
+            const { minLon, maxLon, minLat, maxLat } = tile;
+            
+            // 构建 ArcGIS URL - 使用正方形尺寸
+            const baseUrl = "https://ic.imagery1.arcgis.com/arcgis/rest/services/Sentinel2_10m_LandCover/ImageServer/exportImage";
+            const params = new URLSearchParams({
+                f: 'image',
+                bbox: `${minLon},${minLat},${maxLon},${maxLat}`,
+                bboxSR: '4326',
+                imageSR: '4326',
+                size: `${tileSize},${tileSize}`, // 正方形：宽度和高度相同
+                format: 'png',
+                pixelType: 'U8'
+            });
+            
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.src = `${baseUrl}?${params.toString()}`;
+            
+            img.onload = () => {
+                // 创建临时 canvas - 正方形
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = tileSize;
+                tempCanvas.height = tileSize;
+                const ctx = tempCanvas.getContext('2d');
+                
+                ctx.drawImage(img, 0, 0);
+                processTerrainColors(ctx, tileSize, tileSize);
+                
+                // 立即下载这个tile
+                const prefix = document.getElementById('filePrefix').value || 'terrain';
+                const link = document.createElement('a');
+                link.download = `${prefix}_${minLon}_${maxLon}_${minLat}_${maxLat}.png`;
+                link.href = tempCanvas.toDataURL('image/png');
+                link.click();
+                
+                // 返回canvas用于渲染
+                callback(tempCanvas);
+            };
+            
+            img.onerror = () => {
+                console.error(`Failed to load tile: ${minLon},${minLat} to ${maxLon},${maxLat}`);
+                callback(null);
+            };
+        }
+
+        // --- 像素处理算法 ---
+        function processTerrainColors(ctx, width, height) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+
+            // Sentinel-2 城市建筑颜色 RGB: 237, 2, 42 (红色)
+            // 替换为独立的绿色 RGB: 144, 192, 144 (#90C090)
+            const builtColor = { r: 237, g: 2, b: 42 };
+            const urbanColor = { r: 144, g: 192, b: 144 };
+            const tolerance = 25;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                // 检测并替换城市建筑颜色
+                if (Math.abs(r - builtColor.r) < tolerance &&
+                    Math.abs(g - builtColor.g) < tolerance &&
+                    Math.abs(b - builtColor.b) < tolerance) {
+                    data[i] = urbanColor.r;
+                    data[i + 1] = urbanColor.g;
+                    data[i + 2] = urbanColor.b;
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // --- 河流绘制 ---
+        function drawRivers(ctx, minLon, minLat, maxLon, maxLat, width, height) {
+            // 计算地图的经纬度范围，用于判断河流是否足够大
+            const lonRange = maxLon - minLon;
+            const latRange = maxLat - minLat;
+            
+            // 使用 Overpass API 只查询主要河流（river），不查询支流（stream）
+            const bbox = `${minLat},${minLon},${maxLat},${maxLon}`;
+            const query = `
+                [out:json][timeout:25];
+                (
+                  way["waterway"="river"](${bbox});
+                );
+                out geom;
+            `;
+            
+            const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.elements || data.elements.length === 0) {
+                        console.log('No river data found for this region');
+                        return;
+                    }
+                    
+                    // 根据地图尺度调整河流宽度
+                    const baseWidth = Math.max(1.5, Math.min(4, width / 400));
+                    
+                    ctx.strokeStyle = '#0066CC';
+                    ctx.lineWidth = baseWidth;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    
+                    let drawnCount = 0;
+                    
+                    data.elements.forEach(element => {
+                        if (element.geometry && element.geometry.length > 1) {
+                            // 计算河流的长度（近似）
+                            let riverLength = 0;
+                            for (let i = 1; i < element.geometry.length; i++) {
+                                const dx = element.geometry[i].lon - element.geometry[i-1].lon;
+                                const dy = element.geometry[i].lat - element.geometry[i-1].lat;
+                                riverLength += Math.sqrt(dx * dx + dy * dy);
+                            }
+                            
+                            // 只绘制足够长的河流（在当前尺度下至少跨越地图的2%）
+                            const minLength = Math.max(lonRange, latRange) * 0.02;
+                            if (riverLength < minLength) {
+                                return;
+                            }
+                            
+                            ctx.beginPath();
+                            
+                            element.geometry.forEach((point, i) => {
+                                const x = ((point.lon - minLon) / (maxLon - minLon)) * width;
+                                const y = ((maxLat - point.lat) / (maxLat - minLat)) * height;
+                                
+                                if (i === 0) {
+                                    ctx.moveTo(x, y);
+                                } else {
+                                    ctx.lineTo(x, y);
+                                }
+                            });
+                            
+                            ctx.stroke();
+                            drawnCount++;
+                        }
+                    });
+                    
+                    console.log(`Drew ${drawnCount} major rivers out of ${data.elements.length} total rivers`);
+                })
+                .catch(error => {
+                    console.warn('Failed to load river data:', error);
+                });
+        }
+
+        function downloadImage() {
+            const canvas = document.getElementById('mapCanvas');
+            const minLon = parseFloat(document.getElementById('minLon').value);
+            const maxLon = parseFloat(document.getElementById('maxLon').value);
+            const minLat = parseFloat(document.getElementById('minLat').value);
+            const maxLat = parseFloat(document.getElementById('maxLat').value);
+            const prefix = document.getElementById('filePrefix').value || 'terrain';
+            
+            const link = document.createElement('a');
+            link.download = `${prefix}_${minLon}_${maxLon}_${minLat}_${maxLat}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
