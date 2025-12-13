@@ -491,6 +491,9 @@
     <!-- Game Container -->
     <div id="game-container" class="w-full h-full relative"></div>
 
+    <!-- World Map Iframe Container (for city selection globe) - loaded on demand -->
+    <iframe id="world-map-iframe" class="fixed inset-0 w-full h-full z-[55] border-none" style="display: none;"></iframe>
+
     <!-- Labels Layer (Dynamic HTML for 3D objects) -->
     <div id="labels-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden"></div>
 
@@ -511,7 +514,7 @@
       <p class="text-sm text-white font-semibold tracking-wider drop-shadow-md mt-1 ml-1">powered by paracraft</p>
     </div>
 
-    <!-- Login Window -->
+    <!-- Login Window (Start Screen) -->
     <div id="login-modal" class="fixed inset-0 flex items-center justify-center z-[60] bg-black/40 backdrop-blur-sm">
       <div class="text-center">
         <h1
@@ -1154,46 +1157,6 @@
         }, 4000);
       }
 
-      // --- Load World Map Data from External File ---
-      let CITIES = [];
-      let CONTINENTS = {}; // continents loaded from data file (if any)
-
-      async function loadCitiesData() {
-        // Fallback default cities
-        const defaultCities = [
-          { name: "深圳", lat: 22.5431, lon: 114.0579, population: 12590000, level: 1 },
-          { name: "东京", lat: 35.6762, lon: 139.6503, population: 13960000, level: 1 },
-        ];
-
-        try {
-          const response = await fetch("world_traveler_data");
-          const text = await response.text();
-
-          // Extract JSON array from markdown (between [ and ])
-          // The data file may either be a JSON array (legacy) or a JSON object with { cities: [], continents: {} }
-          const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-          if (jsonMatch) {
-            // Clean up the JSON text: remove comments
-            const jsonText = jsonMatch[0].replace(/\/\/.*$/gm, "");
-            const parsed = JSON.parse(jsonText);
-            if (Array.isArray(parsed)) {
-              CITIES = parsed;
-              CONTINENTS = {};
-            } else {
-              CITIES = parsed.cities || defaultCities;
-              CONTINENTS = parsed.continents || {};
-            }
-            console.log(`Loaded ${CITIES.length} cities from world_traveler_data.md`);
-          } else {
-            console.error("Could not parse cities data from world_traveler_data.md");
-            CITIES = defaultCities;
-          }
-        } catch (error) {
-          console.error("Error loading cities data:", error);
-          CITIES = defaultCities;
-        }
-      }
-
       // --- Load Station Data from External File ---
       async function loadStationData() {
         // Fallback default station data
@@ -1242,770 +1205,6 @@
           console.error("Error loading station data:", error);
           STATION_DATA = defaultStations;
           STATION_NAMES = defaultStations.map(s => s.name);
-        }
-      }
-
-      // --- World Map Class ---
-      class WorldMapManager {
-        constructor(game) {
-          this.game = game;
-          this.scene = new THREE.Scene();
-          this.scene.background = new THREE.Color(0x000000);
-          this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-
-          // Center camera on initial location with zoom to show level 1 and 2
-          const initialLat = 25;
-          const initialLon = 105;
-          const cameraDistance = 28; // Close enough to show level 2 (threshold is 35)
-          const phi = (90 - initialLat) * (Math.PI / 180);
-          const theta = (initialLon + 180) * (Math.PI / 180);
-          const camX = -(cameraDistance * Math.sin(phi) * Math.cos(theta));
-          const camZ = cameraDistance * Math.sin(phi) * Math.sin(theta);
-          const camY = cameraDistance * Math.cos(phi);
-          this.camera.position.set(camX, camY, camZ);
-
-          this.group = new THREE.Group();
-          this.scene.add(this.group);
-
-          this.raycaster = new THREE.Raycaster();
-          this.mouse = new THREE.Vector2();
-
-          this.cities = [];
-          this.planes = []; // active plane animations
-          this.controls = new THREE.OrbitControls(this.camera, this.game.renderer.domElement);
-          this.controls.enableDamping = true;
-          this.controls.dampingFactor = 0.05;
-          this.controls.minDistance = 15;
-          this.controls.maxDistance = 60;
-          this.controls.enablePan = false;
-
-          this.autoRotate = true;
-          this.clock = new THREE.Clock();
-          this.cameraRestoreAnim = null; // {fromPos, toPos, fromTarget, toTarget, t, duration}
-          this.init();
-        }
-
-        init() {
-          // Earth Sphere
-          const geometry = new THREE.SphereGeometry(10, 64, 64);
-          const material = new THREE.MeshPhongMaterial({
-            color: 0x1a237e,
-            emissive: 0x112244,
-            specular: 0x111111,
-            shininess: 10,
-          });
-          this.earth = new THREE.Mesh(geometry, material);
-          this.group.add(this.earth);
-
-          // Atmosphere glow
-          const atmGeo = new THREE.SphereGeometry(10.2, 64, 64);
-          const atmMat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.1, side: THREE.BackSide });
-          this.group.add(new THREE.Mesh(atmGeo, atmMat));
-
-          // Lights
-          const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-          this.scene.add(ambientLight);
-          const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-          dirLight.position.set(50, 30, 50);
-          this.scene.add(dirLight);
-
-          // Event Listeners
-          // Use pointer events for better mobile support
-          const canvas = this.game.renderer.domElement;
-          let downX = 0;
-          let downY = 0;
-
-          canvas.addEventListener("pointerdown", (e) => {
-            downX = e.clientX;
-            downY = e.clientY;
-            // Stop auto-rotation when user starts interacting
-            this.autoRotate = false;
-          });
-
-          canvas.addEventListener("pointerup", (e) => {
-            const moveDist = Math.sqrt(Math.pow(e.clientX - downX, 2) + Math.pow(e.clientY - downY, 2));
-            // Allow small movement (jitter) but filter out drags
-            if (moveDist < 10) {
-              this.onClick(e);
-            }
-          });
-
-          // Also stop auto-rotation when OrbitControls detects drag start
-          this.controls.addEventListener("start", () => {
-            this.autoRotate = false;
-          });
-        }
-
-        renderMapObjects() {
-          this.createContinentOutlines();
-          this.createCities();
-        }
-
-        // Create continent outline curves on globe
-        createContinentOutlines() {
-          const radius = 10.05; // Slightly above earth surface
-          const lineMaterial = new THREE.LineBasicMaterial({ color: 0x44ff88, linewidth: 2, transparent: true, opacity: 0.8 });
-
-          // Continent outline data (simplified lat/lon coordinates)
-          const defaultContinents = {
-            // 亚洲 (Asia) - simplified outline
-            asia: [
-              [66, 170],
-              [70, 140],
-              [75, 100],
-              [70, 70],
-              [55, 60],
-              [45, 35],
-              [35, 35],
-              [25, 55],
-              [10, 75],
-              [8, 80],
-              [20, 90],
-              [22, 90],
-              [25, 95],
-              [10, 100],
-              [5, 105],
-              [1, 104],
-              [-8, 110],
-              [-8, 115],
-              [-5, 120],
-              [5, 120],
-              [10, 125],
-              [20, 120],
-              [25, 122],
-              [35, 130],
-              [40, 130],
-              [45, 140],
-              [50, 140],
-              [55, 160],
-              [60, 170],
-              [66, 170],
-            ],
-          };
-          const continents = typeof CONTINENTS !== "undefined" && Object.keys(CONTINENTS).length > 0 ? CONTINENTS : defaultContinents;
-
-          // Draw each continent outline
-          Object.values(continents).forEach((coords) => {
-            const points = [];
-            // Create points for each coordinate, with interpolation along sphere surface
-            for (let i = 0; i < coords.length; i++) {
-              const [lat1, lon1] = coords[i];
-              const [lat2, lon2] = coords[(i + 1) % coords.length]; // Wrap to first point for closure
-
-              // Add start point
-              points.push(this.latLonToVector3(lat1, lon1, radius));
-
-              // Interpolate points along the great circle to keep lines on sphere surface
-              const segments = 5; // Number of intermediate points between each pair
-              for (let j = 1; j < segments; j++) {
-                const t = j / segments;
-                const latInterp = lat1 + (lat2 - lat1) * t;
-                const lonInterp = lon1 + (lon2 - lon1) * t;
-                points.push(this.latLonToVector3(latInterp, lonInterp, radius));
-              }
-            }
-
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const line = new THREE.Line(geometry, lineMaterial);
-            this.group.add(line);
-          });
-        }
-
-        latLonToVector3(lat, lon, radius) {
-          const phi = (90 - lat) * (Math.PI / 180);
-          const theta = (lon + 180) * (Math.PI / 180);
-          const x = -(radius * Math.sin(phi) * Math.cos(theta));
-          const z = radius * Math.sin(phi) * Math.sin(theta);
-          const y = radius * Math.cos(phi);
-          return new THREE.Vector3(x, y, z);
-        }
-
-        createCities() {
-          // Sort cities by population (descending) - higher population has priority
-          const sortedCities = [...CITIES].sort((a, b) => b.population - a.population);
-
-          // Initialize city positions
-          const cityData = sortedCities.map((city) => ({
-            city,
-            pos: this.latLonToVector3(city.lat, city.lon, 10),
-            mass: city.population, // Use population as mass
-          }));
-
-          const minMarkerDistance = 0.5; // Minimum distance between markers on sphere
-          const maxIterations = 50; // Max iterations for separation
-
-          // Iteratively separate overlapping markers using mass-based repulsion
-          for (let iter = 0; iter < maxIterations; iter++) {
-            let hasOverlap = false;
-
-            for (let i = 0; i < cityData.length; i++) {
-              for (let j = i + 1; j < cityData.length; j++) {
-                const a = cityData[i];
-                const b = cityData[j];
-                const dist = a.pos.distanceTo(b.pos);
-
-                if (dist < minMarkerDistance && dist > 0.001) {
-                  hasOverlap = true;
-
-                  // Calculate repulsion direction (from a to b)
-                  const direction = new THREE.Vector3().subVectors(b.pos, a.pos).normalize();
-
-                  // Calculate displacement based on mass ratio
-                  // Heavier (more population) moves less
-                  const totalMass = a.mass + b.mass;
-                  const overlap = minMarkerDistance - dist;
-                  const moveA = overlap * (b.mass / totalMass); // Lighter moves more
-                  const moveB = overlap * (a.mass / totalMass);
-
-                  // Move positions apart along sphere surface
-                  a.pos.addScaledVector(direction, -moveA);
-                  b.pos.addScaledVector(direction, moveB);
-
-                  // Re-project onto sphere surface (radius = 10)
-                  a.pos.normalize().multiplyScalar(10);
-                  b.pos.normalize().multiplyScalar(10);
-                }
-              }
-            }
-
-            if (!hasOverlap) break;
-          }
-
-          // Create markers and labels
-          cityData.forEach(({ city, pos }) => {
-            // Marker size based on level
-            const markerSize = city.level === 1 ? 0.25 : city.level === 2 ? 0.18 : 0.12;
-            const markerGeo = new THREE.SphereGeometry(markerSize, 16, 16);
-
-            // Color based on level and home city
-            let color;
-            if (city.name === homeCity) {
-              color = 0x00ff00; // Green for home city
-            } else if (city.level === 1) {
-              color = 0xffaa00; // Orange for level 1
-            } else if (city.level === 2) {
-              color = 0x88aaff; // Light blue for level 2
-            } else {
-              color = 0xaaaaaa; // Gray for level 3
-            }
-
-            const markerMat = new THREE.MeshBasicMaterial({ color: color });
-            const marker = new THREE.Mesh(markerGeo, markerMat);
-            marker.position.copy(pos);
-            marker.userData = { city: city };
-            this.group.add(marker);
-
-            // Simple Label (using Sprite) - size based on population/level
-            const canvas = document.createElement("canvas");
-            canvas.width = 256;
-            canvas.height = 64;
-            const context = canvas.getContext("2d");
-            const fontSize = city.level === 1 ? 28 : city.level === 2 ? 22 : 18;
-            context.font = `Bold ${fontSize}px Arial`;
-            context.fillStyle = city.level === 1 ? "#ffffff" : city.level === 2 ? "#ccddff" : "#999999";
-            context.textAlign = "center";
-            context.fillText(city.name, 128, 40);
-
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
-            const sprite = new THREE.Sprite(spriteMat);
-
-            // Position label above marker
-            const labelPos = pos.clone().normalize().multiplyScalar(10.5);
-            sprite.position.copy(labelPos);
-
-            // Scale based on level
-            const spriteScale = city.level === 1 ? 2.5 : city.level === 2 ? 2.0 : 1.5;
-            sprite.scale.set(spriteScale, spriteScale * 0.25, 1);
-
-            this.group.add(sprite);
-
-            this.cities.push({ marker, sprite, data: city, basePos: pos.clone() });
-          });
-        }
-
-        onClick(event) {
-          if (this.game.mode !== "MAP") return;
-          // ignore clicks while a plane is animating so user cannot start multiple flights
-          if (this.planes && this.planes.length > 0) return;
-
-          this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-          this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-          this.raycaster.setFromCamera(this.mouse, this.camera);
-          // Filter out undefined/null markers and only include visible ones
-          const markers = this.cities
-            .map((c) => c.marker)
-            .filter((marker) => marker && marker.visible);
-          
-          // Add safety check to prevent hanging on empty or invalid marker list
-          if (!markers || markers.length === 0) return;
-
-          try {
-            const intersects = this.raycaster.intersectObjects(markers);
-
-            if (intersects.length > 0) {
-              const city = intersects[0].object.userData.city;
-              this.game.travelToCity(city);
-            }
-          } catch (e) {
-            console.error("Error during raycasting:", e);
-          }
-        }
-
-        update() {
-          this.controls.update();
-
-          if (this.autoRotate) {
-            this.group.rotation.y += 0.001;
-          }
-
-          // Level of Detail logic based on zoom distance
-          const dist = this.camera.position.distanceTo(new THREE.Vector3(0, 0, 0));
-
-          // Zoom thresholds for showing different levels
-          const showLevel2 = dist < 35; // Show level 2 when closer
-          const showLevel3 = dist < 22; // Show level 3 when even closer
-
-          // Collect visible labels for overlap detection
-          const visibleLabels = [];
-
-          // First pass: determine visibility based on level
-          this.cities.forEach((c) => {
-            const level = c.data.level || 1;
-            const isHomeCity = c.data.name === homeCity;
-            let shouldShowByLevel = false;
-
-            if (isHomeCity || level === 1) {
-              shouldShowByLevel = true; // Always show home city and level 1
-            } else if (level === 2) {
-              shouldShowByLevel = showLevel2;
-            } else if (level === 3) {
-              shouldShowByLevel = showLevel3;
-            }
-
-            // Check if in front of camera using dot product (more stable than screenZ)
-            const cameraPos = this.camera.position.clone().normalize();
-            const markerDir = c.marker.position.clone().normalize();
-            const dotProduct = markerDir.dot(cameraPos);
-            const isFrontFacing = dotProduct > -0.1; // Visible if on front hemisphere
-
-            const shouldShow = shouldShowByLevel && isFrontFacing;
-
-            c.marker.visible = shouldShow;
-            c.sprite.visible = false; // Default to hidden, will be shown in overlap pass
-            c.potentiallyVisible = shouldShow;
-
-            if (shouldShow) {
-              // Calculate screen position for overlap detection
-              const screenPos = c.marker.position.clone().project(this.camera);
-              c.screenX = ((screenPos.x + 1) / 2) * window.innerWidth;
-              c.screenY = ((-screenPos.y + 1) / 2) * window.innerHeight;
-
-              visibleLabels.push(c);
-            }
-          });
-
-          // Sort by population (higher population has priority for label display)
-          visibleLabels.sort((a, b) => b.data.population - a.data.population);
-
-          // Second pass: show non-overlapping labels (keep higher population visible)
-          const labelRadius = 50; // Approximate label radius in screen pixels
-          const shownLabels = [];
-
-          visibleLabels.forEach((c) => {
-            let hasOverlap = false;
-
-            for (const shown of shownLabels) {
-              const dx = c.screenX - shown.screenX;
-              const dy = c.screenY - shown.screenY;
-              const screenDist = Math.sqrt(dx * dx + dy * dy);
-
-              // Smaller overlap threshold for higher level cities
-              const minDist = labelRadius * (c.data.level === 1 ? 1.2 : c.data.level === 2 ? 1.0 : 0.8);
-
-              if (screenDist < minDist) {
-                hasOverlap = true;
-                break;
-              }
-            }
-
-            if (!hasOverlap) {
-              c.sprite.visible = true;
-              shownLabels.push(c);
-            }
-          });
-
-          // Update plane animations
-          if (this.planes && this.planes.length > 0) {
-            const toRemove = [];
-            for (let i = 0; i < this.planes.length; i++) {
-              const anim = this.planes[i];
-              const mesh = anim.mesh;
-              // Basic speed factor based on distance
-              const angleBetween = anim.start.clone().normalize().dot(anim.end.clone().normalize());
-              const dtheta = Math.acos(THREE.MathUtils.clamp(angleBetween, -1, 1));
-              const baseSpeed = 0.002 + 0.01 / (dtheta + 1.0);
-
-              if (anim.state === "takeoff") {
-                // scale up and start moving forward slightly
-                anim.t += 0.005;
-                const s = THREE.MathUtils.lerp(0.01, 0.9, Math.min(1, anim.t / 0.15));
-                mesh.scale.set(s, s, s);
-                // lift up a bit
-                const pos = this.computeGreatCirclePoint(anim.start, anim.end, 0, anim.radius, anim.altitude * 0.2);
-                mesh.position.copy(pos);
-                mesh.lookAt(this.computeGreatCirclePoint(anim.start, anim.end, 0.05, anim.radius, anim.altitude * 0.2));
-                if (anim.t >= 0.15) {
-                  anim.state = "cruise";
-                  anim.t = 0;
-                }
-              } else if (anim.state === "cruise") {
-                anim.t += baseSpeed;
-                const t = Math.min(1, anim.t);
-                const pos = this.computeGreatCirclePoint(anim.start, anim.end, t, anim.radius, anim.altitude);
-                mesh.position.copy(pos);
-                // bigger plane in cruise
-                mesh.scale.set(1.4, 1.4, 1.4);
-                const lookAheadT = Math.min(1, t + 0.02);
-                const aheadPos = this.computeGreatCirclePoint(anim.start, anim.end, lookAheadT, anim.radius, anim.altitude);
-                mesh.lookAt(aheadPos);
-                if (t >= 1) {
-                  // Arrived at destination; skip circling if loopRounds is 0
-                  if (anim.circleRoundsLeft <= 0) {
-                    // Skip directly to landing
-                    anim.state = "landing";
-                    anim.t = 0;
-                  } else {
-                    // Start circling for specified rounds
-                    anim.state = "circle";
-                    anim.circleAngle = 0;
-                    // Save circle orientation basis
-                    anim.center = anim.end.clone().setLength(anim.radius + anim.altitude);
-                    // Choose circle radius based on city size (small around 0.8)
-                    anim.circleRadius = Math.max(0.6, 0.6);
-                    // Orthonormal basis u, v perpendicular to center normal
-                    const normal = anim.center.clone().normalize();
-                    const arbitrary = new THREE.Vector3(0, 1, 0);
-                    if (Math.abs(normal.dot(arbitrary)) > 0.95) arbitrary.set(1, 0, 0);
-                    anim.u = new THREE.Vector3().crossVectors(normal, arbitrary).normalize();
-                    anim.v = new THREE.Vector3().crossVectors(normal, anim.u).normalize();
-                  }
-                }
-              } else if (anim.state === "circle") {
-                // Rotate around destination center
-                anim.circleAngle += 0.04; // rotation speed
-                const a = anim.circleAngle;
-                const pos = anim.center
-                  .clone()
-                  .add(anim.u.clone().multiplyScalar(Math.cos(a) * anim.circleRadius))
-                  .add(anim.v.clone().multiplyScalar(Math.sin(a) * anim.circleRadius));
-                mesh.position.copy(pos);
-                // point in tangent direction
-                const tangent = anim.u
-                  .clone()
-                  .multiplyScalar(-Math.sin(a) * anim.circleRadius)
-                  .add(anim.v.clone().multiplyScalar(Math.cos(a) * anim.circleRadius));
-                const lookAt = pos.clone().add(tangent);
-                mesh.lookAt(lookAt);
-                // When one round complete, start landing
-                if (anim.circleAngle >= Math.PI * 2 * anim.circleRoundsLeft) {
-                  anim.state = "landing";
-                  anim.t = 0;
-                }
-              } else if (anim.state === "landing") {
-                // shrink and move down to surface
-                anim.t += 0.03;
-                const s = THREE.MathUtils.lerp(mesh.scale.x, 0.02, 0.2);
-                mesh.scale.set(s, s, s);
-                // move towards end surface
-                const current = mesh.position.clone();
-                const dirToEnd = anim.end.clone().sub(current).multiplyScalar(0.15);
-                mesh.position.add(dirToEnd);
-                mesh.lookAt(anim.end);
-                // When close to end, remove
-                if (mesh.position.distanceTo(anim.end) < 0.08 || mesh.scale.x <= 0.03) {
-                  // Trigger completion callback if any
-                  if (typeof anim.onComplete === "function") {
-                    try {
-                      anim.onComplete();
-                    } catch (e) {
-                      console.error(e);
-                    }
-                  }
-                  // Remove mesh
-                  // Remove trail
-                  if (anim.trailMesh) {
-                    try {
-                      this.group.remove(anim.trailMesh);
-                    } catch (e) {}
-                  }
-                  this.group.remove(mesh);
-                  // Restore control state but keep the camera at the destination
-                  if (this.controls && typeof anim.prevControlsEnabled !== "undefined") {
-                    this.controls.enabled = anim.prevControlsEnabled;
-                  }
-                  // Instead of restoring the previous camera position, honor the desired camera distance
-                  // and center the map on the destination (anim.end). This keeps the camera distance
-                  // consistent while focusing on the new map location.
-                  try {
-                    // Determine camera distance to preserve (fallback to current camera length)
-                    const preservedDistance = anim.prevCameraLen || this.camera.position.length();
-                    // Direction from origin to destination (for final camera radial position)
-                    const toDir = anim.end ? anim.end.clone().normalize() : this.camera.position.clone().normalize();
-                    const toPos = toDir.clone().multiplyScalar(preservedDistance);
-
-                    // Queue a smooth camera restore animation instead of snapping the camera.
-                    this.cameraRestoreAnim = {
-                      fromPos: this.camera.position.clone(),
-                      toPos: toPos,
-                      fromTarget: this.controls ? this.controls.target.clone() : new THREE.Vector3(0, 0, 0),
-                      toTarget: new THREE.Vector3(0, 0, 0),
-                      t: 0,
-                      duration: 0.35, // seconds for smooth transition
-                    };
-                  } catch (e) {}
-                  // Hide destination UI indicator
-                  try {
-                    const indicator = document.getElementById("destination-indicator");
-                    if (indicator) indicator.classList.add("hidden");
-                  } catch (e) {}
-                  toRemove.push(i);
-                }
-              }
-              // Camera follow & trail updates
-              if (anim.followCamera && mesh) {
-                // Camera zoom during takeoff
-                if (anim.state === "takeoff") {
-                  anim.zoomInT = Math.min(1, anim.zoomInT + anim.zoomSpeed);
-                  const camLen = THREE.MathUtils.lerp(anim.prevCameraLen, anim.zoomInDistance, anim.zoomInT);
-                  const targetCamPos = mesh.position.clone().normalize().multiplyScalar(camLen);
-                  this.camera.position.lerp(targetCamPos, 0.25);
-                  if (this.controls) this.controls.target.lerp(mesh.position, 0.25);
-                  if (this.controls) this.controls.update();
-                } else if (anim.state === "cruise") {
-                  // Zoom out smoothly to cruise distance
-                  anim.zoomOutT = Math.min(1, anim.zoomOutT + anim.zoomSpeed * 0.25);
-                  const camLen = THREE.MathUtils.lerp(anim.zoomInDistance, anim.zoomOutDistance, anim.zoomOutT);
-                  const targetCamPos = mesh.position.clone().normalize().multiplyScalar(camLen);
-                  this.camera.position.lerp(targetCamPos, 0.12);
-                  if (this.controls) this.controls.target.lerp(mesh.position, 0.12);
-                  if (this.controls) this.controls.update();
-                  // Update trail when cruising
-                  if (anim.trailMesh) {
-                    anim.trailPoints.push(mesh.position.clone());
-                    if (anim.trailPoints.length > anim.trailMaxPoints) anim.trailPoints.shift();
-                    anim.trailMesh.geometry.setFromPoints(anim.trailPoints);
-                    try {
-                      anim.trailMesh.computeLineDistances();
-                    } catch (e) {}
-                    anim.trailMesh.visible = true;
-                  }
-                } else if (anim.state === "circle") {
-                  // As the plane circles before landing, start zooming in to landing distance
-                  const shouldZoomIn = anim.circleRoundsLeft <= 1;
-                  if (shouldZoomIn) {
-                    anim.zoomLandingT = Math.min(1, anim.zoomLandingT + anim.zoomLandingSpeed);
-                  } else {
-                    // slowly decay to avoid abrupt camera jumps if there are multiple circles
-                    anim.zoomLandingT = Math.max(0, anim.zoomLandingT - anim.zoomLandingSpeed * 0.5);
-                  }
-                  const camLen = THREE.MathUtils.lerp(anim.zoomOutDistance, anim.zoomLandingDistance, anim.zoomLandingT);
-                  const targetCamPos = mesh.position.clone().normalize().multiplyScalar(camLen);
-                  this.camera.position.lerp(targetCamPos, 0.18);
-                  if (this.controls) this.controls.target.lerp(mesh.position, 0.18);
-                  if (this.controls) this.controls.update();
-                  // Update trail when circling
-                  if (anim.trailMesh) {
-                    anim.trailPoints.push(mesh.position.clone());
-                    if (anim.trailPoints.length > anim.trailMaxPoints) anim.trailPoints.shift();
-                    anim.trailMesh.geometry.setFromPoints(anim.trailPoints);
-                    try {
-                      anim.trailMesh.computeLineDistances();
-                    } catch (e) {}
-                    anim.trailMesh.visible = true;
-                  }
-                }
-              }
-            }
-            // Remove finished planes from array in reverse order
-            for (let r = toRemove.length - 1; r >= 0; r--) {
-              this.planes.splice(toRemove[r], 1);
-            }
-          }
-
-          // Smooth camera restore animation (if queued)
-          try {
-            const dt = this.clock.getDelta();
-            if (this.cameraRestoreAnim) {
-              const a = this.cameraRestoreAnim;
-              a.t = Math.min(a.duration, a.t + dt);
-              const u = Math.min(1, a.t / a.duration);
-              // Interpolate camera world position and controls target
-              if (a.fromPos && a.toPos) {
-                this.camera.position.lerpVectors(a.fromPos, a.toPos, u);
-              }
-              if (this.controls && a.fromTarget && a.toTarget) {
-                this.controls.target.lerpVectors(a.fromTarget, a.toTarget, u);
-                this.controls.update();
-              }
-              if (u >= 1) {
-                this.cameraRestoreAnim = null;
-              }
-            }
-          } catch (e) {}
-        }
-
-        // --- Plane animation helpers ---
-        createPlaneMesh() {
-          // Simple stylized plane mesh: a small group with body and wings
-          const group = new THREE.Group();
-
-          const body = new THREE.BoxGeometry(0.5, 0.12, 0.8);
-          const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffee88 });
-          const bodyMesh = new THREE.Mesh(body, bodyMat);
-          group.add(bodyMesh);
-
-          const wingGeo = new THREE.BoxGeometry(0.9, 0.02, 0.08);
-          const wingMat = new THREE.MeshStandardMaterial({ color: 0xdd3333 });
-          const wing = new THREE.Mesh(wingGeo, wingMat);
-          wing.position.set(0, 0, 0);
-          group.add(wing);
-
-          const tailGeo = new THREE.BoxGeometry(0.16, 0.2, 0.02);
-          const tailMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-          const tail = new THREE.Mesh(tailGeo, tailMat);
-          tail.position.set(-0.28, 0.08, 0);
-          group.add(tail);
-
-          // Small shadows and low lighting
-          group.scale.set(0.001, 0.001, 0.001); // start from very small
-          group.castShadow = true;
-          group.receiveShadow = false;
-          return group;
-        }
-
-        // Compute a point along a great circle between two vectors; r is radius and altitude added
-        computeGreatCirclePoint(startVec, endVec, t, radius, altitude) {
-          // startVec and endVec are THREE.Vector3 on surface (radius length), we slerp and then lift
-          const v0 = startVec.clone().normalize();
-          const v1 = endVec.clone().normalize();
-          const dot = THREE.MathUtils.clamp(v0.dot(v1), -1, 1);
-          const theta = Math.acos(dot);
-          if (theta === 0) {
-            // Same point
-            const final = v0.clone().multiplyScalar(radius + altitude);
-            return final;
-          }
-          const sinTheta = Math.sin(theta);
-          const s0 = Math.sin((1 - t) * theta) / sinTheta;
-          const s1 = Math.sin(t * theta) / sinTheta;
-          const interpolated = v0.multiplyScalar(s0).add(v1.multiplyScalar(s1)).normalize();
-          const lift = Math.sin(Math.PI * t) * altitude; // arc-shaped altitude
-          return interpolated.multiplyScalar(radius + lift);
-        }
-
-        // Main method to play a plane animation from cityAName to cityBName
-        flyPlane(
-          cityAName,
-          cityBName,
-          {
-            loopRounds = 0,
-            altitude = 2.0,
-            onComplete = null,
-            followCamera = true,
-            zoomInDistance = 18,
-            zoomOutDistance = 25,
-            zoomSpeed = 0.08,
-            trailMaxPoints = 64,
-            trailColor = 0xffffff,
-            zoomLandingDistance = 14,
-            zoomLandingSpeed = 0.06,
-          } = {}
-        ) {
-          if (!this.cities || this.cities.length === 0) return;
-
-          const cityA = this.cities.find((c) => c.data.name === cityAName) || this.cities.find((c) => c.data.name === homeCity);
-          const cityB = this.cities.find((c) => c.data.name === cityBName) || this.cities.find((c) => c.data.name === homeCity);
-          if (!cityA || !cityB) return;
-
-          const startPosSurface = cityA.basePos.clone();
-          const endPosSurface = cityB.basePos.clone();
-
-          // Spawn plane
-          const plane = this.createPlaneMesh();
-          this.group.add(plane);
-
-          const anim = {
-            mesh: plane,
-            start: startPosSurface
-              .clone()
-              .normalize()
-              .multiplyScalar(10 + 0.01), // just above surface
-            end: endPosSurface
-              .clone()
-              .normalize()
-              .multiplyScalar(10 + 0.01),
-            t: 0,
-            state: "takeoff", // takeoff, cruise, circle, landing
-            radius: 10,
-            altitude: altitude,
-            circleAngle: 0,
-            circleRoundsLeft: loopRounds,
-            onComplete: onComplete,
-          };
-
-          // camera follow options
-          anim.followCamera = followCamera;
-          anim.zoomInDistance = zoomInDistance;
-          anim.zoomOutDistance = zoomOutDistance;
-          anim.zoomSpeed = zoomSpeed;
-          anim.zoomInT = 0;
-          anim.zoomOutT = 0;
-          // Landing / circling zoom
-          anim.zoomLandingDistance = zoomLandingDistance;
-          anim.zoomLandingSpeed = zoomLandingSpeed;
-          anim.zoomLandingT = 0;
-          anim.prevCameraPos = this.camera.position.clone();
-          anim.prevControlsTarget = this.controls ? this.controls.target.clone() : new THREE.Vector3(0, 0, 0);
-          anim.prevCameraLen = this.camera.position.length();
-
-          // trail initialization (dashed line)
-          anim.trailPoints = [];
-          anim.trailMaxPoints = trailMaxPoints;
-          const trailMat = new THREE.LineDashedMaterial({ color: trailColor, dashSize: 0.25, gapSize: 0.15, scale: 1 });
-          const trailGeo = new THREE.BufferGeometry().setFromPoints(anim.trailPoints);
-          const trailLine = new THREE.Line(trailGeo, trailMat);
-          trailLine.computeLineDistances();
-          trailLine.visible = false; // show when cruise begins
-          this.group.add(trailLine);
-          anim.trailMesh = trailLine;
-
-          // Initialize position at start (tiny -> grow)
-          const startWorld = anim.start.clone().setLength(anim.radius + 0.1);
-          plane.position.copy(startWorld);
-          plane.lookAt(anim.end);
-          plane.scale.set(0.01, 0.01, 0.01);
-
-          // Add to active planes
-          this.planes.push(anim);
-          // Show destination indicator
-          try {
-            const indicator = document.getElementById("destination-indicator");
-            if (indicator) {
-              indicator.classList.remove("hidden");
-              const nameElem = document.getElementById("indicator-name");
-              if (nameElem) nameElem.textContent = cityBName;
-            }
-          } catch (e) {}
-          // Disable interaction while plane is active
-          if (this.controls) {
-            anim.prevControlsEnabled = this.controls.enabled;
-            this.controls.enabled = false;
-          }
-
-          // Add a small flag to avoid clicking multiple times
-          anim.isAnimating = true;
         }
       }
 
@@ -2104,8 +1303,10 @@
           this.gameMonth = 4; // 从4月开始
           this.totalTurns = 0;
 
-          this.mode = "MAP"; // 'MAP' or 'GAME'
-          this.worldMap = null;
+          this.mode = "GAME"; // 'MAP' or 'GAME' - start in GAME mode (load home city directly)
+          this.worldMap = null; // Legacy - no longer used (iframe handles world map)
+          this.worldMapIframe = null; // Reference to world map iframe element
+          this.pendingCity = null; // City pending selection after travel animation
           this.currentCity = null;
 
           // 城市信息缓存
@@ -2243,39 +1444,125 @@
         }
 
         initWorldMap() {
-          this.worldMap = new WorldMapManager(this);
-          if (this.controls) this.controls.enabled = false;
-
-          // Hide Game UI initially
+          // Use iframe for world map instead of inline WorldMapManager
+          this.worldMapIframe = document.getElementById("world-map-iframe");
+          this.worldMap = null; // No longer using WorldMapManager class
+          
+          // Hide world map iframe initially - game loads directly to home city
+          if (this.worldMapIframe) {
+            this.worldMapIframe.style.display = "none";
+          }
+          
+          // Hide game UI initially until user starts the game
           document.getElementById("ui-layer").style.display = "none";
           document.getElementById("labels-layer").style.display = "none";
-          document.getElementById("game-title").classList.add("hidden");
 
-          // Setup Login
-          const loginModal = document.getElementById("login-modal");
-          if (loginModal) {
-            loginModal.classList.remove("hidden");
-            document.getElementById("login-btn").onclick = () => this.startGame();
+          // Setup message listener for iframe communication
+          window.addEventListener("message", (e) => this.handleMapMessage(e));
+        }
+
+        handleMapMessage(e) {
+          const data = e.data;
+          if (!data || !data.type) return;
+
+          switch (data.type) {
+            case 'mapLoaded':
+              console.log("World map iframe loaded");
+              // Send initial config to iframe
+              this.sendMapMessage({ 
+                type: 'setConfig', 
+                homeCity: homeCity,
+                currentCity: this.currentCity ? this.currentCity.name : null
+              });
+              break;
+
+            case 'mapStarted':
+              console.log("Map started (user clicked start)");
+              document.getElementById("game-title").classList.remove("hidden");
+              break;
+
+            case 'citySelected':
+              console.log("City selected:", data.city);
+              // User clicked on a city in the map - trigger travel animation then enter city
+              if (data.city) {
+                this.pendingCity = data.city;
+                // Send fly command to iframe
+                this.sendMapMessage({ 
+                  type: 'flyToCity', 
+                  cityName: data.city.name, 
+                  enterCity: true 
+                });
+              }
+              break;
+
+            case 'travelComplete':
+              console.log("Travel complete:", data.city);
+              // Plane animation finished, now enter the city
+              if (data.city) {
+                this.selectCity(data.city);
+              }
+              break;
+
+            case 'mapClosed':
+              console.log("Map closed by user");
+              // User closed the map, return to game if we have a city
+              if (this.currentCity) {
+                this.hideWorldMap();
+              }
+              break;
           }
         }
 
-        startGame() {
-          const loginModal = document.getElementById("login-modal");
-          if (loginModal) loginModal.classList.add("hidden");
-
-          document.getElementById("game-title").classList.remove("hidden");
-
-          if (this.worldMap) {
-            // this.worldMap.autoRotate = false;
+        sendMapMessage(message) {
+          if (this.worldMapIframe && this.worldMapIframe.contentWindow) {
+            this.worldMapIframe.contentWindow.postMessage(message, '*');
           }
+        }
+
+        showWorldMap() {
+          if (this.worldMapIframe) {
+            // Load iframe src on first use (lazy loading)
+            if (!this.worldMapIframe.src || this.worldMapIframe.src === 'about:blank' || this.worldMapIframe.src === window.location.href) {
+              const currentPath = window.location.pathname;
+              const lastSlashIndex = currentPath.lastIndexOf('/');
+              const basePath = currentPath.substring(0, lastSlashIndex + 1);
+              const filename = currentPath.substring(lastSlashIndex + 1);
+              const dotIndex = filename.lastIndexOf('.');
+              const extension = dotIndex !== -1 ? filename.substring(dotIndex) : '';
+              const newFilename = 'world_map_select' + extension;
+              this.worldMapIframe.src = basePath + newFilename + window.location.search;
+              
+              // Hide login modal when world map is first loaded
+              const loginModal = document.getElementById("login-modal");
+              if (loginModal) loginModal.classList.add("hidden");
+            }
+            this.worldMapIframe.style.display = "block";
+          }
+          this.mode = "MAP";
+        }
+
+        hideWorldMap() {
+          if (this.worldMapIframe) {
+            this.worldMapIframe.style.display = "none";
+          }
+          this.mode = "GAME";
+          if (this.controls) this.controls.enabled = true;
+          document.getElementById("ui-layer").style.display = "flex";
+          document.getElementById("labels-layer").style.display = "block";
+          document.getElementById("game-title").classList.add("hidden");
+        }
+
+        startGame() {
+          // This is called when the iframe's start button is clicked (via postMessage)
+          document.getElementById("game-title").classList.remove("hidden");
         }
 
         selectCity(city) {
           this.currentCity = city;
-          // If we're in MAP mode, we should ensure worldMap is visible during travel
           this.mode = "GAME";
 
-          if (this.worldMap) this.worldMap.controls.enabled = false;
+          // Hide the world map iframe
+          this.hideWorldMap();
 
           // Reset Game Scene if needed or just init
           // Clear existing map if any?
@@ -2304,44 +1591,31 @@
           let cityObj = null;
           if (!cityOrName) return;
           if (typeof cityOrName === "string") {
-            // find by name
-            cityObj = (CITIES || []).find((c) => c.name === cityOrName);
+            cityObj = { name: cityOrName }; // Create minimal city object with name
           } else {
             cityObj = cityOrName;
           }
-          if (!cityObj) {
+          if (!cityObj || !cityObj.name) {
             console.warn("travelToCity: city not found", cityOrName);
-            return this.selectCity(cityOrName);
+            return;
           }
 
-          const fromName = this.currentCity && this.currentCity.name ? this.currentCity.name : homeCity;
-          // If no worldMap, just switch immediately
-          if (!this.worldMap || typeof this.worldMap.flyPlane !== "function") {
-            return this.selectCity(cityObj);
-          }
-
-          // When the plane finishes flying to cityObj, we call selectCity
-          this.worldMap.flyPlane(fromName, cityObj.name, {
-            altitude: 2.2,
-            followCamera: true,
-            zoomInDistance: 18,
-            zoomOutDistance: 30,
-            zoomSpeed: 0.08,
-            trailMaxPoints: 96,
-            trailColor: 0xffee88,
-            onComplete: () => {
-              if (enterCity) {
-                this.selectCity(cityObj);
-              }
-            },
+          // Show world map and send fly command to iframe
+          this.showWorldMap();
+          this.pendingCity = cityObj;
+          
+          // Send fly command to iframe (iframe will send travelComplete when done)
+          this.sendMapMessage({ 
+            type: 'flyToCity', 
+            cityName: cityObj.name, 
+            enterCity: enterCity 
           });
         }
 
         toggleMap() {
           if (this.mode === "GAME") {
-            this.mode = "MAP";
+            this.showWorldMap();
             if (this.controls) this.controls.enabled = false;
-            if (this.worldMap) this.worldMap.controls.enabled = true;
 
             document.getElementById("ui-layer").style.display = "none";
             document.getElementById("labels-layer").style.display = "none";
@@ -2349,16 +1623,11 @@
             document.getElementById("game-title").classList.remove("hidden");
           } else {
             if (this.currentCity) {
-              this.mode = "GAME";
-              if (this.worldMap) this.worldMap.controls.enabled = false;
-              if (this.controls) this.controls.enabled = true;
-
-              document.getElementById("ui-layer").style.display = "flex";
-              document.getElementById("labels-layer").style.display = "block";
-              document.getElementById("game-title").classList.add("hidden");
+              this.hideWorldMap();
             }
           }
         }
+
 
         async initGame() {
           // Initialize properties cache
@@ -5768,11 +5037,7 @@
           this.camera.aspect = this.width / this.height;
           this.camera.updateProjectionMatrix();
 
-          // Update Map Camera
-          if (this.worldMap) {
-            this.worldMap.camera.aspect = this.width / this.height;
-            this.worldMap.camera.updateProjectionMatrix();
-          }
+          // Note: World map iframe handles its own resize events
 
           this.renderer.setSize(this.width, this.height);
         }
@@ -5780,11 +5045,8 @@
         animate() {
           requestAnimationFrame(() => this.animate());
 
+          // When in MAP mode, the iframe handles rendering - just skip
           if (this.mode === "MAP") {
-            if (this.worldMap) {
-              this.worldMap.update();
-              this.renderer.render(this.worldMap.scene, this.worldMap.camera);
-            }
             return;
           }
 
@@ -5857,19 +5119,32 @@
 
       // Boot
       window.onload = async () => {
-        // Initialize game first (starts rendering loop and rotating earth)
+        // Initialize game first (starts rendering loop)
         window.game = new Game();
-
-        // Load cities data for world map
-        await loadCitiesData();
 
         // Load station data for game map (full city info with lat/lng/population)
         await loadStationData();
 
-        // Render map objects (cities, continents) after data is loaded
-        if (window.game.worldMap) {
-          window.game.worldMap.renderMapObjects();
-        }
+        // Setup start button click handler
+        const loginModal = document.getElementById("login-modal");
+        const loginBtn = document.getElementById("login-btn");
+        
+        loginBtn.onclick = () => {
+          // Hide login modal
+          loginModal.classList.add("hidden");
+          
+          // Auto-load home city immediately
+          const homeCityData = STATION_DATA.find(city => city.name.includes(homeCity) || homeCity.includes(city.name.split(' - ')[0]));
+          if (homeCityData) {
+            window.game.selectCity(homeCityData);
+          } else {
+            // Fallback: use first city or create minimal home city object
+            const fallbackCity = STATION_DATA[0] || { name: homeCity };
+            window.game.selectCity(fallbackCity);
+          }
+        };
+
+        // Note: World map is now hidden by default, user can open it via toggleMap
       };
     </script>
   </body>
