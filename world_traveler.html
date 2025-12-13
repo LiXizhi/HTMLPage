@@ -567,6 +567,14 @@
         </div>
       </div>
 
+      <!-- Left Bottom: Render Stats (FPS, Triangles, Draw Calls) -->
+      <div id="render-stats" class="hud-panel absolute bottom-2 left-2 md:bottom-4 md:left-4 bg-black/70 text-green-400 px-2 py-1 rounded text-xs font-mono pointer-events-none z-20">
+        <div>FPS: <span id="stats-fps">0</span></div>
+        <div>Triangles: <span id="stats-triangles">0</span></div>
+        <div>Draw Calls: <span id="stats-drawcalls">0</span></div>
+        <div>Chunks: <span id="stats-chunks-visible">0</span>/<span id="stats-chunks-total">0</span></div>
+      </div>
+
       <!-- Left Side: Players List -->
       <div class="absolute top-32 md:top-40 left-2 md:left-4 flex flex-col gap-2 pointer-events-none z-20">
         <!-- P1 Info (Minimal) -->
@@ -1481,6 +1489,9 @@
           const meshGroup = new THREE.Group();
           meshGroup.name = `terrain_${tileData.key}`;
           
+          // Spatial chunk size for instanced meshes (16x16 grid cells)
+          const CHUNK_SIZE = 16;
+          
           // Create a water plane for this terrain tile
           // Calculate tile bounds in world coordinates
           const minGridX = Math.floor((tileData.lonFrom - centerLon) * CONFIG_SCALE);
@@ -1506,8 +1517,16 @@
           // Calculate pixels per degree from actual image size
           const pixelsPerDegree = tileData.width / TERRAIN_TILE_DEGREES;
           
-          // Group blocks by terrain type for instancing
-          const blocksByType = {};
+          // Helper to get chunk key from grid coordinates
+          const getChunkKey = (gridX, gridZ) => {
+            const chunkX = Math.floor(gridX / CHUNK_SIZE);
+            const chunkZ = Math.floor(gridZ / CHUNK_SIZE);
+            return `${chunkX},${chunkZ}`;
+          };
+          
+          // Group blocks by chunk AND terrain type for spatially chunked instancing
+          // Structure: { chunkKey: { terrainType: Map<posKey, blockData> } }
+          const blocksByChunk = {};
           
           // Debug: count terrain types found
           const terrainTypeCounts = {};
@@ -1551,8 +1570,14 @@
               // Skip water types (ocean plane handles them)
               if (terrain.type === 'water' || terrain.type === 'ocean') continue;
               
-              if (!blocksByType[terrain.type]) {
-                blocksByType[terrain.type] = new Map();
+              // Get chunk key for this position
+              const chunkKey = getChunkKey(gridX, gridZ);
+              
+              if (!blocksByChunk[chunkKey]) {
+                blocksByChunk[chunkKey] = {};
+              }
+              if (!blocksByChunk[chunkKey][terrain.type]) {
+                blocksByChunk[chunkKey][terrain.type] = new Map();
               }
               
               // Generate random height based on terrain type using position-based seed for consistency
@@ -1572,8 +1597,8 @@
               
               // Only add if not already occupied
               const posKey = `${gridX},${gridZ}`;
-              if (!blocksByType[terrain.type].has(posKey)) {
-                blocksByType[terrain.type].set(posKey, {
+              if (!blocksByChunk[chunkKey][terrain.type].has(posKey)) {
+                blocksByChunk[chunkKey][terrain.type].set(posKey, {
                   x: gridX * TILE_SIZE,
                   z: gridZ * TILE_SIZE,
                   height: blockHeight,
@@ -1583,165 +1608,179 @@
             }
           }
           
-          // Create terrain meshes with optimized rendering
-          // Terrain types that should have tree decorations
-          const treeTerrains = ['forest', 'grass', 'crops', 'scrub'];
-          // Terrain types that use flat height (same as road)
-          const flatTerrains = ['wetland', 'urban'];
+          // Create terrain meshes with optimized instanced rendering
+          // All terrain types now use instanced meshes with scale for varied heights
           
-          // Shared tree geometry for performance
+          // Shared tree/bush geometries for instanced decoration
           const treeGeo = new THREE.ConeGeometry(0.8, 2.5, 6);
           const treeMat = new THREE.MeshLambertMaterial({ color: 0x14532d });
           const tallTreeGeo = new THREE.ConeGeometry(1.2, 4, 6);
           const tallTreeMat = new THREE.MeshLambertMaterial({ color: 0x0d3d1a });
+          const bushGeo = new THREE.ConeGeometry(0.6, 1.8, 6);
+          const bushMat = new THREE.MeshLambertMaterial({ color: 0x5d6d3a });
           
-          // Create meshes by terrain type
-          for (const [type, positions] of Object.entries(blocksByType)) {
-            if (positions.size === 0) continue;
+          // Decoration config per terrain type: { chance, geo, mat, heightOffset, useOffset }
+          const decorationConfig = {
+            forest: { chance: 0.7, geo: tallTreeGeo, mat: tallTreeMat, heightOffset: 2, useOffset: true },
+            grass: { chance: 0.15, geo: treeGeo, mat: treeMat, heightOffset: 1.25, useOffset: false },
+            crops: { chance: 0.08, geo: treeGeo, mat: treeMat, heightOffset: 1.25, useOffset: false },
+            scrub: { chance: 0.12, geo: bushGeo, mat: bushMat, heightOffset: 0.9, useOffset: true, offsetScale: 0.5 }
+          };
+          
+          // Unit box geometry (1x1x1) - will be scaled per instance
+          const unitBoxGeo = new THREE.BoxGeometry(TILE_SIZE, 1, TILE_SIZE);
+          
+          // Helper matrices for instancing
+          const matrix = new THREE.Matrix4();
+          const posVec = new THREE.Vector3();
+          const scaleVec = new THREE.Vector3();
+          const quaternion = new THREE.Quaternion();
+          
+          // Create meshes by spatial chunk, each chunk containing instanced meshes by terrain type
+          let totalBlocks = 0;
+          let chunkCount = 0;
+          
+          for (const [chunkKey, blocksByType] of Object.entries(blocksByChunk)) {
+            // Create a group for this spatial chunk
+            const chunkGroup = new THREE.Group();
+            const [chunkX, chunkZ] = chunkKey.split(',').map(Number);
+            chunkGroup.name = `chunk_${chunkKey}`;
             
-            const material = this.terrainMaterials[type] || this.terrainMaterials['default'];
-            const isFlat = flatTerrains.includes(type);
-            const hasTreeDecoration = treeTerrains.includes(type);
+            // Calculate chunk center for potential frustum culling
+            const chunkCenterX = (chunkX + 0.5) * CHUNK_SIZE * TILE_SIZE;
+            const chunkCenterZ = (chunkZ + 0.5) * CHUNK_SIZE * TILE_SIZE;
+            chunkGroup.userData.chunkCenter = new THREE.Vector3(chunkCenterX, 0, chunkCenterZ);
+            chunkGroup.userData.chunkRadius = CHUNK_SIZE * TILE_SIZE * Math.SQRT2 * 0.5;
             
-            // For forest with manageable count, create individual meshes with trees
-            if (type === 'forest' && positions.size < 3000) {
-              // Create individual forest blocks with varied heights and trees
-              for (const [, pos] of positions) {
-                const blockHeight = pos.height;
-                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
-                mesh.receiveShadow = true;
-                
-                // Add tree decoration based on seed (70% chance for forest)
-                const treeRandom = ((pos.seed * 7) % 100) / 100;
-                if (treeRandom < 0.7) {
-                  const tree = new THREE.Mesh(tallTreeGeo, tallTreeMat);
-                  tree.position.y = blockHeight * 0.5 + 2;
-                  tree.castShadow = true;
-                  // Slight random offset for natural look
-                  const offsetX = ((pos.seed * 13) % 100) / 100 - 0.5;
-                  const offsetZ = ((pos.seed * 17) % 100) / 100 - 0.5;
-                  tree.position.x = offsetX;
-                  tree.position.z = offsetZ;
-                  mesh.add(tree);
-                }
-                
-                meshGroup.add(mesh);
-              }
-            } else if (type === 'grass' && positions.size < 5000) {
-              // Grass blocks: slight height variation with occasional small trees
-              for (const [, pos] of positions) {
-                const blockHeight = pos.height; // Use varied height from config
-                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
-                mesh.receiveShadow = true;
-                
-                // Sparse tree decoration (15% chance for grass)
-                const treeRandom = ((pos.seed * 11) % 100) / 100;
-                if (treeRandom < 0.15) {
-                  const tree = new THREE.Mesh(treeGeo, treeMat);
-                  tree.position.y = blockHeight * 0.5 + 1.25;
-                  tree.castShadow = true;
-                  mesh.add(tree);
-                }
-                
-                meshGroup.add(mesh);
-              }
-            } else if (type === 'crops' && positions.size < 5000) {
-              // Crops blocks: slight height variation with sparse trees (fruit trees)
-              for (const [, pos] of positions) {
-                const blockHeight = pos.height; // Use varied height from config
-                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
-                mesh.receiveShadow = true;
-                
-                // Sparse tree decoration (8% chance for crops - fruit trees)
-                const treeRandom = ((pos.seed * 11) % 100) / 100;
-                if (treeRandom < 0.08) {
-                  const tree = new THREE.Mesh(treeGeo, treeMat);
-                  tree.position.y = blockHeight * 0.5 + 1.25;
-                  tree.castShadow = true;
-                  mesh.add(tree);
-                }
-                
-                meshGroup.add(mesh);
-              }
-            } else if (type === 'scrub' && positions.size < 5000) {
-              // Scrub blocks: slight height variation with sparse short trees/bushes
-              const bushGeo = new THREE.ConeGeometry(0.6, 1.8, 6);
-              const bushMat = new THREE.MeshLambertMaterial({ color: 0x5d6d3a }); // Olive/brown-green for scrub
-              for (const [, pos] of positions) {
-                const blockHeight = pos.height; // Use varied height from config
-                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
-                mesh.receiveShadow = true;
-                
-                // Sparse bush/tree decoration (12% chance for scrub)
-                const treeRandom = ((pos.seed * 11) % 100) / 100;
-                if (treeRandom < 0.12) {
-                  const bush = new THREE.Mesh(bushGeo, bushMat);
-                  bush.position.y = blockHeight * 0.5 + 0.9;
-                  bush.castShadow = true;
-                  // Slight random offset for natural look
-                  const offsetX = ((pos.seed * 13) % 100) / 100 - 0.5;
-                  const offsetZ = ((pos.seed * 17) % 100) / 100 - 0.5;
-                  bush.position.x = offsetX * 0.5;
-                  bush.position.z = offsetZ * 0.5;
-                  mesh.add(bush);
-                }
-                
-                meshGroup.add(mesh);
-              }
-            } else if (type === 'snow' && positions.size < 3000) {
-              // Snow/mountain blocks: varied height for mountain effect
-              for (const [, pos] of positions) {
-                const blockHeight = pos.height;
-                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
-                mesh.receiveShadow = true;
-                meshGroup.add(mesh);
-              }
-            } else if (type === 'barren' && positions.size < 3000) {
-              // Barren blocks: slight height variation for desert/rocky terrain
-              for (const [, pos] of positions) {
-                const blockHeight = pos.height;
-                const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(pos.x, blockHeight * 0.5 - 0.5, pos.z);
-                mesh.receiveShadow = true;
-                meshGroup.add(mesh);
-              }
-            } else {
-              // Use instanced mesh for better performance on flat terrain types or large counts
+            for (const [type, positions] of Object.entries(blocksByType)) {
+              if (positions.size === 0) continue;
+              
+              const material = this.terrainMaterials[type] || this.terrainMaterials['default'];
               const count = positions.size;
-              const blockHeight = 1;
-              const geometry = new THREE.BoxGeometry(TILE_SIZE, blockHeight, TILE_SIZE);
-              const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
+              totalBlocks += count;
+              
+              // Create instanced mesh for terrain blocks with varied heights via scale
+              const instancedMesh = new THREE.InstancedMesh(unitBoxGeo, material, count);
               instancedMesh.receiveShadow = true;
               
-              const matrix = new THREE.Matrix4();
-              let index = 0;
+              // Collect decoration positions for instanced decoration rendering
+              const decoConfig = decorationConfig[type];
+              const decoPositions = [];
               
+              let index = 0;
               for (const [, pos] of positions) {
+                const blockHeight = pos.height;
+                // Position: center block vertically, accounting for scale
                 const yOffset = blockHeight * 0.5 - 0.5;
-                matrix.setPosition(pos.x, yOffset, pos.z);
+                posVec.set(pos.x, yOffset, pos.z);
+                scaleVec.set(1, blockHeight, 1);
+                matrix.compose(posVec, quaternion, scaleVec);
                 instancedMesh.setMatrixAt(index++, matrix);
+                
+                // Check for decoration
+                if (decoConfig) {
+                  const treeRandom = ((pos.seed * 7) % 100) / 100;
+                  if (treeRandom < decoConfig.chance) {
+                    let dx = 0, dz = 0;
+                    // Add random offset for natural variation within tile bounds
+                    const maxRandomOffset = TILE_SIZE * 0.1;
+                    dx = (((pos.seed * 13) % 100) / 100 - 0.5) * 2 * maxRandomOffset;
+                    dz = (((pos.seed * 17) % 100) / 100 - 0.5) * 2 * maxRandomOffset;
+                    // Random height scale for trees (0.5 to 1.5)
+                    const heightScale = 0.8 + ((pos.seed * 19) % 100) / 100 * 0.6;
+                    decoPositions.push({
+                      x: pos.x + dx,
+                      y: blockHeight + decoConfig.heightOffset * heightScale - 0.5,
+                      z: pos.z + dz,
+                      heightScale: heightScale
+                    });
+                  }
+                }
               }
               
               instancedMesh.instanceMatrix.needsUpdate = true;
-              meshGroup.add(instancedMesh);
+              chunkGroup.add(instancedMesh);
+              
+              // Create instanced mesh for decorations (trees/bushes) if any
+              if (decoConfig && decoPositions.length > 0) {
+                const decoInstancedMesh = new THREE.InstancedMesh(decoConfig.geo, decoConfig.mat, decoPositions.length);
+                decoInstancedMesh.castShadow = true;
+                
+                for (let i = 0; i < decoPositions.length; i++) {
+                  const dp = decoPositions[i];
+                  // Apply random uniform scale for natural variation
+                  posVec.set(dp.x, dp.y, dp.z);
+                  scaleVec.set(dp.heightScale, dp.heightScale, dp.heightScale);
+                  matrix.compose(posVec, quaternion, scaleVec);
+                  decoInstancedMesh.setMatrixAt(i, matrix);
+                }
+                
+                decoInstancedMesh.instanceMatrix.needsUpdate = true;
+                chunkGroup.add(decoInstancedMesh);
+              }
             }
+            
+            meshGroup.add(chunkGroup);
+            chunkCount++;
           }
           
           tileData.meshGroup = meshGroup;
           this.terrainGroup.add(meshGroup);
           
-          console.log(`Created terrain mesh for ${tileData.key} with ${Object.values(blocksByType).reduce((sum, m) => sum + m.size, 0)} blocks`);
+          console.log(`Created terrain mesh for ${tileData.key} with ${totalBlocks} blocks in ${chunkCount} chunks (${CHUNK_SIZE}x${CHUNK_SIZE})`);
+        }
+
+        /**
+         * Perform frustum culling on terrain chunk groups
+         * Call this every frame before rendering to hide chunks outside view
+         * @param {THREE.Camera} camera - The active camera
+         * @returns {Object} Stats about visible/culled chunks
+         */
+        cullChunks(camera) {
+          if (!camera) return { visible: 0, culled: 0 };
+          
+          // Reuse cached objects to avoid GC pressure
+          if (!this._cullFrustum) {
+            this._cullFrustum = new THREE.Frustum();
+            this._cullMatrix = new THREE.Matrix4();
+            this._cullSphere = new THREE.Sphere();
+          }
+          
+          // Update frustum from camera
+          this._cullMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+          this._cullFrustum.setFromProjectionMatrix(this._cullMatrix);
+          
+          let visibleCount = 0;
+          let culledCount = 0;
+          
+          // Iterate through all terrain tiles
+          for (const [, tileData] of this.terrainTiles) {
+            if (!tileData.meshGroup) continue;
+            
+            // Iterate through chunk groups within each tile
+            for (const child of tileData.meshGroup.children) {
+              // Skip non-chunk children (like water plane)
+              if (!child.userData.chunkCenter) {
+                continue;
+              }
+              
+              // Check if chunk's bounding sphere intersects frustum
+              this._cullSphere.center.copy(child.userData.chunkCenter);
+              this._cullSphere.radius = child.userData.chunkRadius;
+              
+              const isVisible = this._cullFrustum.intersectsSphere(this._cullSphere);
+              
+              child.visible = isVisible;
+              
+              if (isVisible) {
+                visibleCount++;
+              } else {
+                culledCount++;
+              }
+            }
+          }
+          
+          return { visible: visibleCount, culled: culledCount };
         }
 
         /**
@@ -1990,6 +2029,12 @@
           this.container = document.getElementById("game-container");
           this.width = window.innerWidth;
           this.height = window.innerHeight;
+
+          // FPS and render stats tracking
+          this.lastFrameTime = performance.now();
+          this.frameCount = 0;
+          this.fps = 0;
+          this.lastStatsUpdate = 0;
 
           // Three.js Components
           this.scene = null;
@@ -2992,9 +3037,14 @@
               const treeGeo = new THREE.ConeGeometry(1, 3, 8);
               const treeMat = new THREE.MeshLambertMaterial({ color: 0x14532d });
               const tree = new THREE.Mesh(treeGeo, treeMat);
-              tree.position.set(0, 2.5, 0);
+              // BoxGeometry is centered at origin, so local (0,0,0) is the center of the tile mesh
+              // Add random offset within the tile bounds
+              const maxOffset = TILE_SIZE * 0.1;
+              const randomOffsetX = (Math.random() - 0.5) * 2 * maxOffset;
+              const randomOffsetZ = (Math.random() - 0.5) * 2 * maxOffset;
+              tree.position.set(randomOffsetX, 2.5, randomOffsetZ);
               tree.castShadow = true;
-              mesh.add(tree); // Local coordinate
+              mesh.add(tree); // Local coordinate - (0,0,0) is center of tile
             }
           } else if (tile.type === "green") {
             // Station Marker
@@ -5862,7 +5912,46 @@
           // Update terrain tiles based on camera position (throttled)
           this.updateTerrainTiles();
 
+          // Perform frustum culling on terrain chunks before rendering
+          if (this.terrainManager) {
+            this.chunkCullStats = this.terrainManager.cullChunks(this.camera);
+          }
+
           this.renderer.render(this.scene, this.camera);
+
+          // Update render stats (FPS, triangles, draw calls)
+          this.updateRenderStats();
+        }
+
+        updateRenderStats() {
+          this.frameCount++;
+          const now = performance.now();
+          
+          // Update stats every 500ms
+          if (now - this.lastStatsUpdate >= 500) {
+            const elapsed = now - this.lastFrameTime;
+            this.fps = Math.round((this.frameCount * 1000) / elapsed);
+            this.frameCount = 0;
+            this.lastFrameTime = now;
+            this.lastStatsUpdate = now;
+            
+            // Get renderer info
+            const info = this.renderer.info;
+            const triangles = info.render.triangles;
+            const drawCalls = info.render.calls;
+            
+            // Update DOM
+            document.getElementById('stats-fps').textContent = this.fps;
+            document.getElementById('stats-triangles').textContent = triangles.toLocaleString();
+            document.getElementById('stats-drawcalls').textContent = drawCalls;
+            
+            // Update chunk culling stats
+            if (this.chunkCullStats) {
+              const total = this.chunkCullStats.visible + this.chunkCullStats.culled;
+              document.getElementById('stats-chunks-visible').textContent = this.chunkCullStats.visible;
+              document.getElementById('stats-chunks-total').textContent = total;
+            }
+          }
         }
 
         // Throttled terrain tile update
