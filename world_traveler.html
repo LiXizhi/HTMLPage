@@ -57,46 +57,6 @@
         transition: opacity 0.3s;
       }
 
-      /* Station Labels floating in 3D space */
-      .station-label {
-        position: absolute;
-        background: rgba(0, 0, 0, 0.6);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 14px;
-        font-weight: bold;
-        pointer-events: none;
-        transform: translate(-50%, -150%);
-        white-space: nowrap;
-        text-shadow: 0 1px 2px black;
-        z-index: 10;
-        user-select: none;
-        -webkit-user-select: none;
-      }
-
-      /* Destination label highlight */
-      .station-label.destination {
-        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-        color: #000;
-        font-size: 16px;
-        padding: 6px 16px;
-        border: 2px solid #fff;
-        box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.4);
-        animation: destination-pulse 1.5s ease-in-out infinite;
-        z-index: 15;
-      }
-
-      @keyframes destination-pulse {
-        0%,
-        100% {
-          box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.4);
-        }
-        50% {
-          box-shadow: 0 0 30px rgba(251, 191, 36, 1), 0 0 60px rgba(251, 191, 36, 0.6);
-        }
-      }
-
       /* Off-screen destination indicator */
       .destination-indicator {
         position: fixed;
@@ -493,9 +453,6 @@
 
     <!-- World Map Iframe Container (for city selection globe) - loaded on demand -->
     <iframe id="world-map-iframe" class="fixed inset-0 w-full h-full z-[55] border-none" style="display: none;"></iframe>
-
-    <!-- Labels Layer (Dynamic HTML for 3D objects) -->
-    <div id="labels-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden"></div>
 
     <!-- Off-screen Destination Indicator -->
     <div id="destination-indicator" class="destination-indicator hidden">
@@ -1142,20 +1099,21 @@
 
       // --- Terrain Color Legend (from terrain PNG files) ---
       // Height categories:
-      // - flat: same height as road tiles (1 unit) - urban, crops, scrub, wetland
-      // - varied: random height variation - forest, snow, barren
-      // - grass: slight variation with optional decorations
+      // - flat: height 1 unit, blocks positioned above sea level - urban, crops, scrub, wetland
+      // - varied: random height variation - forest, snow, barren, grass
+      // - water: below sea level (handled by water plane)
+      // All land blocks have their bottom at y=0, above the water plane at y=-0.5
       const TERRAIN_COLORS = {
         '#000000': { type: 'ocean', height: -1, color: 0x000000, label: '海洋', heightType: 'water' },
         '#1A5BAB': { type: 'water', height: -1, color: 0x1A5BAB, label: '水域', heightType: 'water' },
-        '#358221': { type: 'forest', height: 2, color: 0x358221, label: '森林', heightType: 'varied', minHeight: 2, maxHeight: 5, treeChance: 0.8 },
-        '#A7D282': { type: 'grass', height: 1, color: 0xA7D282, label: '草地', heightType: 'varied', minHeight: 1, maxHeight: 1.8, treeChance: 0.15 },
+        '#358221': { type: 'forest', height: 2, color: 0x358221, label: '森林', heightType: 'varied', minHeight: 1, maxHeight: 3, treeChance: 0.8 },
+        '#A7D282': { type: 'grass', height: 1, color: 0xA7D282, label: '草地', heightType: 'varied', minHeight: 1, maxHeight: 1.4, treeChance: 0.15 },
         '#90C090': { type: 'urban', height: 1, color: 0x90C090, label: '城市', heightType: 'flat', treeChance: 0.15 },
-        '#FFDB5C': { type: 'crops', height: 1, color: 0xFFDB5C, label: '耕地', heightType: 'varied', minHeight: 1, maxHeight: 1.6, treeChance: 0.08 },
-        '#EECFA8': { type: 'scrub', height: 1, color: 0xEECFA8, label: '灌木', heightType: 'varied', minHeight: 1, maxHeight: 1.8, treeChance: 0.12 },
-        '#EDE9E4': { type: 'barren', height: 1, color: 0xEDE9E4, label: '荒漠', heightType: 'varied', minHeight: 1, maxHeight: 3 },
-        '#F2F2F2': { type: 'snow', height: 3, color: 0xF2F2F2, label: '雪山', heightType: 'varied', minHeight: 3, maxHeight: 6 },
-        '#419BDF': { type: 'wetland', height: 0, color: 0x419BDF, label: '湿地', heightType: 'flat', treeChance: 0.15 }
+        '#FFDB5C': { type: 'crops', height: 1, color: 0xFFDB5C, label: '耕地', heightType: 'varied', minHeight: 1, maxHeight: 1.3, treeChance: 0.08 },
+        '#EECFA8': { type: 'scrub', height: 1, color: 0xEECFA8, label: '灌木', heightType: 'varied', minHeight: 1, maxHeight: 1.5, treeChance: 0.12 },
+        '#EDE9E4': { type: 'barren', height: 1, color: 0xEDE9E4, label: '荒漠', heightType: 'varied', minHeight: 1, maxHeight: 1.6 },
+        '#F2F2F2': { type: 'snow', height: 3, color: 0xF2F2F2, label: '雪山', heightType: 'varied', minHeight: 1.3, maxHeight: 5 },
+        '#419BDF': { type: 'wetland', height: 1, color: 0x419BDF, label: '湿地', heightType: 'flat', treeChance: 0.15 }
       };
 
       // Terrain tile constants
@@ -1581,8 +1539,9 @@
               }
               
               // Generate random height based on terrain type using position-based seed for consistency
-              const seed = (gridX * 73856093) ^ (gridZ * 19349663);
-              const pseudoRandom = ((seed % 1000) / 1000);
+              // Use Math.abs to handle negative grid coordinates (negative seed would cause negative heights)
+              const seed = Math.abs((gridX * 73856093) ^ (gridZ * 19349663));
+              const pseudoRandom = (seed % 1000) / 1000;
               
               let blockHeight = 1; // Default flat height (same as road tiles)
               const terrainConfig = Object.values(TERRAIN_COLORS).find(t => t.type === terrain.type);
@@ -1670,8 +1629,8 @@
               let index = 0;
               for (const [, pos] of positions) {
                 const blockHeight = pos.height;
-                // Position: center block vertically, accounting for scale
-                const yOffset = blockHeight * 0.5 - 0.5;
+                // Position: center block vertically, with bottom above sea level (water is at y=-0.5)
+                const yOffset = blockHeight * 0.5;
                 posVec.set(pos.x, yOffset, pos.z);
                 scaleVec.set(1, blockHeight, 1);
                 matrix.compose(posVec, quaternion, scaleVec);
@@ -1679,18 +1638,19 @@
                 
                 // Check for decoration
                 if (decoConfig) {
-                  const treeRandom = ((pos.seed * 7) % 100) / 100;
+                  // Use Math.abs to handle negative seeds from negative grid coordinates
+                  const treeRandom = (Math.abs(pos.seed * 7) % 100) / 100;
                   if (treeRandom < decoConfig.chance) {
                     let dx = 0, dz = 0;
                     // Add random offset for natural variation within tile bounds
-                    const maxRandomOffset = TILE_SIZE * 0.1;
-                    dx = (((pos.seed * 13) % 100) / 100 - 0.5) * 2 * maxRandomOffset;
-                    dz = (((pos.seed * 17) % 100) / 100 - 0.5) * 2 * maxRandomOffset;
+                    const maxRandomOffset = TILE_SIZE * 0.2;
+                    dx = ((Math.abs(pos.seed * 13) % 100) / 100 - 0.5) * 2 * maxRandomOffset;
+                    dz = ((Math.abs(pos.seed * 17) % 100) / 100 - 0.5) * 2 * maxRandomOffset;
                     // Random height scale for trees (0.5 to 1.5)
-                    const heightScale = 0.8 + ((pos.seed * 19) % 100) / 100 * 0.6;
+                    const heightScale = 0.8 + (Math.abs(pos.seed * 19) % 100) / 100 * 0.6;
                     decoPositions.push({
                       x: pos.x + dx,
-                      y: blockHeight + decoConfig.heightOffset * heightScale - 0.5,
+                      y: blockHeight,
                       z: pos.z + dz,
                       heightScale: heightScale
                     });
@@ -1787,10 +1747,13 @@
          * Update which terrain tiles should be loaded and visible
          * Loads a 3x3 grid of tiles (9 total) centered on the camera position
          * Each tile is a 2x2 degree area containing many terrain blocks
+         * @returns {boolean} true if any tiles were loaded, created, or visibility changed
          */
         async updateVisibleTiles(centerLon, centerLat, CONFIG_SCALE) {
           this.centerLon = centerLon;
           this.centerLat = centerLat;
+          
+          let tilesChanged = false;
           
           // Calculate which tiles should be visible (3x3 grid = 9 tiles around camera)
           const newVisibleTiles = new Set();
@@ -1812,6 +1775,7 @@
               if (tile && tile.meshGroup) {
                 tile.meshGroup.visible = false;
                 tile.visible = false;
+                tilesChanged = true;
               }
             }
           }
@@ -1823,6 +1787,7 @@
               const tileData = await this.loadTerrainTile(key);
               if (tileData && tileData.loaded) {
                 this.createTerrainMesh(tileData, centerLon, centerLat, CONFIG_SCALE);
+                tilesChanged = true;
               }
             }
             
@@ -1830,15 +1795,18 @@
             if (tile) {
               if (!tile.meshGroup && tile.loaded) {
                 this.createTerrainMesh(tile, centerLon, centerLat, CONFIG_SCALE);
+                tilesChanged = true;
               }
-              if (tile.meshGroup) {
+              if (tile.meshGroup && !tile.visible) {
                 tile.meshGroup.visible = true;
                 tile.visible = true;
+                tilesChanged = true;
               }
             }
           }
           
           this.visibleTiles = newVisibleTiles;
+          return tilesChanged;
         }
 
         /**
@@ -1974,7 +1942,6 @@
 
           this.neighbors = [];
           this.mesh = null; // Three.js Mesh
-          this.labelElement = null; // HTML Element for station name
         }
 
         get isRoad() {
@@ -2036,6 +2003,14 @@
           this.fps = 0;
           this.lastStatsUpdate = 0;
 
+          // Camera change detection for rendering optimization
+          this._lastCameraPosition = new THREE.Vector3();
+          this._lastCameraTarget = new THREE.Vector3();
+          this._lastCameraZoom = 0;
+          this._cameraDirty = true; // Flag to force recalculation
+          this._viewportDirty = true; // Flag for viewport size changes
+          this._cameraChangeThreshold = 0.01; // Minimum movement to trigger recalculation
+
           // Three.js Components
           this.scene = null;
           this.camera = null;
@@ -2084,7 +2059,8 @@
           // Map center coordinates (lon/lat)
           this.mapCenterLon = 0;
           this.mapCenterLat = 0;
-          this.configScale = 70; // Scale factor for lat/lon to grid units
+          // since we are using 2*2 degree of 512*512 terrain image file, the max scale can be 256
+          this.configScale = 96; // Scale factor for lat/lon to grid units
 
           this.initThree();
           // this.initGame(); // Delayed until city selection
@@ -2217,7 +2193,6 @@
           
           // Hide game UI initially until user starts the game
           document.getElementById("ui-layer").style.display = "none";
-          document.getElementById("labels-layer").style.display = "none";
 
           // Setup message listener for iframe communication
           window.addEventListener("message", (e) => this.handleMapMessage(e));
@@ -2310,7 +2285,6 @@
           this.mode = "GAME";
           if (this.controls) this.controls.enabled = true;
           document.getElementById("ui-layer").style.display = "flex";
-          document.getElementById("labels-layer").style.display = "block";
           document.getElementById("game-title").classList.add("hidden");
         }
 
@@ -2342,15 +2316,15 @@
           this.destinationTile = null;
           this.destinationMarker = null;
 
-          // 清空标签层
-          document.getElementById("labels-layer").innerHTML = "";
-
           this.initThree(); // Re-init scene/camera/lights for Game
           this.initGame(); // Generate city map
+          
+          // Force camera dirty to recalculate all positions after city change
+          this._cameraDirty = true;
+          this._viewportDirty = true;
 
           // Update UI
           document.getElementById("ui-layer").style.display = "flex";
-          document.getElementById("labels-layer").style.display = "block";
           document.getElementById("game-title").classList.add("hidden");
         }
 
@@ -2386,7 +2360,6 @@
             if (this.controls) this.controls.enabled = false;
 
             document.getElementById("ui-layer").style.display = "none";
-            document.getElementById("labels-layer").style.display = "none";
             document.getElementById("destination-indicator").classList.add("hidden");
             document.getElementById("game-title").classList.remove("hidden");
           } else {
@@ -2422,6 +2395,14 @@
             tile: new THREE.BoxGeometry(TILE_SIZE - TILE_SPACING, 1, TILE_SIZE - TILE_SPACING),
             envBlock: new THREE.BoxGeometry(TILE_SIZE, 4, TILE_SIZE), // Taller blocks for env
           };
+          
+          // Instanced mesh system for road/colored tiles - stores InstancedMesh per tile type
+          this.instancedMeshes = {};
+          // Map from tile type to array of tiles using that InstancedMesh
+          this.instancedTileArrays = {};
+          // Group for 3D station labels (sprites)
+          this.stationLabelsGroup = new THREE.Group();
+          this.stationLabelsGroup.name = 'stationLabels';
 
           // Generate Map
           const startTile = this.generateMap();
@@ -2927,17 +2908,34 @@
             tileData.set(key, { x, z, type, stationName, population, height: h, obj });
           });
 
-          // --- Step 6: Instantiate Tiles ---
+          // --- Step 6: Instantiate Tiles using chunked InstancedMesh for better performance ---
+          // Uses the same spatial chunking system as terrain tiles (16x16 grid cells per chunk)
           const mapGroup = new THREE.Group();
           mapGroup.name = 'gameMapGroup';
           this.scene.add(mapGroup);
           this.tilesMap = new Map();
           this.mapGroup = mapGroup; // Store reference for later
+          
+          // Add station labels group to scene
+          this.scene.add(this.stationLabelsGroup);
 
           // Note: Ocean planes are now rendered per-terrain-tile in TerrainTileManager.createTerrainMesh()
           // This allows for proper loading/unloading with terrain tiles
 
+          // First pass: Create Tile objects and collect data for chunked instancing
           let idCounter = 0;
+          const ROAD_CHUNK_SIZE = 16; // Same as terrain chunk size
+          
+          // Structure: { chunkKey: { tileType: [tiles] } }
+          const tilesByChunk = {};
+          
+          // Helper to get chunk key from grid coordinates
+          const getChunkKey = (gridX, gridZ) => {
+            const chunkX = Math.floor(gridX / ROAD_CHUNK_SIZE);
+            const chunkZ = Math.floor(gridZ / ROAD_CHUNK_SIZE);
+            return `${chunkX},${chunkZ}`;
+          };
+          
           tileData.forEach((data) => {
             // Skip pure environment tiles - terrain manager handles environment rendering
             // Only create tiles for roads, stations, and game-relevant tiles
@@ -2950,12 +2948,25 @@
 
               this.map.push(tile);
               this.tilesMap.set(`${data.x},${data.z}`, tile);
-              this.createTileVisuals(tile, mapGroup);
+              
+              // Group tiles by chunk and type for instanced rendering
+              const chunkKey = getChunkKey(data.x, data.z);
+              if (!tilesByChunk[chunkKey]) {
+                tilesByChunk[chunkKey] = {};
+              }
+              if (!tilesByChunk[chunkKey][data.type]) {
+                tilesByChunk[chunkKey][data.type] = [];
+              }
+              tilesByChunk[chunkKey][data.type].push(tile);
             }
             // Note: Environment tiles are now rendered by TerrainTileManager from PNG data
           });
 
-          console.log(`Created ${this.map.length} tiles, ${this.map.filter(t => t.type === 'green').length} stations`);
+          // Second pass: Create chunked InstancedMeshes
+          this.createChunkedInstancedTileMeshes(tilesByChunk, mapGroup, ROAD_CHUNK_SIZE);
+
+
+          console.log(`Created ${this.map.length} tiles using InstancedMesh, ${this.map.filter(t => t.type === 'green').length} stations`);
 
           // --- Step 6.5: Initialize Terrain Manager (async loading after stations/roads are rendered) ---
           // Initialize or reset terrain manager
@@ -3001,96 +3012,516 @@
 
           if (startTile) {
             startTile.type = "start";
-            startTile.mesh.material = this.materials.start;
-            startTile.mesh.position.y = 0.2;
-            if (startTile.labelElement) {
-              startTile.labelElement.remove();
-              startTile.labelElement = null;
+            // Update instanced mesh color for start tile
+            if (startTile.instancedMesh && startTile.instanceIndex !== undefined) {
+              // For instanced meshes, we need to update the instance's transform to show it's the start
+              // Since we can't change material per-instance easily, we'll raise the tile slightly
+              const matrix = new THREE.Matrix4();
+              startTile.instancedMesh.getMatrixAt(startTile.instanceIndex, matrix);
+              const pos = new THREE.Vector3();
+              const quat = new THREE.Quaternion();
+              const scale = new THREE.Vector3();
+              matrix.decompose(pos, quat, scale);
+              pos.y = 0.2; // Raise start tile
+              matrix.compose(pos, quat, scale);
+              startTile.instancedMesh.setMatrixAt(startTile.instanceIndex, matrix);
+              startTile.instancedMesh.instanceMatrix.needsUpdate = true;
+              
+              // Update the virtual mesh position
+              if (startTile.mesh && startTile.mesh.position) {
+                startTile.mesh.position.y = 0.2;
+              }
+            }
+            // Remove label for start tile (player is there)
+            if (startTile.labelGroup) {
+              startTile.labelGroup.visible = false;
+              this._releaseLabelTexture(startTile);
             }
           }
 
           return startTile;
         }
 
-        createTileVisuals(tile, parentGroup) {
-          const x = tile.gridX * TILE_SIZE;
-          const z = tile.gridY * TILE_SIZE;
-
-          // 1. Base Block
-          let geometry = this.geometries.tile;
-          let yPos = 0;
-
-          // Environment blocks are taller to create "canyons" for the track
-          if (!tile.isRoad) {
-            geometry = new THREE.BoxGeometry(TILE_SIZE, rand(2, 6), TILE_SIZE);
-            yPos = -1; // Sink them a bit
-          }
-
-          const material = this.materials[tile.type] || this.materials.road;
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.position.set(x, yPos, z);
-          mesh.receiveShadow = true;
-
-          // 2. Decorations
-          if (tile.type === "env_nature") {
-            if (Math.random() > 0.5) {
-              const treeGeo = new THREE.ConeGeometry(1, 3, 8);
-              const treeMat = new THREE.MeshLambertMaterial({ color: 0x14532d });
-              const tree = new THREE.Mesh(treeGeo, treeMat);
-              // BoxGeometry is centered at origin, so local (0,0,0) is the center of the tile mesh
-              // Add random offset within the tile bounds
-              const maxOffset = TILE_SIZE * 0.1;
-              const randomOffsetX = (Math.random() - 0.5) * 2 * maxOffset;
-              const randomOffsetZ = (Math.random() - 0.5) * 2 * maxOffset;
-              tree.position.set(randomOffsetX, 2.5, randomOffsetZ);
-              tree.castShadow = true;
-              mesh.add(tree); // Local coordinate - (0,0,0) is center of tile
+        /**
+         * Create chunked InstancedMeshes for road/station tiles
+         * Uses same spatial chunking system as terrain tiles for efficient frustum culling
+         * @param {Object} tilesByChunk - Structure: { chunkKey: { tileType: [tiles] } }
+         * @param {THREE.Group} parentGroup - Parent group to add chunk groups to
+         * @param {number} chunkSize - Size of each chunk in grid cells
+         */
+        createChunkedInstancedTileMeshes(tilesByChunk, parentGroup, chunkSize) {
+          // Shared geometry for all road/station tiles
+          const tileGeo = new THREE.BoxGeometry(TILE_SIZE - TILE_SPACING, 1, TILE_SIZE - TILE_SPACING);
+          
+          // Shared geometry for station markers (white box on green tiles)
+          const stationMarkerGeo = new THREE.BoxGeometry(2.5, 1, 2.5);
+          const stationMarkerMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+          
+          // Helper matrices for instancing
+          const matrix = new THREE.Matrix4();
+          const posVec = new THREE.Vector3();
+          const scaleVec = new THREE.Vector3(1, 1, 1);
+          const quaternion = new THREE.Quaternion();
+          
+          let totalTiles = 0;
+          let chunkCount = 0;
+          
+          // Store chunk groups for frustum culling
+          this.roadChunkGroups = [];
+          
+          for (const [chunkKey, tilesByType] of Object.entries(tilesByChunk)) {
+            // Create a group for this spatial chunk
+            const chunkGroup = new THREE.Group();
+            const [chunkX, chunkZ] = chunkKey.split(',').map(Number);
+            chunkGroup.name = `road_chunk_${chunkKey}`;
+            
+            // Calculate chunk center for frustum culling
+            const chunkCenterX = (chunkX + 0.5) * chunkSize * TILE_SIZE;
+            const chunkCenterZ = (chunkZ + 0.5) * chunkSize * TILE_SIZE;
+            chunkGroup.userData.chunkCenter = new THREE.Vector3(chunkCenterX, 0.5, chunkCenterZ);
+            chunkGroup.userData.chunkRadius = chunkSize * TILE_SIZE * Math.SQRT2 * 0.5;
+            
+            // Collect station markers for this chunk
+            const stationMarkerPositions = [];
+            
+            for (const [type, tiles] of Object.entries(tilesByType)) {
+              if (tiles.length === 0) continue;
+              
+              const material = this.materials[type] || this.materials.road;
+              const count = tiles.length;
+              totalTiles += count;
+              
+              // Create instanced mesh for this tile type in this chunk
+              const instancedMesh = new THREE.InstancedMesh(tileGeo, material, count);
+              instancedMesh.receiveShadow = true;
+              instancedMesh.name = `instanced_${type}`;
+              
+              // Store reference for raycasting - map instanceId to tile
+              instancedMesh.userData.tileType = type;
+              instancedMesh.userData.tiles = tiles;
+              
+              tiles.forEach((tile, index) => {
+                const x = tile.gridX * TILE_SIZE;
+                const z = tile.gridY * TILE_SIZE;
+                
+                posVec.set(x, 0, z);
+                matrix.compose(posVec, quaternion, scaleVec);
+                instancedMesh.setMatrixAt(index, matrix);
+                
+                // Store reference back to instanced mesh for tile operations
+                tile.instancedMesh = instancedMesh;
+                tile.instanceIndex = index;
+                tile.chunkGroup = chunkGroup;
+                
+                // Create a virtual position object for compatibility with existing code
+                tile.mesh = {
+                  position: new THREE.Vector3(x, 0, z),
+                  // Add method to allow adding children (for buildings)
+                  add: (child) => {
+                    child.position.x += x;
+                    child.position.z += z;
+                    chunkGroup.add(child);
+                  }
+                };
+                
+                // Collect station marker positions
+                if (type === 'green') {
+                  stationMarkerPositions.push({ x, z, tile });
+                  // Create 3D label for station
+                  this.create3DStationLabel(tile, chunkGroup);
+                }
+              });
+              
+              instancedMesh.instanceMatrix.needsUpdate = true;
+              chunkGroup.add(instancedMesh);
             }
-          } else if (tile.type === "green") {
-            // Station Marker
-            const stationGeo = new THREE.BoxGeometry(2.5, 1, 2.5);
-            const stationMesh = new THREE.Mesh(stationGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }));
-            stationMesh.position.y = 0.6;
-            mesh.add(stationMesh);
-
-            // Add HTML Label
-            this.createStationLabel(tile);
+            
+            // Create instanced mesh for station markers if any
+            if (stationMarkerPositions.length > 0) {
+              const markerInstancedMesh = new THREE.InstancedMesh(
+                stationMarkerGeo, 
+                stationMarkerMat, 
+                stationMarkerPositions.length
+              );
+              markerInstancedMesh.name = 'station_markers';
+              
+              stationMarkerPositions.forEach((pos, i) => {
+                posVec.set(pos.x, 0.6, pos.z);
+                matrix.compose(posVec, quaternion, scaleVec);
+                markerInstancedMesh.setMatrixAt(i, matrix);
+              });
+              
+              markerInstancedMesh.instanceMatrix.needsUpdate = true;
+              chunkGroup.add(markerInstancedMesh);
+            }
+            
+            parentGroup.add(chunkGroup);
+            this.roadChunkGroups.push(chunkGroup);
+            chunkCount++;
           }
-
-          tile.mesh = mesh;
-          parentGroup.add(mesh);
+          
+          console.log(`Created ${totalTiles} road/station tiles in ${chunkCount} chunks using InstancedMesh`);
         }
 
-        createStationLabel(tile) {
-          const div = document.createElement("div");
-          div.className = "station-label";
-          div.innerText = tile.stationName;
-          document.getElementById("labels-layer").appendChild(div);
-          tile.labelElement = div;
+        // --- Station label rendering (TextCanvas + pooled CanvasTexture, no troika) ---
 
-          // Determine best label position: prefer non-road adjacent tiles
-          // Check left (-x), right (+x), and top (-z) directions
-          const leftKey = `${tile.gridX - 1},${tile.gridY}`;
-          const rightKey = `${tile.gridX + 1},${tile.gridY}`;
-          const topKey = `${tile.gridX},${tile.gridY - 1}`;
+        /**
+         * A tiny TextCanvas helper: draws a rounded-rect background + centered text.
+         * We intentionally keep it self-contained so it can be used with a small texture cache.
+         */
+        static TextCanvas = {
+          _roundRect(ctx, x, y, w, h, r) {
+            const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.arcTo(x + w, y, x + w, y + h, radius);
+            ctx.arcTo(x + w, y + h, x, y + h, radius);
+            ctx.arcTo(x, y + h, x, y, radius);
+            ctx.arcTo(x, y, x + w, y, radius);
+            ctx.closePath();
+          },
 
-          const leftTile = this.tilesMap.get(leftKey);
-          const rightTile = this.tilesMap.get(rightKey);
-          const topTile = this.tilesMap.get(topKey);
+          /**
+           * Draw label into ctx. Caller must size the canvas first.
+           * @param {CanvasRenderingContext2D} ctx
+           * @param {{text:string,fontFamily?:string,fontWeight?:string,fontSizePx?:number,paddingPx?:number,textColor?:string,bgColor?:string,cornerRadiusPx?:number}} opts
+           */
+          draw(ctx, opts) {
+            const {
+              text,
+              fontFamily = 'Segoe UI, Arial, sans-serif',
+              fontWeight = '700',
+              fontSizePx = 48,
+              paddingPx = 18,
+              textColor = '#ffffff',
+              bgColor = 'rgba(0,0,0,0.70)',
+              cornerRadiusPx = 16
+            } = opts || {};
 
-          // Check if tile is a road/walkable tile (not environment)
-          const isRoadTile = (t) => t && t.isRoad;
+            const w = ctx.canvas.width;
+            const h = ctx.canvas.height;
 
-          // Priority: place label toward non-road areas (top > left > right)
-          if (!isRoadTile(topTile)) {
-            tile.labelOffset = { x: 0, y: -30, align: "center" }; // top (default)
-          } else if (!isRoadTile(leftTile)) {
-            tile.labelOffset = { x: -50, y: 0, align: "right" }; // left side
-          } else if (!isRoadTile(rightTile)) {
-            tile.labelOffset = { x: 50, y: 0, align: "left" }; // right side
-          } else {
-            tile.labelOffset = { x: 0, y: -30, align: "center" }; // fallback to top
+            ctx.clearRect(0, 0, w, h);
+            ctx.save();
+
+            if (bgColor) {
+              ctx.fillStyle = bgColor;
+              this._roundRect(ctx, 0, 0, w, h, cornerRadiusPx);
+              ctx.fill();
+            }
+
+            ctx.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = textColor;
+            ctx.fillText(text, w / 2, h / 2);
+
+            ctx.restore();
           }
+        };
+
+        initStationLabelTexturePool() {
+          if (this._stationLabelTexturePool) return;
+
+          const MAX = 64;
+          const pool = {
+            max: MAX,
+            slots: [],
+            free: [],
+            lru: [],
+            keyToSlot: new Map(),
+            slotToKey: new Map(),
+            slotOwner: new Array(MAX).fill(null)
+          };
+
+          for (let i = 0; i < MAX; i++) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.generateMipmaps = false;
+            texture.needsUpdate = true;
+
+            pool.slots.push({ canvas, ctx, texture });
+            pool.free.push(i);
+          }
+
+          this._stationLabelTexturePool = pool;
+        }
+
+        _stationLabelTouchSlot(slotIndex) {
+          const pool = this._stationLabelTexturePool;
+          const idx = pool.lru.indexOf(slotIndex);
+          if (idx >= 0) pool.lru.splice(idx, 1);
+          pool.lru.push(slotIndex);
+        }
+
+        _stationLabelMakeKey(text, style) {
+          const s = style || {};
+          return JSON.stringify({
+            t: text,
+            fs: s.fontSizePx,
+            fw: s.fontWeight,
+            ff: s.fontFamily,
+            tc: s.textColor,
+            bg: s.bgColor,
+            px: s.paddingPx,
+            cr: s.cornerRadiusPx
+          });
+        }
+
+        _stationLabelAcquireSlot(key, ownerId) {
+          this.initStationLabelTexturePool();
+          const pool = this._stationLabelTexturePool;
+
+          const existing = pool.keyToSlot.get(key);
+          if (existing !== undefined) {
+            this._stationLabelTouchSlot(existing);
+            pool.slotOwner[existing] = ownerId;
+            return existing;
+          }
+
+          let slotIndex = pool.free.pop();
+          if (slotIndex === undefined) {
+            // Evict least recently used
+            slotIndex = pool.lru.shift();
+            const oldKey = pool.slotToKey.get(slotIndex);
+            if (oldKey) {
+              pool.keyToSlot.delete(oldKey);
+              pool.slotToKey.delete(slotIndex);
+            }
+            pool.slotOwner[slotIndex] = null;
+          }
+
+          pool.keyToSlot.set(key, slotIndex);
+          pool.slotToKey.set(slotIndex, key);
+          pool.slotOwner[slotIndex] = ownerId;
+          this._stationLabelTouchSlot(slotIndex);
+          return slotIndex;
+        }
+
+        _stationLabelReleaseSlot(slotIndex) {
+          const pool = this._stationLabelTexturePool;
+          if (!pool) return;
+          if (slotIndex === undefined || slotIndex === null) return;
+          pool.slotOwner[slotIndex] = null;
+          if (!pool.free.includes(slotIndex)) pool.free.push(slotIndex);
+        }
+
+        _stationLabelGetTexture(text, style, ownerId) {
+          this.initStationLabelTexturePool();
+          const pool = this._stationLabelTexturePool;
+          const key = this._stationLabelMakeKey(text, style);
+          const slotIndex = this._stationLabelAcquireSlot(key, ownerId);
+          const slot = pool.slots[slotIndex];
+
+          // Measure, then resize canvas
+          const fontFamily = (style && style.fontFamily) || 'Segoe UI, Arial, sans-serif';
+          const fontWeight = (style && style.fontWeight) || '700';
+          const fontSizePx = (style && style.fontSizePx) || 48;
+          const paddingPx = (style && style.paddingPx) || 18;
+
+          slot.ctx.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
+          const m = slot.ctx.measureText(text);
+          const textW = Math.ceil(m.width);
+          const textH = Math.ceil((m.actualBoundingBoxAscent || fontSizePx * 0.8) + (m.actualBoundingBoxDescent || fontSizePx * 0.2));
+          const w = Math.min(1024, Math.max(64, textW + paddingPx * 2));
+          const h = Math.min(512, Math.max(32, textH + paddingPx * 2));
+
+          if (slot.canvas.width !== w || slot.canvas.height !== h) {
+            slot.canvas.width = w;
+            slot.canvas.height = h;
+          }
+
+          this.constructor.TextCanvas.draw(slot.ctx, {
+            text,
+            fontFamily,
+            fontWeight,
+            fontSizePx,
+            paddingPx,
+            textColor: (style && style.textColor) || '#ffffff',
+            bgColor: (style && style.bgColor) || 'rgba(0,0,0,0.70)',
+            cornerRadiusPx: (style && style.cornerRadiusPx) || 16
+          });
+
+          slot.texture.needsUpdate = true;
+          return { texture: slot.texture, width: w, height: h, slotIndex, key };
+        }
+        
+        /**
+         * Create a 3D label placeholder for a station (no texture assigned at load time).
+         * Texture is assigned on-demand when the label becomes visible via frustum culling.
+         * @param {Tile} tile - The station tile
+         * @param {THREE.Group} chunkGroup - The chunk group to add the label to
+         */
+        create3DStationLabel(tile, chunkGroup) {
+          const text = tile.stationName;
+          if (!text) return;
+
+          const labelGroup = new THREE.Group();
+          // Fixed front-facing orientation (no billboarding)
+          labelGroup.rotation.x = -Math.PI / 4; // Tilt to face the isometric camera
+
+          const style = {
+            fontFamily: 'Segoe UI, Arial, sans-serif',
+            fontWeight: '700',
+            fontSizePx: 32,
+            paddingPx: 12,
+            bgColor: 'rgba(0,0,0,0.70)',
+            textColor: '#ffffff',
+            cornerRadiusPx: 8
+          };
+
+          // Estimate plane size without rendering texture
+          const estCharW = style.fontSizePx * 0.6;
+          const estW = text.length * estCharW + style.paddingPx * 2;
+          const estH = style.fontSizePx + style.paddingPx * 2;
+          const pxToWorld = 0.03;
+
+          const planeGeo = new THREE.PlaneGeometry(estW * pxToWorld, estH * pxToWorld);
+          // Start with no texture
+          const planeMat = new THREE.MeshBasicMaterial({
+            map: null,
+            transparent: true,
+            opacity: 1.0,
+            depthTest: false
+          });
+          const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+          planeMesh.visible = false; // Hidden until texture is assigned
+          labelGroup.add(planeMesh);
+
+          // Position above tile
+          const x = tile.gridX * TILE_SIZE;
+          const z = tile.gridY * TILE_SIZE;
+          labelGroup.position.set(x, 4, z);
+
+          // Store refs (no texture slot yet)
+          tile.labelGroup = labelGroup;
+          tile.labelPlane = planeMesh;
+          tile.labelMaterial = planeMat;
+          tile.labelText = { text, style };
+          tile.labelTextureSlot = undefined;
+          tile.labelTextureKey = undefined;
+          tile.labelHasTexture = false;
+
+          // Track which chunk this label belongs to for visibility management
+          if (!chunkGroup.userData.labelTiles) {
+            chunkGroup.userData.labelTiles = [];
+          }
+          chunkGroup.userData.labelTiles.push(tile);
+
+          chunkGroup.add(labelGroup);
+        }
+
+        /**
+         * Assign a pooled texture to a label (called when label becomes visible)
+         * @param {Tile} tile
+         */
+        _assignLabelTexture(tile) {
+          if (!tile.labelText || !tile.labelPlane || !tile.labelMaterial) return;
+          if (tile.labelHasTexture) return; // Already has texture
+
+          const { text, style } = tile.labelText;
+          const ownerId = `tile_${tile.gridX}_${tile.gridY}`;
+          const rendered = this._stationLabelGetTexture(text, style, ownerId);
+
+          // Update geometry to match actual rendered size
+          const pxToWorld = 0.03;
+          const planeW = rendered.width * pxToWorld;
+          const planeH = rendered.height * pxToWorld;
+          tile.labelPlane.geometry.dispose();
+          tile.labelPlane.geometry = new THREE.PlaneGeometry(planeW, planeH);
+
+          // Assign texture
+          tile.labelMaterial.map = rendered.texture;
+          tile.labelMaterial.needsUpdate = true;
+          tile.labelPlane.visible = true; // Show the mesh
+
+          tile.labelTextureSlot = rendered.slotIndex;
+          tile.labelTextureKey = rendered.key;
+          tile.labelHasTexture = true;
+        }
+
+        /**
+         * Release a label's pooled texture (called when label becomes hidden)
+         * @param {Tile} tile
+         */
+        _releaseLabelTexture(tile) {
+          if (!tile.labelHasTexture) return;
+
+          // Release slot back to pool
+          if (tile.labelTextureSlot !== undefined) {
+            this._stationLabelReleaseSlot(tile.labelTextureSlot);
+          }
+
+          // Clear texture from material (keep mesh for reuse)
+          if (tile.labelMaterial) {
+            tile.labelMaterial.map = null;
+            tile.labelMaterial.needsUpdate = true;
+          }
+          if (tile.labelPlane) {
+            tile.labelPlane.visible = false; // Hide the mesh
+          }
+
+          tile.labelTextureSlot = undefined;
+          tile.labelTextureKey = undefined;
+          tile.labelHasTexture = false;
+        }
+        
+        /**
+         * Update station label to show destination highlight
+         * @param {Tile} tile - The station tile
+         * @param {boolean} isDestination - Whether this is the destination
+         */
+        updateStationLabelHighlight(tile, isDestination) {
+          if (!tile.labelGroup || !tile.labelPlane || !tile.labelMaterial || !tile.labelText) return;
+
+          const baseStyle = tile.labelText.style || {};
+          const newStyle = {
+            ...baseStyle,
+            bgColor: isDestination ? 'rgba(251,191,36,1.0)' : 'rgba(0,0,0,0.70)',
+            textColor: isDestination ? '#000000' : '#ffffff'
+          };
+
+          // Update style (texture will be rendered with new style when visible)
+          tile.labelText.style = newStyle;
+
+          // If label currently has a texture, update it immediately
+          if (tile.labelHasTexture) {
+            const ownerId = `tile_${tile.gridX}_${tile.gridY}`;
+            const rendered = this._stationLabelGetTexture(tile.labelText.text, newStyle, ownerId);
+
+            tile.labelMaterial.map = rendered.texture;
+            tile.labelMaterial.needsUpdate = true;
+
+            // Resize plane if needed
+            const pxToWorld = 0.012;
+            const planeW = rendered.width * pxToWorld;
+            const planeH = rendered.height * pxToWorld;
+            tile.labelPlane.geometry.dispose();
+            tile.labelPlane.geometry = new THREE.PlaneGeometry(planeW, planeH);
+
+            // Release previous slot if different
+            if (tile.labelTextureSlot !== undefined && tile.labelTextureSlot !== rendered.slotIndex) {
+              this._stationLabelReleaseSlot(tile.labelTextureSlot);
+            }
+
+            tile.labelTextureSlot = rendered.slotIndex;
+            tile.labelTextureKey = rendered.key;
+          }
+        }
+
+        /**
+         * Update all billboard labels to face the camera
+         * (Disabled - labels now have fixed front-facing orientation)
+         */
+        updateBillboardLabels() {
+          // No-op: Labels now face front with fixed rotation instead of billboarding
+          return;
         }
 
         getRandomColoredType() {
@@ -3111,9 +3542,9 @@
 
           if (stations.length === 0) return;
 
-          // 移除旧目的地的高亮样式
-          if (this.destinationTile && this.destinationTile.labelElement) {
-            this.destinationTile.labelElement.classList.remove("destination");
+          // 移除旧目的地的高亮样式 (3D label)
+          if (this.destinationTile) {
+            this.updateStationLabelHighlight(this.destinationTile, false);
           }
 
           // 随机选择一个车站作为目的地
@@ -3127,10 +3558,8 @@
           // 更新UI显示
           document.getElementById("destination-name").innerText = newDest.stationName;
 
-          // 添加目的地标签高亮样式
-          if (newDest.labelElement) {
-            newDest.labelElement.classList.add("destination");
-          }
+          // 添加目的地标签高亮样式 (3D label)
+          this.updateStationLabelHighlight(newDest, true);
 
           // 移除旧的目的地标记
           if (this.destinationMarker) {
@@ -5070,18 +5499,33 @@
 
           this.gameRaycaster.setFromCamera(this.gameMouse, this.camera);
           
-          // Get all tile meshes
-          const tileMeshes = this.map.map((tile) => tile.mesh);
-          const intersects = this.gameRaycaster.intersectObjects(tileMeshes);
+          // Collect all instanced meshes from road chunks for raycasting
+          const instancedMeshes = [];
+          if (this.roadChunkGroups) {
+            this.roadChunkGroups.forEach(chunkGroup => {
+              chunkGroup.children.forEach(child => {
+                if (child.isInstancedMesh && child.userData.tiles) {
+                  instancedMeshes.push(child);
+                }
+              });
+            });
+          }
+          
+          const intersects = this.gameRaycaster.intersectObjects(instancedMeshes, false);
 
           if (intersects.length > 0) {
-            // Find which tile was clicked
-            const clickedMesh = intersects[0].object;
-            const clickedTile = this.map.find((tile) => tile.mesh === clickedMesh);
+            const intersection = intersects[0];
+            const instancedMesh = intersection.object;
+            const instanceId = intersection.instanceId;
             
-            if (clickedTile && clickedTile.type === "green") {
-              // Open city info panel in "view-only" mode (no purchase)
-              this.showCityInfoModalViewOnly(clickedTile);
+            // Get the tile from the instanced mesh's userData
+            if (instancedMesh.userData.tiles && instanceId !== undefined) {
+              const clickedTile = instancedMesh.userData.tiles[instanceId];
+              
+              if (clickedTile && clickedTile.type === "green") {
+                // Open city info panel in "view-only" mode (no purchase)
+                this.showCityInfoModalViewOnly(clickedTile);
+              }
             }
           }
         }
@@ -5836,6 +6280,33 @@
           // Note: World map iframe handles its own resize events
 
           this.renderer.setSize(this.width, this.height);
+          
+          // Mark viewport as dirty to force label/indicator recalculation
+          this._viewportDirty = true;
+          this._cameraDirty = true;
+        }
+
+        /**
+         * Check if camera has moved significantly since last frame
+         * Updates _cameraDirty flag if movement exceeds threshold
+         */
+        checkCameraChanged() {
+          const camPos = this.camera.position;
+          const target = this.controls ? this.controls.target : camPos;
+          const zoom = this.camera.zoom || 1;
+
+          // Check if camera position or target changed beyond threshold
+          const posChanged = this._lastCameraPosition.distanceToSquared(camPos) > this._cameraChangeThreshold;
+          const targetChanged = this._lastCameraTarget.distanceToSquared(target) > this._cameraChangeThreshold;
+          const zoomChanged = Math.abs(this._lastCameraZoom - zoom) > 0.001;
+
+          if (posChanged || targetChanged || zoomChanged || this._viewportDirty) {
+            this._cameraDirty = true;
+            this._lastCameraPosition.copy(camPos);
+            this._lastCameraTarget.copy(target);
+            this._lastCameraZoom = zoom;
+            this._viewportDirty = false;
+          }
         }
 
         animate() {
@@ -5864,63 +6335,117 @@
 
           if (this.controls) this.controls.update();
 
-          // Update Station Labels
-          this.map.forEach((tile) => {
-            if (tile.labelElement) {
-              // Only update if visible (optional optimization)
-              const pos = this.getScreenPosition(tile.mesh.position);
-              const offset = tile.labelOffset || { x: 0, y: -30, align: "center" };
+          // Update billboard labels to face camera
+          this.updateBillboardLabels();
 
-              // Apply position based on label alignment
-              let transform;
-              if (offset.align === "left") {
-                // Label on right side of station, align left edge
-                transform = `translate(${pos.x + offset.x}px, ${pos.y + offset.y}px) translate(0%, -50%)`;
-              } else if (offset.align === "right") {
-                // Label on left side of station, align right edge
-                transform = `translate(${pos.x + offset.x}px, ${pos.y + offset.y}px) translate(-100%, -50%)`;
-              } else {
-                // Label on top (default), center aligned
-                transform = `translate(${pos.x + offset.x}px, ${pos.y + offset.y}px) translate(-50%, -100%)`;
-              }
-              tile.labelElement.style.transform = transform;
+          // Check if camera has moved - optimize by only updating screen positions when needed
+          this.checkCameraChanged();
 
-              // Hide if offscreen
-              if (pos.x < 0 || pos.x > this.width || pos.y < 0 || pos.y > this.height) {
-                tile.labelElement.style.opacity = "0";
-              } else {
-                tile.labelElement.style.opacity = "1";
-              }
+          // Only update labels, indicators, and culling when camera has changed
+          if (this._cameraDirty) {
+            // Note: Station labels are now 3D Sprites that auto-billboard toward camera
+            // No need to update HTML positions - they are rendered as part of the scene
+            
+            // Perform frustum culling on road/station chunks
+            this.cullRoadChunks();
+
+            // Update off-screen destination indicator
+            this.updateDestinationIndicator();
+
+            // Update Overlay Buttons if active
+            const overlay = document.getElementById("direction-overlay");
+            if (overlay) {
+              Array.from(overlay.children).forEach((btn) => {
+                if (btn.target3D) {
+                  const screenPos = this.getScreenPosition(btn.target3D);
+                  btn.style.left = `${screenPos.x}px`;
+                  btn.style.top = `${screenPos.y}px`;
+                }
+              });
             }
-          });
 
-          // Update off-screen destination indicator
-          this.updateDestinationIndicator();
+            // Perform frustum culling on terrain chunks (only when camera moved)
+            if (this.terrainManager) {
+              this.chunkCullStats = this.terrainManager.cullChunks(this.camera);
+            }
 
-          // Update Overlay Buttons if active
-          const overlay = document.getElementById("direction-overlay");
-          if (overlay) {
-            Array.from(overlay.children).forEach((btn) => {
-              if (btn.target3D) {
-                const screenPos = this.getScreenPosition(btn.target3D);
-                btn.style.left = `${screenPos.x}px`;
-                btn.style.top = `${screenPos.y}px`;
-              }
-            });
+            // Reset camera dirty flag after processing
+            this._cameraDirty = false;
           }
 
-          // Update terrain tiles based on camera position (throttled)
+          // Update terrain tiles based on camera position (already throttled internally)
           this.updateTerrainTiles();
-
-          // Perform frustum culling on terrain chunks before rendering
-          if (this.terrainManager) {
-            this.chunkCullStats = this.terrainManager.cullChunks(this.camera);
-          }
 
           this.renderer.render(this.scene, this.camera);
 
           // Update render stats (FPS, triangles, draw calls)
           this.updateRenderStats();
+        }
+        
+        /**
+         * Perform frustum culling on road/station chunk groups
+         * Hides chunks outside camera view for better performance
+         * Also manages label texture assignment for visible labels
+         */
+        cullRoadChunks() {
+          if (!this.roadChunkGroups || this.roadChunkGroups.length === 0) return;
+          
+          // Reuse cached objects to avoid GC pressure
+          if (!this._roadCullFrustum) {
+            this._roadCullFrustum = new THREE.Frustum();
+            this._roadCullMatrix = new THREE.Matrix4();
+            this._roadCullSphere = new THREE.Sphere();
+          }
+          
+          // Update frustum from camera
+          this._roadCullMatrix.multiplyMatrices(
+            this.camera.projectionMatrix,
+            this.camera.matrixWorldInverse
+          );
+          this._roadCullFrustum.setFromProjectionMatrix(this._roadCullMatrix);
+          
+          let visible = 0;
+          let culled = 0;
+          
+          for (const chunkGroup of this.roadChunkGroups) {
+            const center = chunkGroup.userData.chunkCenter;
+            const radius = chunkGroup.userData.chunkRadius;
+            // Track previous visibility state (undefined on first run means "not yet processed")
+            const wasVisible = chunkGroup.userData._labelTexturesAssigned;
+            let isVisible = true;
+
+            if (center && radius) {
+              this._roadCullSphere.set(center, radius);
+              isVisible = this._roadCullFrustum.intersectsSphere(this._roadCullSphere);
+            }
+            
+            chunkGroup.visible = isVisible;
+            
+            if (isVisible) {
+              visible++;
+              // Chunk became visible (or first time) - assign textures to its labels
+              if (!wasVisible && chunkGroup.userData.labelTiles) {
+                for (const tile of chunkGroup.userData.labelTiles) {
+                  if (tile.labelGroup && tile.labelGroup.visible !== false) {
+                    this._assignLabelTexture(tile);
+                  }
+                }
+                chunkGroup.userData._labelTexturesAssigned = true;
+              }
+            } else {
+              culled++;
+              // Chunk became hidden - release textures from its labels
+              if (wasVisible && chunkGroup.userData.labelTiles) {
+                for (const tile of chunkGroup.userData.labelTiles) {
+                  this._releaseLabelTexture(tile);
+                }
+                chunkGroup.userData._labelTexturesAssigned = false;
+              }
+            }
+          }
+          
+          // Update road chunk culling stats (optional, for debugging)
+          this.roadChunkCullStats = { visible, culled };
         }
 
         updateRenderStats() {
@@ -5955,7 +6480,7 @@
         }
 
         // Throttled terrain tile update
-        updateTerrainTiles() {
+        async updateTerrainTiles() {
           if (!this.terrainManager || this.mode !== "GAME") return;
           
           // Throttle updates to avoid excessive loading
@@ -5973,8 +6498,13 @@
           const centerLon = this.mapCenterLon + gridX / this.configScale;
           const centerLat = this.mapCenterLat - gridZ / this.configScale;
           
-          // Update visible terrain tiles
-          this.terrainManager.updateVisibleTiles(centerLon, centerLat, this.configScale);
+          // Update visible terrain tiles - returns true if any tiles changed
+          const tilesChanged = await this.terrainManager.updateVisibleTiles(centerLon, centerLat, this.configScale);
+          
+          // If terrain tiles were loaded/created/changed visibility, mark camera dirty for frustum culling
+          if (tilesChanged) {
+            this._cameraDirty = true;
+          }
         }
       }
 
