@@ -460,17 +460,6 @@
       <span id="indicator-name">---</span>
     </div>
 
-    <!-- Title and Subtitle (Outside UI Layer) -->
-    <div id="game-title" class="absolute top-4 left-4 z-50 pointer-events-auto hidden">
-      <h1
-        class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 drop-shadow-lg"
-        style="font-family: 'Arial Black', sans-serif; -webkit-text-stroke: 1px white"
-      >
-        HelloWorld
-      </h1>
-      <p class="text-sm text-white font-semibold tracking-wider drop-shadow-md mt-1 ml-1">powered by paracraft</p>
-    </div>
-
     <!-- Login Window (Start Screen) -->
     <div id="login-modal" class="fixed inset-0 flex items-center justify-center z-[60] bg-black/40 backdrop-blur-sm">
       <div class="text-center">
@@ -1181,7 +1170,7 @@
        * Each terrain tile:
        * - Covers a fixed 2x2 degree area of the Earth (aligned to even degree boundaries)
        * - Is stored as a PNG image on CDN (e.g., terrain_72_74_18_20.png)
-       * - Contains 200x200 pixels, each pixel = one terrain block
+       * - Contains 70x70 or at most 512*512 pixels, each pixel = one terrain block
        * - Is loaded on-demand based on camera position
        * 
        * Typically 9 tiles (3x3 grid) are loaded around the camera view.
@@ -1921,7 +1910,7 @@
         const basePath = currentPath.substring(0, lastSlashIndex + 1);
         const filename = currentPath.substring(lastSlashIndex + 1);
         const dotIndex = filename.lastIndexOf('.');
-        const extension = dotIndex !== -1 ? filename.substring(dotIndex) : '.html';
+        const extension = dotIndex !== -1 ? filename.substring(dotIndex) : '';
         return basePath + gameName + extension + window.location.search;
       }
 
@@ -2282,7 +2271,6 @@
 
             case 'mapStarted':
               console.log("Map started (user clicked start)");
-              document.getElementById("game-title").classList.remove("hidden");
               break;
 
             case 'citySelected':
@@ -2345,12 +2333,10 @@
           this.mode = "GAME";
           if (this.controls) this.controls.enabled = true;
           document.getElementById("ui-layer").style.display = "flex";
-          document.getElementById("game-title").classList.add("hidden");
         }
 
         startGame() {
           // This is called when the iframe's start button is clicked (via postMessage)
-          document.getElementById("game-title").classList.remove("hidden");
         }
 
         selectCity(city) {
@@ -2385,7 +2371,6 @@
 
           // Update UI
           document.getElementById("ui-layer").style.display = "flex";
-          document.getElementById("game-title").classList.add("hidden");
         }
 
         // Travel from current city (or homeCity) to the provided city. Will perform plane animation then select City
@@ -2421,7 +2406,6 @@
 
             document.getElementById("ui-layer").style.display = "none";
             document.getElementById("destination-indicator").classList.add("hidden");
-            document.getElementById("game-title").classList.remove("hidden");
           } else {
             if (this.currentCity) {
               this.hideWorldMap();
@@ -3287,11 +3271,8 @@
           const pool = {
             max: MAX,
             slots: [],
-            free: [],
-            lru: [],
-            keyToSlot: new Map(),
-            slotToKey: new Map(),
-            slotOwner: new Array(MAX).fill(null)
+            free: [],           // Available slot indices
+            activeOwners: new Map()  // ownerId -> slotIndex (tracks which tile owns which slot)
           };
 
           for (let i = 0; i < MAX; i++) {
@@ -3306,80 +3287,78 @@
             texture.generateMipmaps = false;
             texture.needsUpdate = true;
 
-            pool.slots.push({ canvas, ctx, texture });
+            // Track what's currently rendered in this slot
+            pool.slots.push({ 
+              canvas, ctx, texture, 
+              ownerId: null,
+              renderedText: null,    // Current text in texture
+              renderedStyleKey: null // Current style key in texture
+            });
             pool.free.push(i);
           }
 
           this._stationLabelTexturePool = pool;
         }
 
-        _stationLabelTouchSlot(slotIndex) {
-          const pool = this._stationLabelTexturePool;
-          const idx = pool.lru.indexOf(slotIndex);
-          if (idx >= 0) pool.lru.splice(idx, 1);
-          pool.lru.push(slotIndex);
-        }
-
-        _stationLabelMakeKey(text, style) {
+        /**
+         * Generate a key string for style comparison
+         */
+        _makeStyleKey(style) {
           const s = style || {};
-          return JSON.stringify({
-            t: text,
-            fs: s.fontSizePx,
-            fw: s.fontWeight,
-            ff: s.fontFamily,
-            tc: s.textColor,
-            bg: s.bgColor,
-            px: s.paddingPx,
-            cr: s.cornerRadiusPx
-          });
+          return `${s.fontSizePx || 48}_${s.fontWeight || '700'}_${s.textColor || '#fff'}_${s.bgColor || 'rgba(0,0,0,0.7)'}`;
         }
 
-        _stationLabelAcquireSlot(key, ownerId) {
+        /**
+         * Acquire a texture slot for a label. Only redraws if text/style changed.
+         * Returns null if pool is exhausted and no slot is available.
+         * @param {string} text - The text to render
+         * @param {object} style - Style options
+         * @param {string} ownerId - Unique identifier for this label (e.g., "tile_x_y")
+         * @returns {{texture, width, height, slotIndex, redrawn}|null}
+         */
+        _stationLabelAcquireAndRender(text, style, ownerId) {
           this.initStationLabelTexturePool();
           const pool = this._stationLabelTexturePool;
 
-          const existing = pool.keyToSlot.get(key);
-          if (existing !== undefined) {
-            this._stationLabelTouchSlot(existing);
-            pool.slotOwner[existing] = ownerId;
-            return existing;
-          }
-
-          let slotIndex = pool.free.pop();
+          // Check if this owner already has a slot
+          let slotIndex = pool.activeOwners.get(ownerId);
+          let isNewSlot = false;
+          
           if (slotIndex === undefined) {
-            // Evict least recently used
-            slotIndex = pool.lru.shift();
-            const oldKey = pool.slotToKey.get(slotIndex);
-            if (oldKey) {
-              pool.keyToSlot.delete(oldKey);
-              pool.slotToKey.delete(slotIndex);
+            // Need to acquire a new slot
+            slotIndex = pool.free.pop();
+            
+            if (slotIndex === undefined) {
+              // Pool exhausted - can't show this label
+              return null;
             }
-            pool.slotOwner[slotIndex] = null;
+            
+            // Mark this slot as owned
+            pool.slots[slotIndex].ownerId = ownerId;
+            pool.activeOwners.set(ownerId, slotIndex);
+            isNewSlot = true;
           }
 
-          pool.keyToSlot.set(key, slotIndex);
-          pool.slotToKey.set(slotIndex, key);
-          pool.slotOwner[slotIndex] = ownerId;
-          this._stationLabelTouchSlot(slotIndex);
-          return slotIndex;
-        }
-
-        _stationLabelReleaseSlot(slotIndex) {
-          const pool = this._stationLabelTexturePool;
-          if (!pool) return;
-          if (slotIndex === undefined || slotIndex === null) return;
-          pool.slotOwner[slotIndex] = null;
-          if (!pool.free.includes(slotIndex)) pool.free.push(slotIndex);
-        }
-
-        _stationLabelGetTexture(text, style, ownerId) {
-          this.initStationLabelTexturePool();
-          const pool = this._stationLabelTexturePool;
-          const key = this._stationLabelMakeKey(text, style);
-          const slotIndex = this._stationLabelAcquireSlot(key, ownerId);
           const slot = pool.slots[slotIndex];
+          const styleKey = this._makeStyleKey(style);
+          
+          // Check if we need to redraw
+          const needsRedraw = isNewSlot || 
+                              slot.renderedText !== text || 
+                              slot.renderedStyleKey !== styleKey;
 
-          // Measure, then resize canvas
+          if (!needsRedraw) {
+            // Return existing texture without redrawing
+            return { 
+              texture: slot.texture, 
+              width: slot.canvas.width, 
+              height: slot.canvas.height, 
+              slotIndex,
+              redrawn: false
+            };
+          }
+
+          // Redraw the texture
           const fontFamily = (style && style.fontFamily) || 'Segoe UI, Arial, sans-serif';
           const fontWeight = (style && style.fontWeight) || '700';
           const fontSizePx = (style && style.fontSizePx) || 48;
@@ -3409,7 +3388,145 @@
           });
 
           slot.texture.needsUpdate = true;
-          return { texture: slot.texture, width: w, height: h, slotIndex, key };
+          
+          // Update tracking
+          slot.renderedText = text;
+          slot.renderedStyleKey = styleKey;
+          
+          return { texture: slot.texture, width: w, height: h, slotIndex, redrawn: true };
+        }
+
+        /**
+         * Release a texture slot back to the pool
+         * @param {string} ownerId - The owner releasing the slot
+         */
+        _stationLabelReleaseByOwner(ownerId) {
+          const pool = this._stationLabelTexturePool;
+          if (!pool) return;
+          
+          const slotIndex = pool.activeOwners.get(ownerId);
+          if (slotIndex === undefined) return;
+          
+          // Clear ownership but keep rendered content tracking for potential reuse check
+          pool.slots[slotIndex].ownerId = null;
+          pool.activeOwners.delete(ownerId);
+          
+          // Return to free pool
+          pool.free.push(slotIndex);
+        }
+
+        /**
+         * Update visible station labels based on camera position.
+         * Sorts labels by distance to camera and only renders up to max pool size.
+         * Only redraws labels whose text/style has changed.
+         * Optimized: skips chunks that were hidden in both last and current frame.
+         * @param {boolean} visibilityChanged - Whether any chunk's visibility changed this frame
+         */
+        updateVisibleStationLabels(visibilityChanged = true) {
+          if (!this.roadChunkGroups || this.roadChunkGroups.length === 0) return;
+          
+          this.initStationLabelTexturePool();
+          const pool = this._stationLabelTexturePool;
+          const cameraPos = this.camera.position;
+          
+          // Collect label tiles, optimizing by skipping unchanged hidden chunks
+          const visibleTiles = [];
+          const newlyHiddenTiles = []; // Only tiles from chunks that just became hidden
+          
+          for (const chunkGroup of this.roadChunkGroups) {
+            if (!chunkGroup.userData.labelTiles) continue;
+            
+            const isChunkVisible = chunkGroup.visible;
+            const chunkVisibilityChanged = chunkGroup.userData._visibilityChanged;
+            
+            // Optimization: Skip chunks that were hidden last frame AND still hidden now
+            // They have no textures to release and don't need processing
+            if (!isChunkVisible && !chunkVisibilityChanged) {
+              continue;
+            }
+            
+            for (const tile of chunkGroup.userData.labelTiles) {
+              // Skip tiles that have their labelGroup explicitly hidden (e.g., start tile)
+              if (!tile.labelGroup) continue;
+              if (!tile.labelText) continue;
+              if (tile.labelGroup.visible === false) continue;
+              
+              if (isChunkVisible) {
+                // Calculate distance to camera for visible tiles
+                const tileX = tile.gridX * TILE_SIZE;
+                const tileZ = tile.gridY * TILE_SIZE;
+                const dx = tileX - cameraPos.x;
+                const dz = tileZ - cameraPos.z;
+                tile._distToCamera = dx * dx + dz * dz; // squared distance for sorting
+                
+                visibleTiles.push(tile);
+              } else if (chunkVisibilityChanged) {
+                // Chunk just became hidden - need to release its textures
+                newlyHiddenTiles.push(tile);
+              }
+            }
+          }
+          
+          // Release textures from tiles in newly hidden chunks
+          for (const tile of newlyHiddenTiles) {
+            if (tile.labelHasTexture) {
+              this._releaseLabelTexture(tile);
+            }
+          }
+          
+          // Sort visible tiles by distance (closest first)
+          visibleTiles.sort((a, b) => a._distToCamera - b._distToCamera);
+          
+          // Track which tiles should have textures (closest N)
+          const maxLabels = pool.max;
+          const tilesToShow = new Set(visibleTiles.slice(0, maxLabels));
+          
+          // Release textures from visible tiles that are no longer in the top N
+          for (const tile of visibleTiles) {
+            if (!tilesToShow.has(tile) && tile.labelHasTexture) {
+              this._releaseLabelTexture(tile);
+            }
+          }
+          
+          // Assign/update textures for closest tiles
+          for (const tile of tilesToShow) {
+            const { text, style } = tile.labelText;
+            const ownerId = `tile_${tile.gridX}_${tile.gridY}`;
+            
+            // Check if texture needs update
+            const currentStyleKey = this._makeStyleKey(style);
+            const needsUpdate = !tile.labelHasTexture || 
+                               tile._renderedText !== text ||
+                               tile._renderedStyleKey !== currentStyleKey;
+            
+            if (needsUpdate) {
+              const rendered = this._stationLabelAcquireAndRender(text, style, ownerId);
+              
+              if (rendered) {
+                // Update geometry if this is a new texture or was redrawn with different size
+                if (rendered.redrawn || !tile.labelHasTexture) {
+                  const pxToWorld = 0.03;
+                  const planeW = rendered.width * pxToWorld;
+                  const planeH = rendered.height * pxToWorld;
+                  tile.labelPlane.geometry.dispose();
+                  tile.labelPlane.geometry = new THREE.PlaneGeometry(planeW, planeH);
+                }
+                
+                // Assign texture
+                tile.labelMaterial.map = rendered.texture;
+                tile.labelMaterial.needsUpdate = true;
+                tile.labelPlane.visible = true;
+                
+                tile.labelTextureSlot = rendered.slotIndex;
+                tile.labelHasTexture = true;
+                tile._renderedText = text;
+                tile._renderedStyleKey = currentStyleKey;
+              } else {
+                // Pool exhausted, hide this label
+                tile.labelPlane.visible = false;
+              }
+            }
+          }
         }
         
         /**
@@ -3487,7 +3604,13 @@
 
           const { text, style } = tile.labelText;
           const ownerId = `tile_${tile.gridX}_${tile.gridY}`;
-          const rendered = this._stationLabelGetTexture(text, style, ownerId);
+          const rendered = this._stationLabelAcquireAndRender(text, style, ownerId);
+
+          // If pool is exhausted, don't show this label
+          if (!rendered) {
+            tile.labelPlane.visible = false;
+            return;
+          }
 
           // Update geometry to match actual rendered size
           const pxToWorld = 0.03;
@@ -3502,8 +3625,9 @@
           tile.labelPlane.visible = true; // Show the mesh
 
           tile.labelTextureSlot = rendered.slotIndex;
-          tile.labelTextureKey = rendered.key;
           tile.labelHasTexture = true;
+          tile._renderedText = text;
+          tile._renderedStyleKey = this._makeStyleKey(style);
         }
 
         /**
@@ -3513,10 +3637,9 @@
         _releaseLabelTexture(tile) {
           if (!tile.labelHasTexture) return;
 
-          // Release slot back to pool
-          if (tile.labelTextureSlot !== undefined) {
-            this._stationLabelReleaseSlot(tile.labelTextureSlot);
-          }
+          // Release slot back to pool by owner ID
+          const ownerId = `tile_${tile.gridX}_${tile.gridY}`;
+          this._stationLabelReleaseByOwner(ownerId);
 
           // Clear texture from material (keep mesh for reuse)
           if (tile.labelMaterial) {
@@ -3528,8 +3651,9 @@
           }
 
           tile.labelTextureSlot = undefined;
-          tile.labelTextureKey = undefined;
           tile.labelHasTexture = false;
+          tile._renderedText = null;
+          tile._renderedStyleKey = null;
         }
         
         /**
@@ -3553,25 +3677,23 @@
           // If label currently has a texture, update it immediately
           if (tile.labelHasTexture) {
             const ownerId = `tile_${tile.gridX}_${tile.gridY}`;
-            const rendered = this._stationLabelGetTexture(tile.labelText.text, newStyle, ownerId);
+            const rendered = this._stationLabelAcquireAndRender(tile.labelText.text, newStyle, ownerId);
 
-            tile.labelMaterial.map = rendered.texture;
-            tile.labelMaterial.needsUpdate = true;
+            if (rendered) {
+              tile.labelMaterial.map = rendered.texture;
+              tile.labelMaterial.needsUpdate = true;
 
-            // Resize plane if needed
-            const pxToWorld = 0.012;
-            const planeW = rendered.width * pxToWorld;
-            const planeH = rendered.height * pxToWorld;
-            tile.labelPlane.geometry.dispose();
-            tile.labelPlane.geometry = new THREE.PlaneGeometry(planeW, planeH);
+              // Resize plane if needed
+              const pxToWorld = 0.012;
+              const planeW = rendered.width * pxToWorld;
+              const planeH = rendered.height * pxToWorld;
+              tile.labelPlane.geometry.dispose();
+              tile.labelPlane.geometry = new THREE.PlaneGeometry(planeW, planeH);
 
-            // Release previous slot if different
-            if (tile.labelTextureSlot !== undefined && tile.labelTextureSlot !== rendered.slotIndex) {
-              this._stationLabelReleaseSlot(tile.labelTextureSlot);
+              tile.labelTextureSlot = rendered.slotIndex;
+              tile._renderedText = tile.labelText.text;
+              tile._renderedStyleKey = this._makeStyleKey(newStyle);
             }
-
-            tile.labelTextureSlot = rendered.slotIndex;
-            tile.labelTextureKey = rendered.key;
           }
         }
 
@@ -6764,7 +6886,7 @@
         /**
          * Perform frustum culling on road/station chunk groups
          * Hides chunks outside camera view for better performance
-         * Also manages label texture assignment for visible labels
+         * Tracks visibility changes for optimized label updates
          */
         cullRoadChunks() {
           if (!this.roadChunkGroups || this.roadChunkGroups.length === 0) return;
@@ -6785,12 +6907,11 @@
           
           let visible = 0;
           let culled = 0;
+          let visibilityChanged = false;
           
           for (const chunkGroup of this.roadChunkGroups) {
             const center = chunkGroup.userData.chunkCenter;
             const radius = chunkGroup.userData.chunkRadius;
-            // Track previous visibility state (undefined on first run means "not yet processed")
-            const wasVisible = chunkGroup.userData._labelTexturesAssigned;
             let isVisible = true;
 
             if (center && radius) {
@@ -6798,30 +6919,29 @@
               isVisible = this._roadCullFrustum.intersectsSphere(this._roadCullSphere);
             }
             
+            // Track if visibility changed from last frame
+            const wasVisible = chunkGroup.userData._wasVisible;
+            if (wasVisible !== isVisible) {
+              visibilityChanged = true;
+              chunkGroup.userData._visibilityChanged = true;
+            } else {
+              chunkGroup.userData._visibilityChanged = false;
+            }
+            
+            // Store current visibility for next frame comparison
+            chunkGroup.userData._wasVisible = isVisible;
             chunkGroup.visible = isVisible;
             
             if (isVisible) {
               visible++;
-              // Chunk became visible (or first time) - assign textures to its labels
-              if (!wasVisible && chunkGroup.userData.labelTiles) {
-                for (const tile of chunkGroup.userData.labelTiles) {
-                  if (tile.labelGroup && tile.labelGroup.visible !== false) {
-                    this._assignLabelTexture(tile);
-                  }
-                }
-                chunkGroup.userData._labelTexturesAssigned = true;
-              }
             } else {
               culled++;
-              // Chunk became hidden - release textures from its labels
-              if (wasVisible && chunkGroup.userData.labelTiles) {
-                for (const tile of chunkGroup.userData.labelTiles) {
-                  this._releaseLabelTexture(tile);
-                }
-                chunkGroup.userData._labelTexturesAssigned = false;
-              }
             }
           }
+          
+          // Update visible station labels (only process changed chunks + currently visible)
+          this.updateVisibleStationLabels(visibilityChanged);
+          this.updateVisibleStationLabels();
           
           // Update road chunk culling stats (optional, for debugging)
           this.roadChunkCullStats = { visible, culled };
