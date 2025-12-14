@@ -190,13 +190,50 @@
         }
 
         init() {
-          // Earth Sphere
-          const geometry = new THREE.SphereGeometry(10, 64, 64);
+          // Earth Sphere with terrain texture
+          // Texture covers: lon -180 to 180, lat -60 to 85
+          const textureLonMin = -180;
+          const textureLonMax = 180;
+          const textureLatMin = -60;
+          const textureLatMax = 85;
+
+          // Create custom sphere geometry with manual triangles and UV mapping
+          const radius = 10;
+          const widthSegments = 64;
+          const heightSegments = 64;
+          
+          const geometry = this.createCustomSphereGeometry(
+            radius, widthSegments, heightSegments,
+            textureLonMin, textureLonMax, textureLatMin, textureLatMax
+          );
+
+          // Load terrain texture with nearest (block) filtering
+          const textureLoader = new THREE.TextureLoader();
+          const terrainTexture = textureLoader.load(
+            'https://cdn.keepwork.com/worldmap/terrain_-180_180_-60_85.png',
+            (texture) => {
+              console.log('Terrain texture loaded successfully');
+              texture.wrapS = THREE.ClampToEdgeWrapping;
+              texture.wrapT = THREE.ClampToEdgeWrapping;
+              texture.magFilter = THREE.NearestFilter;
+              texture.minFilter = THREE.NearestFilter;
+              texture.needsUpdate = true;
+            },
+            undefined,
+            (error) => {
+              console.error('Error loading terrain texture:', error);
+            }
+          );
+          // Set filters immediately as well
+          terrainTexture.magFilter = THREE.NearestFilter;
+          terrainTexture.minFilter = THREE.NearestFilter;
+
           const material = new THREE.MeshPhongMaterial({
-            color: 0x1a237e,
-            emissive: 0x112244,
+            map: terrainTexture,
+            color: 0xffffff,
+            emissive: 0x111111,
             specular: 0x111111,
-            shininess: 10,
+            shininess: 5,
           });
           this.earth = new THREE.Mesh(geometry, material);
           this.group.add(this.earth);
@@ -250,6 +287,82 @@
         renderMapObjects() {
           this.createContinentOutlines();
           this.createCities();
+        }
+
+        // Create custom sphere geometry with manual triangles and UV mapping
+        // This ensures precise UV mapping that matches our latLonToVector3 coordinate system
+        createCustomSphereGeometry(radius, widthSegments, heightSegments, texLonMin, texLonMax, texLatMin, texLatMax) {
+          const vertices = [];
+          const uvs = [];
+          const indices = [];
+          const normals = [];
+
+          // Generate vertices, normals, and UVs for each grid point
+          // We iterate by latitude (phi) and longitude (theta)
+          for (let latIdx = 0; latIdx <= heightSegments; latIdx++) {
+            // Map latIdx to latitude: 0 -> 90 (north pole), heightSegments -> -90 (south pole)
+            const lat = 90 - (latIdx / heightSegments) * 180;
+            
+            for (let lonIdx = 0; lonIdx <= widthSegments; lonIdx++) {
+              // Map lonIdx to longitude: 0 -> -180, widthSegments -> 180
+              const lon = -180 + (lonIdx / widthSegments) * 360;
+              
+              // Convert lat/lon to 3D position using same formula as latLonToVector3
+              const phi = (90 - lat) * (Math.PI / 180);
+              const theta = (lon + 180) * (Math.PI / 180);
+              const x = -(radius * Math.sin(phi) * Math.cos(theta));
+              const z = radius * Math.sin(phi) * Math.sin(theta);
+              const y = radius * Math.cos(phi);
+              
+              vertices.push(x, y, z);
+              
+              // Normal is just the normalized position (pointing outward)
+              const nx = x / radius;
+              const ny = y / radius;
+              const nz = z / radius;
+              normals.push(nx, ny, nz);
+              
+              // UV mapping: map lon/lat to texture coordinates
+              // U: lon -180 -> 0, lon 180 -> 1
+              const u = (lon - texLonMin) / (texLonMax - texLonMin);
+              
+              // V: texLatMax (85) -> 0 (top of texture), texLatMin (-60) -> 1 (bottom of texture)
+              // Clamp latitude to texture bounds for areas outside texture coverage
+              const clampedLat = Math.max(texLatMin, Math.min(texLatMax, lat));
+              const v = (clampedLat - texLatMin) / (texLatMax - texLatMin);
+              
+              uvs.push(u, v);
+            }
+          }
+
+          // Generate triangle indices
+          // Each quad is made of 2 triangles
+          const vertsPerRow = widthSegments + 1;
+          
+          for (let latIdx = 0; latIdx < heightSegments; latIdx++) {
+            for (let lonIdx = 0; lonIdx < widthSegments; lonIdx++) {
+              // Indices of the 4 corners of this quad
+              const topLeft = latIdx * vertsPerRow + lonIdx;
+              const topRight = topLeft + 1;
+              const bottomLeft = (latIdx + 1) * vertsPerRow + lonIdx;
+              const bottomRight = bottomLeft + 1;
+              
+              // First triangle (top-left, bottom-left, bottom-right)
+              indices.push(topLeft, bottomLeft, bottomRight);
+              
+              // Second triangle (top-left, bottom-right, top-right)
+              indices.push(topLeft, bottomRight, topRight);
+            }
+          }
+
+          // Create BufferGeometry
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+          geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+          geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+          geometry.setIndex(indices);
+          
+          return geometry;
         }
 
         createContinentOutlines() {
@@ -827,7 +940,7 @@
 
       // --- Main ---
       let worldMap = null;
-
+https://cdn.keepwork.com/worldmap/terrain_-180_180_-60_85.png
       window.onload = async () => {
         const container = document.getElementById("map-container");
         worldMap = new WorldMapManager(container);

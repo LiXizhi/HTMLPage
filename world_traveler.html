@@ -678,6 +678,56 @@
       </div>
     </div>
 
+    <!-- 小游戏挑战弹窗 -->
+    <div id="minigame-challenge-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div id="minigame-challenge-content" class="bg-gradient-to-b from-indigo-900 to-purple-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-indigo-400 relative text-center">
+        <div id="minigame-challenge-icon" class="text-8xl mb-4">🎮</div>
+        <h3 id="minigame-challenge-title" class="text-3xl font-black text-indigo-300 mb-4">小游戏挑战！</h3>
+        <p id="minigame-challenge-desc" class="text-xl text-gray-300 mb-2">踏上了特殊格子！</p>
+        <div id="minigame-challenge-amount" class="text-4xl font-mono font-bold text-yellow-400 mb-4">¥1000</div>
+        <p id="minigame-challenge-hint" class="text-lg text-gray-400 mb-6">挑战小游戏，赢了<span class="text-green-400 font-bold">翻倍</span>，输了只得<span class="text-red-400 font-bold">一半</span>！</p>
+        <div class="flex gap-4 justify-center">
+          <button id="minigame-skip-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-xl transition text-lg">
+            😌 直接领取
+          </button>
+          <button id="minigame-play-btn" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition text-lg shadow-lg">
+            🎮 挑战！
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 小游戏 iframe 容器 -->
+    <div id="minigame-iframe-container" class="fixed inset-0 z-[80] hidden bg-black/90">
+      <div class="absolute top-4 right-4 z-10">
+        <button id="minigame-close-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition hidden">
+          ✕ 退出
+        </button>
+      </div>
+      <iframe id="minigame-iframe" class="w-full h-full border-none"></iframe>
+    </div>
+
+    <!-- 小游戏结果弹窗 -->
+    <div id="minigame-result-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-[90]">
+      <div id="minigame-result-content" class="p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 relative text-center">
+        <div id="minigame-result-icon" class="text-8xl mb-4">🎉</div>
+        <h3 id="minigame-result-title" class="text-3xl font-black mb-4">挑战成功！</h3>
+        <p id="minigame-result-desc" class="text-xl mb-2">奖励翻倍！</p>
+        <!-- 显示原始金额和变化后金额的对比 -->
+        <div id="minigame-result-comparison" class="hidden mb-4">
+          <div class="flex items-center justify-center gap-3 text-2xl">
+            <span id="minigame-original-amount" class="text-gray-400 line-through">¥1000</span>
+            <span class="text-white">→</span>
+            <span id="minigame-final-amount" class="font-bold">¥2000</span>
+          </div>
+        </div>
+        <div id="minigame-result-amount" class="text-5xl font-mono font-bold mb-6">¥2000</div>
+        <button id="minigame-result-btn" class="bg-gradient-to-r from-yellow-500 to-orange-600 text-white font-bold py-3 px-12 rounded-xl transition text-xl shadow-lg">
+          确 定
+        </button>
+      </div>
+    </div>
+
     <!-- 使用卡牌选择弹窗 -->
     <div id="use-card-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
       <div class="bg-gradient-to-b from-indigo-900 to-purple-900 p-6 rounded-2xl shadow-2xl max-w-2xl w-full border-4 border-indigo-400 relative">
@@ -1669,7 +1719,9 @@
                 for (let i = 0; i < decoPositions.length; i++) {
                   const dp = decoPositions[i];
                   // Apply random uniform scale for natural variation
-                  posVec.set(dp.x, dp.y, dp.z);
+                  // ConeGeometry origin is at center, so add half the height offset to place tree base on top of terrain
+                  const treeYOffset = decoConfig.heightOffset * dp.heightScale * 0.5;
+                  posVec.set(dp.x, dp.y + treeYOffset, dp.z);
                   scaleVec.set(dp.heightScale, dp.heightScale, dp.heightScale);
                   matrix.compose(posVec, quaternion, scaleVec);
                   decoInstancedMesh.setMatrixAt(i, matrix);
@@ -1857,6 +1909,21 @@
       // --- Utilities ---
       const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      /**
+       * Get the URL for a mini game or related page
+       * @param {string} gameName - The name of the game file (without extension), e.g., "world_candy_crush", "world_map_select"
+       * @returns {string} - The full URL with search params preserved
+       */
+      function GetMiniGameUrl(gameName) {
+        const currentPath = window.location.pathname;
+        const lastSlashIndex = currentPath.lastIndexOf('/');
+        const basePath = currentPath.substring(0, lastSlashIndex + 1);
+        const filename = currentPath.substring(lastSlashIndex + 1);
+        const dotIndex = filename.lastIndexOf('.');
+        const extension = dotIndex !== -1 ? filename.substring(dotIndex) : '.html';
+        return basePath + gameName + extension + window.location.search;
+      }
 
       // Home city - always shown on map in green
       let homeCity = "深圳";
@@ -2260,14 +2327,7 @@
           if (this.worldMapIframe) {
             // Load iframe src on first use (lazy loading)
             if (!this.worldMapIframe.src || this.worldMapIframe.src === 'about:blank' || this.worldMapIframe.src === window.location.href) {
-              const currentPath = window.location.pathname;
-              const lastSlashIndex = currentPath.lastIndexOf('/');
-              const basePath = currentPath.substring(0, lastSlashIndex + 1);
-              const filename = currentPath.substring(lastSlashIndex + 1);
-              const dotIndex = filename.lastIndexOf('.');
-              const extension = dotIndex !== -1 ? filename.substring(dotIndex) : '';
-              const newFilename = 'world_map_select' + extension;
-              this.worldMapIframe.src = basePath + newFilename + window.location.search;
+              this.worldMapIframe.src = GetMiniGameUrl('world_map_select');
               
               // Hide login modal when world map is first loaded
               const loginModal = document.getElementById("login-modal");
@@ -4811,6 +4871,323 @@
           });
         }
 
+        // --- 小游戏挑战系统 ---
+        
+        /**
+         * 处理小游戏挑战（统一UI流程）
+         * @param {Object} player - 玩家对象
+         * @param {number} baseAmount - 基础金额
+         * @param {boolean} isGain - true为获得，false为损失
+         * @returns {Promise<number>} - 返回最终金额（可能是原额、2x或0.5x）
+         */
+        async handleMinigameChallenge(player, baseAmount, isGain) {
+          // AI玩家随机决定输赢
+          if (player.isAI) {
+            const won = Math.random() > 0.5; // 50%概率赢
+            // 计算乘数：
+            // 获得奖励(isGain=true): 赢了翻倍(x2)，输了减半(x0.5)
+            // 损失金钱(isGain=false): 赢了减半(x0.5)，输了翻倍(x2)
+            let multiplier;
+            if (isGain) {
+              multiplier = won ? 2 : 0.5;  // 奖励：赢了翻倍，输了减半
+            } else {
+              multiplier = won ? 0.5 : 2;  // 损失：赢了减半，输了翻倍
+            }
+            const finalAmount = Math.floor(baseAmount * multiplier);
+            
+            // 显示AI的挑战结果
+            await this.showMinigameChallengeResult(player, baseAmount, finalAmount, isGain, won, true);
+            return finalAmount;
+          }
+          
+          // 玩家：显示统一的挑战UI
+          return await this.showMinigameChallengeUI(player, baseAmount, isGain);
+        }
+        
+        /**
+         * 显示统一的小游戏挑战UI（给玩家用）
+         */
+        async showMinigameChallengeUI(player, baseAmount, isGain) {
+          return new Promise((resolve) => {
+            const modal = document.getElementById("minigame-challenge-modal");
+            const content = document.getElementById("minigame-challenge-content");
+            const icon = document.getElementById("minigame-challenge-icon");
+            const title = document.getElementById("minigame-challenge-title");
+            const desc = document.getElementById("minigame-challenge-desc");
+            const amountEl = document.getElementById("minigame-challenge-amount");
+            const hintEl = document.getElementById("minigame-challenge-hint");
+            const skipBtn = document.getElementById("minigame-skip-btn");
+            const playBtn = document.getElementById("minigame-play-btn");
+            
+            // 设置显示内容
+            if (isGain) {
+              icon.textContent = "💰";
+              title.textContent = "幸运格子！";
+              title.className = "text-3xl font-black text-blue-300 mb-4";
+              desc.textContent = "踏上了蓝色幸运格！";
+              content.className = "bg-gradient-to-b from-blue-900 to-indigo-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-blue-400 relative text-center";
+              amountEl.className = "text-4xl font-mono font-bold text-green-400 mb-4";
+              amountEl.textContent = `+¥${baseAmount}`;
+              hintEl.innerHTML = `挑战小游戏，赢了<span class="text-green-400 font-bold">奖励翻倍</span>，输了只得<span class="text-red-400 font-bold">一半</span>！`;
+            } else {
+              icon.textContent = "💸";
+              title.textContent = "倒霉格子！";
+              title.className = "text-3xl font-black text-red-300 mb-4";
+              desc.textContent = "踏上了红色厄运格！";
+              content.className = "bg-gradient-to-b from-red-900 to-rose-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-red-400 relative text-center";
+              amountEl.className = "text-4xl font-mono font-bold text-red-400 mb-4";
+              amountEl.textContent = `-¥${baseAmount}`;
+              hintEl.innerHTML = `挑战小游戏，赢了<span class="text-green-400 font-bold">损失减半</span>，输了<span class="text-red-400 font-bold">损失翻倍</span>！`;
+            }
+            
+            modal.classList.remove("hidden");
+            
+            // 清除之前的事件监听器 - 通过克隆替换元素
+            const newSkipBtn = skipBtn.cloneNode(true);
+            const newPlayBtn = playBtn.cloneNode(true);
+            skipBtn.parentNode.replaceChild(newSkipBtn, skipBtn);
+            playBtn.parentNode.replaceChild(newPlayBtn, playBtn);
+            
+            // 跳过按钮 - 直接领取原始金额，显示结算动画
+            newSkipBtn.onclick = async () => {
+              modal.classList.add("hidden");
+              await this.showMinigameChallengeResult(player, baseAmount, baseAmount, isGain, null, false);
+              resolve(baseAmount);
+            };
+            
+            // 挑战按钮 - 打开小游戏
+            newPlayBtn.onclick = async () => {
+              modal.classList.add("hidden");
+              console.log("点击挑战按钮，开始小游戏");
+              const won = await this.playMinigame();
+              console.log("小游戏返回结果 won:", won);
+              // 确保 won 是 boolean（true 或 false），不是 null/undefined
+              const isWon = won === true;
+              
+              // 计算乘数：
+              // 获得奖励(isGain=true): 赢了翻倍(x2)，输了减半(x0.5)
+              // 损失金钱(isGain=false): 赢了减半(x0.5)，输了翻倍(x2)
+              let multiplier;
+              if (isGain) {
+                multiplier = isWon ? 2 : 0.5;  // 奖励：赢了翻倍，输了减半
+              } else {
+                multiplier = isWon ? 0.5 : 2;  // 损失：赢了减半，输了翻倍
+              }
+              const finalAmount = Math.floor(baseAmount * multiplier);
+              
+              // 显示结果和金额动画，传入明确的 true/false
+              await this.showMinigameChallengeResult(player, baseAmount, finalAmount, isGain, isWon, false);
+              resolve(finalAmount);
+            };
+          });
+        }
+        
+        /**
+         * 打开并运行小游戏
+         * @returns {Promise<boolean>} - 返回是否获胜
+         */
+        async playMinigame() {
+          return new Promise((resolve) => {
+            const container = document.getElementById("minigame-iframe-container");
+            const iframe = document.getElementById("minigame-iframe");
+            const closeBtn = document.getElementById("minigame-close-btn");
+            
+            // 显示容器
+            container.classList.remove("hidden");
+            closeBtn.classList.remove("hidden"); // 始终显示关闭按钮
+            
+            // 加载小游戏
+            iframe.src = GetMiniGameUrl('world_candy_crush');
+            
+            let gameResult = null;
+            let highestLevel = 0; // 记录玩家达到的最高关卡
+            let resolved = false;
+            
+            const cleanup = () => {
+              window.removeEventListener("message", messageHandler);
+              container.classList.add("hidden");
+              iframe.src = "";
+            };
+            
+            // 监听小游戏消息
+            const messageHandler = (event) => {
+              if (resolved) return;
+              if (!event.data) return;
+              
+              // 监听通关消息，记录最高关卡
+              if (event.data.type === "levelCompleted") {
+                const data = event.data.data;
+                console.log("小游戏通关，当前关卡:", data?.level);
+                if (data && data.level > highestLevel) {
+                  highestLevel = data.level;
+                  gameResult = data;
+                }
+              }
+              
+              // 监听游戏结束消息（失败或主动退出）
+              if (event.data.type === "gameFinished") {
+                resolved = true;
+                const data = event.data.data;
+                console.log("小游戏结束，结果:", data);
+                // 使用最高记录的关卡，或者结束时的关卡
+                if (data && data.level > highestLevel) {
+                  highestLevel = data.level;
+                  gameResult = data;
+                }
+                // 游戏结束，立即关闭并返回结果
+                cleanup();
+                // 如果 highestLevel >= 1，说明至少通过了第1关，视为获胜
+                const won = highestLevel >= 1;
+                console.log("判定结果 won:", won, "highestLevel:", highestLevel);
+                resolve(won);
+              }
+            };
+            
+            window.addEventListener("message", messageHandler);
+            
+            // 关闭按钮处理 - 用户主动关闭
+            closeBtn.onclick = () => {
+              if (resolved) return;
+              resolved = true;
+              cleanup();
+              // 用户主动关闭，根据已记录的最高关卡判断
+              const won = highestLevel >= 1;
+              console.log("用户关闭，判定结果 won:", won, "highestLevel:", highestLevel);
+              resolve(won === true ? true : false); // 确保返回 boolean
+            };
+          });
+        }
+        
+        /**
+         * 显示小游戏挑战结果（统一UI，包含金额动画）
+         * @param {Object} player - 玩家对象
+         * @param {number} baseAmount - 基础金额
+         * @param {number} finalAmount - 最终金额
+         * @param {boolean} isGain - true为获得，false为损失
+         * @param {boolean|null} won - 挑战结果：true=赢，false=输，null=跳过挑战
+         * @param {boolean} isAI - 是否是AI玩家
+         */
+        async showMinigameChallengeResult(player, baseAmount, finalAmount, isGain, won, isAI) {
+          return new Promise((resolve) => {
+            const modal = document.getElementById("minigame-result-modal");
+            const content = document.getElementById("minigame-result-content");
+            const icon = document.getElementById("minigame-result-icon");
+            const title = document.getElementById("minigame-result-title");
+            const desc = document.getElementById("minigame-result-desc");
+            const amountEl = document.getElementById("minigame-result-amount");
+            const btn = document.getElementById("minigame-result-btn");
+            const comparisonEl = document.getElementById("minigame-result-comparison");
+            const originalAmountEl = document.getElementById("minigame-original-amount");
+            const finalAmountEl = document.getElementById("minigame-final-amount");
+            
+            // 根据不同情况设置显示内容
+            if (won === null) {
+              // 跳过挑战，直接领取 - 不显示对比
+              comparisonEl.classList.add("hidden");
+              if (isGain) {
+                icon.textContent = "💰";
+                title.textContent = "领取奖励";
+                title.className = "text-3xl font-black text-blue-300 mb-4";
+                desc.textContent = "踏上蓝色幸运格！";
+                content.className = "bg-gradient-to-b from-blue-900 to-indigo-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-blue-400 relative text-center";
+              } else {
+                icon.textContent = "💸";
+                title.textContent = "损失金钱";
+                title.className = "text-3xl font-black text-red-300 mb-4";
+                desc.textContent = "踏上红色厄运格！";
+                content.className = "bg-gradient-to-b from-red-900 to-rose-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-red-400 relative text-center";
+              }
+            } else if (won) {
+              // 挑战成功 - 显示对比
+              comparisonEl.classList.remove("hidden");
+              originalAmountEl.textContent = `¥${baseAmount}`;
+              finalAmountEl.textContent = `¥${finalAmount}`;
+              finalAmountEl.className = isGain ? "font-bold text-green-400" : "font-bold text-yellow-400";
+              
+              if (isAI) {
+                icon.textContent = "🎲";
+                title.textContent = `${player.name} 运气不错！`;
+                desc.innerHTML = `<div class="text-lg text-green-200 mb-1">🎮 小游戏通关！</div><div>${isGain ? '奖励翻倍！' : '损失减半！'}</div>`;
+              } else {
+                icon.textContent = "🎉";
+                title.textContent = "挑战成功！";
+                desc.innerHTML = `<div class="text-lg text-green-200 mb-1">🎮 小游戏通关！</div><div>${isGain ? '奖励翻倍！' : '损失减半！'}</div>`;
+              }
+              title.className = "text-3xl font-black text-green-300 mb-4";
+              content.className = "bg-gradient-to-b from-green-900 to-emerald-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-green-400 relative text-center";
+            } else {
+              // 挑战失败 - 显示对比
+              comparisonEl.classList.remove("hidden");
+              originalAmountEl.textContent = `¥${baseAmount}`;
+              finalAmountEl.textContent = `¥${finalAmount}`;
+              finalAmountEl.className = isGain ? "font-bold text-yellow-400" : "font-bold text-red-400";
+              
+              if (isAI) {
+                icon.textContent = "🎲";
+                title.textContent = `${player.name} 运气不好...`;
+                desc.innerHTML = `<div class="text-lg text-red-200 mb-1">🎮 小游戏未通关</div><div>${isGain ? '奖励减半...' : '损失翻倍！'}</div>`;
+              } else {
+                icon.textContent = "😢";
+                title.textContent = "挑战失败...";
+                desc.innerHTML = `<div class="text-lg text-red-200 mb-1">🎮 小游戏未通关</div><div>${isGain ? '奖励减半...' : '损失翻倍！'}</div>`;
+              }
+              title.className = "text-3xl font-black text-red-300 mb-4";
+              content.className = "bg-gradient-to-b from-gray-900 to-slate-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-gray-400 relative text-center";
+            }
+            
+            // 金额动画
+            const startAmount = 0;
+            const displayAmount = isGain ? finalAmount : finalAmount;
+            const prefix = isGain ? "+" : "-";
+            const colorClass = isGain ? "text-green-400" : "text-red-400";
+            
+            amountEl.className = `text-5xl font-mono font-bold ${colorClass} mb-6`;
+            amountEl.textContent = `${prefix}¥0`;
+            
+            // AI玩家隐藏确定按钮
+            if (isAI) {
+              btn.classList.add("hidden");
+            } else {
+              btn.classList.remove("hidden");
+            }
+            
+            modal.classList.remove("hidden");
+            
+            // 金额滚动动画
+            const duration = 1200;
+            const startTime = Date.now();
+            
+            const animate = () => {
+              const now = Date.now();
+              const progress = Math.min((now - startTime) / duration, 1);
+              const ease = 1 - Math.pow(1 - progress, 4); // Ease out
+              
+              const currentVal = Math.floor(displayAmount * ease);
+              amountEl.textContent = `${prefix}¥${currentVal}`;
+              
+              if (progress < 1) {
+                requestAnimationFrame(animate);
+              } else {
+                amountEl.textContent = `${prefix}¥${displayAmount}`;
+                // AI玩家动画结束后自动关闭
+                if (isAI) {
+                  setTimeout(() => {
+                    modal.classList.add("hidden");
+                    resolve();
+                  }, 800);
+                }
+              }
+            };
+            
+            animate();
+            
+            btn.onclick = () => {
+              modal.classList.add("hidden");
+              resolve();
+            };
+          });
+        }
+
         // --- 穷神系统方法 ---
 
         async attachBinbougami(player) {
@@ -5316,15 +5693,17 @@
           switch (tile.type) {
             case "blue":
               const bonus = rand(500, 2000);
-              player.money += bonus;
-              this.log(`幸运！获得资金 ¥${bonus}`, "#60a5a5");
-              await this.showMoneyChangeDialog(player, bonus);
+              const finalBonus = await this.handleMinigameChallenge(player, bonus, true);
+              player.money += finalBonus;
+              this.log(`幸运！获得资金 ¥${finalBonus}`, "#60a5a5");
+              // 金额动画已在 handleMinigameChallenge 中显示
               break;
             case "red":
               const loss = rand(500, 1500);
-              player.money -= loss;
-              this.log(`倒霉！损失 ¥${loss}`, "#f87171");
-              await this.showMoneyChangeDialog(player, -loss);
+              const finalLoss = await this.handleMinigameChallenge(player, loss, false);
+              player.money -= finalLoss;
+              this.log(`倒霉！损失 ¥${finalLoss}`, "#f87171");
+              // 金额动画已在 handleMinigameChallenge 中显示
               break;
             case "yellow":
               await this.handleCardStation(player);
