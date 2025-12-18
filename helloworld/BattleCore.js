@@ -15,6 +15,41 @@ class BattleCore {
         NONE:  { id: -1, name: '人形', color: '#ffffff', icon: '👤' }
     };
 
+    // Terrain types map to elements for elemental bonus
+    // Terrain element matches gem type for scoring bonus
+    static TERRAINS = {
+        PLAIN:   { id: 0, name: '平原/耕地', element: 2, color: '#4dff88', bgColor: 'rgba(77, 255, 136, 0.3)', icon: '🌿' },  // Green - LIFE
+        CITY:    { id: 1, name: '城市/火山', element: 0, color: '#ff4d4d', bgColor: 'rgba(255, 77, 77, 0.3)', icon: '🔥' },   // Red - FORGE
+        OCEAN:   { id: 2, name: '海洋/水域', element: 1, color: '#4da6ff', bgColor: 'rgba(77, 166, 255, 0.3)', icon: '💧' },  // Blue - TIDE
+        FOREST:  { id: 3, name: '森林/林地', element: 5, color: '#8b4513', bgColor: 'rgba(139, 69, 19, 0.3)', icon: '🌳' },   // Brown - ROOT
+        MOUNTAIN:{ id: 4, name: '高山/丘陵', element: 4, color: '#bf4dff', bgColor: 'rgba(191, 77, 255, 0.3)', icon: '💎' },  // Purple - STONE
+        DESERT:  { id: 5, name: '沙漠/荒漠', element: 3, color: '#ffff4d', bgColor: 'rgba(255, 255, 77, 0.3)', icon: '☀️' }   // Yellow - SOL
+    };
+
+    // Terrain bonus multipliers based on matching gem count
+    static TERRAIN_BONUS = {
+        1: 1.25,  // 1 matching gem: x1.25
+        2: 1.50,  // 2 matching gems: x1.50
+        3: 2.00,  // 3 matching gems: x2.00
+        4: 3.50,  // 4 matching gems: x3.50
+        5: 5.00,  // 5 matching gems: x5.00
+        6: 8.00   // 6+ matching gems: x8.00
+    };
+
+    static getTerrainById(id) {
+        return Object.values(BattleCore.TERRAINS).find(t => t.id === id) || BattleCore.TERRAINS.PLAIN;
+    }
+
+    static getTerrainByElement(elementId) {
+        return Object.values(BattleCore.TERRAINS).find(t => t.element === elementId) || BattleCore.TERRAINS.PLAIN;
+    }
+
+    static getTerrainBonus(matchingCount) {
+        if (matchingCount <= 0) return 1;
+        if (matchingCount >= 6) return BattleCore.TERRAIN_BONUS[6];
+        return BattleCore.TERRAIN_BONUS[matchingCount] || 1;
+    }
+
     static SUPPRESSION = {
         5: 4, // ROOT -> STONE
         4: 1, // STONE -> TIDE
@@ -37,6 +72,7 @@ class BattleCore {
         
         this.grid = [];
         this.wordGrid = [];
+        this.terrainGrid = []; // Terrain type for each cell (element ID 0-5)
         this.score = 0;
         this.moves = 0;
         this.level = 1;
@@ -254,7 +290,108 @@ class BattleCore {
 
         this.comboMultiplier = 1;
         this.isLocked = false;
+        this.createTerrainGrid();
         this.createInitialGrid();
+    }
+
+    /**
+     * Create terrain grid with various patterns
+     * Terrain types correspond to elements for bonus scoring
+     */
+    createTerrainGrid() {
+        this.terrainGrid = [];
+        
+        // Choose a random terrain pattern
+        const patternType = Math.floor(Math.random() * 5);
+        
+        for (let r = 0; r < this.rows; r++) {
+            this.terrainGrid[r] = [];
+            for (let c = 0; c < this.cols; c++) {
+                let terrainElement;
+                
+                switch (patternType) {
+                    case 0: // Horizontal stripes
+                        terrainElement = r % 6;
+                        break;
+                    case 1: // Vertical stripes
+                        terrainElement = c % 6;
+                        break;
+                    case 2: // Checkerboard (2x2 blocks)
+                        terrainElement = (Math.floor(r / 2) + Math.floor(c / 2)) % 6;
+                        break;
+                    case 3: // Quadrants
+                        const midR = this.rows / 2;
+                        const midC = this.cols / 2;
+                        if (r < midR && c < midC) terrainElement = 0; // Top-left: FORGE (Red)
+                        else if (r < midR && c >= midC) terrainElement = 1; // Top-right: TIDE (Blue)
+                        else if (r >= midR && c < midC) terrainElement = 2; // Bottom-left: LIFE (Green)
+                        else terrainElement = 3; // Bottom-right: SOL (Yellow)
+                        break;
+                    case 4: // Random regions using Perlin-like simple noise
+                    default:
+                        // Simple deterministic pattern based on position
+                        const noise = Math.sin(r * 0.5 + c * 0.3) * Math.cos(r * 0.3 - c * 0.5);
+                        terrainElement = Math.abs(Math.floor(noise * 10)) % 6;
+                        break;
+                }
+                
+                this.terrainGrid[r][c] = terrainElement;
+            }
+        }
+    }
+
+    /**
+     * Get terrain element at position
+     * @param {number} r - Row
+     * @param {number} c - Column
+     * @returns {number} - Element ID (0-5)
+     */
+    getTerrainAt(r, c) {
+        if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+            return this.terrainGrid[r][c];
+        }
+        return 0;
+    }
+
+    /**
+     * Calculate terrain bonus for a match
+     * @param {Array} matches - Array of {r, c} positions
+     * @returns {Object} - {bonus: multiplier, matchingCount: count, terrainElement: element}
+     */
+    calculateTerrainBonus(matches) {
+        if (!matches || matches.length === 0) return { bonus: 1, matchingCount: 0, terrainElement: -1 };
+        
+        // Count gems that match their terrain element
+        let matchingCount = 0;
+        const terrainCounts = {};
+        
+        for (const m of matches) {
+            const gemType = this.grid[m.r][m.c];
+            const terrainElement = this.terrainGrid[m.r][m.c];
+            
+            if (gemType === terrainElement) {
+                matchingCount++;
+                terrainCounts[terrainElement] = (terrainCounts[terrainElement] || 0) + 1;
+            }
+        }
+        
+        // Find the dominant terrain element in matching
+        let dominantTerrain = -1;
+        let maxCount = 0;
+        for (const [terrain, count] of Object.entries(terrainCounts)) {
+            if (count > maxCount) {
+                maxCount = count;
+                dominantTerrain = parseInt(terrain);
+            }
+        }
+        
+        const bonus = BattleCore.getTerrainBonus(matchingCount);
+        
+        return {
+            bonus,
+            matchingCount,
+            terrainElement: dominantTerrain
+        };
     }
 
     /**
