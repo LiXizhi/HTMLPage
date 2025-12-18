@@ -99,21 +99,26 @@ class Spell {
     }
 
     /**
-     * Calculate final damage considering element suppression
+     * Calculate final damage considering element suppression and spirit mana
+     * Damage scales with spirit's current mana (mana/100 as multiplier)
      * @param {BattleCore} battleCore - The battle core instance
      * @param {number} targetElement - Target's element ID
+     * @param {number} spiritMana - Spirit's current mana (0-100+)
      * @returns {number}
      */
-    calculateDamage(battleCore, targetElement) {
+    calculateDamage(battleCore, targetElement, spiritMana = 100) {
         const modifier = battleCore.getDamageModifier(this.elementId, targetElement);
-        return Math.floor(this.basePower * modifier);
+        // Mana scaling: damage increases proportionally with mana
+        // At 100 mana = 100% damage, at 200 mana = 200% damage, etc.
+        const manaMultiplier = spiritMana / 100;
+        return Math.floor(this.basePower * modifier * manaMultiplier);
     }
 
     /**
      * Execute the spell
      * Override this method in subclasses for custom behavior
      * @param {BattleCore} battleCore - The battle core instance
-     * @param {Object} caster - The spirit casting the spell
+     * @param {Object} caster - The spirit casting the spell (includes mana info)
      * @param {Object} target - Target information (varies by spell type)
      * @returns {Object} - Result of the spell execution
      */
@@ -177,7 +182,8 @@ class FireballSpell extends Spell {
             return { success: false, message: '没有可攻击的目标' };
         }
 
-        const damage = this.calculateDamage(battleCore, targetEnemy.element);
+        // Damage scales with caster's current mana
+        const damage = this.calculateDamage(battleCore, targetEnemy.element, caster.mana);
         const targetIndex = battleCore.enemies.indexOf(targetEnemy);
         
         battleCore.damageEnemy(damage, this.elementId, targetIndex);
@@ -220,7 +226,8 @@ class WaterWaveSpell extends Spell {
         const damages = [];
 
         aliveEnemies.forEach(enemy => {
-            const damage = this.calculateDamage(battleCore, enemy.element);
+            // Damage scales with caster's current mana
+            const damage = this.calculateDamage(battleCore, enemy.element, caster.mana);
             const idx = battleCore.enemies.indexOf(enemy);
             enemy.hp = Math.max(0, enemy.hp - damage);
             totalDamage += damage;
@@ -269,7 +276,8 @@ class LightningStrikeSpell extends Spell {
             return { success: false, message: '无效的目标' };
         }
 
-        const damage = this.calculateDamage(battleCore, enemy.element);
+        // Damage scales with caster's current mana
+        const damage = this.calculateDamage(battleCore, enemy.element, caster.mana);
         enemy.hp = Math.max(0, enemy.hp - damage);
         battleCore.onBossDamage(damage, target.enemyIndex);
         battleCore.checkWinCondition();
@@ -287,6 +295,107 @@ class LightningStrikeSpell extends Spell {
 // ============================================
 // GRID MANIPULATION SPELLS
 // ============================================
+
+/**
+ * Calculate score/damage for spell-cleared gems
+ * Groups gems by type and checks for connected matches
+ * Connected gems of 3+ of the same type use BattleCore's scoring
+ * Unconnected or less than 3 gems: each gem is worth 20 score
+ * @param {Array} cellsToRemove - Array of cleared cells with type info {r, c, type}
+ * @param {number} spiritMana - Spirit's current mana for scaling (default 100)
+ * @returns {number} - Total score/damage
+ */
+function calculateSpellClearScore(cellsToRemove, spiritMana = 100) {
+    if (cellsToRemove.length === 0) return 0;
+    
+    // Mana scaling: damage increases proportionally with mana
+    const manaMultiplier = spiritMana / 100;
+    
+    // Group cells by type
+    const cellsByType = {};
+    cellsToRemove.forEach(cell => {
+        if (cell.type !== null && cell.type !== undefined) {
+            if (!cellsByType[cell.type]) {
+                cellsByType[cell.type] = [];
+            }
+            cellsByType[cell.type].push({ r: cell.r, c: cell.c });
+        }
+    });
+    
+    // Find connected groups within each type
+    function findConnectedGroups(cells) {
+        if (cells.length === 0) return [];
+        
+        const visited = new Set();
+        const groups = [];
+        
+        // Check if two cells are adjacent
+        function isAdjacent(cell1, cell2) {
+            return (Math.abs(cell1.r - cell2.r) === 1 && cell1.c === cell2.c) ||
+                   (Math.abs(cell1.c - cell2.c) === 1 && cell1.r === cell2.r);
+        }
+        
+        // BFS to find connected component
+        function bfs(startIdx) {
+            const group = [];
+            const queue = [startIdx];
+            visited.add(startIdx);
+            
+            while (queue.length > 0) {
+                const idx = queue.shift();
+                group.push(cells[idx]);
+                
+                for (let i = 0; i < cells.length; i++) {
+                    if (!visited.has(i) && isAdjacent(cells[idx], cells[i])) {
+                        visited.add(i);
+                        queue.push(i);
+                    }
+                }
+            }
+            return group;
+        }
+        
+        // Find all connected groups
+        for (let i = 0; i < cells.length; i++) {
+            if (!visited.has(i)) {
+                groups.push(bfs(i));
+            }
+        }
+        
+        return groups;
+    }
+    
+    // Calculate total score
+    let totalScore = 0;
+    
+    for (const [type, cells] of Object.entries(cellsByType)) {
+        const connectedGroups = findConnectedGroups(cells);
+        
+        for (const group of connectedGroups) {
+            const count = group.length;
+            if (count < 3) {
+                // Less than 3 connected gems: 20 each
+                totalScore += count * 20;
+            } else {
+                // 3+ connected gems: use base scoring
+                if (typeof BattleCore !== 'undefined' && BattleCore.getBaseScore) {
+                    totalScore += BattleCore.getBaseScore(count);
+                } else {
+                    // Fallback scoring if BattleCore not available
+                    const baseScores = { 3: 100, 4: 180, 5: 300, 6: 450 };
+                    if (count >= 6) {
+                        totalScore += baseScores[6];
+                    } else {
+                        totalScore += baseScores[count] || baseScores[3];
+                    }
+                }
+            }
+        }
+    }
+    
+    // Apply mana multiplier to final score
+    return Math.floor(totalScore * manaMultiplier);
+}
 
 /**
  * Row Clear Spell - Clears all gems in a selected row
@@ -327,8 +436,9 @@ class RowClearSpell extends Spell {
             }
         }
 
-        // Deal damage based on gems cleared
-        const damage = Math.floor(this.basePower * (cellsToRemove.length / battleCore.cols));
+        // Calculate damage based on cleared gems score, scaled by caster's mana
+        // Spell clears deal damage to enemies, not add to spirit mana
+        const damage = calculateSpellClearScore(cellsToRemove, caster.mana);
         battleCore.damageEnemy(damage, this.elementId, 0);
 
         return {
@@ -381,8 +491,9 @@ class ColumnClearSpell extends Spell {
             }
         }
 
-        // Deal damage based on gems cleared
-        const damage = Math.floor(this.basePower * (cellsToRemove.length / battleCore.rows));
+        // Calculate damage based on cleared gems score, scaled by caster's mana
+        // Spell clears deal damage to enemies, not add to spirit mana
+        const damage = calculateSpellClearScore(cellsToRemove, caster.mana);
         battleCore.damageEnemy(damage, this.elementId, 0);
 
         return {
@@ -450,7 +561,9 @@ class CrossClearSpell extends Spell {
             }
         }
 
-        const damage = Math.floor(this.basePower * (cellsToRemove.length / (battleCore.rows + battleCore.cols - 1)));
+        // Calculate damage based on cleared gems score, scaled by caster's mana
+        // Spell clears deal damage to enemies, not add to spirit mana
+        const damage = calculateSpellClearScore(cellsToRemove, caster.mana);
         battleCore.damageEnemy(damage, this.elementId, 0);
 
         return {
@@ -487,7 +600,9 @@ class HealSpell extends Spell {
     }
 
     execute(battleCore, caster, target) {
-        const healAmount = this.basePower;
+        // Heal amount scales with caster's current mana
+        const manaMultiplier = caster.mana / 100;
+        const healAmount = Math.floor(this.basePower * manaMultiplier);
         const oldHp = battleCore.playerHp;
         battleCore.playerHp = Math.min(battleCore.playerMaxHp, battleCore.playerHp + healAmount);
         const actualHeal = battleCore.playerHp - oldHp;
@@ -520,18 +635,22 @@ class ShieldSpell extends Spell {
     }
 
     execute(battleCore, caster, target) {
+        // Turns added scales with caster's current mana
+        const manaMultiplier = caster.mana / 100;
+        const turnsToAdd = Math.max(1, Math.floor(this.basePower * manaMultiplier));
+        
         let affected = 0;
         battleCore.enemies.forEach(enemy => {
             if (enemy.hp > 0) {
-                enemy.turn += this.basePower;
+                enemy.turn += turnsToAdd;
                 affected++;
             }
         });
 
         return {
             success: true,
-            message: `${this.name}延迟了${affected}个敌人${this.basePower}回合！`,
-            turnsAdded: this.basePower,
+            message: `${this.name}延迟了${affected}个敌人${turnsToAdd}回合！`,
+            turnsAdded: turnsToAdd,
             affectedCount: affected,
             effectType: this.effectType
         };
@@ -569,9 +688,13 @@ class TransformSpell extends Spell {
             }
         }
 
+        // Number of gems to transform scales with caster's current mana
+        const manaMultiplier = caster.mana / 100;
+        const gemsToTransform = Math.max(1, Math.floor(this.basePower * manaMultiplier));
+
         // Shuffle and pick
         const shuffled = candidates.sort(() => Math.random() - 0.5);
-        const toTransform = shuffled.slice(0, Math.min(this.basePower, shuffled.length));
+        const toTransform = shuffled.slice(0, Math.min(gemsToTransform, shuffled.length));
 
         const transformed = [];
         toTransform.forEach(cell => {
@@ -758,6 +881,8 @@ class SpellManager {
 
     /**
      * Attempt to cast a spirit's spell
+     * Spell consumes ALL of the spirit's mana on cast
+     * Damage/effect scales with the spirit's current mana
      * @param {Object} spirit - The casting spirit
      * @param {Object} target - Target info (optional, for spells requiring selection)
      * @returns {Object} - Result of the cast attempt
@@ -786,12 +911,13 @@ class SpellManager {
             };
         }
 
-        // Execute the spell
+        // Execute the spell (damage/effect scales with current mana)
         const result = spell.execute(this.battleCore, spirit, target);
 
         if (result.success) {
-            // Consume mana
-            spirit.mana -= spell.manaCost;
+            // Consume ALL mana (not just manaCost)
+            result.manaConsumed = spirit.mana;
+            spirit.mana = 0;
             
             // Clear pending state
             this.pendingSpell = null;

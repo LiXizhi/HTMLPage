@@ -403,7 +403,6 @@
             justify-content: center;
             font-size: 28px;
             box-shadow: 0 0 15px rgba(255, 0, 0, 0.4);
-            animation: bossPulse 2s infinite;
             flex-shrink: 0;
             position: relative;
         }
@@ -438,22 +437,7 @@
             border-width: 4px;
             border-color: #ffcc00;
         }
-
-        @keyframes bossPulse {
-            0%, 100% { box-shadow: 0 0 15px rgba(255, 0, 0, 0.4); }
-            50% { box-shadow: 0 0 25px rgba(255, 0, 0, 0.7); }
-        }
-
-        @keyframes enemyAttack {
-            0% { transform: translateY(0); }
-            50% { transform: translateY(20px); }
-            100% { transform: translateY(0); }
-        }
-
-        .enemy-attacking {
-            animation: enemyAttack 0.3s ease-in-out;
-        }
-
+        
         .boss-hp-bar {
             width: 100%;
             height: 10px;
@@ -633,9 +617,48 @@
             font-size: 11px;
             color: #aaa;
         }
+        .spell-stats {
+            font-size: 11px;
+            color: #8cf;
+            margin-top: 4px;
+        }
         .spell-icon {
             font-size: 16px;
             margin-right: 4px;
+        }
+
+        /* Enemy tooltip */
+        .enemy-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            min-width: 120px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 10000;
+            margin-bottom: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+        }
+        .enemy-container:hover .enemy-tooltip,
+        .enemy-container.show-tooltip .enemy-tooltip {
+            opacity: 1;
+        }
+        .enemy-tooltip-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #ff8888;
+            margin-bottom: 4px;
+        }
+        .enemy-tooltip-stats {
+            font-size: 11px;
+            color: #8cf;
         }
 
         /* Spell selection overlay */
@@ -989,33 +1012,18 @@
             100% { transform: scale(0.3); opacity: 0; }
         }
 
-        /* Boss/Enemy hit effect - quick sideways recoil */
-        .boss-avatar.boss-hit {
-            animation: bossHit 0.5s ease-out, bossFlash 0.5s ease-out;
-        }
-
         @keyframes bossHit {
-            0% { transform: translateX(0) scale(1); }
-            10% { transform: translateX(-25px) scale(1.08) rotate(-3deg); }
-            25% { transform: translateX(20px) scale(0.95) rotate(2deg); }
-            40% { transform: translateX(-15px) scale(1.03) rotate(-1deg); }
-            55% { transform: translateX(10px) scale(0.98) rotate(1deg); }
-            70% { transform: translateX(-5px) scale(1.01); }
-            85% { transform: translateX(3px) scale(1); }
-            100% { transform: translateX(0) scale(1) rotate(0deg); }
+            0% { transform: translateY(0) translateX(0) scale(1); }
+            15% { transform: translateY(-20px) translateX(-8px) scale(1.1) rotate(-5deg); }
+            30% { transform: translateY(-15px) translateX(5px) scale(0.95) rotate(3deg); }
+            50% { transform: translateY(-8px) translateX(-3px) scale(1.02) rotate(-2deg); }
+            70% { transform: translateY(-3px) translateX(2px) scale(0.98) rotate(1deg); }
+            100% { transform: translateY(0) translateX(0) scale(1) rotate(0deg); }
         }
 
-        /* Boss flash on hit */
-        .boss-flash {
-            animation: bossFlash 0.5s ease-out;
-        }
-
-        @keyframes bossFlash {
-            0%, 100% { filter: brightness(1); }
-            15% { filter: brightness(2.5) saturate(0.5); }
-            30% { filter: brightness(1); }
-            45% { filter: brightness(2); }
-            60% { filter: brightness(1); }
+        /* Boss/Enemy hit effect - recoil backward (away from player) */
+        .boss-hit {
+            animation: bossHit 0.5s ease-in-out !important;
         }
 
         /* Damage text - enhanced with scaling and bounce */
@@ -1218,6 +1226,9 @@
             <div class="player-hp-bar">
                 <div id="player-hp-fill" class="player-hp-fill" style="width: 100%"></div>
             </div>
+            <div class="flex justify-center items-center mt-1">
+                <span class="text-xs text-blue-300 font-bold">🛡️ 防御: <span id="player-defense-text">0</span></span>
+            </div>
         </div>
     </div>
 
@@ -1344,7 +1355,8 @@
         onUpdateUI: () => updateUI(),
         onBossDamage: (dmg, index) => {
             showBossDamage(dmg, index);
-            updateBossUI();
+            // Delay UI update until after hit animation completes
+            setTimeout(() => updateBossUI(), 600);
         },
         onPlayerDamage: (dmg, index) => {
             showPlayerDamage(dmg, index);
@@ -1390,9 +1402,11 @@
         // Terrain DOM
         terrainGrid: document.getElementById('terrain-grid'),
         // Player DOM
+        playerArea: document.getElementById('player-area'),
         playerHpText: document.getElementById('player-hp-text'),
         playerMaxHpText: document.getElementById('player-max-hp-text'),
         playerHpFill: document.getElementById('player-hp-fill'),
+        playerDefenseText: document.getElementById('player-defense-text'),
         // Spell Selection DOM
         spellSelectionOverlay: document.getElementById('spell-selection-overlay'),
         spellSelectionText: document.getElementById('spell-selection-text'),
@@ -1455,19 +1469,39 @@
         }
         
         updateUI();
-        updateBossUI();
+        // Delay boss UI update to allow hit animation to play
+        setTimeout(() => updateBossUI(), 600);
         updatePlayerUI();
         updateSpiritUI();
     };
 
     /**
      * Equip random spells to all spirits
+     * Ensures each spirit has a unique spell
      */
     function equipRandomSpells() {
         const allSpellIds = spellRegistry.getAllSpellIds();
-        battle.spirits.forEach(spirit => {
-            const randomSpellId = allSpellIds[Math.floor(Math.random() * allSpellIds.length)];
-            spellManager.equipSpell(spirit, randomSpellId);
+        // Shuffle the spell IDs to randomize assignment
+        const shuffledSpellIds = [...allSpellIds].sort(() => Math.random() - 0.5);
+        const usedSpells = new Set();
+        
+        battle.spirits.forEach((spirit, index) => {
+            let spellId;
+            if (index < shuffledSpellIds.length) {
+                // Assign unique spells from shuffled list
+                spellId = shuffledSpellIds[index];
+            } else {
+                // If more spirits than spells, pick from unused or random
+                const availableSpells = allSpellIds.filter(id => !usedSpells.has(id));
+                if (availableSpells.length > 0) {
+                    spellId = availableSpells[Math.floor(Math.random() * availableSpells.length)];
+                } else {
+                    // Fallback: all spells used, pick random (allows duplicates only when necessary)
+                    spellId = allSpellIds[Math.floor(Math.random() * allSpellIds.length)];
+                }
+            }
+            usedSpells.add(spellId);
+            spellManager.equipSpell(spirit, spellId);
         });
     }
 
@@ -1756,6 +1790,7 @@
         dom.grid.style.height = `${GRID_SIZE}px`;
         dom.bossArea.style.width = `${GRID_SIZE}px`;
         dom.spiritArea.style.width = `${GRID_SIZE}px`;
+        dom.playerArea.style.width = `${GRID_SIZE}px`;
 
         if (battle.grid && battle.grid.length > 0) {
             renderGrid();
@@ -2621,12 +2656,22 @@
             const hpText = document.createElement('div');
             hpText.className = 'text-[10px] text-center text-gray-300 mt-1';
             hpText.textContent = `${Math.max(0, enemy.hp)} / ${enemy.maxHp}`;
+
+            // Add enemy tooltip with defense info
+            const tooltip = document.createElement('div');
+            tooltip.className = 'enemy-tooltip';
+            tooltip.innerHTML = `
+                <div class="enemy-tooltip-name">${enemy.avatar} ${enemy.name}</div>
+                <div class="enemy-tooltip-stats">⚔️ 攻击: ${enemy.attack}</div>
+                <div class="enemy-tooltip-stats">🛡️ 防御: ${enemy.defense || 0}</div>
+            `;
             
             container.appendChild(turn);
             container.appendChild(avatar);
             info.appendChild(hpBar);
             info.appendChild(hpText);
             container.appendChild(info);
+            container.appendChild(tooltip);
             
             dom.bossArea.appendChild(container);
         });
@@ -2637,6 +2682,7 @@
         dom.playerHpFill.style.width = `${hpPercent}%`;
         dom.playerHpText.textContent = Math.max(0, battle.playerHp);
         dom.playerMaxHpText.textContent = battle.playerMaxHp;
+        dom.playerDefenseText.textContent = battle.playerDefense || 0;
         
         if (hpPercent < 30) {
             dom.playerHpFill.classList.remove('from-green-500', 'to-emerald-400');
@@ -2682,8 +2728,18 @@
                 const tooltip = document.createElement('div');
                 tooltip.className = 'spirit-tooltip';
                 tooltip.innerHTML = `
-                    <div class="spell-name"><span class="spell-icon">${s.spell.icon}</span>${s.spell.name}</div>
-                    <div class="spell-desc">${s.spell.description}</div>
+                    <div class="spell-name"><span class="spell-icon">${s.icon}</span>${s.name}</div>
+                    <div class="spell-desc"><span class="spell-icon">${s.spell.icon}</span>${s.spell.name}: ${s.spell.description}</div>
+                    <div class="spell-stats">🛡️ 防御: ${s.defense || 0}</div>
+                `;
+                spiritDiv.appendChild(tooltip);
+            } else {
+                // Show tooltip with defense even without spell
+                const tooltip = document.createElement('div');
+                tooltip.className = 'spirit-tooltip';
+                tooltip.innerHTML = `
+                    <div class="spell-name"><span class="spell-icon">${s.icon}</span>${s.name}</div>
+                    <div class="spell-stats">🛡️ 防御: ${s.defense || 0}</div>
                 `;
                 spiritDiv.appendChild(tooltip);
             }
@@ -3290,13 +3346,11 @@
         const avatar = enemyEl.querySelector('.boss-avatar');
         if (avatar) {
             // Remove existing animations and trigger reflow
-            avatar.classList.remove('boss-hit', 'boss-flash');
-            avatar.style.animation = 'none';
+            avatar.classList.remove('boss-hit');
             void avatar.offsetWidth;
             
             // Apply hit animation via CSS classes
-            avatar.style.animation = '';
-            avatar.classList.add('boss-hit', 'boss-flash');
+            avatar.classList.add('boss-hit');
             
             // Create impact burst effect at avatar position
             const avatarRect = avatar.getBoundingClientRect();
@@ -3310,8 +3364,7 @@
             
             // Remove animations after they complete and restore pulse
             setTimeout(() => {
-                avatar.classList.remove('boss-hit', 'boss-flash');
-                avatar.style.animation = '';
+                avatar.classList.remove('boss-hit');
             }, 600);
         }
 

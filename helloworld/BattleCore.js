@@ -149,10 +149,11 @@ class BattleCore {
         this.level = 1;
         this.wordLevel = 1;
         
-        this.enemies = []; // Array of {hp, maxHp, level, avatar, name, isBoss, turn, maxTurn}
-        this.spirits = []; // Array of {mana, maxMana, damage, icon, type}
+        this.enemies = []; // Array of {hp, maxHp, level, avatar, name, isBoss, turn, maxTurn, defense}
+        this.spirits = []; // Array of {mana, maxMana, damage, icon, type, defense}
         this.playerHp = 1000;
         this.playerMaxHp = 1000;
+        this.playerDefense = 0; // Player defense value
         
         this.allWordLevels = {};
         this.wordPairs = [];
@@ -259,6 +260,7 @@ class BattleCore {
         
         this.playerHp = 1000;
         this.playerMaxHp = 1000;
+        this.playerDefense = 0; // Reset player defense
 
         // Difficulty Multipliers
         let hpMult = 1;
@@ -282,12 +284,19 @@ class BattleCore {
         const avatars = ['👹', '💀', '👻', '👽', '👾', '🤖'];
         const minionAvatars = ['👿', '👺', '🤡', '👽', '👾'];
         
+        // Unique boss names
+        const bossNames = ['暗影领主', '毁灭者', '深渊之王', '噩梦统治者', '混沌之主', '虚空行者', 
+                          '黑暗君王', '末日使者', '幽冥霸主', '魔焰之王'];
+        // Unique minion names
+        const minionNames = ['暗影仆从', '骷髅兵', '幽灵战士', '小恶魔', '暗影侍卫', '虚空爬虫',
+                            '地狱犬', '亡灵士兵', '噩梦魔物', '堕落精灵'];
+        
         const isBossOnly = Math.random() < 0.3 && lvl > 1; // 30% chance for boss only after level 1
         
         if (isBossOnly) {
             this.enemies.push({
                 id: 0,
-                name: `Boss`,
+                name: bossNames[Math.floor(Math.random() * bossNames.length)],
                 hp: totalHp,
                 maxHp: totalHp,
                 level: lvl,
@@ -296,7 +305,8 @@ class BattleCore {
                 turn: 3,
                 maxTurn: 3,
                 attack: 100 + (lvl * 20),
-                element: Math.floor(Math.random() * 6)
+                element: Math.floor(Math.random() * 6),
+                defense: 0
             });
         } else {
             // 1 Boss + 2 Minions
@@ -305,7 +315,7 @@ class BattleCore {
             
             this.enemies.push({
                 id: 0,
-                name: `Boss`,
+                name: bossNames[Math.floor(Math.random() * bossNames.length)],
                 hp: bossHp,
                 maxHp: bossHp,
                 level: lvl,
@@ -314,13 +324,16 @@ class BattleCore {
                 turn: 3,
                 maxTurn: 3,
                 attack: 100 + (lvl * 20),
-                element: Math.floor(Math.random() * 6)
+                element: Math.floor(Math.random() * 6),
+                defense: 0
             });
             
+            // Shuffle minion names to get unique names
+            const shuffledMinionNames = [...minionNames].sort(() => Math.random() - 0.5);
             for (let i = 1; i <= 2; i++) {
                 this.enemies.push({
                     id: i,
-                    name: `Minion ${i}`,
+                    name: shuffledMinionNames[i - 1],
                     hp: minionHp,
                     maxHp: minionHp,
                     level: lvl,
@@ -329,7 +342,8 @@ class BattleCore {
                     turn: 3 + i, // Minions might have different turn counts
                     maxTurn: 3 + i,
                     attack: 50 + (lvl * 10),
-                    element: Math.floor(Math.random() * 6)
+                    element: Math.floor(Math.random() * 6),
+                    defense: 0
                 });
             }
         }
@@ -337,20 +351,32 @@ class BattleCore {
         // Setup Spirits - randomly select MAX_SPIRITS_IN_BATTLE from 6 elements (each element at most once)
         this.spirits = [];
         const elementKeys = ['FORGE', 'TIDE', 'LIFE', 'SOL', 'STONE', 'ROOT'];
+        // Unique spirit names by element
+        const spiritNames = {
+            FORGE: ['炎灵', '火焰精灵', '熔岩之子', '烈焰守护者'],
+            TIDE:  ['水灵', '潮汐精灵', '深海之魂', '清流使者'],
+            LIFE:  ['生灵', '自然精灵', '万物之灵', '生机守护者'],
+            SOL:   ['光灵', '太阳精灵', '金阳之子', '光明使者'],
+            STONE: ['岩灵', '磐石精灵', '山岳之魂', '坚岩守护者'],
+            ROOT:  ['木灵', '森林精灵', '古木之灵', '林木守护者']
+        };
         // Shuffle and pick first MAX_SPIRITS_IN_BATTLE elements
         const shuffledKeys = [...elementKeys].sort(() => Math.random() - 0.5);
         const selectedKeys = shuffledKeys.slice(0, BattleCore.MAX_SPIRITS_IN_BATTLE);
         
         for (const key of selectedKeys) {
             const element = BattleCore.ELEMENTS[key];
+            const names = spiritNames[key];
+            const randomName = names[Math.floor(Math.random() * names.length)];
             this.spirits.push({
                 type: element.id,
                 icon: element.icon,
-                name: element.name,
+                name: randomName,
                 mana: 0,
                 maxMana: 300,
                 damage: 150 + (lvl * 50),
-                element: element.id
+                element: element.id,
+                defense: 0
             });
         }
 
