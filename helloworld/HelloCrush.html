@@ -1,0 +1,2052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gem Rush - 宝石迷阵</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
+    <script src="BattleCore.js"></script>
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background: radial-gradient(circle at center, #2b1055 0%, #1a0b2e 100%);
+            color: white;
+            overflow: hidden;
+            touch-action: none; /* Prevent scroll on mobile */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* Grid Styling */
+        #grid-area {
+            position: relative;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            border: 4px solid #4c2e85;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            touch-action: none;
+        }
+
+        /* Gem Styles */
+        .gem {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.2s ease;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* GPU Acceleration hint */
+            will-change: transform;
+        }
+
+        .gem-inner {
+            width: 85%;
+            height: 85%;
+            border-radius: 20%;
+            box-shadow: inset 0 4px 8px rgba(255,255,255,0.4), 
+                        inset 0 -4px 8px rgba(0,0,0,0.4),
+                        0 4px 8px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .gem-inner::after {
+            content: '';
+            position: absolute;
+            top: 15%;
+            left: 15%;
+            width: 30%;
+            height: 30%;
+            background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+        }
+
+        /* Gem Colors */
+        .type-0 .gem-inner { background: linear-gradient(135deg, #ff4d4d, #b30000); border: 1px solid #ff8080; } /* Red - Forge */
+        .type-1 .gem-inner { background: linear-gradient(135deg, #4da6ff, #0059b3); border: 1px solid #80bfff; border-radius: 50%; } /* Blue - Tide */
+        .type-2 .gem-inner { background: linear-gradient(135deg, #4dff88, #00b33c); border: 1px solid #80ffaa; border-radius: 10%; transform: rotate(45deg) scale(0.85); } /* Green - Life */
+        .type-3 .gem-inner { background: linear-gradient(135deg, #ffff4d, #b3b300); border: 1px solid #ffff80; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); border-radius: 0; width: 80%; height: 80%;} /* Yellow - Sol */
+        .type-4 .gem-inner { background: linear-gradient(135deg, #bf4dff, #7300b3); border: 1px solid #df80ff; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); border-radius: 0; } /* Purple - Stone */
+        .type-5 .gem-inner { background: linear-gradient(135deg, #8b4513, #5d2e0d); border: 1px solid #a0522d; border-radius: 30%; } /* Brown - Root */
+
+        .gem.has-word {
+            z-index: 15;
+        }
+
+        .gem.selected {
+            z-index: 50;
+        }
+
+        .gem.selected .gem-inner {
+            filter: brightness(1.4);
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+            z-index: 20;
+        }
+
+        /* Particles */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
+            animation: pop 0.6s ease-out forwards;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; top: var(--dest-y); left: var(--dest-x); }
+        }
+
+        /* Floating Text */
+        .float-text {
+            position: absolute;
+            font-weight: bold;
+            font-size: 24px;
+            color: #ffd700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            z-index: 50;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+        
+        .hidden { display: none !important; }
+
+        .btn-primary {
+            background: linear-gradient(to bottom, #ff4d4d, #c41e1e);
+            border: none;
+            padding: 12px 30px;
+            color: white;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 77, 77, 0.4);
+            transition: transform 0.1s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        .btn-primary:active { transform: scale(0.95); }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 20px;
+            color: #aaa;
+            font-size: 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Fredoka', sans-serif;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .btn-secondary.selected {
+            background: #4da6ff;
+            border-color: #4da6ff;
+            color: white;
+            box-shadow: 0 0 10px rgba(77, 166, 255, 0.5);
+        }
+
+        /* Word Overlay */
+        .gem-word {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 4px #000, 0 0 2px #000;
+            pointer-events: none;
+            z-index: 100;
+            text-align: center;
+            width: max-content;
+            white-space: nowrap;
+            transform-origin: center center;
+        }
+        
+        .entangled .gem-inner {
+            filter: grayscale(0.8) brightness(0.6);
+            box-shadow: inset 0 0 10px #000;
+        }
+        
+        .entangled::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(0,0,0,0.2),
+                rgba(0,0,0,0.2) 5px,
+                rgba(0,0,0,0.4) 5px,
+                rgba(0,0,0,0.4) 10px
+            );
+            z-index: 14;
+            border-radius: 20%;
+        }
+
+        /* Word Cell Animations */
+        @keyframes pulseShadow {
+            0% { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)); }
+            50% { filter: drop-shadow(0 0 8px rgba(255, 255, 255, 1)); }
+            100% { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)); }
+        }
+
+        @keyframes rainbowGlow {
+            0% { filter: drop-shadow(0 0 3px #ff0000) drop-shadow(0 0 5px #ff0000); }
+            25% { filter: drop-shadow(0 0 3px #ffff00) drop-shadow(0 0 5px #ffff00); }
+            50% { filter: drop-shadow(0 0 3px #00ff00) drop-shadow(0 0 5px #00ff00); }
+            75% { filter: drop-shadow(0 0 3px #00ffff) drop-shadow(0 0 5px #00ffff); }
+            100% { filter: drop-shadow(0 0 3px #ff00ff) drop-shadow(0 0 5px #ff00ff); }
+        }
+
+        /* English Word Style */
+        .gem.lang-en {
+            animation: pulseShadow 2s infinite;
+        }
+
+        /* Chinese Word Style - Special */
+        .gem.lang-cn {
+            animation: rainbowGlow 3s linear infinite;
+        }
+        
+        /* Enhance text readability */
+        .gem.has-word .gem-word {
+            text-shadow: 0 0 4px #000, 0 0 3px #000, 0 0 2px #000;
+        }
+        /* Boss Area Styles - Now inside game-container, above grid */
+        #boss-area {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(80, 0, 0, 0.3);
+            border-radius: 12px;
+            border: 2px solid #8b0000;
+            box-sizing: border-box;
+            min-height: 100px;
+        }
+
+        .enemy-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            flex: 1;
+            max-width: 100px;
+            transition: all 0.3s ease;
+        }
+
+        .enemy-container.dead {
+            opacity: 0.3;
+            filter: grayscale(1);
+            transform: scale(0.8);
+        }
+
+        .enemy-turn {
+            position: absolute;
+            top: -5px;
+            right: 5px;
+            background: #ffcc00;
+            color: #000;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            border: 2px solid #333;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .boss-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4a0000 0%, #8b0000 50%, #4a0000 100%);
+            border: 3px solid #ff4444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.4);
+            animation: bossPulse 2s infinite;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .enemy-element-badge {
+            position: absolute;
+            bottom: -5px;
+            left: -20px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            border: 2px solid rgba(255,255,255,0.8);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+            z-index: 11;
+        }
+
+        .element-bg-0 { background: linear-gradient(135deg, #ff4d4d, #b30000); }
+        .element-bg-1 { background: linear-gradient(135deg, #4da6ff, #0059b3); }
+        .element-bg-2 { background: linear-gradient(135deg, #4dff88, #00b33c); }
+        .element-bg-3 { background: linear-gradient(135deg, #ffff4d, #b3b300); }
+        .element-bg-4 { background: linear-gradient(135deg, #bf4dff, #7300b3); }
+        .element-bg-5 { background: linear-gradient(135deg, #8b4513, #5d2e0d); }
+
+        .enemy-container.is-boss .boss-avatar {
+            width: 65px;
+            height: 65px;
+            font-size: 36px;
+            border-width: 4px;
+            border-color: #ffcc00;
+        }
+
+        @keyframes bossPulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(255, 0, 0, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(255, 0, 0, 0.7); }
+        }
+
+        @keyframes enemyAttack {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(20px); }
+            100% { transform: translateY(0); }
+        }
+
+        .enemy-attacking {
+            animation: enemyAttack 0.3s ease-in-out;
+        }
+
+        .boss-hp-bar {
+            width: 100%;
+            height: 10px;
+            background: #222;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 4px;
+            border: 1px solid #444;
+        }
+
+        .boss-hp-fill {
+            height: 100%;
+            background: linear-gradient(to right, #ff0000, #ff4444);
+            transition: width 0.4s ease;
+        }
+
+        /* Player Area Styles */
+        #player-area {
+            width: 100%;
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(0, 80, 0, 0.2);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .player-hp-bar {
+            width: 100%;
+            height: 12px;
+            background: #222;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+
+        .player-hp-fill {
+            height: 100%;
+            background: linear-gradient(to right, #2ecc71, #27ae60);
+            transition: width 0.5s ease;
+        }
+
+        /* Spirit Area Styles - Now inside game-container, below grid */
+        #spirit-area {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-around;
+            gap: 8px;
+            padding: 12px 12px;
+            margin-top: 8px;
+            background: rgba(0, 50, 80, 0.5);
+            border-radius: 12px;
+            border: 2px solid #0066aa;
+            box-sizing: border-box;
+            /* Width set by JS to match grid */
+        }
+
+        .spirit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s, filter 0.2s;
+            position: relative;
+        }
+
+        .spirit:hover {
+            transform: scale(1.1);
+        }
+
+        .spirit.ready {
+            animation: spiritReady 0.5s infinite alternate;
+        }
+
+        @keyframes spiritReady {
+            from { filter: brightness(1); }
+            to { filter: brightness(1.5) drop-shadow(0 0 10px currentColor); }
+        }
+
+        .spirit-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            border: 2px solid rgba(255,255,255,0.5);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .spirit-0 .spirit-icon { background: linear-gradient(135deg, #ff4d4d, #b30000); }
+        .spirit-1 .spirit-icon { background: linear-gradient(135deg, #4da6ff, #0059b3); }
+        .spirit-2 .spirit-icon { background: linear-gradient(135deg, #4dff88, #00b33c); }
+        .spirit-3 .spirit-icon { background: linear-gradient(135deg, #ffff4d, #b3b300); }
+        .spirit-4 .spirit-icon { background: linear-gradient(135deg, #bf4dff, #7300b3); }
+        .spirit-5 .spirit-icon { background: linear-gradient(135deg, #8b4513, #5d2e0d); }
+
+        .spirit-mana-bar {
+            width: 36px;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .spirit-mana-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .spirit-0 .spirit-mana-fill { background: #ff4d4d; }
+        .spirit-1 .spirit-mana-fill { background: #4da6ff; }
+        .spirit-2 .spirit-mana-fill { background: #4dff88; }
+        .spirit-3 .spirit-mana-fill { background: #ffff4d; }
+        .spirit-4 .spirit-mana-fill { background: #bf4dff; }
+
+        /* Stats Area - Left Sidebar */
+        #stats-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 50, 0.4);
+            border-radius: 12px;
+            border: 2px solid #4c2e85;
+            min-width: 100px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        /* Settings Area - Right Sidebar */
+        #settings-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px;
+            background: rgba(50, 50, 50, 0.4);
+            border-radius: 12px;
+            border: 2px solid #555;
+            min-width: 100px;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .setting-select {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            min-width: 70px;
+        }
+
+        .setting-select:focus {
+            outline: none;
+            border-color: #4da6ff;
+        }
+
+        .restart-btn {
+            background: linear-gradient(to bottom, #ff4d4d, #c41e1e);
+            color: white;
+            border: 1px solid #ff6666;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .restart-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .restart-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Main Layout - Responsive */
+        #main-layout {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100vh;
+            gap: 15px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        /* Landscape Mode */
+        @media (min-aspect-ratio: 1/1) {
+            #stats-area {
+                order: 1;
+            }
+            #game-container {
+                order: 2;
+            }
+            #settings-area {
+                order: 3;
+            }
+        }
+
+        /* Portrait Mode */
+        @media (max-aspect-ratio: 1/1) {
+            #main-layout {
+                flex-direction: column;
+                gap: 8px;
+            }
+            #stats-area {
+                order: 1;
+                flex-direction: row;
+                width: auto;
+                min-width: auto;
+                gap: 20px;
+                padding: 8px 15px;
+            }
+            #game-container {
+                order: 2;
+            }
+            #settings-area {
+                order: 3;
+                flex-direction: row;
+                width: auto;
+                min-width: auto;
+                gap: 10px;
+                padding: 8px 15px;
+                flex-wrap: wrap;
+            }
+            .setting-item {
+                flex-direction: row;
+                gap: 5px;
+            }
+            .boss-avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 22px;
+            }
+        }
+
+        /* Skill Effect */
+        .skill-effect {
+            position: fixed;
+            pointer-events: none;
+            z-index: 200;
+            animation: skillBlast 0.8s ease-out forwards;
+        }
+
+        @keyframes skillBlast {
+            0% { transform: scale(0.5); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .boss-hit {
+            animation: bossHit 0.3s ease-out;
+        }
+
+        @keyframes bossHit {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .damage-text {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff4444;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            animation: damageFloat 1s ease-out forwards;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .bullet {
+            position: fixed;
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle, #ff6666 0%, #ff0000 40%, #8b0000 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 15px #ff0000, 0 0 30px #ff0000;
+            z-index: 300;
+            pointer-events: none;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes damageFloat {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.3); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="main-layout">
+    <!-- Left Sidebar - Stats -->
+    <div id="stats-area">
+        <div class="stat-item">
+            <div class="text-sm text-gray-300 opacity-80">分数</div>
+            <div id="score-display" class="text-3xl font-bold text-yellow-400">0</div>
+        </div>
+        <div class="stat-item">
+            <div class="text-sm text-gray-300 opacity-80">关卡</div>
+            <div id="level-display" class="text-4xl font-bold text-white">1</div>
+        </div>
+        <div class="stat-item">
+            <div id="moves-label" class="text-sm text-gray-300 opacity-80">步数</div>
+            <div id="moves-display" class="text-3xl font-bold text-red-400">20</div>
+        </div>
+    </div>
+
+    <!-- Game Container (Center) -->
+    <div id="game-container">
+        <!-- Close Button -->
+        <button id="close-game-btn" class="fixed top-4 right-4 z-50 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-lg border border-red-400">
+            ✕ 退出
+        </button>
+        
+        <!-- Boss Area - Above Grid -->
+        <div id="boss-area">
+            <!-- Enemies generated by JS -->
+        </div>
+
+        <!-- Game Board -->
+        <div id="grid-area">
+            <!-- Gems generated by JS -->
+        </div>
+
+        <!-- Spirit Area - Below Grid -->
+        <div id="spirit-area">
+            <!-- Spirits generated dynamically by JS based on battle.spirits -->
+        </div>
+
+        <!-- Player Area - Below Spirits -->
+        <div id="player-area">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-xs text-gray-400 font-bold">PLAYER HP</span>
+                <span class="text-xs text-green-400 font-bold"><span id="player-hp-text">1000</span> / <span id="player-max-hp-text">1000</span></span>
+            </div>
+            <div class="player-hp-bar">
+                <div id="player-hp-fill" class="player-hp-fill" style="width: 100%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Sidebar - Settings -->
+    <div id="settings-area">
+        <div class="setting-item">
+            <label class="text-xs text-gray-400">词汇</label>
+            <select id="word-level-select" class="setting-select">
+                <option value="1" selected>Lv.1</option>
+                <option value="2">Lv.2</option>
+                <option value="3">Lv.3</option>
+                <option value="4">Lv.4</option>
+                <option value="5">Lv.5</option>
+                <option value="6">Lv.6</option>
+            </select>
+        </div>
+        <div class="setting-item">
+            <label class="text-xs text-gray-400">难度</label>
+            <select id="difficulty-select" class="setting-select">
+                <option value="easy">简单</option>
+                <option value="normal" selected>普通</option>
+                <option value="hard">困难</option>
+            </select>
+        </div>
+        <div class="setting-item">
+            <label class="text-xs text-gray-400">模式</label>
+            <select id="mode-select" class="setting-select">
+                <option value="moves" selected>步数</option>
+                <option value="time">倒计时</option>
+            </select>
+        </div>
+        <div class="setting-item">
+            <button id="footer-restart-btn" class="restart-btn">重开</button>
+        </div>
+    </div>
+</div>
+
+<!-- Success Overlay -->
+<div id="success-overlay" class="hidden fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+    <canvas id="confetti-canvas" class="absolute inset-0 w-full h-full"></canvas>
+    <div class="absolute text-6xl font-bold text-yellow-300 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)] animate-bounce">Boss 击败!</div>
+</div>
+
+<!-- Level Complete Modal -->
+<div id="level-modal" class="modal hidden">
+    <div class="bg-gray-900 p-8 rounded-2xl border-2 border-yellow-500 text-center max-w-xs w-full transform transition-all scale-100 shadow-2xl">
+        <h2 class="text-3xl font-bold text-yellow-400 mb-2">Boss 击败!</h2>
+        <p class="text-gray-300 mb-6">做得好!</p>
+        <div class="text-lg mb-6">分数: <span id="level-score-final" class="text-white font-bold">0</span></div>
+        <button id="next-level-btn" class="btn-primary w-full">下一关</button>
+    </div>
+</div>
+
+<!-- Game Over Modal -->
+<div id="game-over-modal" class="modal hidden">
+    <div class="bg-gray-900 p-8 rounded-2xl border-2 border-red-600 text-center max-w-xs w-full shadow-2xl">
+        <h2 class="text-3xl font-bold text-red-500 mb-2">游戏结束</h2>
+        <p class="text-gray-300 mb-6" id="game-over-reason">你被击败了!</p>
+        <div class="text-lg mb-6">最终分数: <span id="final-score" class="text-white font-bold">0</span></div>
+        <button id="restart-btn" class="btn-primary w-full">重试</button>
+    </div>
+</div>
+
+<script>
+    /**
+     * Game Configuration & State
+     */
+    const COLS = 8;
+    const ROWS = 8;
+    const GEM_TYPES = 6; // Number of colors
+    let GRID_SIZE = 0; // Calculated dynamically
+    let CELL_SIZE = 0;
+
+    let RAW_WORD_DATA = `
+## level 1
+苹果: Apple
+香蕉: Banana
+橙子: Orange
+葡萄: Grape
+西瓜: Watermelon
+草莓: Strawberry
+樱桃: Cherry
+梨: Pear
+桃子: Peach
+柠檬: Lemon
+
+## level 2
+红色: Red
+蓝色: Blue
+`;
+
+    const battle = new BattleCore({
+        rows: ROWS,
+        cols: COLS,
+        gemTypes: GEM_TYPES,
+        onUpdateUI: () => updateUI(),
+        onBossDamage: (dmg, index) => {
+            showBossDamage(dmg, index);
+            updateBossUI();
+        },
+        onPlayerDamage: (dmg, index) => {
+            showPlayerDamage(dmg, index);
+            updatePlayerUI();
+        },
+        onSpiritMana: () => updateSpiritUI(),
+        onGameOver: () => {
+            dom.finalScore.textContent = battle.score;
+            const reason = battle.playerHp <= 0 ? "你被击败了!" : (battle.mode === 'time' ? "时间到!" : "步数用尽!");
+            document.getElementById('game-over-reason').textContent = reason;
+            dom.gameOverModal.classList.remove('hidden');
+        },
+        onLevelComplete: () => {
+            playWinEffect();
+            setTimeout(() => {
+                dom.levelScoreFinal.textContent = battle.score;
+                dom.levelModal.classList.remove('hidden');
+            }, 2000);
+        }
+    });
+
+    const dom = {
+        grid: document.getElementById('grid-area'),
+        score: document.getElementById('score-display'),
+        moves: document.getElementById('moves-display'),
+        movesLabel: document.getElementById('moves-label'),
+        level: document.getElementById('level-display'),
+        levelModal: document.getElementById('level-modal'),
+        gameOverModal: document.getElementById('game-over-modal'),
+        nextLevelBtn: document.getElementById('next-level-btn'),
+        restartBtn: document.getElementById('restart-btn'),
+        levelScoreFinal: document.getElementById('level-score-final'),
+        finalScore: document.getElementById('final-score'),
+        diffSelect: document.getElementById('difficulty-select'),
+        modeSelect: document.getElementById('mode-select'),
+        wordLevelSelect: document.getElementById('word-level-select'),
+        footerRestartBtn: document.getElementById('footer-restart-btn'),
+        closeGameBtn: document.getElementById('close-game-btn'),
+        // Boss & Spirit DOM
+        bossArea: document.getElementById('boss-area'),
+        spiritArea: document.getElementById('spirit-area'),
+        spirits: [], // Populated dynamically by updateSpiritArea()
+        // Player DOM
+        playerHpText: document.getElementById('player-hp-text'),
+        playerMaxHpText: document.getElementById('player-max-hp-text'),
+        playerHpFill: document.getElementById('player-hp-fill')
+    };
+
+    /* --- Initialization & Resizing --- */
+
+    // Initialize SDK
+    let sdk = null;
+    try {
+        if (typeof KeepworkSDK !== 'undefined') {
+            sdk = new KeepworkSDK({
+                timeout: 30000
+            });
+            console.log(`Keepwork SDK initialized token: ${sdk.token}`);
+        }
+    } catch (e) {
+        console.error("SDK Init Failed", e);
+    }
+
+    async function speak(text) {
+        if (sdk && sdk.speech) {
+            try {
+                const result = await sdk.speech.textToAudio(text, {
+                    per: 4, 
+                    spd: 5,
+                    pit: 5,
+                    vol: 5
+                });
+                if (result && result.url) {
+                    const audio = new Audio(result.url);
+                    audio.play();
+                    return;
+                }
+            } catch (e) {
+                console.error("SDK TTS failed", e);
+            }
+        }
+        
+        // Fallback
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+        }
+    }
+
+    // Simple Sound Effect Generator
+    let audioCtx = null;
+    function playSound(type) {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            switch(type) {
+                case 'select':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                    break;
+                case 'swap':
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(330, now);
+                    osc.frequency.linearRampToValueAtTime(220, now + 0.2);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.start(now);
+                    osc.stop(now + 0.2);
+                    break;
+                case 'match':
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.start(now);
+                    osc.stop(now + 0.2);
+                    break;
+                case 'hit':
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(100, now);
+                    osc.frequency.linearRampToValueAtTime(50, now + 0.3);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                    break;
+                case 'playerHit':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(80, now);
+                    osc.frequency.linearRampToValueAtTime(40, now + 0.5);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                    break;
+                case 'skill':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(200, now);
+                    osc.frequency.exponentialRampToValueAtTime(1000, now + 0.5);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                    break;
+                case 'correct':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                    break;
+            }
+        } catch (e) {
+            console.warn("Audio context failed", e);
+        }
+    }
+
+    function animateAndCrush(p1, p2, wordPair) {
+        return new Promise(async (resolve) => {
+            battle.isLocked = true;
+            
+            const el1 = getGemDOM(p1.r, p1.c);
+            const el2 = getGemDOM(p2.r, p2.c);
+            
+            if (!el1 || !el2) {
+                resolve();
+                return;
+            }
+
+            const w1 = battle.wordGrid[p1.r][p1.c];
+            const w2 = battle.wordGrid[p2.r][p2.c];
+            
+            let cnEl = el1;
+            if (w1 && w1.lang === 'EN') {
+                cnEl = el2;
+            } else if (w2 && w2.lang === 'CN') {
+                cnEl = el2;
+            }
+
+            el1.style.zIndex = 1000;
+            el2.style.zIndex = 1000;
+
+            const centerPos = GRID_SIZE / 2 - CELL_SIZE / 2;
+            const offset = CELL_SIZE * 0.8;
+            
+            el1.style.transition = 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            el2.style.transition = 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            
+            el1.offsetHeight; 
+            
+            if (cnEl === el1) {
+                el1.style.transform = `translate(${centerPos}px, ${centerPos - offset}px) scale(2.5)`;
+                el2.style.transform = `translate(${centerPos}px, ${centerPos + offset}px) scale(2.5)`;
+            } else {
+                el1.style.transform = `translate(${centerPos}px, ${centerPos + offset}px) scale(2.5)`;
+                el2.style.transform = `translate(${centerPos}px, ${centerPos - offset}px) scale(2.5)`;
+            }
+            
+            await new Promise(r => setTimeout(r, 600));
+            
+            if(wordPair && wordPair.en) {
+                speak(wordPair.en);
+            }
+            
+            await new Promise(r => setTimeout(r, 1500));
+            
+            const commonX = centerPos + CELL_SIZE/2;
+            const cnY = centerPos - offset + CELL_SIZE/2;
+            const enY = centerPos + offset + CELL_SIZE/2;
+            
+            if (cnEl === el1) {
+                createParticles(p1.r, p1.c, battle.grid[p1.r][p1.c], commonX, cnY);
+                createParticles(p2.r, p2.c, battle.grid[p2.r][p2.c], commonX, enY);
+            } else {
+                createParticles(p1.r, p1.c, battle.grid[p1.r][p1.c], commonX, enY);
+                createParticles(p2.r, p2.c, battle.grid[p2.r][p2.c], commonX, cnY);
+            }
+
+            resolve();
+        });
+    }
+
+    function init() {
+        fetch('candy_word_crush_data_cn_en')
+            .then(res => res.ok ? res.text() : Promise.reject())
+            .then(text => {
+                battle.parseWordData(text);
+                updateLevelDropdown();
+                battle.updateWordList();
+                startLevel(1);
+            })
+            .catch(() => {
+                // Fallback if fetch fails
+                battle.parseWordData(RAW_WORD_DATA);
+                updateLevelDropdown();
+                battle.updateWordList();
+                startLevel(1);
+            });
+
+        resizeGrid();
+        
+        dom.diffSelect.addEventListener('change', (e) => {
+            battle.difficulty = e.target.value;
+            startLevel(battle.level);
+        });
+
+        dom.modeSelect.addEventListener('change', (e) => {
+            battle.mode = e.target.value;
+            startLevel(battle.level);
+        });
+
+        dom.wordLevelSelect.addEventListener('change', (e) => {
+            battle.wordLevel = parseInt(e.target.value);
+            battle.updateWordList();
+            startLevel(1);
+        });
+
+        dom.footerRestartBtn.addEventListener('click', () => startLevel(battle.level));
+        
+        // Note: Spirit click events are added dynamically in updateSpiritArea()
+        
+        dom.closeGameBtn.addEventListener('click', () => {
+            window.parent.postMessage({ 
+                type: 'gameFinished', 
+                data: { 
+                    score: battle.score, 
+                    level: battle.level,
+                    difficulty: battle.difficulty,
+                    mode: battle.mode,
+                    closed: true 
+                } 
+            }, '*');
+        });
+        
+        window.addEventListener('resize', resizeGrid);
+        dom.nextLevelBtn.addEventListener('click', () => startLevel(battle.level + 1));
+        dom.restartBtn.addEventListener('click', () => {
+            startLevel(battle.level);
+            dom.gameOverModal.classList.add('hidden');
+        });
+
+        window.parent.postMessage({ type: 'gameLoaded' }, '*');
+    }
+
+    function resizeGrid() {
+        const isLandscape = window.innerWidth > window.innerHeight;
+        let maxWidth, maxHeight;
+        if (isLandscape) {
+            maxWidth = Math.min(window.innerWidth * 0.5, 450);
+            maxHeight = window.innerHeight * 0.65;
+        } else {
+            maxWidth = Math.min(window.innerWidth - 30, 450);
+            maxHeight = window.innerHeight * 0.5;
+        }
+        
+        let size = Math.min(maxWidth, maxHeight);
+        GRID_SIZE = size;
+        CELL_SIZE = (GRID_SIZE - 8) / COLS;
+
+        dom.grid.style.width = `${GRID_SIZE}px`;
+        dom.grid.style.height = `${GRID_SIZE}px`;
+        dom.bossArea.style.width = `${GRID_SIZE}px`;
+        dom.spiritArea.style.width = `${GRID_SIZE}px`;
+
+        if (battle.grid && battle.grid.length > 0) {
+            renderGrid(); 
+        }
+    }
+
+    function startLevel(lvl) {
+        battle.initLevel(lvl, {
+            difficulty: dom.diffSelect.value,
+            mode: dom.modeSelect.value,
+            wordLevel: parseInt(dom.wordLevelSelect.value)
+        });
+        
+        if (battle.mode === 'time') {
+            dom.movesLabel.textContent = "时间";
+            if (battle.timerInterval) clearInterval(battle.timerInterval);
+            battle.timerInterval = setInterval(updateTimer, 1000);
+        } else {
+            dom.movesLabel.textContent = "步数";
+            if (battle.timerInterval) clearInterval(battle.timerInterval);
+        }
+        
+        dom.levelModal.classList.add('hidden');
+        dom.gameOverModal.classList.add('hidden');
+        document.getElementById('success-overlay').classList.add('hidden');
+
+        dom.grid.innerHTML = '';
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                createGemDOM(r, c, battle.grid[r][c]);
+            }
+        }
+
+        updateUI();
+        updateBossUI();
+        updateSpiritArea(); // Recreate spirit DOM elements for new level
+        updateSpiritUI();
+        updatePlayerUI();
+    }
+
+    function updateTimer() {
+        if (battle.isLocked) return;
+        battle.timeLeft--;
+        if (battle.timeLeft <= 0) {
+            battle.timeLeft = 0;
+            clearInterval(battle.timerInterval);
+            battle.checkWinCondition();
+        }
+        updateUI();
+    }
+
+    function createGemDOM(r, c, type) {
+        const div = document.createElement('div');
+        div.classList.add('gem', `type-${type}`);
+        div.id = `gem-${r}-${c}`;
+        div.style.width = `${CELL_SIZE}px`;
+        div.style.height = `${CELL_SIZE}px`;
+        div.style.transform = `translate(${c * CELL_SIZE}px, ${r * CELL_SIZE}px)`;
+        
+        const inner = document.createElement('div');
+        inner.classList.add('gem-inner');
+        div.appendChild(inner);
+
+        const wordData = battle.wordGrid[r] && battle.wordGrid[r][c];
+        if (wordData) {
+            div.classList.add('has-word');
+            div.classList.add(wordData.lang === 'CN' ? 'lang-cn' : 'lang-en');
+            const wordEl = document.createElement('div');
+            wordEl.classList.add('gem-word');
+            wordEl.textContent = wordData.word;
+            div.appendChild(wordEl);
+            fitText(wordEl);
+            if (wordData.isEntangled) div.classList.add('entangled');
+        }
+
+        bindInteraction(div, r, c);
+        dom.grid.appendChild(div);
+        return div;
+    }
+
+    function getGemDOM(r, c) {
+        return document.getElementById(`gem-${r}-${c}`);
+    }
+
+    function renderGrid() {
+        if (!battle.grid || battle.grid.length === 0) return;
+        for (let r = 0; r < ROWS; r++) {
+            if (!battle.grid[r]) continue;
+            for (let c = 0; c < COLS; c++) {
+                const gem = getGemDOM(r, c);
+                if (gem) {
+                    gem.style.width = `${CELL_SIZE}px`;
+                    gem.style.height = `${CELL_SIZE}px`;
+                    gem.style.transform = `translate(${c * CELL_SIZE}px, ${r * CELL_SIZE}px)`;
+                    const wordEl = gem.querySelector('.gem-word');
+                    if (wordEl) fitText(wordEl);
+                }
+            }
+        }
+    }
+
+    function handleInput(r, c) {
+        if (battle.isLocked) return;
+        if (battle.grid[r][c] === null) return;
+        if (battle.wordGrid[r][c] && battle.wordGrid[r][c].isEntangled) return;
+
+        playSound('select');
+        const clicked = { r, c };
+        if (battle.selectedGem && battle.selectedGem.r === r && battle.selectedGem.c === c) {
+            toggleSelectVisual(battle.selectedGem, false);
+            battle.selectedGem = null;
+            return;
+        }
+
+        if (!battle.selectedGem) {
+            battle.selectedGem = clicked;
+            toggleSelectVisual(clicked, true);
+            return;
+        }
+
+        if (isAdjacent(battle.selectedGem, clicked)) {
+            toggleSelectVisual(battle.selectedGem, false);
+            attemptSwap(battle.selectedGem, clicked);
+            battle.selectedGem = null;
+        } else {
+            toggleSelectVisual(battle.selectedGem, false);
+            battle.selectedGem = clicked;
+            toggleSelectVisual(clicked, true);
+        }
+    }
+
+    function isAdjacent(p1, p2) {
+        return Math.abs(p1.r - p2.r) + Math.abs(p1.c - p2.c) === 1;
+    }
+
+    function toggleSelectVisual(pos, isSelected) {
+        const el = getGemDOM(pos.r, pos.c);
+        if (el) {
+            if (isSelected) el.classList.add('selected');
+            else el.classList.remove('selected');
+        }
+    }
+
+    function isWordOnBoard(word, excludePos) {
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS; c++) {
+                if (excludePos && excludePos.r === r && excludePos.c === c) continue;
+                const w = battle.wordGrid[r][c];
+                if (w && w.word === word) return true;
+            }
+        }
+        return false;
+    }
+
+    async function endTurn() {
+        battle.isLocked = true;
+        const attacked = battle.processEnemyTurns();
+        if (attacked) {
+            // Delay UI update to allow attack animations to play
+            await new Promise(r => setTimeout(r, 500));
+        }
+        updateBossUI();
+        updatePlayerUI();
+        battle.checkWinCondition();
+        battle.isLocked = false;
+    }
+
+    async function attemptSwap(p1, p2) {
+        battle.isLocked = true;
+        await swapAnimation(p1, p2);
+
+        const w1 = battle.wordGrid[p1.r][p1.c];
+        const w2 = battle.wordGrid[p2.r][p2.c];
+        
+        if (w1 && w2 && w1.lang !== w2.lang) {
+            const cn = w1.lang === 'CN' ? w1 : w2;
+            const en = w1.lang === 'EN' ? w1 : w2;
+            const pair = battle.wordPairs.find(p => p.cn === cn.word && p.en === en.word);
+            
+            if (pair) {
+                if (battle.mode === 'moves') battle.moves--;
+                updateUI();
+                await processWordMatch(p1, p2, true);
+                await endTurn();
+                return;
+            } else {
+                await swapAnimation(p1, p2);
+                if (battle.mode === 'moves') battle.moves--;
+                updateUI();
+                await processWordMatch(p1, p2, false);
+                await endTurn();
+                return;
+            }
+        }
+
+        battle.swapGems(p1, p2);
+        updateDomIds(p1, p2);
+
+        const matches = battle.findMatches();
+        if (matches.length > 0) {
+            if (battle.mode === 'moves') battle.moves--;
+            battle.comboMultiplier = 1;
+            updateUI();
+            await processMatches(matches);
+            await endTurn();
+        } else {
+            await swapAnimation(p1, p2);
+            battle.swapGems(p1, p2);
+            updateDomIds(p1, p2);
+            battle.isLocked = false;
+            
+            // English word special logic
+            const w1_new = battle.wordGrid[p1.r][p1.c];
+            if (w1_new && w1_new.lang === 'EN') {
+                if (battle.currentPair && w1_new.word === battle.currentPair.en) {
+                    let cnPos = null;
+                    for(let r=0; r<ROWS; r++) {
+                        for(let c=0; c<COLS; c++) {
+                            const w = battle.wordGrid[r][c];
+                            if (w && w.lang === 'CN' && w.word === battle.currentPair.cn) {
+                                cnPos = {r, c}; break;
+                            }
+                        }
+                    }
+                    if (cnPos) {
+                        battle.isLocked = true;
+                        if (battle.mode === 'moves') battle.moves--;
+                        await animateAndCrush(p1, cnPos, battle.currentPair);
+                        battle.score += 500;
+                        showFloatingText(500, p1);
+                        removeGem(p1.r, p1.c, true);
+                        removeGem(cnPos.r, cnPos.c, true);
+                        battle.markPairAsCrushed(battle.currentPair);
+                        battle.currentPair = null;
+                        updateUI();
+                        setTimeout(async () => {
+                            await applyGravity();
+                            const changed = battle.ensureWords();
+                            changed.forEach(pos => updateWordVisuals(pos.r, pos.c));
+                            const m = battle.findMatches();
+                            if(m.length > 0) await processMatches(m);
+                            await endTurn();
+                        }, 300);
+                    }
+                } else {
+                    // Entangle
+                    w1_new.isEntangled = true;
+                    const availableForEntangle = battle.availablePairs.filter(
+                        p => p.en !== w1_new.word && !isWordOnBoard(p.en, p1)
+                    );
+                    if (availableForEntangle.length > 0) {
+                        const randomPair = availableForEntangle[Math.floor(Math.random() * availableForEntangle.length)];
+                        w1_new.word = randomPair.en;
+                    }
+                    updateWordVisuals(p1.r, p1.c);
+                }
+            }
+        }
+    }
+
+    function removeGem(r, c, skipParticles = false) {
+        const el = getGemDOM(r, c);
+        if (el) {
+            if (!skipParticles) {
+                createParticles(r, c, battle.grid[r][c]);
+                playSound('match');
+            }
+            el.style.transform += " scale(0)";
+            el.style.opacity = "0";
+            setTimeout(() => el.remove(), 300);
+        }
+        battle.grid[r][c] = null;
+        battle.wordGrid[r][c] = null;
+    }
+
+    async function processWordMatch(p1, p2, isCorrect) {
+        if (isCorrect) {
+            playSound('correct');
+            const w1 = battle.wordGrid[p1.r][p1.c];
+            const w2 = battle.wordGrid[p2.r][p2.c];
+            let pair = battle.currentPair;
+            if (w1 && w2) {
+                 const cn = w1.lang === 'CN' ? w1 : w2;
+                 const en = w1.lang === 'EN' ? w1 : w2;
+                 const found = battle.wordPairs.find(p => p.cn === cn.word && p.en === en.word);
+                 if(found) pair = found;
+            }
+            await animateAndCrush(p1, p2, pair);
+            battle.score += 500;
+            showFloatingText(500, p1);
+            removeGem(p1.r, p1.c, true);
+            removeGem(p2.r, p2.c, true);
+            battle.advanceWordPair();
+            updateUI();
+            
+            await new Promise(r => setTimeout(r, 300));
+            await applyGravity();
+            const changed = battle.ensureWords();
+            changed.forEach(pos => updateWordVisuals(pos.r, pos.c));
+            const m = battle.findMatches();
+            if(m.length > 0) await processMatches(m);
+            
+            battle.isLocked = false;
+        } else {
+            const w1 = battle.wordGrid[p1.r][p1.c];
+            const w2 = battle.wordGrid[p2.r][p2.c];
+            let enPos = w1 && w1.lang === 'EN' ? p1 : p2;
+            let enWord = battle.wordGrid[enPos.r][enPos.c];
+            if (enWord) {
+                enWord.isEntangled = true;
+                const availableForEntangle = battle.availablePairs.filter(
+                    p => p.en !== enWord.word && !isWordOnBoard(p.en, enPos)
+                );
+                if (availableForEntangle.length > 0) {
+                    const randomPair = availableForEntangle[Math.floor(Math.random() * availableForEntangle.length)];
+                    enWord.word = randomPair.en;
+                }
+                updateWordVisuals(enPos.r, enPos.c);
+            }
+            battle.isLocked = false;
+        }
+    }
+
+    async function processMatches(matches) {
+        // Logic for word pair cascade
+        if (battle.currentPair) {
+            let enExploded = false, cnExploded = false;
+            matches.forEach(m => {
+                const w = battle.wordGrid[m.r][m.c];
+                if (w) {
+                    if (w.word === battle.currentPair.en) enExploded = true;
+                    if (w.word === battle.currentPair.cn) cnExploded = true;
+                }
+            });
+            if (enExploded || cnExploded) {
+                let targetWord = enExploded ? battle.currentPair.cn : battle.currentPair.en;
+                let targetPos = null;
+                if (!(enExploded && cnExploded)) {
+                    for(let r=0; r<ROWS; r++) {
+                        for(let c=0; c<COLS; c++) {
+                            if (battle.wordGrid[r][c] && battle.wordGrid[r][c].word === targetWord) {
+                                targetPos = {r, c}; break;
+                            }
+                        }
+                        if(targetPos) break;
+                    }
+                    if (targetPos && !matches.some(m => m.r === targetPos.r && m.c === targetPos.c)) {
+                        matches.push(targetPos);
+                        battle.score += 300;
+                        showFloatingText("连消!", targetPos);
+                    }
+                }
+            }
+        }
+
+        const gemTypeCounts = {};
+        matches.forEach(m => {
+            const type = battle.grid[m.r][m.c];
+            if (type !== null) gemTypeCounts[type] = (gemTypeCounts[type] || 0) + 1;
+        });
+
+        for (const [type, count] of Object.entries(gemTypeCounts)) {
+            const typeInt = parseInt(type);
+            addSpiritMana(typeInt, count);
+            const typeDamage = Math.floor(count * 30 * battle.comboMultiplier);
+            battle.damageEnemy(typeDamage, typeInt);
+        }
+
+        const points = (matches.length * 100) * battle.comboMultiplier;
+        battle.score += points;
+        if(matches.length > 0) showFloatingText(points, matches[0]);
+
+        let cnExploded = false;
+        matches.forEach(m => {
+            const w = battle.wordGrid[m.r][m.c];
+            if (w && battle.currentPair) {
+                if (w.word === battle.currentPair.cn) cnExploded = true;
+                if (w.word === battle.currentPair.cn || w.word === battle.currentPair.en) {
+                    battle.score += 200;
+                    showFloatingText("奖励!", m);
+                }
+            }
+            
+            const neighbors = [{r: m.r-1, c: m.c}, {r: m.r+1, c: m.c}, {r: m.r, c: m.c-1}, {r: m.r, c: m.c+1}];
+            neighbors.forEach(n => {
+                if(n.r >= 0 && n.r < ROWS && n.c >= 0 && n.c < COLS) {
+                    const nw = battle.wordGrid[n.r][n.c];
+                    if(nw && nw.isEntangled) {
+                        nw.isEntangled = false;
+                        updateWordVisuals(n.r, n.c);
+                    }
+                }
+            });
+        });
+        
+        battle.comboMultiplier++;
+        updateUI();
+        if (cnExploded) battle.advanceWordPair();
+
+        // Check for pair animation
+        const animatedGems = new Set();
+        let pairToAnimate = null;
+        let enGem = null;
+        let cnGem = null;
+        
+        for(let i=0; i<matches.length; i++) {
+            const m1 = matches[i];
+            const w1 = battle.wordGrid[m1.r][m1.c];
+            if(!w1) continue;
+            
+            for(let j=i+1; j<matches.length; j++) {
+                const m2 = matches[j];
+                const w2 = battle.wordGrid[m2.r][m2.c];
+                if(!w2) continue;
+                
+                if(w1.lang !== w2.lang) {
+                    const cn = w1.lang === 'CN' ? w1 : w2;
+                    const en = w1.lang === 'EN' ? w1 : w2;
+                    const p = battle.wordPairs.find(wp => wp.cn === cn.word && wp.en === en.word);
+                    if(p) {
+                        pairToAnimate = p;
+                        enGem = w1.lang === 'EN' ? m1 : m2;
+                        cnGem = w1.lang === 'CN' ? m1 : m2;
+                        break;
+                    }
+                }
+            }
+            if(pairToAnimate) break;
+        }
+        
+        if(pairToAnimate && enGem && cnGem) {
+            await animateAndCrush(enGem, cnGem, pairToAnimate);
+            animatedGems.add(`${enGem.r},${enGem.c}`);
+            animatedGems.add(`${cnGem.r},${cnGem.c}`);
+        }
+
+        matches.forEach(m => {
+            const skipParticles = animatedGems.has(`${m.r},${m.c}`);
+            removeGem(m.r, m.c, skipParticles);
+        });
+        await new Promise(r => setTimeout(r, 300));
+        await applyGravity();
+        const changed = battle.ensureWords();
+        changed.forEach(pos => updateWordVisuals(pos.r, pos.c));
+
+        const newMatches = battle.findMatches();
+        if (newMatches.length > 0) {
+            await new Promise(r => setTimeout(r, 200));
+            await processMatches(newMatches);
+        } else {
+            battle.checkWinCondition();
+            battle.isLocked = false;
+        }
+    }
+
+    async function applyGravity() {
+        const moves = []; 
+        for (let c = 0; c < COLS; c++) {
+            let emptySlots = 0;
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (battle.grid[r][c] === null) emptySlots++;
+                else if (emptySlots > 0) {
+                    const type = battle.grid[r][c];
+                    const newR = r + emptySlots;
+                    battle.grid[newR][c] = type;
+                    battle.grid[r][c] = null;
+                    battle.wordGrid[newR][c] = battle.wordGrid[r][c];
+                    battle.wordGrid[r][c] = null;
+                    const el = getGemDOM(r, c);
+                    if(el) { el.id = `gem-${newR}-${c}`; moves.push({ el, r: newR, c }); }
+                }
+            }
+            for(let r = 0; r < emptySlots; r++) {
+                const type = Math.floor(Math.random() * GEM_TYPES);
+                battle.grid[r][c] = type;
+                battle.wordGrid[r][c] = null;
+                const div = createGemDOM(r, c, type);
+                div.style.transform = `translate(${c * CELL_SIZE}px, -${(emptySlots - r + 1) * CELL_SIZE}px)`;
+                moves.push({ el: div, r: r, c: c });
+            }
+        }
+        await new Promise(r => requestAnimationFrame(r));
+        if (moves.length > 0) playSound('select'); // Mini sound for falling
+        moves.forEach(m => {
+            m.el.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+            m.el.style.transform = `translate(${m.c * CELL_SIZE}px, ${m.r * CELL_SIZE}px)`;
+            bindInteraction(m.el, m.r, m.c);
+        });
+        await new Promise(r => setTimeout(r, 400));
+    }
+
+    function updateDomIds(p1, p2) {
+        const dom1 = getGemDOM(p1.r, p1.c);
+        const dom2 = getGemDOM(p2.r, p2.c);
+        if(dom1 && dom2) {
+            dom1.id = "temp_id";
+            dom2.id = `gem-${p1.r}-${p1.c}`;
+            dom1.id = `gem-${p2.r}-${p2.c}`;
+            bindInteraction(dom1, p2.r, p2.c);
+            bindInteraction(dom2, p1.r, p1.c);
+        }
+    }
+
+    function bindInteraction(el, r, c) {
+        const startHandler = (e) => {
+            if (e.cancelable && e.type === 'touchstart') e.preventDefault();
+            handleInteractionStart(e, r, c);
+        };
+        el.onmousedown = startHandler;
+        el.ontouchstart = startHandler;
+    }
+
+    let dragStart = null;
+    function handleInteractionStart(e, r, c) {
+        if (battle.isLocked) return;
+        if (battle.wordGrid[r][c] && battle.wordGrid[r][c].isEntangled) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        dragStart = { r, c, x: clientX, y: clientY, moved: false };
+        document.addEventListener('mousemove', handleInteractionMove);
+        document.addEventListener('mouseup', handleInteractionEnd);
+        document.addEventListener('touchmove', handleInteractionMove, { passive: false });
+        document.addEventListener('touchend', handleInteractionEnd);
+    }
+
+    function handleInteractionMove(e) {
+        if (!dragStart || battle.isLocked) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - dragStart.x, dy = clientY - dragStart.y;
+        if (Math.sqrt(dx*dx + dy*dy) > 20) {
+            dragStart.moved = true;
+            let tr = dragStart.r, tc = dragStart.c;
+            if (Math.abs(dx) > Math.abs(dy)) { if (dx > 0) tc++; else tc--; }
+            else { if (dy > 0) tr++; else tr--; }
+            if (tr >= 0 && tr < ROWS && tc >= 0 && tc < COLS) {
+                if (battle.selectedGem) { toggleSelectVisual(battle.selectedGem, false); battle.selectedGem = null; }
+                attemptSwap({ r: dragStart.r, c: dragStart.c }, { r: tr, c: tc });
+            }
+            cleanupInteraction();
+        }
+    }
+
+    function handleInteractionEnd(e) {
+        if (dragStart && !dragStart.moved) handleInput(dragStart.r, dragStart.c);
+        cleanupInteraction();
+    }
+
+    function cleanupInteraction() {
+        dragStart = null;
+        document.removeEventListener('mousemove', handleInteractionMove);
+        document.removeEventListener('mouseup', handleInteractionEnd);
+        document.removeEventListener('touchmove', handleInteractionMove);
+        document.removeEventListener('touchend', handleInteractionEnd);
+    }
+
+    function swapAnimation(p1, p2) {
+        return new Promise(resolve => {
+            playSound('swap');
+            const el1 = getGemDOM(p1.r, p1.c), el2 = getGemDOM(p2.r, p2.c);
+            if(!el1 || !el2) { resolve(); return; }
+            el1.style.transition = el2.style.transition = 'transform 0.2s ease';
+            el1.style.transform = `translate(${p2.c * CELL_SIZE}px, ${p2.r * CELL_SIZE}px)`;
+            el2.style.transform = `translate(${p1.c * CELL_SIZE}px, ${p1.r * CELL_SIZE}px)`;
+            setTimeout(resolve, 210);
+        });
+    }
+
+    function playWinEffect() {
+        const overlay = document.getElementById('success-overlay'), canvas = document.getElementById('confetti-canvas');
+        overlay.classList.remove('hidden');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        const particles = [], colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+        for(let i=0; i<200; i++) particles.push({ x: canvas.width/2, y: canvas.height/2, vx: (Math.random()-0.5)*30, vy: (Math.random()-0.5)*30, color: colors[Math.floor(Math.random()*colors.length)], size: Math.random()*10+5, life: 100 });
+        function animate() {
+            if(overlay.classList.contains('hidden')) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let active = false;
+            particles.forEach(p => { if(p.life > 0) { active = true; p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.life--; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); } });
+            if(active) requestAnimationFrame(animate);
+        }
+        animate();
+    }
+
+    function createParticles(r, c, type, x, y) {
+        const cx = x !== undefined ? x : (c * CELL_SIZE + CELL_SIZE / 2), cy = y !== undefined ? y : (r * CELL_SIZE + CELL_SIZE / 2);
+        const colors = ['#ff4d4d', '#4da6ff', '#4dff88', '#ffff4d', '#bf4dff', '#ffae4d'];
+        for (let i = 0; i < 8; i++) {
+            const p = document.createElement('div'); p.classList.add('particle'); p.style.backgroundColor = colors[type] || '#fff';
+            p.style.left = `${cx}px`; p.style.top = `${cy}px`; p.style.width = p.style.height = `${Math.random()*10+5}px`;
+            const angle = Math.random()*Math.PI*2, vel = Math.random()*60+20;
+            p.style.setProperty('--dest-x', `${Math.cos(angle)*vel}px`); p.style.setProperty('--dest-y', `${Math.sin(angle)*vel}px`);
+            dom.grid.appendChild(p); setTimeout(() => p.remove(), 600);
+        }
+    }
+
+    function showFloatingText(text, pos) {
+        const el = document.createElement('div'); el.classList.add('float-text'); el.textContent = typeof text === 'number' ? `+${text}` : text;
+        if(pos && pos.c !== undefined) { el.style.left = `${pos.c*CELL_SIZE+CELL_SIZE/2-20}px`; el.style.top = `${pos.r*CELL_SIZE}px`; dom.grid.appendChild(el); setTimeout(() => el.remove(), 1000); }
+    }
+
+    function updateUI() {
+        dom.score.textContent = battle.score;
+        if (battle.mode === 'time') {
+            const m = Math.floor(battle.timeLeft / 60), s = battle.timeLeft % 60;
+            dom.moves.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+        } else dom.moves.textContent = battle.moves;
+        dom.level.textContent = battle.level;
+    }
+
+    function updateBossUI() {
+        dom.bossArea.innerHTML = '';
+        battle.enemies.forEach((enemy, index) => {
+            const container = document.createElement('div');
+            container.className = `enemy-container ${enemy.hp <= 0 ? 'dead' : ''} ${enemy.isBoss ? 'is-boss' : ''}`;
+            container.id = `enemy-${index}`;
+            
+            const turn = document.createElement('div');
+            turn.className = 'enemy-turn';
+            turn.textContent = enemy.turn;
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'boss-avatar';
+            avatar.textContent = enemy.avatar;
+
+            // Add element badge
+            const element = BattleCore.getElementById(enemy.element);
+            const elementBadge = document.createElement('div');
+            elementBadge.className = `enemy-element-badge element-bg-${enemy.element}`;
+            elementBadge.innerHTML = `<span>${element.icon}</span>`;
+            avatar.appendChild(elementBadge);
+            
+            const info = document.createElement('div');
+            info.className = 'w-full px-2';
+            
+            const hpBar = document.createElement('div');
+            hpBar.className = 'boss-hp-bar';
+            const hpFill = document.createElement('div');
+            hpFill.className = 'boss-hp-fill';
+            hpFill.style.width = `${(enemy.hp / enemy.maxHp) * 100}%`;
+            hpBar.appendChild(hpFill);
+            
+            const hpText = document.createElement('div');
+            hpText.className = 'text-[10px] text-center text-gray-300 mt-1';
+            hpText.textContent = `${Math.max(0, enemy.hp)} / ${enemy.maxHp}`;
+            
+            container.appendChild(turn);
+            container.appendChild(avatar);
+            info.appendChild(hpBar);
+            info.appendChild(hpText);
+            container.appendChild(info);
+            
+            dom.bossArea.appendChild(container);
+        });
+    }
+
+    function updatePlayerUI() {
+        const hpPercent = (battle.playerHp / battle.playerMaxHp) * 100;
+        dom.playerHpFill.style.width = `${hpPercent}%`;
+        dom.playerHpText.textContent = Math.max(0, battle.playerHp);
+        dom.playerMaxHpText.textContent = battle.playerMaxHp;
+        
+        if (hpPercent < 30) {
+            dom.playerHpFill.classList.remove('from-green-500', 'to-emerald-400');
+            dom.playerHpFill.classList.add('from-red-500', 'to-red-600');
+        } else {
+            dom.playerHpFill.classList.add('from-green-500', 'to-emerald-400');
+            dom.playerHpFill.classList.remove('from-red-500', 'to-red-600');
+        }
+    }
+
+    function updateSpiritArea() {
+        // Clear existing spirits
+        dom.spiritArea.innerHTML = '';
+        
+        // Generate spirit DOM elements based on battle.spirits
+        battle.spirits.forEach((s, index) => {
+            const spiritDiv = document.createElement('div');
+            spiritDiv.className = `spirit spirit-${s.type}`;
+            spiritDiv.dataset.type = s.type;
+            spiritDiv.dataset.index = index;
+            
+            const iconDiv = document.createElement('div');
+            iconDiv.className = 'spirit-icon';
+            iconDiv.textContent = s.icon;
+            
+            const manaBarDiv = document.createElement('div');
+            manaBarDiv.className = 'spirit-mana-bar';
+            
+            const manaFillDiv = document.createElement('div');
+            manaFillDiv.className = 'spirit-mana-fill';
+            manaFillDiv.style.width = '0%';
+            
+            manaBarDiv.appendChild(manaFillDiv);
+            spiritDiv.appendChild(iconDiv);
+            spiritDiv.appendChild(manaBarDiv);
+            
+            // Add click event for using skill
+            spiritDiv.addEventListener('click', () => useSpiritSkill(index));
+            
+            dom.spiritArea.appendChild(spiritDiv);
+        });
+        
+        // Update dom.spirits reference
+        dom.spirits = Array.from(dom.spiritArea.querySelectorAll('.spirit'));
+    }
+
+    function updateSpiritUI() {
+        dom.spirits.forEach((spirit, index) => {
+            const s = battle.spirits[index]; if (!s) return;
+            const manaPercent = (s.mana / s.maxMana) * 100;
+            const fill = spirit.querySelector('.spirit-mana-fill');
+            if (fill) fill.style.width = `${Math.min(100, manaPercent)}%`;
+            if (s.mana >= s.maxMana) spirit.classList.add('ready'); else spirit.classList.remove('ready');
+        });
+    }
+
+    function addSpiritMana(type, count) {
+        // Find spirit by element type (not by index, since we only have 5 spirits now)
+        const s = battle.getSpiritByElement(type);
+        if (s) {
+            s.mana = Math.min(s.maxMana, s.mana + count * 15 * battle.comboMultiplier);
+            updateSpiritUI();
+        }
+    }
+
+    function useSpiritSkill(index) {
+        if (battle.isLocked) return;
+        const s = battle.spirits[index];
+        if (s && s.mana >= s.maxMana) {
+            playSound('skill');
+            s.mana = 0;
+            battle.damageEnemy(s.damage, s.element);
+            
+            createSkillEffect(index);
+            updateUI(); updateBossUI(); updateSpiritUI();
+            battle.checkWinCondition();
+        }
+    }
+
+    function createSkillEffect(index) {
+        const spirit = dom.spirits[index];
+        if (!spirit) return;
+        const rect = spirit.getBoundingClientRect();
+        const effect = document.createElement('div');
+        effect.className = 'skill-effect';
+        effect.style.left = `${rect.left + rect.width / 2}px`;
+        effect.style.top = `${rect.top + rect.height / 2}px`;
+        
+        // Get color from spirit icon background
+        const icon = spirit.querySelector('.spirit-icon');
+        const style = window.getComputedStyle(icon);
+        effect.style.background = style.background || style.backgroundColor;
+        
+        effect.style.width = '40px';
+        effect.style.height = '40px';
+        effect.style.borderRadius = '50%';
+        effect.style.transform = 'translate(-50%, -50%)';
+        
+        document.body.appendChild(effect);
+        setTimeout(() => effect.remove(), 800);
+    }
+
+    function fireBullet(fromEl, toEl) {
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect = toEl.getBoundingClientRect();
+        
+        const numBullets = 3;
+        for (let i = 0; i < numBullets; i++) {
+            setTimeout(() => {
+                const bullet = document.createElement('div');
+                bullet.className = 'bullet';
+                // Add some spread
+                const spreadX = (Math.random() * 40 - 20);
+                const spreadY = (Math.random() * 40 - 20);
+                
+                bullet.style.left = `${fromRect.left + fromRect.width / 2 + spreadX}px`;
+                bullet.style.top = `${fromRect.top + fromRect.height / 2 + spreadY}px`;
+                document.body.appendChild(bullet);
+                
+                const startTime = performance.now();
+                const duration = 800; // Slower
+                
+                function animate(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    // Cubic ease in for a "speeding up" effect
+                    const easeProgress = progress * progress * progress;
+                    
+                    const startX = fromRect.left + fromRect.width / 2 + spreadX;
+                    const startY = fromRect.top + fromRect.height / 2 + spreadY;
+                    const endX = toRect.left + toRect.width / 2;
+                    const endY = toRect.top + toRect.height / 2;
+                    
+                    const x = startX + (endX - startX) * easeProgress;
+                    const y = startY + (endY - startY) * easeProgress;
+                    
+                    bullet.style.left = `${x - 6}px`;
+                    bullet.style.top = `${y - 6}px`;
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        bullet.remove();
+                    }
+                }
+                requestAnimationFrame(animate);
+                playSound('hit');
+            }, i * 150); // Fire with delay
+        }
+    }
+
+    function showBossDamage(damage, index) {
+        const enemyEl = document.getElementById(`enemy-${index}`);
+        if (!enemyEl) return;
+        
+        playSound('hit');
+        // Shake the avatar
+        const avatar = enemyEl.querySelector('.boss-avatar');
+        if (avatar) {
+            avatar.classList.remove('boss-hit');
+            void avatar.offsetWidth; // trigger reflow
+            avatar.classList.add('boss-hit');
+            setTimeout(() => avatar.classList.remove('boss-hit'), 300);
+        }
+
+        const dmgEl = document.createElement('div'); 
+        dmgEl.className = 'damage-text'; 
+        dmgEl.textContent = `-${damage}`;
+        dmgEl.style.left = '50%'; 
+        dmgEl.style.top = '0'; 
+        dmgEl.style.transform = 'translateX(-50%)';
+        
+        enemyEl.appendChild(dmgEl); 
+        setTimeout(() => dmgEl.remove(), 1000);
+    }
+
+    function showPlayerDamage(damage, enemyIndex) {
+        const enemyEl = document.getElementById(`enemy-${enemyIndex}`);
+        const playerHpBar = document.getElementById('player-area');
+        
+        playSound('playerHit');
+        if (enemyEl && playerHpBar) {
+            const avatar = enemyEl.querySelector('.boss-avatar');
+            if (avatar) {
+                fireBullet(avatar, playerHpBar);
+                // Add attack animation
+                avatar.classList.add('enemy-attacking');
+                setTimeout(() => avatar.classList.remove('enemy-attacking'), 300);
+            }
+        }
+
+        const dmgEl = document.createElement('div');
+        dmgEl.className = 'damage-text';
+        dmgEl.textContent = `-${damage}`;
+        // Add slight random offset to avoid overlapping when multiple enemies attack
+        const offset = (Math.random() * 40 - 20);
+        dmgEl.style.left = `calc(50% + ${offset}px)`;
+        dmgEl.style.bottom = '40px';
+        dmgEl.style.color = '#ff0000';
+        dmgEl.style.fontSize = '32px';
+        
+        playerHpBar.style.position = 'relative';
+        playerHpBar.appendChild(dmgEl);
+        setTimeout(() => dmgEl.remove(), 1000);
+        
+        // Shake screen
+        document.body.classList.remove('boss-hit');
+        void document.body.offsetWidth;
+        document.body.classList.add('boss-hit');
+        setTimeout(() => document.body.classList.remove('boss-hit'), 300);
+    }
+
+    function fitText(el) {
+        requestAnimationFrame(() => {
+            if (!el || !el.parentElement) return;
+            const w = el.offsetWidth, max = CELL_SIZE * 2.8; 
+            el.style.transform = w > max ? `translate(-50%, -50%) scale(${max/w})` : `translate(-50%, -50%)`;
+        });
+    }
+
+    function updateWordVisuals(r, c) {
+        const el = getGemDOM(r, c); if (!el) return;
+        const existing = el.querySelector('.gem-word'); if (existing) existing.remove();
+        el.classList.remove('entangled', 'has-word', 'lang-cn', 'lang-en');
+        const data = battle.wordGrid[r][c];
+        if (data) {
+            el.classList.add('has-word', data.lang === 'CN' ? 'lang-cn' : 'lang-en');
+            const wordEl = document.createElement('div'); wordEl.classList.add('gem-word'); wordEl.textContent = data.word;
+            el.appendChild(wordEl); fitText(wordEl);
+            if (data.isEntangled) el.classList.add('entangled');
+        }
+    }
+
+    function updateLevelDropdown() {
+        const select = dom.wordLevelSelect, currentVal = parseInt(select.value) || 1;
+        select.innerHTML = '';
+        const levels = Object.keys(battle.allWordLevels).map(Number).sort((a, b) => a - b);
+        if (levels.length === 0) { const opt = document.createElement('option'); opt.value = 1; opt.textContent = 'Level 1'; select.appendChild(opt); return; }
+        levels.forEach(lvl => { const opt = document.createElement('option'); opt.value = lvl; opt.textContent = `Level ${lvl}`; if (lvl === currentVal) opt.selected = true; select.appendChild(opt); });
+        if (!levels.includes(currentVal)) { select.value = levels[0]; battle.wordLevel = levels[0]; }
+    }
+
+    // Run
+    init();
+
+</script>
+</body>
+</html>

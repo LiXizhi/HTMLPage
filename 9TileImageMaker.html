@@ -113,6 +113,7 @@
         const state = {
             img: null,
             imgSrc: '',
+            fileName: '', // 原始文件名（不含扩展名，去掉末尾数字和下划线）
             target: { w: 128, h: 64 },
             previewScale: 1,
             guides: { x1: 0, x2: 0, y1: 0, y2: 0 },
@@ -277,6 +278,11 @@
         }
 
         function loadFile(file) {
+            // 提取文件名（去掉扩展名，去掉末尾的数字和下划线）
+            let baseName = file.name.replace(/\.[^/.]+$/, ''); // 去掉扩展名
+            baseName = baseName.replace(/[_\d]+$/, ''); // 去掉末尾的数字和下划线
+            state.fileName = baseName || 'image';
+            
             const reader = new FileReader();
             reader.onload = (event) => {
                 const img = new Image();
@@ -867,8 +873,15 @@
 
         downloadBtn.addEventListener('click', () => {
             if(!state.img) return;
+            
+            // 计算九宫格边距：left, top 为到左上角的距离，right, bottom 为距离右下角的距离
+            const left = Math.round(state.guides.x1 - state.cropRect.x);
+            const top = Math.round(state.guides.y1 - state.cropRect.y);
+            const right = Math.round((state.cropRect.x + state.cropRect.w) - state.guides.x2);
+            const bottom = Math.round((state.cropRect.y + state.cropRect.h) - state.guides.y2);
+            
             const link = document.createElement('a');
-            link.download = `9slice_${state.target.w}x${state.target.h}.png`;
+            link.download = `${state.fileName}_${left}_${top}_${right}_${bottom}.png`;
             link.href = previewCanvas.toDataURL('image/png');
             link.click();
         });
