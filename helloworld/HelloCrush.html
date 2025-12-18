@@ -587,78 +587,96 @@
         /* Spell tooltip */
         .spirit-tooltip {
             position: absolute;
-            bottom: 100%;
+            top: 100%;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.95);
             border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            padding: 8px 12px;
-            min-width: 140px;
+            border-radius: 10px;
+            padding: 14px 18px;
+            min-width: 180px;
             text-align: center;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.2s;
-            z-index: 10000;
-            margin-bottom: 8px;
+            z-index: 1000;
+            margin-top: 8px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.8);
         }
-        .spirit:hover .spirit-tooltip,
         .spirit.show-tooltip .spirit-tooltip {
             opacity: 1;
+            pointer-events: auto;
         }
         .spell-name {
             font-weight: bold;
-            font-size: 14px;
+            font-size: 16px;
             color: #fff;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
         .spell-desc {
-            font-size: 11px;
+            font-size: 13px;
             color: #aaa;
+            line-height: 1.4;
         }
         .spell-stats {
-            font-size: 11px;
+            font-size: 13px;
             color: #8cf;
-            margin-top: 4px;
+            margin-top: 6px;
         }
         .spell-icon {
-            font-size: 16px;
+            font-size: 18px;
             margin-right: 4px;
         }
 
         /* Enemy tooltip */
         .enemy-tooltip {
             position: absolute;
-            bottom: 100%;
+            top: 100%;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.95);
             border: 1px solid rgba(255, 100, 100, 0.3);
-            border-radius: 8px;
-            padding: 8px 12px;
-            min-width: 120px;
+            border-radius: 10px;
+            padding: 14px 18px;
+            min-width: 160px;
             text-align: center;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.2s;
-            z-index: 10000;
-            margin-bottom: 8px;
+            z-index: 1000;
+            margin-top: 8px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.8);
         }
-        .enemy-container:hover .enemy-tooltip,
         .enemy-container.show-tooltip .enemy-tooltip {
             opacity: 1;
+            pointer-events: auto;
         }
         .enemy-tooltip-name {
             font-weight: bold;
-            font-size: 14px;
+            font-size: 16px;
             color: #ff8888;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            padding-right: 20px;
         }
         .enemy-tooltip-stats {
-            font-size: 11px;
+            font-size: 13px;
             color: #8cf;
+            margin-top: 4px;
+        }
+
+        /* Tooltip backdrop for mobile touch events */
+        .tooltip-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            z-index: 9999;
+        }
+        .tooltip-backdrop.active {
+            display: block;
         }
 
         /* Spell selection overlay */
@@ -1244,6 +1262,9 @@
         </div>
     </div>
 
+    <!-- Tooltip Backdrop for mobile touch events -->
+    <div id="tooltip-backdrop" class="tooltip-backdrop"></div>
+
     <!-- Game Container (Center) -->
     <div id="game-container">
         <!-- Close Button -->
@@ -1815,8 +1836,24 @@
             document.body.classList.remove('cell-selecting');
         });
         
-        // Grid click for spell targeting (row/col selection)
+        // Grid click/touch for spell targeting (row/col selection)
         dom.grid.addEventListener('click', handleGridClickForSpell);
+        dom.grid.addEventListener('touchend', (e) => {
+            // Only handle touch for spell targeting in cell-selecting mode
+            if (!document.body.classList.contains('cell-selecting')) return;
+            if (!spellManager.hasPendingSpell()) return;
+            
+            // Use the last touch point
+            const touch = e.changedTouches[0];
+            if (!touch) return;
+            
+            // Create a synthetic event-like object for handleGridClickForSpell
+            const syntheticEvent = {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            };
+            handleGridClickForSpell(syntheticEvent);
+        });
         
         dom.closeGameBtn.addEventListener('click', () => {
             window.parent.postMessage({ 
@@ -1839,6 +1876,25 @@
             
             dom.levelEditorBtn.addEventListener('click', () => {
                 window.open('HelloCrushLevelEditor.html', '_blank');
+            });
+            
+            // Dev mode: 5 consecutive clicks on player HP bar to fill all spirit mana to max
+            dom.playerHpFill.parentElement.addEventListener('click', () => {
+                devClickCount++;
+                clearTimeout(devClickTimer);
+                devClickTimer = setTimeout(() => {
+                    devClickCount = 0;
+                }, DEV_CLICK_TIMEOUT);
+                
+                if (devClickCount >= DEV_CLICK_THRESHOLD) {
+                    devClickCount = 0;
+                    // Fill all spirits' mana to max
+                    battle.spirits.forEach(s => {
+                        if (s) s.mana = s.maxMana;
+                    });
+                    updateSpiritUI();
+                    console.log('[Dev] All spirit mana charged to max!');
+                }
             });
         }
         
@@ -2791,6 +2847,10 @@
 
     function bindInteraction(el, r, c) {
         const startHandler = (e) => {
+            // In cell-selecting mode, don't handle gem interactions - let the grid click handler handle it
+            if (document.body.classList.contains('cell-selecting')) {
+                return;
+            }
             if (e.cancelable && e.type === 'touchstart') e.preventDefault();
             handleInteractionStart(e, r, c);
         };
@@ -2945,24 +3005,35 @@
                 <div class="enemy-tooltip-stats">⚔️ 攻击: ${enemy.attack}</div>
                 <div class="enemy-tooltip-stats">🛡️ 防御: ${enemy.defense || 0}</div>
             `;
-
-            // Add touch event handlers for tooltip on mobile
-            let enemyTooltipTimeout = null;
-            const hideEnemyTooltipWithDelay = () => {
-                if (enemyTooltipTimeout) clearTimeout(enemyTooltipTimeout);
-                enemyTooltipTimeout = setTimeout(() => {
-                    container.classList.remove('show-tooltip');
-                }, 1500); // Hide after 1.5 seconds
-            };
+            
+            // Show tooltip and backdrop on touch (only when NOT in enemy-selecting mode)
             container.addEventListener('touchstart', (e) => {
-                if (enemyTooltipTimeout) clearTimeout(enemyTooltipTimeout);
+                // In enemy-selecting mode, don't show tooltip - use touchend for selection
+                if (document.body.classList.contains('enemy-selecting')) return;
+                showTooltipBackdrop(() => {
+                    container.classList.remove('show-tooltip');
+                });
                 container.classList.add('show-tooltip');
+                requestAnimationFrame(() => adjustTooltipPosition(tooltip, container, 'below'));
             });
-            container.addEventListener('touchend', () => {
-                hideEnemyTooltipWithDelay();
+            
+            // Handle touch end for enemy selection on mobile
+            container.addEventListener('touchend', (e) => {
+                if (document.body.classList.contains('enemy-selecting')) {
+                    e.preventDefault();
+                    handleEnemyClickForSpell(index);
+                }
             });
-            container.addEventListener('touchcancel', () => {
-                hideEnemyTooltipWithDelay();
+            
+            // Show tooltip on click
+            container.addEventListener('click', (e) => {
+                // Don't show tooltip if enemy selecting mode is active
+                if (document.body.classList.contains('enemy-selecting')) return;
+                showTooltipBackdrop(() => {
+                    container.classList.remove('show-tooltip');
+                });
+                container.classList.add('show-tooltip');
+                requestAnimationFrame(() => adjustTooltipPosition(tooltip, container, 'below'));
             });
             
             container.appendChild(turn);
@@ -3022,26 +3093,34 @@
             manaFillDiv.className = 'spirit-mana-fill';
             manaFillDiv.style.width = '0%';
             
-            // Add spell tooltip if spirit has a spell
+            // Add spell tooltip
+            const tooltip = document.createElement('div');
+            tooltip.className = 'spirit-tooltip';
             if (s.spell) {
-                const tooltip = document.createElement('div');
-                tooltip.className = 'spirit-tooltip';
                 tooltip.innerHTML = `
                     <div class="spell-name"><span class="spell-icon">${s.icon}</span>${s.name}</div>
                     <div class="spell-desc"><span class="spell-icon">${s.spell.icon}</span>${s.spell.name}: ${s.spell.description}</div>
                     <div class="spell-stats">🛡️ 防御: ${s.defense || 0}</div>
                 `;
-                spiritDiv.appendChild(tooltip);
             } else {
                 // Show tooltip with defense even without spell
-                const tooltip = document.createElement('div');
-                tooltip.className = 'spirit-tooltip';
                 tooltip.innerHTML = `
                     <div class="spell-name"><span class="spell-icon">${s.icon}</span>${s.name}</div>
                     <div class="spell-stats">🛡️ 防御: ${s.defense || 0}</div>
                 `;
-                spiritDiv.appendChild(tooltip);
             }
+            spiritDiv.appendChild(tooltip);
+            
+            // Show tooltip and backdrop on touch (only if not fully charged)
+            spiritDiv.addEventListener('touchstart', (e) => {
+                const s = battle.spirits[index];
+                if (s && s.mana >= s.maxMana) return;
+                showTooltipBackdrop(() => {
+                    spiritDiv.classList.remove('show-tooltip');
+                });
+                spiritDiv.classList.add('show-tooltip');
+                requestAnimationFrame(() => adjustTooltipPosition(tooltip, spiritDiv, 'above'));
+            });
             
             manaBarDiv.appendChild(manaFillDiv);
             spiritDiv.appendChild(iconDiv);
@@ -3053,62 +3132,20 @@
             manaTextDiv.textContent = `${s.mana}/${s.maxMana}`;
             spiritDiv.appendChild(manaTextDiv);
             
-            // Add click event for using skill
+            // Add click event for using skill or showing tooltip
             spiritDiv.addEventListener('click', () => {
-                // Dev mode: 5 consecutive clicks fill mana
-                if (isDevMode) {
-                    devClickCount++;
-                    clearTimeout(devClickTimer);
-                    devClickTimer = setTimeout(() => {
-                        devClickCount = 0;
-                    }, DEV_CLICK_TIMEOUT);
-                    
-                    if (devClickCount >= DEV_CLICK_THRESHOLD) {
-                        // Fill mana for this spirit
-                        const s = battle.spirits[index];
-                        if (s) {
-                            s.mana = s.maxMana;
-                            updateSpiritUI();
-                            console.log(`[DEV] Spirit ${index} mana filled to ${s.maxMana}`);
-                        }
-                        devClickCount = 0;
-                        return;
-                    }
-                }
-                // Only cast spell if mana is full, otherwise just show tooltip
                 const s = battle.spirits[index];
                 if (s && s.mana >= s.maxMana) {
+                    // Cast spell if mana is full
                     useSpiritSkill(index);
+                } else {
+                    // Show tooltip if not fully charged
+                    showTooltipBackdrop(() => {
+                        spiritDiv.classList.remove('show-tooltip');
+                    });
+                    spiritDiv.classList.add('show-tooltip');
+                    requestAnimationFrame(() => adjustTooltipPosition(tooltip, spiritDiv, 'above'));
                 }
-            });
-            
-            // Add mousedown/touchstart to show tooltip (for mobile and hold-to-view)
-            let spiritTooltipTimeout = null;
-            const hideTooltipWithDelay = () => {
-                if (spiritTooltipTimeout) clearTimeout(spiritTooltipTimeout);
-                spiritTooltipTimeout = setTimeout(() => {
-                    spiritDiv.classList.remove('show-tooltip');
-                }, 1500); // Hide after 1.5 seconds
-            };
-            spiritDiv.addEventListener('mousedown', (e) => {
-                if (spiritTooltipTimeout) clearTimeout(spiritTooltipTimeout);
-                spiritDiv.classList.add('show-tooltip');
-            });
-            spiritDiv.addEventListener('mouseup', () => {
-                spiritDiv.classList.remove('show-tooltip');
-            });
-            spiritDiv.addEventListener('mouseleave', () => {
-                spiritDiv.classList.remove('show-tooltip');
-            });
-            spiritDiv.addEventListener('touchstart', (e) => {
-                if (spiritTooltipTimeout) clearTimeout(spiritTooltipTimeout);
-                spiritDiv.classList.add('show-tooltip');
-            });
-            spiritDiv.addEventListener('touchend', () => {
-                hideTooltipWithDelay();
-            });
-            spiritDiv.addEventListener('touchcancel', () => {
-                hideTooltipWithDelay();
             });
             
             dom.spiritArea.appendChild(spiritDiv);
@@ -3129,6 +3166,117 @@
             if (s.mana >= s.maxMana) spirit.classList.add('ready'); else spirit.classList.remove('ready');
         });
     }
+
+    /**
+     * Adjust tooltip position to ensure it stays within viewport
+     * @param {HTMLElement} tooltip - The tooltip element
+     * @param {HTMLElement} parent - The parent container element
+     * @param {string} preferredPosition - 'above' or 'below'
+     */
+    function adjustTooltipPosition(tooltip, parent, preferredPosition = 'below') {
+        // Reset any previous adjustments
+        tooltip.style.top = '';
+        tooltip.style.bottom = '';
+        tooltip.style.left = '';
+        tooltip.style.transform = '';
+        
+        const parentRect = parent.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const margin = 10;
+        
+        // Determine vertical position
+        if (preferredPosition === 'below') {
+            const spaceBelow = viewportHeight - parentRect.bottom;
+            const spaceAbove = parentRect.top;
+            
+            if (tooltipRect.height + margin > spaceBelow && spaceAbove > spaceBelow) {
+                // Not enough space below, position above
+                tooltip.style.top = 'auto';
+                tooltip.style.bottom = '100%';
+                tooltip.style.marginTop = '0';
+                tooltip.style.marginBottom = '8px';
+            } else {
+                // Position below (default)
+                tooltip.style.top = '100%';
+                tooltip.style.bottom = 'auto';
+                tooltip.style.marginTop = '8px';
+                tooltip.style.marginBottom = '0';
+            }
+        } else {
+            // preferredPosition === 'above'
+            const spaceAbove = parentRect.top;
+            const spaceBelow = viewportHeight - parentRect.bottom;
+            
+            if (tooltipRect.height + margin > spaceAbove && spaceBelow > spaceAbove) {
+                // Not enough space above, position below
+                tooltip.style.top = '100%';
+                tooltip.style.bottom = 'auto';
+                tooltip.style.marginTop = '8px';
+                tooltip.style.marginBottom = '0';
+            } else {
+                // Position above (default)
+                tooltip.style.top = 'auto';
+                tooltip.style.bottom = '100%';
+                tooltip.style.marginTop = '0';
+                tooltip.style.marginBottom = '8px';
+            }
+        }
+        
+        // Adjust horizontal position to keep within viewport
+        // Recalculate tooltip rect after vertical adjustment
+        const newTooltipRect = tooltip.getBoundingClientRect();
+        let horizontalOffset = 0;
+        
+        if (newTooltipRect.left < margin) {
+            horizontalOffset = margin - newTooltipRect.left;
+        } else if (newTooltipRect.right > viewportWidth - margin) {
+            horizontalOffset = (viewportWidth - margin) - newTooltipRect.right;
+        }
+        
+        if (horizontalOffset !== 0) {
+            tooltip.style.left = `calc(50% + ${horizontalOffset}px)`;
+        } else {
+            tooltip.style.left = '50%';
+        }
+        tooltip.style.transform = 'translateX(-50%)';
+    }
+
+    /**
+     * Tooltip backdrop management for mobile touch devices
+     */
+    let tooltipBackdropCallback = null;
+    let tooltipBackdropJustOpened = false;
+    const tooltipBackdrop = document.getElementById('tooltip-backdrop');
+    
+    function showTooltipBackdrop(onClose) {
+        tooltipBackdropCallback = onClose;
+        tooltipBackdropJustOpened = true;
+        tooltipBackdrop.classList.add('active');
+        // Reset the flag after the current touch sequence ends
+        setTimeout(() => {
+            tooltipBackdropJustOpened = false;
+        }, 300);
+    }
+    
+    function hideTooltipBackdrop() {
+        tooltipBackdrop.classList.remove('active');
+        tooltipBackdropCallback = null;
+    }
+    
+    // Close tooltip when backdrop is touched/clicked
+    tooltipBackdrop.addEventListener('click', () => {
+        if (tooltipBackdropJustOpened) return;
+        if (tooltipBackdropCallback) tooltipBackdropCallback();
+        hideTooltipBackdrop();
+    });
+    tooltipBackdrop.addEventListener('touchstart', (e) => {
+        if (tooltipBackdropJustOpened) return;
+        e.preventDefault();
+        if (tooltipBackdropCallback) tooltipBackdropCallback();
+        hideTooltipBackdrop();
+    });
 
     /**
      * Handle grid click for spell targeting
