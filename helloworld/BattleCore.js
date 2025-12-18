@@ -18,12 +18,12 @@ class BattleCore {
     // Terrain types map to elements for elemental bonus
     // Terrain element matches gem type for scoring bonus
     static TERRAINS = {
-        PLAIN:   { id: 0, name: '平原/耕地', element: 2, color: '#4dff88', bgColor: 'rgba(77, 255, 136, 0.3)', icon: '🌿' },  // Green - LIFE
-        CITY:    { id: 1, name: '城市/火山', element: 0, color: '#ff4d4d', bgColor: 'rgba(255, 77, 77, 0.3)', icon: '🔥' },   // Red - FORGE
-        OCEAN:   { id: 2, name: '海洋/水域', element: 1, color: '#4da6ff', bgColor: 'rgba(77, 166, 255, 0.3)', icon: '💧' },  // Blue - TIDE
-        FOREST:  { id: 3, name: '森林/林地', element: 5, color: '#8b4513', bgColor: 'rgba(139, 69, 19, 0.3)', icon: '🌳' },   // Brown - ROOT
+        CITY:    { id: 0, name: '城市/火山', element: 0, color: '#ff4d4d', bgColor: 'rgba(255, 77, 77, 0.3)', icon: '🔥' },   // Red - FORGE
+        OCEAN:   { id: 1, name: '海洋/水域', element: 1, color: '#4da6ff', bgColor: 'rgba(77, 166, 255, 0.3)', icon: '💧' },  // Blue - TIDE
+        PLAIN:   { id: 2, name: '平原/耕地', element: 2, color: '#4dff88', bgColor: 'rgba(77, 255, 136, 0.3)', icon: '🌿' },  // Green - LIFE
+        DESERT:  { id: 3, name: '沙漠/荒漠', element: 3, color: '#ffff4d', bgColor: 'rgba(255, 255, 77, 0.3)', icon: '☀️' },  // Yellow - SOL
         MOUNTAIN:{ id: 4, name: '高山/丘陵', element: 4, color: '#bf4dff', bgColor: 'rgba(191, 77, 255, 0.3)', icon: '💎' },  // Purple - STONE
-        DESERT:  { id: 5, name: '沙漠/荒漠', element: 3, color: '#ffff4d', bgColor: 'rgba(255, 255, 77, 0.3)', icon: '☀️' }   // Yellow - SOL
+        FOREST:  { id: 5, name: '森林/林地', element: 5, color: '#8b4513', bgColor: 'rgba(139, 69, 19, 0.3)', icon: '🌳' }    // Brown - ROOT
     };
 
     // Terrain bonus multipliers based on matching gem count
@@ -34,6 +34,26 @@ class BattleCore {
         4: 3.50,  // 4 matching gems: x3.50
         5: 5.00,  // 5 matching gems: x5.00
         6: 8.00   // 6+ matching gems: x8.00
+    };
+
+    // Base scores for gem matches (by count)
+    // 基础消除得分 - 消除数量越多得分越高，但增长放缓以鼓励道具使用
+    static BASE_SCORES = {
+        3: 100,   // 3 gems: 100 points (x1.0)
+        4: 180,   // 4 gems: 180 points (x1.8) - creates item
+        5: 300,   // 5 gems: 300 points (x3.0) - creates advanced item
+        6: 450    // 6+ gems: 450 points (x4.5) - maximum item
+    };
+
+    // Combo multipliers for cascade matches
+    // 连击倍数 - 指数级增长，奖励连锁消除
+    static COMBO_MULTIPLIERS = {
+        1: 1.0,   // Initial match: x1.0
+        2: 1.2,   // 1st cascade: x1.2 (+20%)
+        3: 1.5,   // 2nd cascade: x1.5 (+50%)
+        4: 2.0,   // 3rd cascade: x2.0 (double)
+        5: 3.0,   // 4th cascade: x3.0 (huge)
+        6: 4.0    // 5th+ cascade: x4.0 (max)
     };
 
     static getTerrainById(id) {
@@ -48,6 +68,57 @@ class BattleCore {
         if (matchingCount <= 0) return 1;
         if (matchingCount >= 6) return BattleCore.TERRAIN_BONUS[6];
         return BattleCore.TERRAIN_BONUS[matchingCount] || 1;
+    }
+
+    /**
+     * Get base score for a match based on gem count
+     * @param {number} gemCount - Number of gems matched (3+)
+     * @returns {number} - Base score value
+     */
+    static getBaseScore(gemCount) {
+        if (gemCount < 3) return 0;
+        if (gemCount >= 6) return BattleCore.BASE_SCORES[6];
+        return BattleCore.BASE_SCORES[gemCount] || BattleCore.BASE_SCORES[3];
+    }
+
+    /**
+     * Get combo multiplier based on cascade count
+     * @param {number} comboCount - Current combo/cascade count (1 = initial match)
+     * @returns {number} - Combo multiplier
+     */
+    static getComboMultiplier(comboCount) {
+        if (comboCount <= 1) return BattleCore.COMBO_MULTIPLIERS[1];
+        if (comboCount >= 6) return BattleCore.COMBO_MULTIPLIERS[6];
+        return BattleCore.COMBO_MULTIPLIERS[comboCount] || 1;
+    }
+
+    /**
+     * Calculate total score for a match
+     * Score = BaseScore × TerrainBonus × ComboMultiplier
+     * @param {number} gemCount - Number of gems matched
+     * @param {number} terrainMatchCount - Number of gems matching their terrain element
+     * @param {number} comboCount - Current combo/cascade count
+     * @returns {Object} - {totalScore, baseScore, terrainBonus, comboMultiplier, breakdown}
+     */
+    static calculateMatchScore(gemCount, terrainMatchCount, comboCount) {
+        const baseScore = BattleCore.getBaseScore(gemCount);
+        const terrainBonus = BattleCore.getTerrainBonus(terrainMatchCount);
+        const comboMultiplier = BattleCore.getComboMultiplier(comboCount);
+        
+        const totalScore = Math.floor(baseScore * terrainBonus * comboMultiplier);
+        
+        return {
+            totalScore,
+            baseScore,
+            terrainBonus,
+            comboMultiplier,
+            breakdown: {
+                gemCount,
+                terrainMatchCount,
+                comboCount,
+                formula: `${baseScore} × ${terrainBonus.toFixed(2)} × ${comboMultiplier.toFixed(1)} = ${totalScore}`
+            }
+        };
     }
 
     static SUPPRESSION = {
@@ -277,7 +348,7 @@ class BattleCore {
                 icon: element.icon,
                 name: element.name,
                 mana: 0,
-                maxMana: 100,
+                maxMana: 300,
                 damage: 150 + (lvl * 50),
                 element: element.id
             });

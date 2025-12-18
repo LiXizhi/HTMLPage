@@ -7,6 +7,7 @@
     <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
     <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js"></script>
     <script src="BattleCore.js"></script>
+    <script src="Spells.js"></script>
     <style>
         body {
             font-family: 'Fredoka', sans-serif;
@@ -160,14 +161,14 @@
         /* Gem Colors */
         .type-0 .gem-inner { background: linear-gradient(135deg, #ff4d4d, #b30000); border: 1px solid #ff8080; } /* Red - Forge */
         .type-1 .gem-inner { background: linear-gradient(135deg, #4da6ff, #0059b3); border: 1px solid #80bfff; border-radius: 50%; } /* Blue - Tide */
-        .type-2 .gem-inner { background: linear-gradient(135deg, #4dff88, #00b33c); border: 1px solid #80ffaa; border-radius: 10%; transform: rotate(45deg) scale(0.85); } /* Green - Life */
-        .type-3 .gem-inner { background: linear-gradient(135deg, #ffff4d, #b3b300); border: 1px solid #ffff80; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); border-radius: 0; width: 80%; height: 80%;} /* Yellow - Sol */
-        .type-4 .gem-inner { background: linear-gradient(135deg, #bf4dff, #7300b3); border: 1px solid #df80ff; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); border-radius: 0; } /* Purple - Stone */
+        .type-2 .gem-inner { background: linear-gradient(135deg, #4dff88, #00b33c); border: 1px solid #80ffaa; border-radius: 10%; transform: rotate(45deg) scale(0.75); } /* Green - Life */
+        .type-3 .gem-inner { background: linear-gradient(135deg, #ffff4d, #b3b300); border: 1px solid #ffff80; border-radius: 50% 50% 50% 0; transform: rotate(-45deg) scale(0.8); } /* Yellow - Sol */
+        .type-4 .gem-inner { background: linear-gradient(135deg, #bf4dff, #7300b3); border: 1px solid #df80ff; border-radius: 30%; transform: rotate(45deg) scale(0.85); } /* Purple - Stone  */
         .type-5 .gem-inner { background: linear-gradient(135deg, #8b4513, #5d2e0d); border: 1px solid #a0522d; border-radius: 30%; } /* Brown - Root */
 
         /* Terrain match highlight - glowing border when gem matches terrain */
         .gem.terrain-match {
-            filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8));
+            filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.9));
         }
         .gem.terrain-match .gem-inner {
             box-shadow: inset 0 4px 8px rgba(255,255,255,0.4), 
@@ -507,6 +508,8 @@
             border-radius: 12px;
             border: 2px solid #0066aa;
             box-sizing: border-box;
+            position: relative;
+            z-index: 100;
             /* Width set by JS to match grid */
         }
 
@@ -542,6 +545,24 @@
             font-size: 20px;
             border: 2px solid rgba(255,255,255,0.5);
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        /* Skill icon badge on spirit */
+        .spirit-skill-badge {
+            position: absolute;
+            bottom: -6px;
+            right: -6px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid rgba(255,255,255,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            z-index: 5;
         }
 
         .spirit-0 .spirit-icon { background: linear-gradient(135deg, #ff4d4d, #b30000); }
@@ -570,6 +591,206 @@
         .spirit-2 .spirit-mana-fill { background: #4dff88; }
         .spirit-3 .spirit-mana-fill { background: #ffff4d; }
         .spirit-4 .spirit-mana-fill { background: #bf4dff; }
+        .spirit-5 .spirit-mana-fill { background: #cd853f; }
+
+        .spirit-mana-text {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 2px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Spell tooltip */
+        .spirit-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            min-width: 140px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 10000;
+            margin-bottom: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+        }
+        .spirit:hover .spirit-tooltip,
+        .spirit.show-tooltip .spirit-tooltip {
+            opacity: 1;
+        }
+        .spell-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        .spell-desc {
+            font-size: 11px;
+            color: #aaa;
+        }
+        .spell-icon {
+            font-size: 16px;
+            margin-right: 4px;
+        }
+
+        /* Spell selection overlay */
+        #spell-selection-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 200;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        #spell-selection-overlay.active {
+            display: flex;
+        }
+        .spell-selection-prompt {
+            background: linear-gradient(135deg, #2b1055, #1a0b2e);
+            border: 2px solid #4c2e85;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        .spell-selection-prompt .cancel-btn {
+            margin-top: 15px;
+            padding: 8px 20px;
+            background: #555;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+        }
+        .spell-selection-prompt .cancel-btn:hover {
+            background: #777;
+        }
+
+        /* Row/Column highlight for spell selection */
+        .row-highlight, .col-highlight {
+            position: absolute;
+            background: rgba(255, 255, 0, 0.3);
+            pointer-events: none;
+            z-index: 50;
+            animation: highlightPulse 0.5s infinite alternate;
+        }
+        @keyframes highlightPulse {
+            from { opacity: 0.3; }
+            to { opacity: 0.6; }
+        }
+
+        /* Enemy Selection Mode - Gray out everything except enemies */
+        .enemy-selection-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 150;
+            display: none;
+            pointer-events: none;
+        }
+        .enemy-selection-mode.active {
+            display: block;
+        }
+        .enemy-selection-mode .selection-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        /* Make boss area clickable above the overlay */
+        body.enemy-selecting #boss-area {
+            position: relative;
+            z-index: 200;
+        }
+        body.enemy-selecting .enemy-container {
+            cursor: crosshair !important;
+            animation: enemyTargetPulse 0.6s infinite alternate;
+        }
+        body.enemy-selecting .enemy-container:not(.dead):hover {
+            transform: scale(1.15);
+            filter: drop-shadow(0 0 15px rgba(255, 200, 0, 0.9));
+        }
+        body.enemy-selecting .enemy-container.dead {
+            pointer-events: none;
+            opacity: 0.2;
+        }
+        @keyframes enemyTargetPulse {
+            from { 
+                filter: drop-shadow(0 0 8px rgba(255, 100, 0, 0.6)); 
+            }
+            to { 
+                filter: drop-shadow(0 0 15px rgba(255, 200, 0, 0.9)); 
+            }
+        }
+
+        /* Cell Selection Mode - Gray out everything except grid */
+        .cell-selection-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 150;
+            display: none;
+            pointer-events: none;
+        }
+        .cell-selection-mode.active {
+            display: block;
+        }
+        .cell-selection-mode .selection-hint {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        /* Make grid area clickable above the overlay */
+        body.cell-selecting #grid-area {
+            position: relative;
+            z-index: 200;
+            cursor: crosshair !important;
+            box-shadow: 0 0 20px rgba(255, 200, 0, 0.8), 0 0 40px rgba(255, 200, 0, 0.4);
+        }
+        body.cell-selecting .gem {
+            cursor: crosshair !important;
+            animation: cellTargetPulse 0.6s infinite alternate;
+        }
+        body.cell-selecting .gem:hover {
+            transform: scale(1.1);
+            filter: brightness(1.3);
+        }
+        @keyframes cellTargetPulse {
+            from { 
+                filter: drop-shadow(0 0 4px rgba(255, 200, 0, 0.4)); 
+            }
+            to { 
+                filter: drop-shadow(0 0 8px rgba(255, 200, 0, 0.7)); 
+            }
+        }
 
         /* Stats Area - Left Sidebar */
         #stats-area {
@@ -768,22 +989,20 @@
             100% { transform: scale(0.3); opacity: 0; }
         }
 
-        /* Boss/Enemy hit effect - more dramatic shake */
-        .boss-hit {
-            animation: bossHit 0.6s ease-out;
+        /* Boss/Enemy hit effect - quick sideways recoil */
+        .boss-avatar.boss-hit {
+            animation: bossHit 0.5s ease-out, bossFlash 0.5s ease-out;
         }
 
         @keyframes bossHit {
-            0%, 100% { transform: translateX(0) scale(1); }
-            10% { transform: translateX(-12px) scale(1.05); }
-            20% { transform: translateX(10px) scale(0.95); }
-            30% { transform: translateX(-8px) scale(1.03); }
-            40% { transform: translateX(6px) scale(0.98); }
-            50% { transform: translateX(-5px) scale(1.02); }
-            60% { transform: translateX(4px) scale(0.99); }
-            70% { transform: translateX(-3px) scale(1.01); }
-            80% { transform: translateX(2px) scale(1); }
-            90% { transform: translateX(-1px) scale(1); }
+            0% { transform: translateX(0) scale(1); }
+            10% { transform: translateX(-25px) scale(1.08) rotate(-3deg); }
+            25% { transform: translateX(20px) scale(0.95) rotate(2deg); }
+            40% { transform: translateX(-15px) scale(1.03) rotate(-1deg); }
+            55% { transform: translateX(10px) scale(0.98) rotate(1deg); }
+            70% { transform: translateX(-5px) scale(1.01); }
+            85% { transform: translateX(3px) scale(1); }
+            100% { transform: translateX(0) scale(1) rotate(0deg); }
         }
 
         /* Boss flash on hit */
@@ -1062,6 +1281,24 @@
     </div>
 </div>
 
+<!-- Spell Selection Overlay -->
+<div id="spell-selection-overlay">
+    <div class="spell-selection-prompt">
+        <div id="spell-selection-text">选择目标</div>
+        <button class="cancel-btn" id="cancel-spell-btn">取消</button>
+    </div>
+</div>
+
+<!-- Enemy Selection Overlay (for SELECT_ENEMY spells) -->
+<div id="enemy-selection-overlay" class="enemy-selection-mode">
+    <div class="selection-hint">⚡ 点击选择敌人</div>
+</div>
+
+<!-- Cell Selection Overlay (for SELECT_CELL/SELECT_ROW/SELECT_COL spells) -->
+<div id="cell-selection-overlay" class="cell-selection-mode">
+    <div class="selection-hint" id="cell-selection-hint">✨ 点击选择格子</div>
+</div>
+
 <script>
     /**
      * Game Configuration & State
@@ -1071,6 +1308,16 @@
     const GEM_TYPES = 6; // Number of colors
     let GRID_SIZE = 0; // Calculated dynamically
     let CELL_SIZE = 0;
+
+    // Dev mode detection - enable debug features when ?dev=true
+    const urlParams = new URLSearchParams(window.location.search);
+    const isDevMode = urlParams.get('dev') === 'true';
+    
+    // Dev mode: track clicks on spirits to fill mana
+    let devClickCount = 0;
+    let devClickTimer = null;
+    const DEV_CLICK_THRESHOLD = 5;
+    const DEV_CLICK_TIMEOUT = 1000; // Reset click count after 1 second of no clicks
 
     let RAW_WORD_DATA = `
 ## level 1
@@ -1145,8 +1392,84 @@
         // Player DOM
         playerHpText: document.getElementById('player-hp-text'),
         playerMaxHpText: document.getElementById('player-max-hp-text'),
-        playerHpFill: document.getElementById('player-hp-fill')
+        playerHpFill: document.getElementById('player-hp-fill'),
+        // Spell Selection DOM
+        spellSelectionOverlay: document.getElementById('spell-selection-overlay'),
+        spellSelectionText: document.getElementById('spell-selection-text'),
+        cancelSpellBtn: document.getElementById('cancel-spell-btn'),
+        // Enemy Selection DOM
+        enemySelectionOverlay: document.getElementById('enemy-selection-overlay'),
+        // Cell Selection DOM
+        cellSelectionOverlay: document.getElementById('cell-selection-overlay'),
+        cellSelectionHint: document.getElementById('cell-selection-hint')
     };
+
+    // Initialize Spell Manager
+    const spellManager = new SpellManager(battle);
+    
+    // Spell manager callbacks
+    spellManager.onSelectionRequired = (spell, caster) => {
+        // Check if this is an enemy selection spell
+        if (spell.targetType === SpellTargetType.SELECT_ENEMY) {
+            // Check how many enemies are alive
+            const aliveEnemies = battle.enemies.filter(e => e.hp > 0);
+            if (aliveEnemies.length === 1) {
+                // Only one enemy alive, auto-select it
+                const enemyIndex = battle.enemies.indexOf(aliveEnemies[0]);
+                setTimeout(() => handleEnemyClickForSpell(enemyIndex), 0);
+                return;
+            }
+            // Use enemy selection mode - gray out everything except enemies
+            dom.enemySelectionOverlay.classList.add('active');
+            document.body.classList.add('enemy-selecting');
+        } else if (spell.targetType === SpellTargetType.SELECT_CELL || 
+                   spell.targetType === SpellTargetType.SELECT_ROW || 
+                   spell.targetType === SpellTargetType.SELECT_COL) {
+            // Use cell selection mode - gray out everything except grid
+            dom.cellSelectionHint.textContent = spell.getSelectionPrompt();
+            dom.cellSelectionOverlay.classList.add('active');
+            document.body.classList.add('cell-selecting');
+        } else {
+            // Use standard overlay for other spells
+            dom.spellSelectionText.textContent = spell.getSelectionPrompt();
+            dom.spellSelectionOverlay.classList.add('active');
+        }
+    };
+    
+    spellManager.onSpellComplete = (result) => {
+        // Hide all overlays
+        dom.spellSelectionOverlay.classList.remove('active');
+        dom.enemySelectionOverlay.classList.remove('active');
+        dom.cellSelectionOverlay.classList.remove('active');
+        document.body.classList.remove('enemy-selecting');
+        document.body.classList.remove('cell-selecting');
+        
+        // Handle gravity for grid manipulation spells
+        if (result.requiresGravity) {
+            handleSpellGravity(result);
+        }
+        
+        // Handle gem transformation spells
+        if (result.requiresRender) {
+            renderGrid();
+        }
+        
+        updateUI();
+        updateBossUI();
+        updatePlayerUI();
+        updateSpiritUI();
+    };
+
+    /**
+     * Equip random spells to all spirits
+     */
+    function equipRandomSpells() {
+        const allSpellIds = spellRegistry.getAllSpellIds();
+        battle.spirits.forEach(spirit => {
+            const randomSpellId = allSpellIds[Math.floor(Math.random() * allSpellIds.length)];
+            spellManager.equipSpell(spirit, randomSpellId);
+        });
+    }
 
     /* --- Initialization & Resizing --- */
 
@@ -1378,6 +1701,19 @@
         
         // Note: Spirit click events are added dynamically in updateSpiritArea()
         
+        // Cancel spell button (for grid-based spells only)
+        dom.cancelSpellBtn.addEventListener('click', () => {
+            spellManager.cancelPendingSpell();
+            dom.spellSelectionOverlay.classList.remove('active');
+            dom.enemySelectionOverlay.classList.remove('active');
+            dom.cellSelectionOverlay.classList.remove('active');
+            document.body.classList.remove('enemy-selecting');
+            document.body.classList.remove('cell-selecting');
+        });
+        
+        // Grid click for spell targeting (row/col selection)
+        dom.grid.addEventListener('click', handleGridClickForSpell);
+        
         dom.closeGameBtn.addEventListener('click', () => {
             window.parent.postMessage({ 
                 type: 'gameFinished', 
@@ -1433,6 +1769,9 @@
             mode: dom.modeSelect.value,
             wordLevel: parseInt(dom.wordLevelSelect.value)
         });
+        
+        // Equip random spells to spirits
+        equipRandomSpells();
         
         if (battle.mode === 'time') {
             dom.movesLabel.textContent = "时间";
@@ -1796,9 +2135,17 @@
                     if (cnPos) {
                         battle.isLocked = true;
                         if (battle.mode === 'moves') battle.moves--;
+                        
+                        // 获取攻击元素类型
+                        const attackElement = battle.grid[cnPos.r][cnPos.c] !== null ? battle.grid[cnPos.r][cnPos.c] : battle.grid[p1.r][p1.c];
+                        
                         await animateAndCrush(p1, cnPos, battle.currentPair);
                         battle.score += 500;
                         showFloatingText(500, p1);
+                        
+                        // Word Crush 攻击敌人
+                        performWordCrushAttack(p1, cnPos, attackElement);
+                        
                         removeGem(p1.r, p1.c, true);
                         removeGem(cnPos.r, cnPos.c, true);
                         battle.markPairAsCrushed(battle.currentPair);
@@ -1856,9 +2203,21 @@
                  const found = battle.wordPairs.find(p => p.cn === cn.word && p.en === en.word);
                  if(found) pair = found;
             }
+            
+            // 获取两个匹配宝石的元素类型用于攻击
+            const gem1Type = battle.grid[p1.r][p1.c];
+            const gem2Type = battle.grid[p2.r][p2.c];
+            // 使用其中一个宝石的元素类型，优先使用中文宝石的类型
+            const cnPos = w1 && w1.lang === 'CN' ? p1 : p2;
+            const attackElement = battle.grid[cnPos.r][cnPos.c] !== null ? battle.grid[cnPos.r][cnPos.c] : (gem1Type !== null ? gem1Type : gem2Type);
+            
             await animateAndCrush(p1, p2, pair);
             battle.score += 500;
             showFloatingText(500, p1);
+            
+            // Word Crush 攻击敌人，使用匹配宝石的元素类型
+            performWordCrushAttack(p1, p2, attackElement);
+            
             removeGem(p1.r, p1.c, true);
             removeGem(p2.r, p2.c, true);
             battle.advanceWordPair();
@@ -1937,35 +2296,41 @@
             if (type !== null) gemTypeCounts[type] = (gemTypeCounts[type] || 0) + 1;
         });
 
+        // 使用新计分系统: Score = BaseScore × TerrainBonus × ComboMultiplier
+        const gemCount = matches.length;
+        const scoreResult = BattleCore.calculateMatchScore(
+            gemCount,
+            terrainBonus.matchingCount,
+            battle.comboMultiplier
+        );
+        
+        // Gem消除增加精灵能量，按比例分配总分数到各元素精灵
         for (const [type, count] of Object.entries(gemTypeCounts)) {
             const typeInt = parseInt(type);
-            addSpiritMana(typeInt, count);
-            const typeDamage = Math.floor(count * 30 * battle.comboMultiplier);
-            battle.damageEnemy(typeDamage, typeInt);
+            // Calculate proportional score for this gem type
+            const proportionalScore = Math.floor(scoreResult.totalScore * (count / gemCount));
+            addSpiritMana(typeInt, proportionalScore);
+            // 移除: Gem消除不再攻击敌人，只有Word Crush才会攻击
         }
 
-        // Apply terrain bonus to score
-        let basePoints = (matches.length * 100) * battle.comboMultiplier;
-        let terrainBonusPoints = 0;
+        battle.score += scoreResult.totalScore;
         
-        if (terrainBonus.matchingCount > 0) {
-            terrainBonusPoints = Math.floor(basePoints * (terrainBonus.bonus - 1));
-            const totalPoints = basePoints + terrainBonusPoints;
-            battle.score += totalPoints;
-            
-            // Show base score first
-            if (matches.length > 0) {
-                showFloatingText(basePoints, matches[0]);
+        // Show score with combo info
+        if (matches.length > 0) {
+            let scoreText = scoreResult.totalScore.toString();
+            if (battle.comboMultiplier > 1) {
+                scoreText = `${scoreResult.totalScore} (x${scoreResult.comboMultiplier})`;
             }
-            
-            // Play terrain bonus animation with explosion effect
+            showFloatingText(scoreText, matches[0]);
+        }
+        
+        // Play terrain bonus animation if applicable
+        if (terrainBonus.matchingCount > 0 && matchingCells.length > 0) {
+            const element = BattleCore.getElementById(terrainBonus.terrainElement);
+            const terrainBonusPoints = Math.floor(scoreResult.baseScore * (terrainBonus.bonus - 1) * scoreResult.comboMultiplier);
             if (terrainBonusPoints > 0) {
-                const element = BattleCore.getElementById(terrainBonus.terrainElement);
                 playTerrainBonusAnimation(matchingCells, terrainBonusPoints, element);
             }
-        } else {
-            battle.score += basePoints;
-            if(matches.length > 0) showFloatingText(basePoints, matches[0]);
         }
 
         let cnExploded = false;
@@ -2027,7 +2392,14 @@
         }
         
         if(pairToAnimate && enGem && cnGem) {
+            // 获取攻击元素类型 (优先使用中文宝石的元素类型)
+            const attackElement = battle.grid[cnGem.r][cnGem.c] !== null ? battle.grid[cnGem.r][cnGem.c] : battle.grid[enGem.r][enGem.c];
+            
             await animateAndCrush(enGem, cnGem, pairToAnimate);
+            
+            // Word Crush 攻击敌人
+            performWordCrushAttack(enGem, cnGem, attackElement);
+            
             animatedGems.add(`${enGem.r},${enGem.c}`);
             animatedGems.add(`${cnGem.r},${cnGem.c}`);
         }
@@ -2217,6 +2589,10 @@
             container.className = `enemy-container ${enemy.hp <= 0 ? 'dead' : ''} ${enemy.isBoss ? 'is-boss' : ''}`;
             container.id = `enemy-${index}`;
             
+            // Add click handler for spell targeting
+            container.addEventListener('click', () => handleEnemyClickForSpell(index));
+            container.style.cursor = 'pointer';
+            
             const turn = document.createElement('div');
             turn.className = 'enemy-turn';
             turn.textContent = enemy.turn;
@@ -2286,6 +2662,14 @@
             iconDiv.className = 'spirit-icon';
             iconDiv.textContent = s.icon;
             
+            // Add skill icon badge if spirit has a spell
+            if (s.spell) {
+                const skillBadge = document.createElement('div');
+                skillBadge.className = 'spirit-skill-badge';
+                skillBadge.textContent = s.spell.icon;
+                iconDiv.appendChild(skillBadge);
+            }
+            
             const manaBarDiv = document.createElement('div');
             manaBarDiv.className = 'spirit-mana-bar';
             
@@ -2293,12 +2677,68 @@
             manaFillDiv.className = 'spirit-mana-fill';
             manaFillDiv.style.width = '0%';
             
+            // Add spell tooltip if spirit has a spell
+            if (s.spell) {
+                const tooltip = document.createElement('div');
+                tooltip.className = 'spirit-tooltip';
+                tooltip.innerHTML = `
+                    <div class="spell-name"><span class="spell-icon">${s.spell.icon}</span>${s.spell.name}</div>
+                    <div class="spell-desc">${s.spell.description}</div>
+                `;
+                spiritDiv.appendChild(tooltip);
+            }
+            
             manaBarDiv.appendChild(manaFillDiv);
             spiritDiv.appendChild(iconDiv);
             spiritDiv.appendChild(manaBarDiv);
             
+            // Add MP text below the progress bar
+            const manaTextDiv = document.createElement('div');
+            manaTextDiv.className = 'spirit-mana-text';
+            manaTextDiv.textContent = `${s.mana}/${s.maxMana}`;
+            spiritDiv.appendChild(manaTextDiv);
+            
             // Add click event for using skill
-            spiritDiv.addEventListener('click', () => useSpiritSkill(index));
+            spiritDiv.addEventListener('click', () => {
+                // Dev mode: 5 consecutive clicks fill mana
+                if (isDevMode) {
+                    devClickCount++;
+                    clearTimeout(devClickTimer);
+                    devClickTimer = setTimeout(() => {
+                        devClickCount = 0;
+                    }, DEV_CLICK_TIMEOUT);
+                    
+                    if (devClickCount >= DEV_CLICK_THRESHOLD) {
+                        // Fill mana for this spirit
+                        const s = battle.spirits[index];
+                        if (s) {
+                            s.mana = s.maxMana;
+                            updateSpiritUI();
+                            console.log(`[DEV] Spirit ${index} mana filled to ${s.maxMana}`);
+                        }
+                        devClickCount = 0;
+                        return;
+                    }
+                }
+                useSpiritSkill(index);
+            });
+            
+            // Add mousedown/touchstart to show tooltip (for mobile and hold-to-view)
+            spiritDiv.addEventListener('mousedown', (e) => {
+                spiritDiv.classList.add('show-tooltip');
+            });
+            spiritDiv.addEventListener('mouseup', () => {
+                spiritDiv.classList.remove('show-tooltip');
+            });
+            spiritDiv.addEventListener('mouseleave', () => {
+                spiritDiv.classList.remove('show-tooltip');
+            });
+            spiritDiv.addEventListener('touchstart', (e) => {
+                spiritDiv.classList.add('show-tooltip');
+            });
+            spiritDiv.addEventListener('touchend', () => {
+                spiritDiv.classList.remove('show-tooltip');
+            });
             
             dom.spiritArea.appendChild(spiritDiv);
         });
@@ -2313,15 +2753,155 @@
             const manaPercent = (s.mana / s.maxMana) * 100;
             const fill = spirit.querySelector('.spirit-mana-fill');
             if (fill) fill.style.width = `${Math.min(100, manaPercent)}%`;
+            const manaText = spirit.querySelector('.spirit-mana-text');
+            if (manaText) manaText.textContent = `${s.mana}/${s.maxMana}`;
             if (s.mana >= s.maxMana) spirit.classList.add('ready'); else spirit.classList.remove('ready');
         });
     }
 
-    function addSpiritMana(type, count) {
+    /**
+     * Handle grid click for spell targeting
+     */
+    function handleGridClickForSpell(e) {
+        if (!spellManager.hasPendingSpell()) return;
+        
+        const pendingInfo = spellManager.getPendingSpellInfo();
+        if (!pendingInfo) return;
+        
+        const spell = pendingInfo.spell;
+        
+        // Only handle cell/row/col selection spells
+        if (spell.targetType !== SpellTargetType.SELECT_CELL &&
+            spell.targetType !== SpellTargetType.SELECT_ROW &&
+            spell.targetType !== SpellTargetType.SELECT_COL) {
+            return;
+        }
+        
+        const rect = dom.grid.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const col = Math.floor(x / CELL_SIZE);
+        const row = Math.floor(y / CELL_SIZE);
+        
+        if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+        
+        let target = null;
+        
+        switch (spell.targetType) {
+            case SpellTargetType.SELECT_ROW:
+                target = { row: row };
+                break;
+            case SpellTargetType.SELECT_COL:
+                target = { col: col };
+                break;
+            case SpellTargetType.SELECT_CELL:
+                target = { row: row, col: col };
+                break;
+            default:
+                return;
+        }
+        
+        // Complete the pending spell with the selected target
+        playSound('skill');
+        const result = spellManager.completePendingSpell(target);
+        
+        if (result.success) {
+            createSpellEffect(
+                battle.spirits.indexOf(pendingInfo.caster),
+                pendingInfo.caster.spell,
+                result
+            );
+        }
+        
+        updateSpiritUI();
+    }
+
+    /**
+     * Handle enemy click for spell targeting
+     */
+    function handleEnemyClickForSpell(enemyIndex) {
+        if (!spellManager.hasPendingSpell()) return;
+        
+        const pendingInfo = spellManager.getPendingSpellInfo();
+        if (!pendingInfo || pendingInfo.spell.targetType !== SpellTargetType.SELECT_ENEMY) return;
+        
+        playSound('skill');
+        const result = spellManager.completePendingSpell({ enemyIndex: enemyIndex });
+        
+        if (result.success) {
+            createSpellEffect(
+                battle.spirits.indexOf(pendingInfo.caster),
+                pendingInfo.caster.spell,
+                result
+            );
+        }
+        
+        updateSpiritUI();
+    }
+
+    /**
+     * Perform word crush attack - attacks enemy when CN/EN word pair is matched
+     * @param {object} p1 - First gem position {r, c}
+     * @param {object} p2 - Second gem position {r, c}
+     * @param {number} attackElement - Element type for the attack (-1 for neutral)
+     */
+    function performWordCrushAttack(p1, p2, attackElement = -1) {
+        // Calculate damage based on combo multiplier
+        const baseDamage = 200;
+        const damage = Math.floor(baseDamage * battle.comboMultiplier);
+        
+        // Find the spirit with matching element (if any) for projectile color
+        const spirit = battle.getSpiritByElement(attackElement);
+        const spiritIndex = spirit ? battle.spirits.indexOf(spirit) : 0;
+        
+        // Get the gem positions for visual effect origin
+        const gem1El = getGemDOM(p1.r, p1.c);
+        const gem2El = getGemDOM(p2.r, p2.c);
+        
+        // Determine effect start position (center of the two gems)
+        let startRect;
+        if (gem1El && gem2El) {
+            const rect1 = gem1El.getBoundingClientRect();
+            const rect2 = gem2El.getBoundingClientRect();
+            startRect = {
+                left: (rect1.left + rect2.left) / 2,
+                top: (rect1.top + rect2.top) / 2,
+                width: rect1.width,
+                height: rect1.height
+            };
+        } else if (gem1El) {
+            startRect = gem1El.getBoundingClientRect();
+        } else {
+            // Fallback to grid center
+            const gridRect = dom.grid.getBoundingClientRect();
+            startRect = {
+                left: gridRect.left + gridRect.width / 2,
+                top: gridRect.top + gridRect.height / 2,
+                width: CELL_SIZE,
+                height: CELL_SIZE
+            };
+        }
+        
+        // Get element color for projectile
+        const colors = ['#ff4d4d', '#4da6ff', '#4dff88', '#ffff4d', '#bf4dff', '#8b4513'];
+        const color = attackElement >= 0 && attackElement < colors.length ? colors[attackElement] : '#ffffff';
+        
+        // Fire projectile at enemy
+        const targetEnemy = battle.enemies.find(e => e.hp > 0);
+        const targetIndex = targetEnemy ? battle.enemies.indexOf(targetEnemy) : 0;
+        createProjectileEffect(startRect, targetIndex, color);
+        
+        // Deal damage to enemy
+        battle.damageEnemy(damage, attackElement);
+    }
+
+    function addSpiritMana(type, score) {
         // Find spirit by element type (not by index, since we only have 5 spirits now)
         const s = battle.getSpiritByElement(type);
         if (s) {
-            s.mana = Math.min(s.maxMana, s.mana + count * 15 * battle.comboMultiplier);
+            // Add full score to spirit mana
+            s.mana = Math.min(s.maxMana, s.mana + score);
             updateSpiritUI();
         }
     }
@@ -2329,21 +2909,191 @@
     function useSpiritSkill(index) {
         if (battle.isLocked) return;
         const s = battle.spirits[index];
-        if (s && s.mana >= s.maxMana) {
-            playSound('skill');
-            s.mana = 0;
-            
-            // Fire projectile to enemy, then deal damage on impact
-            createSkillEffect(index, () => {
-                battle.damageEnemy(s.damage, s.element);
-                updateUI(); updateBossUI();
-                battle.checkWinCondition();
-            });
-            
-            updateSpiritUI();
+        
+        if (!s || !spellManager.canCast(s)) return;
+        
+        playSound('skill');
+        
+        // Try to cast the spell
+        const result = spellManager.castSpell(s);
+        
+        if (result.needsSelection) {
+            // Spell needs user selection - show overlay and wait
+            // The actual cast will happen when user selects target
+            return;
+        }
+        
+        if (result.success) {
+            // Create visual effect based on spell type
+            createSpellEffect(index, s.spell, result);
+        }
+        
+        updateSpiritUI();
+    }
+
+    /**
+     * Handle spell effects that require gravity (row/column clear)
+     */
+    async function handleSpellGravity(result) {
+        if (!result.cellsCleared || result.cellsCleared.length === 0) return;
+        
+        // Animate cleared cells
+        result.cellsCleared.forEach(cell => {
+            const gem = getGemDOM(cell.r, cell.c);
+            if (gem) {
+                gem.classList.add('matched');
+                setTimeout(() => gem.remove(), 300);
+            }
+        });
+        
+        // Apply gravity after animation
+        await new Promise(r => setTimeout(r, 350));
+        await applyGravity();
+        const changedCells = battle.ensureWords();
+        changedCells.forEach(c => {
+            updateWordVisuals(c.r, c.c);
+        });
+        renderGrid();
+        updateTerrainMatchHighlights();
+        
+        // Check for new matches after gravity (chain reaction)
+        const newMatches = battle.findMatches();
+        if (newMatches.length > 0) {
+            await new Promise(r => setTimeout(r, 200));
+            await processMatches(newMatches);
+        } else {
+            battle.checkWinCondition();
+            battle.isLocked = false;
         }
     }
 
+    /**
+     * Create visual effects for spell casting
+     */
+    function createSpellEffect(index, spell, result) {
+        const spirit = dom.spirits[index];
+        if (!spirit) return;
+        
+        const s = battle.spirits[index];
+        const spiritRect = spirit.getBoundingClientRect();
+        const colors = ['#ff4d4d', '#4da6ff', '#4dff88', '#ffff4d', '#bf4dff', '#8b4513'];
+        const color = colors[s.type] || '#fff';
+        
+        // Create burst effect at spirit
+        const burstEffect = document.createElement('div');
+        burstEffect.className = 'skill-effect';
+        burstEffect.style.left = `${spiritRect.left + spiritRect.width / 2}px`;
+        burstEffect.style.top = `${spiritRect.top + spiritRect.height / 2}px`;
+        burstEffect.style.background = `radial-gradient(circle, ${color} 0%, transparent 70%)`;
+        burstEffect.style.width = '40px';
+        burstEffect.style.height = '40px';
+        burstEffect.style.borderRadius = '50%';
+        document.body.appendChild(burstEffect);
+        setTimeout(() => burstEffect.remove(), 1200);
+        
+        // For damage spells, fire projectile at enemy
+        if (spell.effectType === SpellEffectType.DAMAGE) {
+            // Find target
+            let targetIndex = result.targetIndex;
+            if (targetIndex === undefined) {
+                // For AOE spells, target first alive enemy
+                const target = battle.enemies.find(e => e.hp > 0);
+                targetIndex = target ? battle.enemies.indexOf(target) : 0;
+            }
+            
+            createProjectileEffect(spiritRect, targetIndex, color);
+        }
+        
+        // For heal spells, create heal effect on player
+        if (spell.effectType === SpellEffectType.HEAL) {
+            createHealEffect();
+        }
+        
+        // For grid clear spells, highlight the cleared cells
+        if (spell.effectType === SpellEffectType.CLEAR_GEMS && result.cellsCleared) {
+            result.cellsCleared.forEach(cell => {
+                const gem = getGemDOM(cell.r, cell.c);
+                if (gem) {
+                    gem.classList.add('matched');
+                }
+            });
+        }
+    }
+    
+    /**
+     * Create projectile effect flying to enemy
+     */
+    function createProjectileEffect(startRect, targetIndex, color) {
+        const enemyEl = document.getElementById(`enemy-${targetIndex}`);
+        if (!enemyEl) return;
+        
+        const avatar = enemyEl.querySelector('.boss-avatar');
+        if (!avatar) return;
+        
+        const targetRect = avatar.getBoundingClientRect();
+        
+        const projectile = document.createElement('div');
+        projectile.className = 'spirit-projectile';
+        projectile.style.background = `radial-gradient(circle, white 0%, ${color} 50%, transparent 100%)`;
+        projectile.style.left = `${startRect.left + startRect.width / 2}px`;
+        projectile.style.top = `${startRect.top + startRect.height / 2}px`;
+        document.body.appendChild(projectile);
+        
+        const targetX = targetRect.left + targetRect.width / 2;
+        const targetY = targetRect.top + targetRect.height / 2;
+        
+        projectile.animate([
+            { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+            { transform: `translate(${targetX - startRect.left - startRect.width/2}px, ${targetY - startRect.top - startRect.height/2}px) scale(0.5)`, opacity: 0.8 }
+        ], {
+            duration: 400,
+            easing: 'ease-in'
+        }).onfinish = () => {
+            projectile.remove();
+            // Create hit effect
+            const hit = document.createElement('div');
+            hit.className = 'skill-effect';
+            hit.style.left = `${targetX}px`;
+            hit.style.top = `${targetY}px`;
+            hit.style.background = `radial-gradient(circle, white 0%, ${color} 50%, transparent 100%)`;
+            hit.style.width = '60px';
+            hit.style.height = '60px';
+            document.body.appendChild(hit);
+            setTimeout(() => hit.remove(), 500);
+        };
+    }
+    
+    /**
+     * Create heal effect on player area
+     */
+    function createHealEffect() {
+        const playerArea = document.getElementById('player-area');
+        if (!playerArea) return;
+        
+        const rect = playerArea.getBoundingClientRect();
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => {
+                const particle = document.createElement('div');
+                particle.className = 'skill-effect';
+                particle.style.left = `${rect.left + Math.random() * rect.width}px`;
+                particle.style.top = `${rect.top + rect.height}px`;
+                particle.style.background = 'radial-gradient(circle, #4dff88 0%, transparent 70%)';
+                particle.style.width = '20px';
+                particle.style.height = '20px';
+                document.body.appendChild(particle);
+                
+                particle.animate([
+                    { transform: 'translateY(0) scale(1)', opacity: 1 },
+                    { transform: 'translateY(-50px) scale(0)', opacity: 0 }
+                ], {
+                    duration: 800,
+                    easing: 'ease-out'
+                }).onfinish = () => particle.remove();
+            }, i * 100);
+        }
+    }
+
+    // Legacy function - kept for backward compatibility
     function createSkillEffect(index, onHitCallback) {
         const spirit = dom.spirits[index];
         if (!spirit) return;
@@ -2541,9 +3291,11 @@
         if (avatar) {
             // Remove existing animations and trigger reflow
             avatar.classList.remove('boss-hit', 'boss-flash');
+            avatar.style.animation = 'none';
             void avatar.offsetWidth;
             
-            // Add both shake and flash animations
+            // Apply hit animation via CSS classes
+            avatar.style.animation = '';
             avatar.classList.add('boss-hit', 'boss-flash');
             
             // Create impact burst effect at avatar position
@@ -2556,9 +3308,10 @@
             document.body.appendChild(impact);
             setTimeout(() => impact.remove(), 500);
             
-            // Remove animations after they complete
+            // Remove animations after they complete and restore pulse
             setTimeout(() => {
                 avatar.classList.remove('boss-hit', 'boss-flash');
+                avatar.style.animation = '';
             }, 600);
         }
 
