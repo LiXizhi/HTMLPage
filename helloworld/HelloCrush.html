@@ -1566,36 +1566,6 @@
         updateSpiritUI();
     };
 
-    /**
-     * Equip random spells to all spirits
-     * Ensures each spirit has a unique spell
-     */
-    function equipRandomSpells() {
-        const allSpellIds = spellRegistry.getAllSpellIds();
-        // Shuffle the spell IDs to randomize assignment
-        const shuffledSpellIds = [...allSpellIds].sort(() => Math.random() - 0.5);
-        const usedSpells = new Set();
-        
-        battle.spirits.forEach((spirit, index) => {
-            let spellId;
-            if (index < shuffledSpellIds.length) {
-                // Assign unique spells from shuffled list
-                spellId = shuffledSpellIds[index];
-            } else {
-                // If more spirits than spells, pick from unused or random
-                const availableSpells = allSpellIds.filter(id => !usedSpells.has(id));
-                if (availableSpells.length > 0) {
-                    spellId = availableSpells[Math.floor(Math.random() * availableSpells.length)];
-                } else {
-                    // Fallback: all spells used, pick random (allows duplicates only when necessary)
-                    spellId = allSpellIds[Math.floor(Math.random() * allSpellIds.length)];
-                }
-            }
-            usedSpells.add(spellId);
-            spellManager.equipSpell(spirit, spellId);
-        });
-    }
-
     /* --- Initialization & Resizing --- */
 
     // Initialize SDK
@@ -1787,21 +1757,52 @@
         });
     }
 
+    // Custom level config from URL hash (from Level Editor)
+    let customLevelConfig = null;
+    
+    function parseHashLevelConfig() {
+        const hash = window.location.hash;
+        if (hash && hash.startsWith('#levelconfig=')) {
+            try {
+                const base64 = hash.substring('#levelconfig='.length);
+                const jsonStr = decodeURIComponent(escape(atob(base64)));
+                customLevelConfig = JSON.parse(jsonStr);
+                console.log('[LevelConfig] Loaded custom level from URL:', customLevelConfig.name || 'Unnamed');
+                return true;
+            } catch (e) {
+                console.error('[LevelConfig] Failed to parse level config from hash:', e);
+                customLevelConfig = null;
+            }
+        }
+        return false;
+    }
+
     function init() {
+        // Check for custom level config in URL hash first
+        const hasCustomConfig = parseHashLevelConfig();
+        
         fetch('candy_word_crush_data_cn_en')
             .then(res => res.ok ? res.text() : Promise.reject())
             .then(text => {
                 battle.parseWordData(text);
                 updateLevelDropdown();
                 battle.updateWordList();
-                startLevel(1);
+                if (hasCustomConfig) {
+                    startLevelFromConfig(customLevelConfig);
+                } else {
+                    startLevel(1);
+                }
             })
             .catch(() => {
                 // Fallback if fetch fails
                 battle.parseWordData(RAW_WORD_DATA);
                 updateLevelDropdown();
                 battle.updateWordList();
-                startLevel(1);
+                if (hasCustomConfig) {
+                    startLevelFromConfig(customLevelConfig);
+                } else {
+                    startLevel(1);
+                }
             });
 
         resizeGrid();
@@ -1942,9 +1943,45 @@
             wordLevel: parseInt(dom.wordLevelSelect.value)
         });
         
-        // Equip random spells to spirits
-        equipRandomSpells();
+        // Common level startup routine
+        onLevelInitialized();
+    }
+
+    /**
+     * Start level from a custom config (from Level Editor)
+     * @param {Object} config - Level configuration from editor
+     */
+    function startLevelFromConfig(config) {
+        if (!config) {
+            console.error('[LevelConfig] No config provided');
+            startLevel(1);
+            return;
+        }
         
+        // Initialize battle state from config (core logic in BattleCore)
+        const success = battle.initLevelFromConfig(config, {
+            difficulty: dom.diffSelect.value,
+            mode: dom.modeSelect.value
+        });
+        
+        if (!success) {
+            startLevel(1);
+            return;
+        }
+        
+        // Common level startup routine
+        onLevelInitialized();
+    }
+
+    /**
+     * Common initialization after battle state is set up
+     * Called by both startLevel and startLevelFromConfig
+     */
+    function onLevelInitialized() {
+        // Equip random spells to spirits (only if not already equipped)
+        battle.equipRandomSpells();
+        
+        // Setup timer for time mode
         if (battle.mode === 'time') {
             dom.movesLabel.textContent = "时间";
             if (battle.timerInterval) clearInterval(battle.timerInterval);
@@ -1954,34 +1991,33 @@
             if (battle.timerInterval) clearInterval(battle.timerInterval);
         }
         
+        // Hide modals
         dom.levelModal.classList.add('hidden');
         dom.gameOverModal.classList.add('hidden');
         document.getElementById('success-overlay').classList.add('hidden');
-
+        
+        // Render the grid
         dom.grid.innerHTML = '';
         
-        // Recreate terrain grid container
         const terrainContainer = document.createElement('div');
         terrainContainer.id = 'terrain-grid';
         dom.grid.appendChild(terrainContainer);
         dom.terrainGrid = terrainContainer;
         
-        // Render terrain first (background layer)
         renderTerrainGrid();
         
-        // Then create gems (foreground layer)
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 createGemDOM(r, c, battle.grid[r][c]);
             }
         }
-
+        
         updateUI();
         updateBossUI();
-        updateSpiritArea(); // Recreate spirit DOM elements for new level
+        updateSpiritArea();
         updateSpiritUI();
         updatePlayerUI();
-        updateTerrainMatchHighlights(); // Highlight gems that match terrain
+        updateTerrainMatchHighlights();
     }
 
     function renderTerrainGrid() {

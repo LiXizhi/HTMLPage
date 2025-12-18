@@ -1104,6 +1104,7 @@ class SpellManager {
             caster: this.pendingCaster
         };
     }
+
 }
 
 // ============================================

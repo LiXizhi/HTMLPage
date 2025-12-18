@@ -247,22 +247,41 @@ class BattleCore {
         return this.availablePairs[Math.floor(Math.random() * this.availablePairs.length)];
     }
 
+    /**
+     * Initialize level with auto-generated config
+     * @param {number} lvl - Level number (1+)
+     * @param {Object} options - Options including difficulty, mode, wordLevel
+     */
     initLevel(lvl, options = {}) {
-        this.level = lvl;
-        this.difficulty = options.difficulty || this.difficulty;
-        this.mode = options.mode || this.mode;
-        this.wordLevel = options.wordLevel || this.wordLevel;
-        this.levelCompleted = false; // Reset the level completed flag
+        this.initLevelFromConfig({
+            level: lvl,
+            config: {
+                mode: options.mode || this.mode
+            }
+        }, options);
+    }
 
-        if (lvl === 1) {
+    /**
+     * Initialize level from a config object (from Level Editor or auto-generated)
+     * Missing config will be auto-generated based on level and difficulty
+     * @param {Object} config - Level configuration (can be minimal, missing fields auto-generated)
+     * @param {Object} options - Additional options (difficulty, wordLevel, etc.)
+     * @returns {boolean} - True if successfully initialized
+     */
+    initLevelFromConfig(config = {}, options = {}) {
+        const lvl = config.level || 1;
+        this.level = lvl;
+        
+        // Reset score on level 1 or custom levels
+        if (lvl === 1 || !options._preserveScore) {
             this.score = 0;
         }
         
-        this.playerHp = 1000;
-        this.playerMaxHp = 1000;
-        this.playerDefense = 0; // Reset player defense
-
-        // Difficulty Multipliers
+        this.levelCompleted = false;
+        this.difficulty = options.difficulty || this.difficulty || 'normal';
+        this.wordLevel = options.wordLevel || this.wordLevel;
+        
+        // Difficulty Multipliers for auto-generation
         let hpMult = 1;
         let movesBase = 30;
         let timeBase = 90;
@@ -276,25 +295,116 @@ class BattleCore {
             movesBase = 20;
             timeBase = 60;
         }
+        
+        // Apply player config (or defaults)
+        const playerConfig = config.player || {};
+        this.playerHp = playerConfig.hp || 1000;
+        this.playerMaxHp = playerConfig.maxHp || playerConfig.hp || 1000;
+        this.playerDefense = playerConfig.defense || 0;
+        
+        // Apply or generate enemies config
+        const elementKeys = ['FORGE', 'TIDE', 'LIFE', 'SOL', 'STONE', 'ROOT'];
+        if (config.enemies && config.enemies.length > 0) {
+            this.enemies = config.enemies.map((e, idx) => ({
+                id: e.id !== undefined ? e.id : idx,
+                name: e.name || `Enemy ${idx + 1}`,
+                hp: e.hp || 1000,
+                maxHp: e.maxHp || e.hp || 1000,
+                level: e.level || lvl,
+                avatar: e.avatar || '👾',
+                isBoss: e.isBoss !== undefined ? e.isBoss : (idx === 0),
+                turn: e.turn || 3,
+                maxTurn: e.maxTurn || e.turn || 3,
+                attack: e.attack || 100,
+                element: e.element !== undefined ? e.element : Math.floor(Math.random() * 6),
+                defense: e.defense || 0
+            }));
+        } else {
+            // Auto-generate enemies based on level
+            this.enemies = this._generateEnemies(lvl, hpMult);
+        }
+        
+        // Apply or generate spirits config
+        if (config.spirits && config.spirits.length > 0) {
+            this.spirits = config.spirits.map((s, idx) => {
+                const typeId = s.type !== undefined ? s.type : idx;
+                const element = BattleCore.ELEMENTS[elementKeys[typeId]] || BattleCore.ELEMENTS.FORGE;
+                return {
+                    type: typeId,
+                    icon: element.icon,
+                    name: s.name || element.name || `Spirit ${idx + 1}`,
+                    mana: s.mana || 0,
+                    maxMana: s.maxMana || 300,
+                    damage: s.damage || 150,
+                    element: typeId,
+                    defense: s.defense || 0
+                };
+            });
+        } else {
+            // Auto-generate spirits based on level
+            this.spirits = this._generateSpirits(lvl);
+        }
+        
+        // Apply mode config
+        const modeConfig = config.config || {};
+        this.mode = modeConfig.mode || options.mode || 'moves';
+        
+        if (this.mode === 'time') {
+            this.timeLeft = modeConfig.time || timeBase;
+        } else {
+            this.moves = modeConfig.moves || movesBase;
+        }
+        
+        // Apply terrain grid or generate
+        if (config.terrainGrid && config.terrainGrid.length > 0) {
+            this.terrainGrid = config.terrainGrid.map(row => [...row]);
+        } else {
+            this.createTerrainGrid();
+        }
+        
+        // Apply gem grid or generate
+        if (config.grid && config.grid.length > 0) {
+            this.grid = config.grid.map(row => [...row]);
+            // Initialize wordGrid for custom grids
+            this.wordGrid = [];
+            for (let r = 0; r < this.rows; r++) {
+                this.wordGrid[r] = [];
+                for (let c = 0; c < this.cols; c++) {
+                    this.wordGrid[r][c] = null;
+                }
+            }
+        } else {
+            this.createInitialGrid();
+        }
+        
+        // Reset other battle state
+        this.comboMultiplier = 1;
+        this.isLocked = false;
+        
+        console.log('[BattleCore] Level initialized:', config.name || `Level ${this.level}`);
+        return true;
+    }
 
-        // Setup Enemies (1 boss + 2 minions or just 1 boss)
-        this.enemies = [];
+    /**
+     * Generate enemies based on level and HP multiplier
+     * @private
+     */
+    _generateEnemies(lvl, hpMult) {
+        const enemies = [];
         const totalHp = Math.floor((800 + (lvl * 200)) * hpMult);
         
         const avatars = ['👹', '💀', '👻', '👽', '👾', '🤖'];
         const minionAvatars = ['👿', '👺', '🤡', '👽', '👾'];
         
-        // Unique boss names
         const bossNames = ['暗影领主', '毁灭者', '深渊之王', '噩梦统治者', '混沌之主', '虚空行者', 
                           '黑暗君王', '末日使者', '幽冥霸主', '魔焰之王'];
-        // Unique minion names
         const minionNames = ['暗影仆从', '骷髅兵', '幽灵战士', '小恶魔', '暗影侍卫', '虚空爬虫',
                             '地狱犬', '亡灵士兵', '噩梦魔物', '堕落精灵'];
         
-        const isBossOnly = Math.random() < 0.3 && lvl > 1; // 30% chance for boss only after level 1
+        const isBossOnly = Math.random() < 0.3 && lvl > 1;
         
         if (isBossOnly) {
-            this.enemies.push({
+            enemies.push({
                 id: 0,
                 name: bossNames[Math.floor(Math.random() * bossNames.length)],
                 hp: totalHp,
@@ -309,11 +419,10 @@ class BattleCore {
                 defense: 0
             });
         } else {
-            // 1 Boss + 2 Minions
             const bossHp = Math.floor(totalHp * 0.6);
             const minionHp = Math.floor(totalHp * 0.2);
             
-            this.enemies.push({
+            enemies.push({
                 id: 0,
                 name: bossNames[Math.floor(Math.random() * bossNames.length)],
                 hp: bossHp,
@@ -328,10 +437,9 @@ class BattleCore {
                 defense: 0
             });
             
-            // Shuffle minion names to get unique names
             const shuffledMinionNames = [...minionNames].sort(() => Math.random() - 0.5);
             for (let i = 1; i <= 2; i++) {
-                this.enemies.push({
+                enemies.push({
                     id: i,
                     name: shuffledMinionNames[i - 1],
                     hp: minionHp,
@@ -339,7 +447,7 @@ class BattleCore {
                     level: lvl,
                     avatar: minionAvatars[Math.floor(Math.random() * minionAvatars.length)],
                     isBoss: false,
-                    turn: 3 + i, // Minions might have different turn counts
+                    turn: 3 + i,
                     maxTurn: 3 + i,
                     attack: 50 + (lvl * 10),
                     element: Math.floor(Math.random() * 6),
@@ -347,11 +455,16 @@ class BattleCore {
                 });
             }
         }
+        return enemies;
+    }
 
-        // Setup Spirits - randomly select MAX_SPIRITS_IN_BATTLE from 6 elements (each element at most once)
-        this.spirits = [];
+    /**
+     * Generate spirits based on level
+     * @private
+     */
+    _generateSpirits(lvl) {
+        const spirits = [];
         const elementKeys = ['FORGE', 'TIDE', 'LIFE', 'SOL', 'STONE', 'ROOT'];
-        // Unique spirit names by element
         const spiritNames = {
             FORGE: ['炎灵', '火焰精灵', '熔岩之子', '烈焰守护者'],
             TIDE:  ['水灵', '潮汐精灵', '深海之魂', '清流使者'],
@@ -360,7 +473,7 @@ class BattleCore {
             STONE: ['岩灵', '磐石精灵', '山岳之魂', '坚岩守护者'],
             ROOT:  ['木灵', '森林精灵', '古木之灵', '林木守护者']
         };
-        // Shuffle and pick first MAX_SPIRITS_IN_BATTLE elements
+        
         const shuffledKeys = [...elementKeys].sort(() => Math.random() - 0.5);
         const selectedKeys = shuffledKeys.slice(0, BattleCore.MAX_SPIRITS_IN_BATTLE);
         
@@ -368,7 +481,7 @@ class BattleCore {
             const element = BattleCore.ELEMENTS[key];
             const names = spiritNames[key];
             const randomName = names[Math.floor(Math.random() * names.length)];
-            this.spirits.push({
+            spirits.push({
                 type: element.id,
                 icon: element.icon,
                 name: randomName,
@@ -379,18 +492,7 @@ class BattleCore {
                 defense: 0
             });
         }
-
-        // Mode Setup
-        if (this.mode === 'time') {
-            this.timeLeft = timeBase;
-        } else {
-            this.moves = movesBase;
-        }
-
-        this.comboMultiplier = 1;
-        this.isLocked = false;
-        this.createTerrainGrid();
-        this.createInitialGrid();
+        return spirits;
     }
 
     /**
@@ -895,6 +997,52 @@ class BattleCore {
             }
         }
         return moved;
+    }
+
+    /**
+     * Equip random spells to all spirits that don't already have spells
+     * Ensures each spirit has a unique spell when possible
+     * Requires spellRegistry from Spells.js to be loaded
+     */
+    equipRandomSpells() {
+        if (typeof spellRegistry === 'undefined') {
+            console.warn('spellRegistry not available, cannot equip random spells');
+            return;
+        }
+        
+        const allSpellIds = spellRegistry.getAllSpellIds();
+        // Shuffle the spell IDs to randomize assignment
+        const shuffledSpellIds = [...allSpellIds].sort(() => Math.random() - 0.5);
+        const usedSpells = new Set();
+        
+        // Track already equipped spells
+        this.spirits.forEach(spirit => {
+            if (spirit.spell && spirit.spell.id) {
+                usedSpells.add(spirit.spell.id);
+            }
+        });
+        
+        this.spirits.forEach((spirit, index) => {
+            // Skip if already equipped
+            if (spirit.spell) return;
+            
+            let spellId;
+            // Find first unused spell from shuffled list
+            const unusedFromShuffle = shuffledSpellIds.find(id => !usedSpells.has(id));
+            if (unusedFromShuffle) {
+                spellId = unusedFromShuffle;
+            } else {
+                // All spells used, pick random (allows duplicates only when necessary)
+                spellId = allSpellIds[Math.floor(Math.random() * allSpellIds.length)];
+            }
+            usedSpells.add(spellId);
+            
+            // Create and equip the spell
+            const spell = spellRegistry.create(spellId, spirit.element);
+            if (spell) {
+                spirit.spell = spell;
+            }
+        });
     }
 }
 
