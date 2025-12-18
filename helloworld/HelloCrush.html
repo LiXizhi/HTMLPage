@@ -1170,13 +1170,66 @@
             50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.8; }
             100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
         }
+
+        /* Chaos Shuffle / Transform Gem Effects */
+        .gem.chaos-shuffle {
+            animation: chaosShuffleGem 0.6s ease-in-out;
+        }
+
+        @keyframes chaosShuffleGem {
+            0% { transform: var(--gem-start-pos); opacity: 1; }
+            25% { transform: var(--gem-start-pos) scale(0.3) rotate(180deg); opacity: 0.7; }
+            50% { transform: var(--gem-start-pos) scale(0) rotate(360deg); opacity: 0; }
+            51% { transform: var(--gem-end-pos) scale(0) rotate(0deg); opacity: 0; }
+            75% { transform: var(--gem-end-pos) scale(0.3) rotate(-180deg); opacity: 0.7; }
+            100% { transform: var(--gem-end-pos) scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        .gem.gem-transform {
+            animation: gemTransform 0.5s ease-in-out;
+        }
+
+        @keyframes gemTransform {
+            0% { transform: var(--gem-pos) scale(1); filter: brightness(1); }
+            30% { transform: var(--gem-pos) scale(0.5) rotate(180deg); filter: brightness(2); }
+            50% { transform: var(--gem-pos) scale(0); filter: brightness(3); }
+            70% { transform: var(--gem-pos) scale(0.5) rotate(-180deg); filter: brightness(2); }
+            100% { transform: var(--gem-pos) scale(1) rotate(0deg); filter: brightness(1); }
+        }
+
+        /* Chaos swirl overlay effect */
+        .chaos-swirl-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 200;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chaos-swirl {
+            font-size: 80px;
+            animation: chaosSwirlSpin 0.8s ease-in-out forwards;
+            filter: drop-shadow(0 0 20px rgba(255, 255, 100, 0.8));
+        }
+
+        @keyframes chaosSwirlSpin {
+            0% { transform: scale(0) rotate(0deg); opacity: 0; }
+            30% { transform: scale(1.5) rotate(360deg); opacity: 1; }
+            70% { transform: scale(1.2) rotate(720deg); opacity: 1; }
+            100% { transform: scale(0) rotate(1080deg); opacity: 0; }
+        }
     </style>
 </head>
 <body>
 
 <div id="main-layout">
-    <!-- Left Sidebar - Stats -->
-    <div id="stats-area">
+    <!-- Left Sidebar - Stats (hidden by default) -->
+    <div id="stats-area" style="display: none;">
         <div class="stat-item">
             <div class="text-sm text-gray-300 opacity-80">分数</div>
             <div id="score-display" class="text-3xl font-bold text-yellow-400">0</div>
@@ -1196,6 +1249,11 @@
         <!-- Close Button -->
         <button id="close-game-btn" class="fixed top-4 right-4 z-50 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-lg border border-red-400">
             ✕ 退出
+        </button>
+        
+        <!-- Level Editor Button (dev mode only) -->
+        <button id="level-editor-btn" class="hidden fixed top-4 left-4 z-50 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-lg border border-purple-400">
+            🛠️ 关卡编辑器
         </button>
         
         <!-- Boss Area - Above Grid -->
@@ -1232,8 +1290,8 @@
         </div>
     </div>
 
-    <!-- Right Sidebar - Settings -->
-    <div id="settings-area">
+    <!-- Right Sidebar - Settings (hidden by default) -->
+    <div id="settings-area" style="display: none;">
         <div class="setting-item">
             <label class="text-xs text-gray-400">词汇</label>
             <select id="word-level-select" class="setting-select">
@@ -1395,6 +1453,10 @@
         wordLevelSelect: document.getElementById('word-level-select'),
         footerRestartBtn: document.getElementById('footer-restart-btn'),
         closeGameBtn: document.getElementById('close-game-btn'),
+        levelEditorBtn: document.getElementById('level-editor-btn'),
+        // Stats and Settings areas
+        statsArea: document.getElementById('stats-area'),
+        settingsArea: document.getElementById('settings-area'),
         // Boss & Spirit DOM
         bossArea: document.getElementById('boss-area'),
         spiritArea: document.getElementById('spirit-area'),
@@ -1463,8 +1525,16 @@
             handleSpellGravity(result);
         }
         
+        // Handle chaos shuffle spell (grid-wide shuffle)
+        if (result.shuffledCells && result.shuffledCells.length > 0) {
+            handleChaosShuffle(result.shuffledCells);
+        }
         // Handle gem transformation spells
-        if (result.requiresRender) {
+        else if (result.transformedCells && result.transformedCells.length > 0) {
+            handleGemTransform(result.transformedCells);
+        }
+        // Handle other spells that just need re-render
+        else if (result.requiresRender) {
             renderGrid();
         }
         
@@ -1761,6 +1831,17 @@
             }, '*');
         });
         
+        // Dev mode: Show level editor button and panels
+        if (isDevMode) {
+            dom.levelEditorBtn.classList.remove('hidden');
+            //dom.statsArea.style.display = 'flex';
+            //dom.settingsArea.style.display = 'flex';
+            
+            dom.levelEditorBtn.addEventListener('click', () => {
+                window.open('HelloCrushLevelEditor.html', '_blank');
+            });
+        }
+        
         window.addEventListener('resize', resizeGrid);
         dom.nextLevelBtn.addEventListener('click', () => startLevel(battle.level + 1));
         dom.restartBtn.addEventListener('click', () => {
@@ -2024,6 +2105,133 @@
 
     function getGemDOM(r, c) {
         return document.getElementById(`gem-${r}-${c}`);
+    }
+
+    /**
+     * Update a gem's visual type (for transform/shuffle spells)
+     * @param {number} r - Row
+     * @param {number} c - Column
+     * @param {number} newType - New gem type
+     */
+    function updateGemType(r, c, newType) {
+        const gem = getGemDOM(r, c);
+        if (!gem) return;
+        
+        // Remove old type class
+        for (let i = 0; i < 6; i++) {
+            gem.classList.remove(`type-${i}`);
+        }
+        // Add new type class
+        gem.classList.add(`type-${newType}`);
+    }
+
+    /**
+     * Handle chaos shuffle visual effect
+     * @param {Array} shuffledCells - Array of {r, c, oldType, newType}
+     */
+    async function handleChaosShuffle(shuffledCells) {
+        if (!shuffledCells || shuffledCells.length === 0) return;
+
+        // Create swirl overlay effect
+        const overlay = document.createElement('div');
+        overlay.className = 'chaos-swirl-overlay';
+        overlay.innerHTML = '<div class="chaos-swirl">🌀</div>';
+        document.body.appendChild(overlay);
+
+        // Play sound
+        playSound('bonus');
+
+        // Apply spin animation to all gems
+        shuffledCells.forEach(cell => {
+            const gem = getGemDOM(cell.r, cell.c);
+            if (gem) {
+                const pos = `translate(${cell.c * CELL_SIZE}px, ${cell.r * CELL_SIZE}px)`;
+                gem.style.setProperty('--gem-pos', pos);
+                gem.classList.add('gem-transform');
+            }
+        });
+
+        // Wait for mid-animation (when gems are invisible)
+        await new Promise(r => setTimeout(r, 250));
+
+        // Update gem types while they're invisible
+        shuffledCells.forEach(cell => {
+            updateGemType(cell.r, cell.c, cell.newType);
+        });
+
+        // Wait for animation to complete
+        await new Promise(r => setTimeout(r, 300));
+
+        // Clean up
+        shuffledCells.forEach(cell => {
+            const gem = getGemDOM(cell.r, cell.c);
+            if (gem) {
+                gem.classList.remove('gem-transform');
+                gem.style.removeProperty('--gem-pos');
+            }
+        });
+
+        overlay.remove();
+        
+        // Update terrain match highlights after shuffle
+        updateTerrainMatchHighlights();
+
+        // Check for matches created by shuffle and process them
+        const newMatches = battle.findMatches();
+        if (newMatches.length > 0) {
+            await new Promise(r => setTimeout(r, 200));
+            await processMatches(newMatches);
+        }
+    }
+
+    /**
+     * Handle gem transformation visual effect
+     * @param {Array} transformedCells - Array of {r, c, oldType, newType}
+     */
+    async function handleGemTransform(transformedCells) {
+        if (!transformedCells || transformedCells.length === 0) return;
+
+        playSound('bonus');
+
+        // Apply transform animation to affected gems
+        transformedCells.forEach(cell => {
+            const gem = getGemDOM(cell.r, cell.c);
+            if (gem) {
+                const pos = `translate(${cell.c * CELL_SIZE}px, ${cell.r * CELL_SIZE}px)`;
+                gem.style.setProperty('--gem-pos', pos);
+                gem.classList.add('gem-transform');
+            }
+        });
+
+        // Wait for mid-animation
+        await new Promise(r => setTimeout(r, 250));
+
+        // Update gem types
+        transformedCells.forEach(cell => {
+            updateGemType(cell.r, cell.c, cell.newType);
+        });
+
+        // Wait for animation to complete
+        await new Promise(r => setTimeout(r, 300));
+
+        // Clean up
+        transformedCells.forEach(cell => {
+            const gem = getGemDOM(cell.r, cell.c);
+            if (gem) {
+                gem.classList.remove('gem-transform');
+                gem.style.removeProperty('--gem-pos');
+            }
+        });
+
+        // Update terrain match highlights
+        updateTerrainMatchHighlights();
+
+        // Check for matches created by transformation and process them
+        const newMatches = battle.findMatches();
+        if (newMatches.length > 0) {
+            await new Promise(r => setTimeout(r, 200));
+            await processMatches(newMatches);
+        }
     }
 
     function renderGrid() {
@@ -2458,6 +2666,78 @@
         }
     }
 
+    /**
+     * Apply gravity with distance-based animation timing
+     * Gems fall at a consistent speed, so longer distances take longer
+     */
+    async function applyGravityWithDistance() {
+        const moves = [];
+        let maxFallDistance = 0;
+        
+        for (let c = 0; c < COLS; c++) {
+            let emptySlots = 0;
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (battle.grid[r][c] === null) emptySlots++;
+                else if (emptySlots > 0) {
+                    const type = battle.grid[r][c];
+                    const newR = r + emptySlots;
+                    battle.grid[newR][c] = type;
+                    battle.grid[r][c] = null;
+                    battle.wordGrid[newR][c] = battle.wordGrid[r][c];
+                    battle.wordGrid[r][c] = null;
+                    const el = getGemDOM(r, c);
+                    if(el) { 
+                        el.id = `gem-${newR}-${c}`; 
+                        moves.push({ el, r: newR, c, fallDistance: emptySlots, isNew: false }); 
+                        maxFallDistance = Math.max(maxFallDistance, emptySlots);
+                    }
+                }
+            }
+            // Create new gems at the top
+            for(let r = 0; r < emptySlots; r++) {
+                const type = Math.floor(Math.random() * GEM_TYPES);
+                battle.grid[r][c] = type;
+                battle.wordGrid[r][c] = null;
+                const div = createGemDOM(r, c, type);
+                // Position new gems above the grid
+                const startY = -(emptySlots - r) * CELL_SIZE;
+                div.style.transform = `translate(${c * CELL_SIZE}px, ${startY}px)`;
+                // New gems fall from above, so their total fall distance is their final row + distance from spawn point
+                const totalFallDistance = r + (emptySlots - r);
+                moves.push({ el: div, r: r, c: c, fallDistance: totalFallDistance, isNew: true });
+                maxFallDistance = Math.max(maxFallDistance, totalFallDistance);
+            }
+        }
+        
+        if (moves.length === 0) return;
+        
+        await new Promise(r => requestAnimationFrame(r));
+        playSound('select'); // Sound for falling
+        
+        // Calculate animation duration based on max fall distance
+        // Base speed: ~100ms per cell, with minimum 150ms and maximum 600ms
+        const baseDurationPerCell = 80;
+        const minDuration = 150;
+        const maxDuration = 600;
+        
+        moves.forEach(m => {
+            // Calculate duration based on this gem's fall distance
+            const duration = Math.min(maxDuration, Math.max(minDuration, m.fallDistance * baseDurationPerCell));
+            
+            // Use cubic-bezier for natural bounce effect at the end
+            m.el.style.transition = `transform ${duration}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+            m.el.style.transform = `translate(${m.c * CELL_SIZE}px, ${m.r * CELL_SIZE}px)`;
+            bindInteraction(m.el, m.r, m.c);
+        });
+        
+        // Wait for the longest animation to complete
+        const longestDuration = Math.min(maxDuration, Math.max(minDuration, maxFallDistance * baseDurationPerCell));
+        await new Promise(r => setTimeout(r, longestDuration + 50));
+        
+        // Update terrain match highlights after gems settle
+        updateTerrainMatchHighlights();
+    }
+
     async function applyGravity() {
         const moves = []; 
         for (let c = 0; c < COLS; c++) {
@@ -2776,7 +3056,11 @@
                         return;
                     }
                 }
-                useSpiritSkill(index);
+                // Only cast spell if mana is full, otherwise just show tooltip
+                const s = battle.spirits[index];
+                if (s && s.mana >= s.maxMana) {
+                    useSpiritSkill(index);
+                }
             });
             
             // Add mousedown/touchstart to show tooltip (for mobile and hold-to-view)
@@ -2993,23 +3277,37 @@
     async function handleSpellGravity(result) {
         if (!result.cellsCleared || result.cellsCleared.length === 0) return;
         
-        // Animate cleared cells
-        result.cellsCleared.forEach(cell => {
+        // Animate cleared cells with particles and scale-down effect
+        result.cellsCleared.forEach((cell, index) => {
             const gem = getGemDOM(cell.r, cell.c);
             if (gem) {
-                gem.classList.add('matched');
-                setTimeout(() => gem.remove(), 300);
+                // Stagger the removal animation slightly for visual effect
+                setTimeout(() => {
+                    // Create particle explosion effect
+                    createParticles(cell.r, cell.c, cell.type);
+                    playSound('match');
+                    
+                    // Scale down and fade out animation
+                    gem.style.transition = 'transform 0.25s ease-out, opacity 0.25s ease-out';
+                    gem.style.transform += ' scale(0)';
+                    gem.style.opacity = '0';
+                    
+                    setTimeout(() => gem.remove(), 250);
+                }, index * 30); // 30ms stagger between each gem
             }
         });
         
-        // Apply gravity after animation
-        await new Promise(r => setTimeout(r, 350));
-        await applyGravity();
+        // Wait for all removal animations to complete
+        const removalTime = result.cellsCleared.length * 30 + 300;
+        await new Promise(r => setTimeout(r, removalTime));
+        
+        // Apply gravity with distance-based animation
+        await applyGravityWithDistance();
+        
         const changedCells = battle.ensureWords();
         changedCells.forEach(c => {
             updateWordVisuals(c.r, c.c);
         });
-        renderGrid();
         updateTerrainMatchHighlights();
         
         // Check for new matches after gravity (chain reaction)

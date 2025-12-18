@@ -454,14 +454,15 @@ class RowClearSpell extends Spell {
 
 /**
  * Column Clear Spell - Clears all gems in a selected column
+ * 贯穿光束：清除指定一列上的所有方块和障碍物
  */
 class ColumnClearSpell extends Spell {
     constructor(elementId = 5) {
         super({
             id: 'column_clear',
-            name: '天崩地裂',
-            description: '清除选中列的所有宝石，并造成伤害',
-            icon: '⬇️',
+            name: '贯穿光束',
+            description: '【单线清除】清除指定一列上的所有方块和障碍物，快速清除直线上高耐久障碍物',
+            icon: '⚡',
             targetType: SpellTargetType.SELECT_COL,
             effectType: SpellEffectType.CLEAR_GEMS,
             manaCost: 100,
@@ -508,15 +509,16 @@ class ColumnClearSpell extends Spell {
 }
 
 /**
- * Cross Clear Spell - Clears both row and column of selected cell
+ * Area Clear Spell - Clears 3x3 area around selected cell
+ * 范围震爆：清除指定中心点3x3区域内的所有方块和障碍物
  */
-class CrossClearSpell extends Spell {
+class AreaClearSpell extends Spell {
     constructor(elementId = 0) {
         super({
-            id: 'cross_clear',
-            name: '十字斩',
-            description: '清除选中格子所在的整行和整列',
-            icon: '✚',
+            id: 'area_clear',
+            name: '范围震爆',
+            description: '【范围清场】清除指定中心点3x3区域内的所有方块和障碍物，应对密集障碍物挑战',
+            icon: '💥',
             targetType: SpellTargetType.SELECT_CELL,
             effectType: SpellEffectType.CLEAR_GEMS,
             manaCost: 100,
@@ -539,30 +541,24 @@ class CrossClearSpell extends Spell {
         const cellsToRemove = [];
         const cleared = new Set();
 
-        // Clear row
-        for (let c = 0; c < battleCore.cols; c++) {
-            const key = `${row},${c}`;
-            if (!cleared.has(key) && battleCore.grid[row][c] !== null) {
-                cellsToRemove.push({ r: row, c: c, type: battleCore.grid[row][c] });
-                cleared.add(key);
-                battleCore.grid[row][c] = null;
-                battleCore.wordGrid[row][c] = null;
-            }
-        }
-
-        // Clear column
-        for (let r = 0; r < battleCore.rows; r++) {
-            const key = `${r},${col}`;
-            if (!cleared.has(key) && battleCore.grid[r][col] !== null) {
-                cellsToRemove.push({ r: r, c: col, type: battleCore.grid[r][col] });
-                cleared.add(key);
-                battleCore.grid[r][col] = null;
-                battleCore.wordGrid[r][col] = null;
+        // Clear 3x3 area centered on selected cell
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const r = row + dr;
+                const c = col + dc;
+                if (r >= 0 && r < battleCore.rows && c >= 0 && c < battleCore.cols) {
+                    const key = `${r},${c}`;
+                    if (!cleared.has(key) && battleCore.grid[r][c] !== null) {
+                        cellsToRemove.push({ r: r, c: c, type: battleCore.grid[r][c] });
+                        cleared.add(key);
+                        battleCore.grid[r][c] = null;
+                        battleCore.wordGrid[r][c] = null;
+                    }
+                }
             }
         }
 
         // Calculate damage based on cleared gems score, scaled by caster's mana
-        // Spell clears deal damage to enemies, not add to spirit mana
         const damage = calculateSpellClearScore(cellsToRemove, caster.mana);
         battleCore.damageEnemy(damage, this.elementId, 0);
 
@@ -635,9 +631,8 @@ class ShieldSpell extends Spell {
     }
 
     execute(battleCore, caster, target) {
-        // Turns added scales with caster's current mana
-        const manaMultiplier = caster.mana / 100;
-        const turnsToAdd = Math.max(1, Math.floor(this.basePower * manaMultiplier));
+        // Fixed 1 turn delay
+        const turnsToAdd = 1;
         
         let affected = 0;
         battleCore.enemies.forEach(enemy => {
@@ -659,18 +654,19 @@ class ShieldSpell extends Spell {
 
 /**
  * Transform Spell - Converts random gems to caster's element
+ * 元素转换：将棋盘上随机10个方块转化为该精灵对应颜色的方块
  */
 class TransformSpell extends Spell {
     constructor(elementId = 1) {
         super({
             id: 'transform',
-            name: '元素转化',
-            description: '将若干随机宝石转化为施法者的元素',
+            name: '元素转换',
+            description: '【方块集中】将棋盘上随机10个方块转化为该精灵对应颜色的方块，便于进行5消或6消',
             icon: '🔄',
             targetType: SpellTargetType.SELF,
             effectType: SpellEffectType.TRANSFORM_GEMS,
             manaCost: 100,
-            basePower: 5, // Number of gems to transform
+            basePower: 10, // Number of gems to transform
             elementId: elementId
         });
     }
@@ -707,6 +703,142 @@ class TransformSpell extends Spell {
             success: true,
             message: `${this.name}转化了${transformed.length}个宝石！`,
             transformedCells: transformed,
+            effectType: this.effectType,
+            requiresRender: true
+        };
+    }
+}
+
+/**
+ * Element Lock Spell - Removes the least common gem color from the board
+ * 元素锁定：消除棋盘上最少数量的一个颜色的方块
+ */
+class ElementLockSpell extends Spell {
+    constructor(elementId = 2) {
+        super({
+            id: 'element_lock',
+            name: '元素锁定',
+            description: '【消除保护】消除棋盘上最少数量的一个颜色的方块，移除干扰颜色，优化布局',
+            icon: '🔒',
+            targetType: SpellTargetType.SELF,
+            effectType: SpellEffectType.CLEAR_GEMS,
+            manaCost: 100,
+            basePower: 100,
+            elementId: elementId
+        });
+    }
+
+    execute(battleCore, caster, target) {
+        // Count gems by type
+        const gemCounts = {};
+        for (let r = 0; r < battleCore.rows; r++) {
+            for (let c = 0; c < battleCore.cols; c++) {
+                const type = battleCore.grid[r][c];
+                if (type !== null) {
+                    gemCounts[type] = (gemCounts[type] || 0) + 1;
+                }
+            }
+        }
+
+        // Find the least common gem type
+        let minCount = Infinity;
+        let minType = null;
+        for (const [type, count] of Object.entries(gemCounts)) {
+            if (count < minCount) {
+                minCount = count;
+                minType = parseInt(type);
+            }
+        }
+
+        if (minType === null) {
+            return { success: false, message: '棋盘上没有可消除的宝石' };
+        }
+
+        // Clear all gems of the least common type
+        const cellsToRemove = [];
+        for (let r = 0; r < battleCore.rows; r++) {
+            for (let c = 0; c < battleCore.cols; c++) {
+                if (battleCore.grid[r][c] === minType) {
+                    cellsToRemove.push({ r: r, c: c, type: minType });
+                    battleCore.grid[r][c] = null;
+                    battleCore.wordGrid[r][c] = null;
+                }
+            }
+        }
+
+        // Calculate damage based on cleared gems score, scaled by caster's mana
+        const damage = calculateSpellClearScore(cellsToRemove, caster.mana);
+        battleCore.damageEnemy(damage, this.elementId, 0);
+
+        return {
+            success: true,
+            message: `${this.name}消除了${cellsToRemove.length}个宝石，造成${damage}点伤害！`,
+            cellsCleared: cellsToRemove,
+            damage: damage,
+            effectType: this.effectType,
+            requiresGravity: true
+        };
+    }
+}
+
+/**
+ * Chaos Shuffle Spell - Shuffles all gems on the board randomly
+ * 混沌重构：重新随机打乱所有方块的位置，不影响障碍物
+ */
+class ChaosShuffleSpell extends Spell {
+    constructor(elementId = 3) {
+        super({
+            id: 'chaos_shuffle',
+            name: '混沌重构',
+            description: '【全盘洗牌】重新随机打乱所有方块的位置，不影响障碍物，绝境重置寻求新机会',
+            icon: '🌀',
+            targetType: SpellTargetType.SELF,
+            effectType: SpellEffectType.TRANSFORM_GEMS,
+            manaCost: 100,
+            basePower: 0,
+            elementId: elementId
+        });
+    }
+
+    execute(battleCore, caster, target) {
+        // Collect all gem positions and their types
+        const gemCells = [];
+        const gemTypes = [];
+
+        for (let r = 0; r < battleCore.rows; r++) {
+            for (let c = 0; c < battleCore.cols; c++) {
+                const type = battleCore.grid[r][c];
+                if (type !== null) {
+                    gemCells.push({ r, c });
+                    gemTypes.push(type);
+                }
+            }
+        }
+
+        if (gemCells.length < 2) {
+            return { success: false, message: '棋盘上没有足够的宝石进行洗牌' };
+        }
+
+        // Shuffle gem types using Fisher-Yates algorithm
+        for (let i = gemTypes.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [gemTypes[i], gemTypes[j]] = [gemTypes[j], gemTypes[i]];
+        }
+
+        // Reassign shuffled types to positions
+        const shuffledCells = [];
+        for (let i = 0; i < gemCells.length; i++) {
+            const { r, c } = gemCells[i];
+            const oldType = battleCore.grid[r][c];
+            const newType = gemTypes[i];
+            battleCore.grid[r][c] = newType;
+            shuffledCells.push({ r, c, oldType, newType });
+        }
+
+        return {
+            success: true,
+            message: `${this.name}重新打乱了${shuffledCells.length}个宝石的位置！`,
+            shuffledCells: shuffledCells,
             effectType: this.effectType,
             requiresRender: true
         };
@@ -798,23 +930,25 @@ class SpellRegistry {
         this.register('lightning_strike', LightningStrikeSpell);
         this.register('row_clear', RowClearSpell);
         this.register('column_clear', ColumnClearSpell);
-        this.register('cross_clear', CrossClearSpell);
+        this.register('area_clear', AreaClearSpell);
         this.register('heal', HealSpell);
         this.register('shield', ShieldSpell);
         this.register('transform', TransformSpell);
+        this.register('element_lock', ElementLockSpell);
+        this.register('chaos_shuffle', ChaosShuffleSpell);
 
         // Set default spells for each element
-        // FORGE (0) - Fire element: Fireball
-        this.setDefaultSpell(0, 'fireball');
-        // TIDE (1) - Water element: Water Wave
-        this.setDefaultSpell(1, 'water_wave');
-        // LIFE (2) - Nature element: Heal
-        this.setDefaultSpell(2, 'heal');
-        // SOL (3) - Lightning element: Lightning Strike
-        this.setDefaultSpell(3, 'lightning_strike');
-        // STONE (4) - Earth element: Row Clear
+        // FORGE (0) - Fire element: 范围震爆
+        this.setDefaultSpell(0, 'area_clear');
+        // TIDE (1) - Water element: 元素转换
+        this.setDefaultSpell(1, 'transform');
+        // LIFE (2) - Nature element: 元素锁定
+        this.setDefaultSpell(2, 'element_lock');
+        // SOL (3) - Lightning element: 混沌重构
+        this.setDefaultSpell(3, 'chaos_shuffle');
+        // STONE (4) - Earth element: Row Clear (横扫千军)
         this.setDefaultSpell(4, 'row_clear');
-        // ROOT (5) - Wood element: Column Clear
+        // ROOT (5) - Wood element: 贯穿光束
         this.setDefaultSpell(5, 'column_clear');
     }
 }
@@ -987,10 +1121,12 @@ if (typeof module !== 'undefined' && module.exports) {
         LightningStrikeSpell,
         RowClearSpell,
         ColumnClearSpell,
-        CrossClearSpell,
+        AreaClearSpell,
         HealSpell,
         ShieldSpell,
         TransformSpell,
+        ElementLockSpell,
+        ChaosShuffleSpell,
         SpellRegistry,
         SpellManager,
         spellRegistry
