@@ -97,6 +97,7 @@ class BattleCore {
         this.mode = 'moves';
         this.timeLeft = 0;
         this.selectedGem = null;
+        this.levelCompleted = false; // Prevent duplicate level complete triggers
 
         // Callbacks for UI updates
         this.onUpdateUI = options.onUpdateUI || (() => {});
@@ -179,6 +180,7 @@ class BattleCore {
         this.difficulty = options.difficulty || this.difficulty;
         this.mode = options.mode || this.mode;
         this.wordLevel = options.wordLevel || this.wordLevel;
+        this.levelCompleted = false; // Reset the level completed flag
 
         if (lvl === 1) {
             this.score = 0;
@@ -726,8 +728,12 @@ class BattleCore {
     }
 
     checkWinCondition() {
+        // Prevent duplicate triggers
+        if (this.levelCompleted) return true;
+
         const allDead = this.enemies.every(e => e.hp <= 0);
         if (allDead) {
+            this.levelCompleted = true;
             this.onLevelComplete();
             return true;
         }
