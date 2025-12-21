@@ -823,7 +823,7 @@ class BattleCore {
     findMatches() {
         const matches = new Set();
 
-        // Horizontal
+        // Horizontal (3+ in a row)
         for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols - 2; c++) {
                 const type = this.grid[r][c];
@@ -835,7 +835,7 @@ class BattleCore {
             }
         }
 
-        // Vertical
+        // Vertical (3+ in a column)
         for (let c = 0; c < this.cols; c++) {
             for (let r = 0; r < this.rows - 2; r++) {
                 const type = this.grid[r][c];
@@ -843,6 +843,41 @@ class BattleCore {
                     matches.add(`${r},${c}`);
                     matches.add(`${r+1},${c}`);
                     matches.add(`${r+2},${c}`);
+                }
+            }
+        }
+
+        // 2x2 grid match - also absorbs nearby cells of the same color
+        for (let r = 0; r < this.rows - 1; r++) {
+            for (let c = 0; c < this.cols - 1; c++) {
+                const type = this.grid[r][c];
+                if (type !== null && 
+                    type === this.grid[r][c+1] && 
+                    type === this.grid[r+1][c] && 
+                    type === this.grid[r+1][c+1]) {
+                    // Add the 2x2 core
+                    matches.add(`${r},${c}`);
+                    matches.add(`${r},${c+1}`);
+                    matches.add(`${r+1},${c}`);
+                    matches.add(`${r+1},${c+1}`);
+                    
+                    // Absorb nearby cells of the same color (adjacent to the 2x2 block)
+                    const adjacentOffsets = [
+                        [-1, 0], [-1, 1],   // Top row
+                        [2, 0], [2, 1],     // Bottom row
+                        [0, -1], [1, -1],   // Left column
+                        [0, 2], [1, 2]      // Right column
+                    ];
+                    
+                    for (const [dr, dc] of adjacentOffsets) {
+                        const nr = r + dr;
+                        const nc = c + dc;
+                        if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols) {
+                            if (this.grid[nr][nc] === type) {
+                                matches.add(`${nr},${nc}`);
+                            }
+                        }
+                    }
                 }
             }
         }

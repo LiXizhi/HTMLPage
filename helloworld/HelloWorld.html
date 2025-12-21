@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hello World - Travel, Build, Talk</title>
+    <script src="https://cdn.keepwork.com/keepwork/cdn/tailwindcss@3.4.16.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three%400.128.0/build/three.min.js"></script>
+    <script src="https://cdn.keepwork.com/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.keepwork.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <script src="https://cdn.keepwork.com/sdk/keepworkSDK.iife.js?v=1.0.16"></script>
+
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #202025;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+      canvas {
+        display: block;
+        outline: none;
+        touch-action: none;
+      }
+
+      /* UI Overlay - 保持原样，但增加穿透性 */
+      #ui-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 20;
+      }
+      .hud-panel {
+        pointer-events: auto;
+      }
+
+      /* Animations */
+      @keyframes bounce {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+      .animate-bounce-custom {
+        animation: bounce 1s infinite;
+      }
+
+      .modal {
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(4px);
+        transition: opacity 0.3s;
+      }
+
+      /* Off-screen destination indicator */
+      .destination-indicator {
+        position: fixed;
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        color: #000;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+        pointer-events: none;
+        white-space: nowrap;
+        border: 2px solid #fff;
+        box-shadow: 0 0 15px rgba(251, 191, 36, 0.8);
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        animation: indicator-pulse 1s ease-in-out infinite;
+      }
+
+      @keyframes indicator-pulse {
+        0%,
+        100% {
+          opacity: 1;
+          box-shadow: 0 0 15px rgba(251, 191, 36, 0.8);
+        }
+        50% {
+          opacity: 0.9;
+          box-shadow: 0 0 25px rgba(251, 191, 36, 1);
+        }
+      }
+
+      /* 穷神相关样式 */
+      .binbougami-indicator {
+        animation: binbougami-shake 0.5s ease-in-out infinite;
+      }
+
+      @keyframes binbougami-shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-2px) rotate(-1deg);
+        }
+        75% {
+          transform: translateX(2px) rotate(1deg);
+        }
+      }
+
+      .binbougami-effect {
+        animation: binbougami-appear 0.5s ease-out;
+      }
+
+      @keyframes binbougami-appear {
+        0% {
+          transform: scale(0) rotate(-180deg);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1) rotate(0deg);
+          opacity: 1;
+        }
+      }
+
+      /* 穷神大魔王模式 */
+      .binbougami-king {
+        animation: king-pulse 1s ease-in-out infinite;
+        filter: drop-shadow(0 0 10px #ff0000);
+      }
+
+      @keyframes king-pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          filter: drop-shadow(0 0 10px #ff0000);
+        }
+        50% {
+          transform: scale(1.1);
+          filter: drop-shadow(0 0 20px #ff4444);
+        }
+      }
+
+      /* 卡牌样式 */
+      .card-item {
+        transition: all 0.2s ease;
+        cursor: pointer;
+      }
+
+      .card-item:hover {
+        transform: translateY(-8px) scale(1.05);
+        z-index: 100;
+      }
+
+      .card-rarity-common {
+        border-color: #9ca3af;
+        background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+      }
+      .card-rarity-rare {
+        border-color: #3b82f6;
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+      }
+      .card-rarity-epic {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+      }
+      .card-rarity-legendary {
+        border-color: #f59e0b;
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+      }
+
+      .card-panel {
+        max-height: 120px;
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      .card-panel::-webkit-scrollbar {
+        height: 4px;
+      }
+
+      .card-panel::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+      }
+
+      /* --- 3D Dice Animation Styles --- */
+      :root {
+        --die-size: 80px;
+        --die-half: 40px;
+        --dot-size: 10px;
+      }
+
+      .dice-modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+      }
+
+      .dice-modal.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .dice-scene {
+        position: relative;
+        width: 400px;
+        height: 300px;
+        perspective: 2000px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible;
+      }
+
+      .dice-floor {
+        position: absolute;
+        width: 500px;
+        height: 500px;
+        background-image: radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px);
+        background-size: 20px 20px;
+        opacity: 0.5;
+        transform: rotateX(60deg) scale(1.5);
+        pointer-events: none;
+      }
+
+      .dice-stage {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform-style: preserve-3d;
+        opacity: 0;
+      }
+
+      @keyframes diceStageEnter {
+        0% {
+          opacity: 0;
+          transform: translate(300px, 200px) scale(0.2);
+        }
+        60% {
+          opacity: 1;
+          transform: translate(-20px, -20px) scale(1.05);
+        }
+        100% {
+          opacity: 1;
+          transform: translate(0, 0) scale(1);
+        }
+      }
+
+      .dice-stage.entering {
+        animation: diceStageEnter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+
+      .dice-camera {
+        position: relative;
+        transform-style: preserve-3d;
+        transform: rotateX(-35deg) rotateY(45deg);
+        display: flex;
+        gap: 30px;
+        transition: transform 0.5s;
+      }
+
+      .die-wrapper {
+        position: relative;
+        width: var(--die-size);
+        height: var(--die-size);
+        transform-style: preserve-3d;
+      }
+
+      .die {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        transform-style: preserve-3d;
+        transform: rotateX(-90deg);
+      }
+
+      .die-shadow {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.2);
+        filter: blur(15px);
+        transform: translateY(50px) rotateX(90deg) scale(1.2);
+        border-radius: 50%;
+        z-index: -1;
+      }
+
+      .die-face {
+        position: absolute;
+        width: var(--die-size);
+        height: var(--die-size);
+        background: white;
+        border: 2px solid #cbd5e1;
+        border-radius: 10px;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        padding: 10px;
+        box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.1);
+        backface-visibility: visible;
+      }
+
+      .die-dot {
+        width: var(--dot-size);
+        height: var(--dot-size);
+        background: #1e293b;
+        border-radius: 50%;
+        align-self: center;
+        justify-self: center;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+      }
+
+      .die-face-1 { transform: translateZ(var(--die-half)); }
+      .die-face-2 { transform: rotateX(90deg) translateZ(var(--die-half)); }
+      .die-face-3 { transform: rotateY(-90deg) translateZ(var(--die-half)); }
+      .die-face-4 { transform: rotateY(90deg) translateZ(var(--die-half)); }
+      .die-face-5 { transform: rotateX(-90deg) translateZ(var(--die-half)); }
+      .die-face-6 { transform: rotateY(180deg) translateZ(var(--die-half)); }
+
+      .dice-result {
+        position: absolute;
+        top: -60px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 32px;
+        font-weight: 900;
+        color: white;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        transition: opacity 0.3s;
+        white-space: nowrap;
+      }
+
+      .dice-result.show {
+        opacity: 1;
+      }
+
+      .dice-result-value {
+        color: #fbbf24;
+      }
+
+      /* 礼花动画样式 */
+      .fireworks-container {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 60;
+      }
+
+      .firework {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        animation: firework-explode 1.5s ease-out forwards;
+      }
+
+      @keyframes firework-explode {
+        0% {
+          transform: scale(0);
+          opacity: 1;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1) translate(var(--tx), var(--ty));
+          opacity: 0;
+        }
+      }
+
+      .firework-trail {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        animation: firework-trail 0.8s ease-out forwards;
+      }
+
+      @keyframes firework-trail {
+        0% {
+          transform: translateY(100vh) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translateY(var(--end-y)) scale(0.5);
+          opacity: 0;
+        }
+      }
+
+      .sparkle {
+        position: absolute;
+        font-size: 24px;
+        animation: sparkle-float 2s ease-out forwards;
+        pointer-events: none;
+      }
+
+      @keyframes sparkle-float {
+        0% {
+          transform: scale(0) rotate(0deg);
+          opacity: 1;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1.5) rotate(180deg) translateY(-100px);
+          opacity: 0;
+        }
+      }
+
+      .arrival-btn {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        color: #000;
+        font-weight: bold;
+        padding: 12px 48px;
+        border-radius: 12px;
+        border: 3px solid #fff;
+        cursor: pointer;
+        font-size: 20px;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 15px rgba(251, 191, 36, 0.5);
+      }
+
+      .arrival-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(251, 191, 36, 0.7);
+      }
+
+      .arrival-btn:active {
+        transform: scale(0.98);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Game Container -->
+    <div id="game-container" class="w-full h-full relative"></div>
+
+    <!-- World Map Iframe Container (for city selection globe) - loaded on demand -->
+    <iframe id="world-map-iframe" class="fixed inset-0 w-full h-full z-[55] border-none" style="display: none;"></iframe>
+
+    <!-- Off-screen Destination Indicator -->
+    <div id="destination-indicator" class="destination-indicator hidden">
+      <span id="indicator-arrow">→</span>
+      <span id="indicator-name">---</span>
+    </div>
+
+    <!-- Login Window (Start Screen) -->
+    <div id="login-modal" class="fixed inset-0 flex items-center justify-center z-[60] bg-black/40 backdrop-blur-sm">
+      <div class="text-center">
+        <h1
+          class="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 drop-shadow-lg mb-2"
+          style="font-family: 'Arial Black', sans-serif; -webkit-text-stroke: 1px white"
+        >
+          Hello World
+        </h1>
+        <p class="text-2xl text-white font-semibold tracking-wider drop-shadow-md mb-8">Travel the World, Build Your Home, Talk With People</p>
+        <button
+          id="login-btn"
+          class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-4 px-12 rounded-full text-2xl shadow-lg transform transition hover:scale-105 active:scale-95 border-2 border-white/50"
+        >
+          立即出发
+        </button>
+      </div>
+      <div class="absolute bottom-8 text-white/90 text-sm font-bold tracking-widest drop-shadow-lg">powered by Paracraft (c) copy right 2025</div>
+    </div>
+
+    <!-- UI Layer -->
+    <div id="ui-layer" class="flex flex-col justify-between p-2 md:p-4 pointer-events-none">
+      <!-- Top Bar Container -->
+      <div class="flex flex-col w-full items-center gap-2 pointer-events-none">
+        <!-- Row 1: Destination & Time (Always visible at top, compact on mobile) -->
+        <div
+          class="hud-panel pointer-events-auto bg-gradient-to-r from-purple-900/90 to-pink-900/90 text-white px-3 py-2 pr-12 md:pr-3 rounded-xl border-2 border-yellow-400 shadow-lg hidden w-full max-w-2xl flex justify-between items-center gap-2 z-50"
+          id="destination-panel"
+        >
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-300">📅</span>
+            <span class="text-sm md:text-lg font-bold text-yellow-300 whitespace-nowrap"><span id="game-year">1</span>年<span id="game-month">4</span>月</span>
+          </div>
+          <div class="w-px h-6 bg-gray-500"></div>
+          <div class="flex items-center gap-2 overflow-hidden flex-1 justify-center">
+            <span class="text-xs text-gray-300">🎯</span>
+            <span class="text-sm md:text-lg font-bold text-green-300 truncate" id="destination-name">---</span>
+          </div>
+          <div class="w-px h-6 bg-gray-500 hidden md:block"></div>
+          <div class="flex items-center gap-2 hidden md:flex">
+            <span class="text-xs text-gray-300">💰</span>
+            <span class="text-sm md:text-lg font-bold text-yellow-400">¥5000</span>
+          </div>
+        </div>
+
+        <!-- Turn Indicator - Centered -->
+        <div
+          class="hud-panel bg-gray-800/80 text-white px-3 py-1 md:px-6 md:py-2 rounded-full border border-gray-600 pointer-events-auto"
+        >
+          <span id="turn-indicator" class="font-bold text-xs md:text-lg tracking-widest whitespace-nowrap">等待...</span>
+        </div>
+      </div>
+
+      <!-- Left Bottom: Render Stats (FPS, Triangles, Draw Calls) -->
+      <div id="render-stats" class="hud-panel absolute bottom-2 left-2 md:bottom-4 md:left-4 bg-black/70 text-green-400 px-2 py-1 rounded text-xs font-mono pointer-events-none z-20">
+        <div>FPS: <span id="stats-fps">0</span></div>
+        <div>Triangles: <span id="stats-triangles">0</span></div>
+        <div>Draw Calls: <span id="stats-drawcalls">0</span></div>
+        <div>Chunks: <span id="stats-chunks-visible">0</span>/<span id="stats-chunks-total">0</span></div>
+      </div>
+
+      <!-- Left Side: Players List -->
+      <div class="absolute top-32 md:top-40 left-2 md:left-4 flex flex-col gap-2 pointer-events-none z-20">
+        <!-- P1 Info (Minimal) -->
+        <div
+          class="hud-panel bg-blue-900/90 text-white px-3 py-2 rounded-lg border-2 border-blue-400 shadow-lg transition-all pointer-events-auto cursor-pointer hover:border-yellow-400 flex items-center gap-2"
+          id="p1-panel"
+          onclick="game.showPlayerDetail(0)"
+        >
+          <div class="w-4 h-4 rounded-full bg-blue-400 flex-shrink-0"></div>
+          <span class="font-bold text-sm">P1</span>
+          <span id="p1-binbougami" class="hidden text-lg binbougami-indicator" title="穷神附身中">👻</span>
+          <span class="text-yellow-300 text-sm font-mono ml-1">¥<span id="p1-money">0</span></span>
+        </div>
+
+        <!-- COM Info (Minimal) -->
+        <div
+          class="hud-panel bg-red-900/90 text-white px-3 py-2 rounded-lg border-2 border-red-400 shadow-lg transition-all opacity-70 pointer-events-auto cursor-pointer hover:border-yellow-400 flex items-center gap-2"
+          id="com-panel"
+          onclick="game.showPlayerDetail(1)"
+        >
+          <div class="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
+          <span class="font-bold text-sm">COM</span>
+          <span id="com-binbougami" class="hidden text-lg binbougami-indicator" title="穷神附身中">👻</span>
+          <span class="text-yellow-300 text-sm font-mono ml-1">¥<span id="com-money">0</span></span>
+        </div>
+      </div>
+
+      <!-- Airport Button -->
+      <button
+        onclick="game.toggleMap()"
+        class="hud-panel absolute top-2 right-2 md:top-4 md:right-4 bg-blue-600 hover:bg-blue-700 text-white p-2 md:p-3 rounded-full shadow-lg border-2 border-white z-50 pointer-events-auto transition-transform hover:scale-110"
+        title="切换城市"
+      >
+        ✈️
+      </button>
+
+      <!-- Action Log -->
+      <div class="absolute top-40 md:top-24 right-2 md:right-4 w-48 md:w-64 pointer-events-none z-20">
+        <div id="game-log" class="flex flex-col gap-1 md:gap-2 items-end text-xs md:text-sm font-bold text-white shadow-black drop-shadow-md">
+          <!-- Log entries go here -->
+        </div>
+      </div>
+
+      <!-- Bottom Controls -->
+      <div class="flex flex-col items-center gap-4 mb-4 pointer-events-none">
+        <!-- 卡牌手牌区域 -->
+        <div id="card-hand-panel" class="hud-panel pointer-events-auto bg-gray-900/80 px-4 py-2 rounded-xl border border-gray-600 hidden">
+          <div class="text-xs text-gray-400 mb-1 text-center">🃏 手牌 (点击使用)</div>
+          <div id="card-hand" class="card-panel flex gap-2">
+            <!-- 卡牌会动态插入 -->
+          </div>
+        </div>
+
+        <!-- 按钮区域 -->
+        <div class="flex gap-3">
+          <button
+            id="use-card-btn"
+            class="hud-panel pointer-events-auto bg-gradient-to-b from-purple-400 to-purple-600 text-white font-bold text-lg px-6 py-3 rounded-xl shadow-lg border-b-4 border-purple-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden"
+          >
+            🃏 使用卡牌
+          </button>
+          <button
+            id="roll-btn"
+            class="hud-panel pointer-events-auto bg-gradient-to-b from-yellow-400 to-yellow-600 text-black font-black text-2xl px-12 py-4 rounded-2xl shadow-xl border-b-4 border-yellow-800 hover:translate-y-1 hover:border-b-0 active:scale-95 transition-all hidden"
+          >
+            🎲 掷骰子
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Money Change Modal -->
+    <div id="money-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border-4 relative text-center transform transition-all scale-100">
+        <div id="money-modal-icon" class="text-6xl mb-4">💰</div>
+        <h3 class="text-2xl font-black text-gray-800 mb-2" id="money-modal-title">玩家</h3>
+        <div class="text-2xl font-bold mb-2" id="money-modal-delta"></div>
+        <div class="text-5xl font-mono font-bold my-4 text-gray-800" id="money-modal-amount">¥0</div>
+        <div class="text-gray-500 text-sm" id="money-modal-desc">资金变动</div>
+      </div>
+    </div>
+
+    <!-- Property Buy Modal -->
+    <!-- 穷神效果弹窗 -->
+    <div id="binbougami-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div class="bg-gradient-to-b from-gray-900 to-purple-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-purple-500 relative text-center">
+        <div id="binbougami-modal-icon" class="text-8xl mb-4 binbougami-effect">👻</div>
+        <h3 class="text-3xl font-black text-purple-300 mb-2" id="binbougami-modal-title">穷神来袭！</h3>
+        <p class="text-xl text-gray-300 mb-4" id="binbougami-modal-desc">穷神正在捣乱...</p>
+        <div class="text-4xl font-mono font-bold text-red-400 mb-4" id="binbougami-modal-effect"></div>
+        <div class="text-sm text-gray-400" id="binbougami-modal-hint"></div>
+      </div>
+    </div>
+
+    <!-- AI购买房产弹窗 -->
+    <div id="ai-purchase-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div class="bg-gradient-to-b from-red-900 to-orange-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-red-500 relative text-center">
+        <div class="text-8xl mb-4">🏠</div>
+        <h3 class="text-3xl font-black text-red-300 mb-2" id="ai-purchase-title">电脑购买房产</h3>
+        <p class="text-2xl text-yellow-300 font-bold mb-2" id="ai-purchase-property-name">房产名称</p>
+        <p class="text-xl text-gray-300 mb-4" id="ai-purchase-location">位置：XXX</p>
+        <div class="text-4xl font-mono font-bold text-red-400 mb-4" id="ai-purchase-price">-¥0</div>
+        <div class="text-sm text-gray-400">点击任意处继续...</div>
+      </div>
+    </div>
+
+    <!-- 穷神附身全屏动画 -->
+    <div id="possession-modal" class="fixed inset-0 flex items-center justify-center hidden z-[100] bg-black/90 backdrop-blur-sm transition-opacity duration-500">
+      <div class="text-center transform transition-all duration-500 scale-0" id="possession-content">
+        <div class="text-9xl mb-8 animate-bounce">👻</div>
+        <h1 class="text-6xl font-black text-purple-500 mb-4 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]">穷神附身！</h1>
+        <p class="text-4xl text-white font-bold" id="possession-text">玩家 XX 被穷神附身了！</p>
+      </div>
+    </div>
+
+    <!-- 3D 骰子动画弹窗 -->
+    <div id="dice-modal" class="dice-modal">
+      <div class="flex flex-col items-center">
+        <div class="dice-scene">
+          <div id="dice-result" class="dice-result">
+            掷出了 <span id="dice-result-value" class="dice-result-value">0</span> 点!
+          </div>
+          <div class="dice-floor"></div>
+          <div id="dice-stage" class="dice-stage">
+            <div id="dice-camera" class="dice-camera">
+              <!-- Dice will be dynamically injected here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 卡牌获取弹窗 -->
+    <div id="card-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div class="bg-gradient-to-b from-amber-900 to-yellow-900 p-6 rounded-2xl shadow-2xl max-w-lg w-full border-4 border-yellow-500 relative">
+        <div class="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-black px-6 py-1 rounded-full font-bold shadow-lg">🃏 卡片站</div>
+        <h3 class="text-2xl font-bold text-center mt-4 mb-4 text-yellow-300">获取卡牌</h3>
+        <div id="card-modal-content" class="space-y-3 mb-4">
+          <!-- 卡牌选项会动态插入 -->
+        </div>
+        <div class="flex gap-3">
+          <button onclick="game.closeCardModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition">离开</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 小游戏挑战弹窗 -->
+    <div id="minigame-challenge-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div id="minigame-challenge-content" class="bg-gradient-to-b from-indigo-900 to-purple-900 p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 border-indigo-400 relative text-center">
+        <div id="minigame-challenge-icon" class="text-8xl mb-4">🎮</div>
+        <h3 id="minigame-challenge-title" class="text-3xl font-black text-indigo-300 mb-4">小游戏挑战！</h3>
+        <p id="minigame-challenge-desc" class="text-xl text-gray-300 mb-2">踏上了特殊格子！</p>
+        <div id="minigame-challenge-amount" class="text-4xl font-mono font-bold text-yellow-400 mb-4">¥1000</div>
+        <p id="minigame-challenge-hint" class="text-lg text-gray-400 mb-6">挑战小游戏，赢了<span class="text-green-400 font-bold">翻倍</span>，输了只得<span class="text-red-400 font-bold">一半</span>！</p>
+        <div class="flex gap-4 justify-center">
+          <button id="minigame-skip-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-xl transition text-lg">
+            😌 直接领取
+          </button>
+          <button id="minigame-play-btn" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition text-lg shadow-lg">
+            🎮 挑战！
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 小游戏 iframe 容器 -->
+    <div id="minigame-iframe-container" class="fixed inset-0 z-[80] hidden bg-black/90">
+      <div class="absolute top-4 right-4 z-10">
+        <button id="minigame-close-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition hidden">
+          ✕ 退出
+        </button>
+      </div>
+      <iframe id="minigame-iframe" class="w-full h-full border-none"></iframe>
+    </div>
+
+    <!-- 小游戏结果弹窗 -->
+    <div id="minigame-result-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-[90]">
+      <div id="minigame-result-content" class="p-8 rounded-2xl shadow-2xl max-w-md w-full border-4 relative text-center">
+        <div id="minigame-result-icon" class="text-8xl mb-4">🎉</div>
+        <h3 id="minigame-result-title" class="text-3xl font-black mb-4">挑战成功！</h3>
+        <p id="minigame-result-desc" class="text-xl mb-2">奖励翻倍！</p>
+        <!-- 显示原始金额和变化后金额的对比 -->
+        <div id="minigame-result-comparison" class="hidden mb-4">
+          <div class="flex items-center justify-center gap-3 text-2xl">
+            <span id="minigame-original-amount" class="text-gray-400 line-through">¥1000</span>
+            <span class="text-white">→</span>
+            <span id="minigame-final-amount" class="font-bold">¥2000</span>
+          </div>
+        </div>
+        <div id="minigame-result-amount" class="text-5xl font-mono font-bold mb-6">¥2000</div>
+        <button id="minigame-result-btn" class="bg-gradient-to-r from-yellow-500 to-orange-600 text-white font-bold py-3 px-12 rounded-xl transition text-xl shadow-lg">
+          确 定
+        </button>
+      </div>
+    </div>
+
+    <!-- 使用卡牌选择弹窗 -->
+    <div id="use-card-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div class="bg-gradient-to-b from-indigo-900 to-purple-900 p-6 rounded-2xl shadow-2xl max-w-2xl w-full border-4 border-indigo-400 relative">
+        <div class="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-indigo-500 text-white px-6 py-1 rounded-full font-bold shadow-lg">🃏 选择要使用的卡牌</div>
+        <div id="use-card-list" class="flex flex-wrap gap-3 justify-center mt-6 mb-4">
+          <!-- 卡牌会动态插入 -->
+        </div>
+        <div class="flex gap-3">
+          <button onclick="game.closeUseCardModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 玩家详情弹窗 -->
+    <div id="player-detail-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+      <div id="player-detail-content" class="bg-gradient-to-b from-gray-900 to-gray-800 p-6 rounded-2xl shadow-2xl max-w-sm w-full border-4 relative">
+        <button onclick="game.closePlayerDetailModal()" class="absolute top-3 right-3 text-white/70 hover:text-white text-xl">✕</button>
+        <div class="flex items-center gap-3 mb-4">
+          <div id="player-detail-color" class="w-8 h-8 rounded-full"></div>
+          <h3 id="player-detail-name" class="text-2xl font-bold text-white"></h3>
+          <span id="player-detail-binbougami" class="hidden text-2xl binbougami-indicator">👻</span>
+        </div>
+        <div class="space-y-3">
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">💰 现金</span>
+            <span id="player-detail-money" class="text-xl font-bold text-yellow-300">¥0</span>
+          </div>
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">🏠 资产</span>
+            <span id="player-detail-assets" class="text-lg text-green-300">¥0</span>
+          </div>
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">📍 距目的地</span>
+            <span id="player-detail-distance" class="text-lg text-cyan-300">--</span>
+          </div>
+          <div class="flex justify-between items-center text-white">
+            <span class="text-gray-400">🃏 卡牌</span>
+            <span id="player-detail-cards" class="text-lg text-amber-300">0</span>
+          </div>
+        </div>
+        <button onclick="game.closePlayerDetailModal(); game.focusOnPlayer(game.currentDetailPlayer)" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition">
+          📍 定位到玩家
+        </button>
+      </div>
+    </div>
+
+    <!-- 城市信息面板 -->
+    <div id="city-info-modal" class="modal fixed inset-0 flex items-center justify-center hidden z-50 bg-black/70 p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full h-5/6 max-w-2xl md:max-w-4xl lg:max-w-6xl flex flex-col relative">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 md:p-6 rounded-t-2xl flex justify-between items-center gap-4">
+          <div class="min-w-0">
+            <h2 class="text-2xl md:text-4xl font-bold truncate" id="city-info-title">城市信息</h2>
+            <p class="text-blue-100 text-xs md:text-sm mt-1 truncate" id="city-info-subtitle"></p>
+          </div>
+          <button onclick="game.closeCityInfoModal()" class="text-white hover:bg-white/20 rounded-full p-2 text-xl md:text-2xl flex-shrink-0">✕</button>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex border-b border-gray-200 bg-gray-50 overflow-x-auto">
+          <button class="city-info-tab flex-1 min-w-max py-3 md:py-4 px-4 md:px-6 text-sm md:text-lg font-bold text-center cursor-pointer border-b-4 border-blue-600 text-blue-600 transition whitespace-nowrap" data-tab="properties">
+            🏠 地产与建筑
+          </button>
+          <button class="city-info-tab flex-1 min-w-max py-3 md:py-4 px-4 md:px-6 text-sm md:text-lg font-bold text-center cursor-pointer border-b-4 border-transparent text-gray-600 hover:text-gray-800 transition whitespace-nowrap" data-tab="info">
+            📖 城市信息
+          </button>
+        </div>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-y-auto">
+          <!-- Properties Tab (merged with buildings) -->
+          <div id="city-info-properties-tab" class="city-info-tab-content p-4 md:p-8">
+            <!-- Player Money Display -->
+            <div class="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border-2 border-yellow-200">
+              <p class="text-center text-lg md:text-xl font-bold text-gray-800">
+                💰 持有资金: <span class="text-yellow-600" id="city-info-player-money">0</span> 元
+              </p>
+            </div>
+            
+            <!-- Destination indicator -->
+            <div id="city-info-dest-indicator" class="mb-4 bg-yellow-100 text-center py-2 px-4 rounded-full text-sm font-bold text-yellow-700 border-2 border-yellow-400 hidden">
+              🎯 当前目的地！
+            </div>
+            
+            <!-- Combined Properties & Buildings List -->
+            <div id="city-info-properties-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              <!-- Combined property and building cards injected here -->
+            </div>
+            <div id="city-info-empty-properties" class="text-center text-gray-500 py-12 col-span-full">
+              <p class="text-xl md:text-2xl">暂无地产与建筑 🏜️</p>
+            </div>
+            
+            <!-- Monopoly hint -->
+            <div class="mt-6 bg-purple-50 p-4 rounded-lg border-2 border-purple-200 text-center">
+              <p class="text-sm md:text-base text-purple-700 font-bold">
+                <span id="city-info-monopoly-hint">💡 买齐3种物件可获得独占加成(收益x2)</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Info Tab -->
+          <div id="city-info-info-tab" class="city-info-tab-content hidden p-4 md:p-8 overflow-x-hidden">
+            <div id="city-llm-content" class="prose prose-sm md:prose-lg max-w-none">
+              <div class="flex items-center justify-center py-12">
+                <div class="text-center">
+                  <div class="animate-spin text-4xl mb-4">⏳</div>
+                  <p class="text-gray-500 text-lg md:text-xl">正在加载城市信息...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="border-t border-gray-200 bg-gray-50 p-4 md:p-6 rounded-b-2xl flex justify-end gap-2 md:gap-4">
+          <button onclick="game.closeCityInfoModal()" class="px-4 md:px-8 py-2 md:py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold rounded-lg transition text-sm md:text-base">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { Game, loadStationData, STATION_DATA, homeCity } from './MapCore.js';
+
+      // Boot
+      window.onload = async () => {
+        // Initialize game first (starts rendering loop)
+        window.game = new Game();
+
+        // Load station data for game map (full city info with lat/lng/population)
+        await loadStationData();
+
+        // Setup start button click handler
+        const loginModal = document.getElementById("login-modal");
+        const loginBtn = document.getElementById("login-btn");
+        
+        loginBtn.onclick = () => {
+          // Hide login modal
+          loginModal.classList.add("hidden");
+          
+          // Auto-load home city immediately
+          const homeCityData = STATION_DATA.find(city => city.name.includes(homeCity) || homeCity.includes(city.name.split(' - ')[0]));
+          if (homeCityData) {
+            window.game.selectCity(homeCityData);
+          } else {
+            // Fallback: use first city or create minimal home city object
+            const fallbackCity = STATION_DATA[0] || { name: homeCity };
+            window.game.selectCity(fallbackCity);
+          }
+        };
+
+        // Note: World map is now hidden by default, user can open it via toggleMap
+      };
+    </script>
+  </body>
+</html>
